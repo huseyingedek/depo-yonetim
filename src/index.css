@@ -4,12 +4,37 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Anlamsal renk token'ları — açık tema (varsayılan) */
 :root {
   color-scheme: light;
+  --surface: 255 255 255; /* kart/bar yüzeyi */
+  --elevated: 243 245 249; /* hafif dolgu */
+  --line: 232 235 241; /* çizgi/kenarlık */
+  --fg: 15 23 42; /* birincil yazı */
+  --muted: 82 95 118; /* ikincil yazı */
+  --subtle: 130 144 168; /* üçüncül yazı */
+  /* Sayfa arka plan gradient'i (menüden farklı, açık mavi → nötr) */
+  --app-from: 223 233 252;
+  --app-via: 239 243 251;
+  --app-to: 244 246 250;
 }
 
-/* iOS Safari, 16px altı input'lara odaklanınca otomatik zoom yapar.
-   Tüm form alanlarını en az 16px yaparak bunu engelliyoruz. */
+.dark {
+  color-scheme: dark;
+  /* Menüdeki lacivert-mavi ton ailesi */
+  --surface: 26 37 82; /* navy kart yüzeyi (#1a2552) */
+  --elevated: 34 47 100; /* #222f64 */
+  --line: 46 60 120; /* #2e3c78 */
+  --fg: 228 234 248;
+  --muted: 166 179 216;
+  --subtle: 126 141 188;
+  /* Sayfa gradient'i — menüyle aynı mavi tonda, biraz daha koyu */
+  --app-from: 21 32 86; /* #151f56 */
+  --app-via: 16 24 64; /* #101840 */
+  --app-to: 11 17 46; /* #0b112e */
+}
+
+/* iOS Safari, 16px altı input'lara odaklanınca otomatik zoom yapar. */
 input,
 select,
 textarea {
@@ -26,7 +51,17 @@ body {
   margin: 0;
   font-family: "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: radial-gradient(1200px 600px at 50% -10%, #1c2b6b 0%, #0b1130 45%, #070b1f 100%);
+  background: rgb(var(--app-to));
+}
+
+/* Tüm sayfalara uygulanan tema arka plan gradient'i */
+.app-bg {
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--app-from)),
+    rgb(var(--app-via)) 45%,
+    rgb(var(--app-to))
+  );
 }
 
 /* Hide scrollbars inside the phone viewport for a native feel */
@@ -40,13 +75,13 @@ body {
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-2xl font-semibold transition active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl font-semibold transition-all duration-200 ease-soft active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
   }
   .btn-primary {
     @apply btn bg-brand-600 text-white shadow-soft hover:bg-brand-700;
   }
   .btn-ghost {
-    @apply btn bg-ink-100 text-ink-700 hover:bg-ink-200;
+    @apply btn bg-elevated text-fg hover:bg-line;
   }
   .btn-lg {
     @apply h-14 px-6 text-[15px];
@@ -55,13 +90,17 @@ body {
     @apply w-full;
   }
   .field-label {
-    @apply mb-1.5 block text-[13px] font-medium text-ink-500;
+    @apply mb-1.5 block text-[13px] font-medium text-muted;
   }
   .field-input {
-    @apply h-12 w-full rounded-2xl border border-ink-200 bg-white px-4 text-base text-ink-900 outline-none transition placeholder:text-ink-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-100;
+    @apply h-12 w-full rounded-2xl border border-line bg-surface px-4 text-base text-fg outline-none transition placeholder:text-subtle focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20;
   }
   .card {
-    @apply rounded-2xl bg-white shadow-card;
+    @apply rounded-2xl bg-surface shadow-card transition-shadow duration-200 ease-soft;
+  }
+  /* Liste öğelerine kademeli giriş için yardımcı */
+  .stagger {
+    animation: fade-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .chip {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold;

@@ -49,7 +49,7 @@ export default function Pagination({ page, pageCount, onChange, rangeStart, rang
 
   return (
     <div className="mt-6 flex flex-col items-center justify-between gap-3 sm:flex-row">
-      <p className="text-xs text-ink-400">
+      <p className="text-xs text-subtle">
         {rangeStart}–{rangeEnd} / {total} {label}
       </p>
       {pageCount > 1 && (
@@ -57,13 +57,13 @@ export default function Pagination({ page, pageCount, onChange, rangeStart, rang
           <button
             onClick={() => onChange(page - 1)}
             disabled={page === 1}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-ink-200 bg-white text-ink-500 transition hover:bg-ink-50 disabled:opacity-40"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-surface text-muted transition hover:bg-elevated disabled:opacity-40"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           {pages.map((p, i) =>
             p === "…" ? (
-              <span key={`e${i}`} className="px-1 text-ink-300">
+              <span key={`e${i}`} className="px-1 text-subtle">
                 …
               </span>
             ) : (
@@ -71,7 +71,7 @@ export default function Pagination({ page, pageCount, onChange, rangeStart, rang
                 key={p}
                 onClick={() => onChange(p)}
                 className={`h-9 min-w-9 rounded-lg px-2 text-sm font-semibold transition ${
-                  p === page ? "bg-brand-600 text-white" : "border border-ink-200 bg-white text-ink-600 hover:bg-ink-50"
+                  p === page ? "bg-brand-600 text-white" : "border border-line bg-surface text-muted hover:bg-elevated"
                 }`}
               >
                 {p}
@@ -81,7 +81,7 @@ export default function Pagination({ page, pageCount, onChange, rangeStart, rang
           <button
             onClick={() => onChange(page + 1)}
             disabled={page === pageCount}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-ink-200 bg-white text-ink-500 transition hover:bg-ink-50 disabled:opacity-40"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-surface text-muted transition hover:bg-elevated disabled:opacity-40"
           >
             <ChevronRight className="h-4 w-4" />
           </button>

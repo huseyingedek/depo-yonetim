@@ -16,7 +16,7 @@ export default function PhoneFrame({ children }: { children: ReactNode }) {
   }, []);
 
   if (isMobile) {
-    return <div className="h-[100dvh] w-full overflow-hidden bg-ink-50">{children}</div>;
+    return <div className="h-[100dvh] w-full overflow-hidden bg-elevated">{children}</div>;
   }
 
   return (
@@ -27,7 +27,7 @@ export default function PhoneFrame({ children }: { children: ReactNode }) {
           {/* Çentik */}
           <div className="absolute left-1/2 top-0 z-30 h-6 w-40 -translate-x-1/2 rounded-b-2xl bg-ink-950" />
           {/* Ekran */}
-          <div className="relative h-full w-full overflow-hidden rounded-[2.3rem] bg-ink-50">
+          <div className="relative h-full w-full overflow-hidden rounded-[2.3rem] bg-elevated">
             {children}
           </div>
         </div>

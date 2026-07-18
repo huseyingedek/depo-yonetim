@@ -71,10 +71,10 @@ export default function BarcodeScanner({ onDetected, sampleBarcode }: Props) {
 
   if (manualMode) {
     return (
-      <div className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-card">
+      <div className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-card">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-ink-700">{t("picking.manualEntry")}</span>
-          <button onClick={() => setManualMode(false)} className="text-ink-400 hover:text-ink-600">
+          <span className="text-sm font-semibold text-muted">{t("picking.manualEntry")}</span>
+          <button onClick={() => setManualMode(false)} className="text-subtle hover:text-muted">
             <X className="h-5 w-5" />
           </button>
         </div>

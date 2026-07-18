@@ -55,7 +55,7 @@ export default function PutawayItemPage() {
     return (
       <div className="mx-auto max-w-3xl p-4 lg:p-8">
         <PageHeader title={t("putaway.title")} backTo="/putaway" />
-        <div className="flex items-center justify-center py-24 text-ink-300"><Loader2 className="h-6 w-6 animate-spin" /></div>
+        <div className="flex items-center justify-center py-24 text-subtle"><Loader2 className="h-6 w-6 animate-spin" /></div>
       </div>
     );
   }
@@ -64,7 +64,7 @@ export default function PutawayItemPage() {
     return (
       <div className="mx-auto max-w-3xl p-4 lg:p-8">
         <PageHeader title={t("putaway.title")} backTo="/putaway" />
-        <p className="py-16 text-center text-ink-400">{t("common.noResults")}</p>
+        <p className="py-16 text-center text-subtle">{t("common.noResults")}</p>
       </div>
     );
   }
@@ -75,10 +75,10 @@ export default function PutawayItemPage() {
         <div className="mb-5 flex h-24 w-24 animate-pop-in items-center justify-center rounded-full bg-violet-100">
           <CheckCircle2 className="h-12 w-12 text-violet-600" />
         </div>
-        <h1 className="text-2xl font-extrabold text-ink-900">{t("putaway.placed")}!</h1>
-        <div className="mt-4 w-full rounded-2xl border border-ink-100 bg-white p-5 text-left shadow-card">
-          <p className="truncate font-semibold text-ink-900">{item.product.name}</p>
-          <p className="mt-1 flex items-center gap-1.5 text-sm text-ink-500">
+        <h1 className="text-2xl font-extrabold text-fg">{t("putaway.placed")}!</h1>
+        <div className="mt-4 w-full rounded-2xl border border-line bg-surface p-5 text-left shadow-card">
+          <p className="truncate font-semibold text-fg">{item.product.name}</p>
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-muted">
             <MapPin className="h-4 w-4 text-violet-500" /> <span className="font-mono font-semibold">{location}</span> · {item.qty} {item.product.unit}
           </p>
         </div>
@@ -102,12 +102,12 @@ export default function PutawayItemPage() {
           {/* Ürün */}
           <div className="card p-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-ink-100">
-                <Package className="h-5 w-5 text-ink-500" />
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-elevated">
+                <Package className="h-5 w-5 text-muted" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-ink-900">{item.product.name}</p>
-                <p className="font-mono text-xs text-ink-400">{item.product.barcode}</p>
+                <p className="truncate font-semibold text-fg">{item.product.name}</p>
+                <p className="font-mono text-xs text-subtle">{item.product.barcode}</p>
               </div>
               {verified && (
                 <span className="chip bg-emerald-100 text-emerald-700"><Check className="h-3.5 w-3.5" /> {t("transfer.productOk")}</span>
@@ -118,8 +118,8 @@ export default function PutawayItemPage() {
           {/* Miktar + Lokasyon */}
           <div className="card space-y-4 p-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-ink-500">{t("putaway.quantity")}</span>
-              <span className="font-mono text-lg font-bold text-ink-900">{item.qty} {item.product.unit}</span>
+              <span className="text-sm text-muted">{t("putaway.quantity")}</span>
+              <span className="font-mono text-lg font-bold text-fg">{item.qty} {item.product.unit}</span>
             </div>
             <div>
               <label className="field-label">{t("putaway.targetLocation")}</label>
@@ -127,7 +127,7 @@ export default function PutawayItemPage() {
                 <MapPin className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-violet-400" />
                 <input value={location} onChange={(e) => setLocation(e.target.value)} className="field-input pl-11 font-mono font-semibold" placeholder="A-03-02" />
               </div>
-              <p className="mt-1.5 text-xs text-ink-400">{t("putaway.suggested")}: <span className="font-mono font-semibold text-violet-600">{item.suggestedLocation}</span></p>
+              <p className="mt-1.5 text-xs text-subtle">{t("putaway.suggested")}: <span className="font-mono font-semibold text-violet-600">{item.suggestedLocation}</span></p>
             </div>
           </div>
 

@@ -41,7 +41,7 @@ export default function PickingListPage() {
         backTo="/home"
         right={
           <div className="relative hidden sm:block">
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-300" />
+            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -54,7 +54,7 @@ export default function PickingListPage() {
 
       {/* Mobil arama */}
       <div className="relative mb-5 sm:hidden">
-        <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-300" />
+        <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -66,11 +66,11 @@ export default function PickingListPage() {
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-32 animate-pulse rounded-2xl bg-ink-100" />
+            <div key={i} className="h-32 animate-pulse rounded-2xl bg-elevated" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-ink-300">
+        <div className="flex flex-col items-center justify-center py-20 text-subtle">
           <Package className="mb-2 h-10 w-10" />
           <p className="text-sm">—</p>
         </div>
@@ -85,12 +85,12 @@ export default function PickingListPage() {
               <button
                 key={o.id}
                 onClick={() => navigate(`/picking/${o.id}`)}
-                className="rounded-2xl border border-ink-100 bg-white p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
+                className="rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
               >
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-base font-bold text-ink-900">{o.id}</span>
+                      <span className="font-mono text-base font-bold text-fg">{o.id}</span>
                       <span
                         className={`chip ${
                           started ? "bg-amber-100 text-amber-700" : "bg-brand-100 text-brand-700"
@@ -99,16 +99,16 @@ export default function PickingListPage() {
                         {started ? t("picking.status.inProgress") : t("picking.status.new")}
                       </span>
                     </div>
-                    <p className="mt-0.5 text-sm text-ink-500">{o.customer}</p>
+                    <p className="mt-0.5 text-sm text-muted">{o.customer}</p>
                   </div>
-                  <ChevronRight className="mt-1 h-5 w-5 text-ink-300" />
+                  <ChevronRight className="mt-1 h-5 w-5 text-subtle" />
                 </div>
 
                 <div className="mt-4 flex items-center gap-3">
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-ink-100">
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-elevated">
                     <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${progress}%` }} />
                   </div>
-                  <span className="whitespace-nowrap text-xs font-semibold text-ink-400">
+                  <span className="whitespace-nowrap text-xs font-semibold text-subtle">
                     {lineCount} {t("picking.items")} · {requested} adet
                   </span>
                 </div>

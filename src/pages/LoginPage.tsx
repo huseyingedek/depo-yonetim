@@ -42,9 +42,9 @@ export default function LoginPage() {
         </div>
 
         {/* Form kartı */}
-        <form onSubmit={submit} className="rounded-3xl bg-white p-6 shadow-soft">
-          <h2 className="text-lg font-bold text-ink-900">{t("login.welcome")}</h2>
-          <p className="mb-5 text-sm text-ink-400">{t("login.subtitle")}</p>
+        <form onSubmit={submit} className="rounded-3xl bg-surface p-6 shadow-soft">
+          <h2 className="text-lg font-bold text-fg">{t("login.welcome")}</h2>
+          <p className="mb-5 text-sm text-subtle">{t("login.subtitle")}</p>
 
           <label className="field-label">{t("login.username")}</label>
           <input
@@ -67,7 +67,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => setShowPw((v) => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-subtle"
             >
               {showPw ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
             </button>
@@ -86,7 +86,7 @@ export default function LoginPage() {
             )}
           </button>
 
-          <p className="mt-4 text-center text-xs text-ink-300">{t("login.demoHint")}</p>
+          <p className="mt-4 text-center text-xs text-subtle">{t("login.demoHint")}</p>
         </form>
       </div>
     </div>

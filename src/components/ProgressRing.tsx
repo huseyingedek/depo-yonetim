@@ -28,8 +28,8 @@ export default function ProgressRing({ value, size = 120, stroke = 10, label }: 
         />
       </svg>
       <div className="absolute flex flex-col items-center">
-        <span className="text-2xl font-extrabold text-ink-900">{Math.round(clamped)}%</span>
-        {label && <span className="text-[11px] font-medium text-ink-400">{label}</span>}
+        <span className="text-2xl font-extrabold text-fg">{Math.round(clamped)}%</span>
+        {label && <span className="text-[11px] font-medium text-subtle">{label}</span>}
       </div>
     </div>
   );

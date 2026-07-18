@@ -51,7 +51,7 @@ export default function ReceivingDetailPage() {
     return (
       <div className="mx-auto max-w-6xl p-4 lg:p-8">
         <PageHeader title={t("receiving.title")} backTo="/receiving" />
-        <div className="flex items-center justify-center py-24 text-ink-300">
+        <div className="flex items-center justify-center py-24 text-subtle">
           <Loader2 className="h-6 w-6 animate-spin" />
         </div>
       </div>
@@ -79,14 +79,14 @@ export default function ReceivingDetailPage() {
           </div>
           <div className="card mt-4 p-4">
             <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="font-semibold text-ink-500">{t("picking.progress")}</span>
-              <span className="font-bold text-ink-900">{Math.round(progress)}%</span>
+              <span className="font-semibold text-muted">{t("picking.progress")}</span>
+              <span className="font-bold text-fg">{Math.round(progress)}%</span>
             </div>
-            <div className="h-2.5 overflow-hidden rounded-full bg-ink-100">
+            <div className="h-2.5 overflow-hidden rounded-full bg-elevated">
               <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${progress}%` }} />
             </div>
             {nextLine ? (
-              <p className="mt-3 flex items-center gap-1.5 truncate text-xs text-ink-400">
+              <p className="mt-3 flex items-center gap-1.5 truncate text-xs text-subtle">
                 <ArrowRight className="h-3.5 w-3.5 shrink-0" /> {nextLine.product.name}
               </p>
             ) : (
@@ -106,17 +106,17 @@ export default function ReceivingDetailPage() {
               return (
                 <div
                   key={line.id}
-                  className={`flex flex-col gap-3 rounded-2xl border bg-white p-4 shadow-card transition sm:flex-row sm:items-center ${
-                    flashing ? "border-emerald-400 ring-2 ring-emerald-200" : "border-ink-100"
+                  className={`flex flex-col gap-3 rounded-2xl border bg-surface p-4 shadow-card transition sm:flex-row sm:items-center ${
+                    flashing ? "border-emerald-400 ring-2 ring-emerald-200" : "border-line"
                   }`}
                 >
                   <div className="flex min-w-0 flex-1 items-start gap-3">
-                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${done ? "bg-emerald-100" : partial ? "bg-amber-100" : "bg-ink-100"}`}>
-                      {done ? <Check className="h-5 w-5 text-emerald-600" /> : <span className={`text-sm font-bold ${partial ? "text-amber-600" : "text-ink-400"}`}>{line.receivedQty}</span>}
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${done ? "bg-emerald-100" : partial ? "bg-amber-100" : "bg-elevated"}`}>
+                      {done ? <Check className="h-5 w-5 text-emerald-600" /> : <span className={`text-sm font-bold ${partial ? "text-amber-600" : "text-subtle"}`}>{line.receivedQty}</span>}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold text-ink-900">{line.product.name}</p>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-400">
+                      <p className="truncate font-semibold text-fg">{line.product.name}</p>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-subtle">
                         <span className="font-mono">{line.product.barcode}</span>
                         {line.tracksLot && (
                           <button onClick={() => setLotLine(line)} className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 font-semibold text-violet-600">
@@ -128,10 +128,10 @@ export default function ReceivingDetailPage() {
                     </div>
                   </div>
                   <div className="flex items-center justify-end gap-2">
-                    <button onClick={() => setQty(line.id, line.receivedQty - 1)} className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink-100 text-ink-600 transition hover:bg-ink-200 active:scale-95">
+                    <button onClick={() => setQty(line.id, line.receivedQty - 1)} className="flex h-9 w-9 items-center justify-center rounded-lg bg-elevated text-muted transition hover:bg-line active:scale-95">
                       <Minus className="h-4 w-4" />
                     </button>
-                    <span className="w-16 text-center font-mono text-sm font-bold text-ink-900">{line.receivedQty} / {line.expectedQty}</span>
+                    <span className="w-16 text-center font-mono text-sm font-bold text-fg">{line.receivedQty} / {line.expectedQty}</span>
                     <button onClick={() => (line.tracksLot ? setLotLine(line) : setQty(line.id, line.receivedQty + 1))} className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-600 text-white transition hover:bg-emerald-700 active:scale-95">
                       <Plus className="h-4 w-4" />
                     </button>
@@ -192,32 +192,32 @@ function LotModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink-900/40 p-0 sm:items-center sm:p-4">
-      <div className="w-full max-w-md animate-slide-up rounded-t-3xl bg-white p-6 shadow-soft sm:rounded-3xl">
+      <div className="w-full max-w-md animate-slide-up rounded-t-3xl bg-surface p-6 shadow-soft sm:rounded-3xl">
         <div className="mb-4 flex items-start justify-between">
           <div>
-            <h3 className="text-lg font-bold text-ink-900">{t("receiving.lotInfo")}</h3>
-            <p className="truncate text-sm text-ink-400">{line.product.name}</p>
+            <h3 className="text-lg font-bold text-fg">{t("receiving.lotInfo")}</h3>
+            <p className="truncate text-sm text-subtle">{line.product.name}</p>
           </div>
-          <button onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-xl text-ink-400 hover:bg-ink-100">
+          <button onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-xl text-subtle hover:bg-elevated">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <label className="field-label">{t("receiving.lotNumber")}</label>
         <div className="relative mb-4">
-          <Tag className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-300" />
+          <Tag className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
           <input autoFocus value={lot} onChange={(e) => setLot(e.target.value)} placeholder="L20260718" className="field-input pl-11 font-mono" />
         </div>
 
         <label className="field-label">{t("receiving.expiry")}</label>
         <div className="relative mb-4">
-          <Calendar className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-300" />
+          <Calendar className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
           <input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} className="field-input pl-11" />
         </div>
 
         <label className="field-label">{t("receiving.quantity")} ({t("receiving.expected")}: {line.expectedQty})</label>
         <div className="mb-4 flex items-center gap-3">
-          <button onClick={() => setQty((q) => Math.max(0, q - 1))} className="flex h-12 w-12 items-center justify-center rounded-xl bg-ink-100 text-ink-600 active:scale-95">
+          <button onClick={() => setQty((q) => Math.max(0, q - 1))} className="flex h-12 w-12 items-center justify-center rounded-xl bg-elevated text-muted active:scale-95">
             <Minus className="h-5 w-5" />
           </button>
           <input value={qty} onChange={(e) => setQty(Math.max(0, Number(e.target.value) || 0))} inputMode="numeric" className="field-input flex-1 text-center font-mono text-lg font-bold" />

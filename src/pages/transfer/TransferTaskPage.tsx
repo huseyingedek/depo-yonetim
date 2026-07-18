@@ -52,7 +52,7 @@ export default function TransferTaskPage() {
     return (
       <div className="mx-auto max-w-3xl p-4 lg:p-8">
         <PageHeader title={t("transfer.title")} backTo="/transfer" />
-        <div className="flex items-center justify-center py-24 text-ink-300"><Loader2 className="h-6 w-6 animate-spin" /></div>
+        <div className="flex items-center justify-center py-24 text-subtle"><Loader2 className="h-6 w-6 animate-spin" /></div>
       </div>
     );
   }
@@ -61,7 +61,7 @@ export default function TransferTaskPage() {
     return (
       <div className="mx-auto max-w-3xl p-4 lg:p-8">
         <PageHeader title={t("transfer.title")} backTo="/transfer" />
-        <p className="py-16 text-center text-ink-400">{t("common.noResults")}</p>
+        <p className="py-16 text-center text-subtle">{t("common.noResults")}</p>
       </div>
     );
   }
@@ -72,14 +72,14 @@ export default function TransferTaskPage() {
         <div className="mb-5 flex h-24 w-24 animate-pop-in items-center justify-center rounded-full bg-amber-100">
           <CheckCircle2 className="h-12 w-12 text-amber-600" />
         </div>
-        <h1 className="text-2xl font-extrabold text-ink-900">{t("transfer.completed")}!</h1>
-        <div className="mt-4 w-full rounded-2xl border border-ink-100 bg-white p-5 text-left shadow-card">
-          <p className="truncate font-semibold text-ink-900">{task.product.name}</p>
+        <h1 className="text-2xl font-extrabold text-fg">{t("transfer.completed")}!</h1>
+        <div className="mt-4 w-full rounded-2xl border border-line bg-surface p-5 text-left shadow-card">
+          <p className="truncate font-semibold text-fg">{task.product.name}</p>
           <p className="mt-1 flex items-center gap-1.5 text-sm">
-            <span className="font-mono font-semibold text-ink-500">{task.fromLocation}</span>
+            <span className="font-mono font-semibold text-muted">{task.fromLocation}</span>
             <ArrowRight className="h-4 w-4 text-amber-500" />
             <span className="font-mono font-semibold text-amber-600">{toLocation}</span>
-            <span className="text-ink-400">· {task.qty} {task.product.unit}</span>
+            <span className="text-subtle">· {task.qty} {task.product.unit}</span>
           </p>
         </div>
         <button onClick={() => navigate("/transfer", { replace: true })} className="btn-primary btn-lg mt-6 w-full">
@@ -101,12 +101,12 @@ export default function TransferTaskPage() {
         <div className="space-y-4">
           <div className="card p-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-ink-100">
-                <Package className="h-5 w-5 text-ink-500" />
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-elevated">
+                <Package className="h-5 w-5 text-muted" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-ink-900">{task.product.name}</p>
-                <p className="font-mono text-xs text-ink-400">{task.product.barcode}</p>
+                <p className="truncate font-semibold text-fg">{task.product.name}</p>
+                <p className="font-mono text-xs text-subtle">{task.product.barcode}</p>
               </div>
               {verified && <span className="chip bg-emerald-100 text-emerald-700"><Check className="h-3.5 w-3.5" /> {t("transfer.productOk")}</span>}
             </div>
@@ -114,9 +114,9 @@ export default function TransferTaskPage() {
 
           <div className="card space-y-4 p-4">
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-ink-50 p-3">
-                <p className="text-xs text-ink-400">{t("transfer.from")}</p>
-                <p className="mt-0.5 flex items-center gap-1 font-mono font-bold text-ink-900"><MapPin className="h-4 w-4 text-ink-400" />{task.fromLocation}</p>
+              <div className="rounded-xl bg-elevated p-3">
+                <p className="text-xs text-subtle">{t("transfer.from")}</p>
+                <p className="mt-0.5 flex items-center gap-1 font-mono font-bold text-fg"><MapPin className="h-4 w-4 text-subtle" />{task.fromLocation}</p>
               </div>
               <div className="rounded-xl bg-amber-50 p-3">
                 <p className="text-xs text-amber-600">{t("transfer.to")}</p>
@@ -124,8 +124,8 @@ export default function TransferTaskPage() {
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-ink-500">{t("transfer.quantity")}</span>
-              <span className="font-mono text-lg font-bold text-ink-900">{task.qty} {task.product.unit}</span>
+              <span className="text-sm text-muted">{t("transfer.quantity")}</span>
+              <span className="font-mono text-lg font-bold text-fg">{task.qty} {task.product.unit}</span>
             </div>
           </div>
 

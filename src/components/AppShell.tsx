@@ -21,27 +21,27 @@ export default function AppShell() {
   }, [location.pathname]);
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-ink-50">
+    <div className="app-bg flex h-[100dvh] overflow-hidden">
       {/* Masaüstü sabit menü */}
-      <aside className="hidden w-72 shrink-0 flex-col border-r border-ink-100 bg-white lg:flex">
+      <aside className="hidden w-72 shrink-0 flex-col border-r border-white/10 bg-gradient-to-b from-ink-900 via-brand-900 to-brand-950 lg:flex">
         <SidebarContent onNavigate={() => {}} />
       </aside>
 
       {/* Ana bölüm */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Üst bar (mobilde app bar, web'de sade) */}
-        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-ink-100 bg-white px-4 lg:px-8">
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface px-4 lg:px-8">
           <div className="flex items-center gap-2.5 lg:hidden">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600">
               <Boxes className="h-5 w-5 text-white" />
             </div>
             <div className="leading-tight">
-              <p className="text-sm font-extrabold text-ink-900">{t("app.company")}</p>
-              <p className="text-[11px] text-ink-400">{t("app.name")}</p>
+              <p className="text-sm font-extrabold text-fg">{t("app.company")}</p>
+              <p className="text-[11px] text-subtle">{t("app.name")}</p>
             </div>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <button className="flex h-10 w-10 items-center justify-center rounded-xl text-ink-400 transition hover:bg-ink-100" aria-label="Bildirimler">
+            <button className="flex h-10 w-10 items-center justify-center rounded-xl text-subtle transition hover:bg-elevated" aria-label="Bildirimler">
               <Bell className="h-5 w-5" />
             </button>
             <UserBadge />
@@ -67,11 +67,6 @@ function MobileTabBar() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
-  const tabClass = (active: boolean) =>
-    `flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-semibold transition active:scale-95 ${
-      active ? "text-brand-600" : "text-ink-400"
-    }`;
-
   const tabs = [
     { to: "/home", icon: Home, label: t("nav.home"), active: pathname === "/home" },
     { to: "/picking", icon: ClipboardList, label: t("nav.picking"), active: pathname.startsWith("/picking") },
@@ -81,14 +76,26 @@ function MobileTabBar() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 flex border-t border-ink-100 bg-white/95 backdrop-blur lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-surface/95 backdrop-blur lg:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       {tabs.map((tab) => {
         const Icon = tab.icon;
         return (
-          <button key={tab.to} onClick={() => navigate(tab.to)} className={tabClass(tab.active)}>
-            <Icon className="h-[22px] w-[22px]" />
+          <button
+            key={tab.to}
+            onClick={() => navigate(tab.to)}
+            className={`flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-semibold transition-colors duration-200 ease-soft active:scale-95 ${
+              tab.active ? "text-brand-600" : "text-subtle"
+            }`}
+          >
+            <span
+              className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-200 ease-soft ${
+                tab.active ? "bg-brand-50" : "bg-transparent"
+              }`}
+            >
+              <Icon className={`h-[21px] w-[21px] transition-transform duration-200 ease-soft ${tab.active ? "scale-110" : ""}`} />
+            </span>
             {tab.label}
           </button>
         );
@@ -102,29 +109,29 @@ function SidebarContent({ onNavigate }: { onNavigate: () => void }) {
   const settings = useAppStore((s) => s.settings);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
-      isActive ? "bg-brand-50 text-brand-700" : "text-ink-500 hover:bg-ink-50 hover:text-ink-800"
+    `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 ease-soft ${
+      isActive ? "bg-white/15 text-white shadow-soft" : "text-white/70 hover:bg-white/10 hover:text-white"
     }`;
 
   return (
     <div className="flex h-full flex-col p-4">
       {/* Marka */}
       <div className="flex items-center gap-3 px-2 py-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20">
           <Boxes className="h-6 w-6 text-white" />
         </div>
         <div className="leading-tight">
-          <p className="text-sm font-extrabold text-ink-900">{t("app.company")}</p>
-          <p className="text-xs text-ink-400">{t("app.name")}</p>
+          <p className="text-sm font-extrabold text-white">{t("app.company")}</p>
+          <p className="text-xs text-brand-200">{t("app.name")}</p>
         </div>
       </div>
 
       {/* Çalışma bağlamı */}
-      <div className="mt-4 flex items-center gap-2 rounded-xl bg-ink-50 px-3 py-2.5">
-        <Building2 className="h-4 w-4 shrink-0 text-ink-400" />
+      <div className="mt-4 flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2.5 ring-1 ring-white/10">
+        <Building2 className="h-4 w-4 shrink-0 text-brand-200" />
         <div className="min-w-0 leading-tight">
-          <p className="truncate text-xs font-semibold text-ink-700">{settings.facility}</p>
-          <p className="truncate text-[11px] text-ink-400">{settings.warehouse}</p>
+          <p className="truncate text-xs font-semibold text-white">{settings.facility}</p>
+          <p className="truncate text-[11px] text-brand-200">{settings.warehouse}</p>
         </div>
       </div>
 
@@ -134,7 +141,7 @@ function SidebarContent({ onNavigate }: { onNavigate: () => void }) {
           <Home className="h-5 w-5" />
           {t("home.selectOperation")}
         </NavLink>
-        <p className="px-3 pb-1 pt-4 text-[11px] font-bold uppercase tracking-wide text-ink-300">
+        <p className="px-3 pb-1 pt-4 text-[11px] font-bold uppercase tracking-wide text-white/40">
           {t("app.name")}
         </p>
         {OPERATIONS.map((op) => {
@@ -146,7 +153,7 @@ function SidebarContent({ onNavigate }: { onNavigate: () => void }) {
               </span>
               <span className="flex-1">{t(`home.operations.${op.type}`)}</span>
               {!op.ready && (
-                <span className="rounded-full bg-ink-100 px-1.5 py-0.5 text-[9px] font-semibold text-ink-400">
+                <span className="rounded-full bg-elevated px-1.5 py-0.5 text-[9px] font-semibold text-subtle">
                   yakında
                 </span>
               )}
@@ -156,7 +163,7 @@ function SidebarContent({ onNavigate }: { onNavigate: () => void }) {
       </nav>
 
       {/* Alt */}
-      <div className="mt-2 space-y-1 border-t border-ink-100 pt-3">
+      <div className="mt-2 space-y-1 border-t border-white/10 pt-3">
         <NavLink to="/settings" className={linkClass} onClick={onNavigate}>
           <SettingsIcon className="h-5 w-5" />
           {t("settings.title")}
@@ -177,7 +184,7 @@ function LogoutButton() {
         logout();
         navigate("/login", { replace: true });
       }}
-      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-rose-500 transition hover:bg-rose-50"
+      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-rose-300 transition-all duration-200 ease-soft hover:bg-white/10 hover:text-rose-200"
     >
       <LogOut className="h-5 w-5" />
       {t("settings.signOut")}
@@ -196,8 +203,8 @@ function UserBadge() {
   return (
     <div className="flex items-center gap-2">
       <div className="hidden text-right leading-tight sm:block">
-        <p className="text-sm font-semibold text-ink-800">{user?.displayName}</p>
-        <p className="text-[11px] text-ink-400">{user?.username}</p>
+        <p className="text-sm font-semibold text-fg">{user?.displayName}</p>
+        <p className="text-[11px] text-subtle">{user?.username}</p>
       </div>
       <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-700">
         {initials || "?"}

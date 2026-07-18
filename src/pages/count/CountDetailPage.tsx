@@ -67,7 +67,7 @@ export default function CountDetailPage() {
     return (
       <div className="mx-auto max-w-3xl p-4 lg:p-8">
         <PageHeader title={t("count.title")} backTo="/count" />
-        <div className="flex items-center justify-center py-24 text-ink-300"><Loader2 className="h-6 w-6 animate-spin" /></div>
+        <div className="flex items-center justify-center py-24 text-subtle"><Loader2 className="h-6 w-6 animate-spin" /></div>
       </div>
     );
   }
@@ -78,9 +78,9 @@ export default function CountDetailPage() {
         <div className="mb-5 flex h-24 w-24 animate-pop-in items-center justify-center rounded-full bg-rose-100">
           <CheckCircle2 className="h-12 w-12 text-rose-500" />
         </div>
-        <h1 className="text-2xl font-extrabold text-ink-900">{t("count.completed")}</h1>
+        <h1 className="text-2xl font-extrabold text-fg">{t("count.completed")}</h1>
         <div className="mt-1 flex items-center gap-1.5 text-sm text-emerald-600"><Send className="h-4 w-4" /> {t("picking.sentToCanias")}</div>
-        <div className="mt-6 w-full rounded-2xl border border-ink-100 bg-white p-5 text-left shadow-card">
+        <div className="mt-6 w-full rounded-2xl border border-line bg-surface p-5 text-left shadow-card">
           <Row label={t("count.location")} value={task.location} mono />
           <Row label={t("picking.reference")} value={caniasRef} mono />
           <Row label={t("count.countedLines")} value={`${lines.length}`} />
@@ -107,7 +107,7 @@ export default function CountDetailPage() {
           </div>
           <div className="card mt-4 p-4">
             <label className="field-label">{t("count.note")}</label>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder={t("count.notePlaceholder")} className="w-full rounded-2xl border border-ink-200 bg-white px-4 py-3 text-base outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder={t("count.notePlaceholder")} className="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-base outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
           </div>
         </div>
 
@@ -118,11 +118,11 @@ export default function CountDetailPage() {
               const diff = counted === null ? null : counted - line.systemQty;
               const flashing = flashLine === line.id;
               return (
-                <div key={line.id} className={`rounded-2xl border bg-white p-4 shadow-card transition ${flashing ? "border-rose-300 ring-2 ring-rose-200" : "border-ink-100"}`}>
+                <div key={line.id} className={`rounded-2xl border bg-surface p-4 shadow-card transition ${flashing ? "border-rose-300 ring-2 ring-rose-200" : "border-line"}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-ink-900">{line.product.name}</p>
-                      <p className="font-mono text-xs text-ink-400">{line.product.barcode}</p>
+                      <p className="truncate font-semibold text-fg">{line.product.name}</p>
+                      <p className="font-mono text-xs text-subtle">{line.product.barcode}</p>
                     </div>
                     {diff !== null && (
                       <span className={`chip shrink-0 ${diff === 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"}`}>
@@ -132,14 +132,14 @@ export default function CountDetailPage() {
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-3">
-                    <div className="rounded-xl bg-ink-50 p-2.5 text-center">
-                      <p className="text-[11px] text-ink-400">{t("count.systemQty")}</p>
-                      <p className="font-mono text-lg font-bold text-ink-700">{line.systemQty}</p>
+                    <div className="rounded-xl bg-elevated p-2.5 text-center">
+                      <p className="text-[11px] text-subtle">{t("count.systemQty")}</p>
+                      <p className="font-mono text-lg font-bold text-muted">{line.systemQty}</p>
                     </div>
                     <div className="rounded-xl bg-brand-50 p-2.5">
                       <p className="mb-1 text-center text-[11px] text-brand-500">{t("count.countedQty")}</p>
                       <div className="flex items-center gap-1.5">
-                        <button onClick={() => setCounted(line.id, Math.max(0, (counted ?? 0) - 1))} className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-ink-600 active:scale-95">
+                        <button onClick={() => setCounted(line.id, Math.max(0, (counted ?? 0) - 1))} className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface text-muted active:scale-95">
                           <Minus className="h-4 w-4" />
                         </button>
                         <input
@@ -173,9 +173,9 @@ export default function CountDetailPage() {
 
 function Row({ label, value, mono, danger, last }: { label: string; value: string; mono?: boolean; danger?: boolean; last?: boolean }) {
   return (
-    <div className={`flex items-center justify-between py-2 ${last ? "" : "border-b border-ink-100"}`}>
-      <span className="text-sm text-ink-400">{label}</span>
-      <span className={`text-sm font-bold ${danger ? "text-rose-500" : "text-ink-900"} ${mono ? "font-mono" : ""}`}>{value}</span>
+    <div className={`flex items-center justify-between py-2 ${last ? "" : "border-b border-line"}`}>
+      <span className="text-sm text-subtle">{label}</span>
+      <span className={`text-sm font-bold ${danger ? "text-rose-500" : "text-fg"} ${mono ? "font-mono" : ""}`}>{value}</span>
     </div>
   );
 }

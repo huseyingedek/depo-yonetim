@@ -38,11 +38,11 @@ export default function ReceivingSummaryPage() {
         <div className="mb-5 flex h-24 w-24 animate-pop-in items-center justify-center rounded-full bg-emerald-100">
           <CheckCircle2 className="h-12 w-12 text-emerald-600" />
         </div>
-        <h1 className="text-2xl font-extrabold text-ink-900">{t("receiving.completed")}</h1>
+        <h1 className="text-2xl font-extrabold text-fg">{t("receiving.completed")}</h1>
         <div className="mt-1 flex items-center gap-1.5 text-sm text-emerald-600">
           <Send className="h-4 w-4" /> <span>{t("picking.sentToCanias")}</span>
         </div>
-        <div className="mt-6 w-full rounded-2xl border border-ink-100 bg-white p-5 shadow-card">
+        <div className="mt-6 w-full rounded-2xl border border-line bg-surface p-5 shadow-card">
           <Row label={t("receiving.waybill")} value={receipt.id} mono />
           <Row label={t("picking.reference")} value={caniasRef} mono />
           <Row label={t("receiving.totalLines")} value={`${lineCount}`} />
@@ -74,19 +74,19 @@ export default function ReceivingSummaryPage() {
         {receipt.lines.map((line) => {
           const lineDone = line.receivedQty >= line.expectedQty;
           return (
-            <div key={line.id} className="flex items-center gap-3 rounded-2xl border border-ink-100 bg-white p-3.5 shadow-card">
+            <div key={line.id} className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-card">
               <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${lineDone ? "bg-emerald-100" : "bg-amber-100"}`}>
                 <Check className={`h-4 w-4 ${lineDone ? "text-emerald-600" : "text-amber-500"}`} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-ink-800">{line.product.name}</p>
+                <p className="truncate text-sm font-medium text-fg">{line.product.name}</p>
                 {line.lot && (
                   <p className="flex items-center gap-1 text-xs text-violet-600">
                     <Tag className="h-3 w-3" /> {line.lot} · {line.expiry}
                   </p>
                 )}
               </div>
-              <span className="font-mono text-sm font-bold text-ink-900">{line.receivedQty}/{line.expectedQty}</span>
+              <span className="font-mono text-sm font-bold text-fg">{line.receivedQty}/{line.expectedQty}</span>
             </div>
           );
         })}
@@ -101,19 +101,19 @@ export default function ReceivingSummaryPage() {
 
 function Row({ label, value, mono, last }: { label: string; value: string; mono?: boolean; last?: boolean }) {
   return (
-    <div className={`flex items-center justify-between py-2 ${last ? "" : "border-b border-ink-100"}`}>
-      <span className="text-sm text-ink-400">{label}</span>
-      <span className={`text-sm font-bold text-ink-900 ${mono ? "font-mono" : ""}`}>{value}</span>
+    <div className={`flex items-center justify-between py-2 ${last ? "" : "border-b border-line"}`}>
+      <span className="text-sm text-subtle">{label}</span>
+      <span className={`text-sm font-bold text-fg ${mono ? "font-mono" : ""}`}>{value}</span>
     </div>
   );
 }
 
 function Stat({ value, label, tone }: { value: number; label: string; tone: "ink" | "brand" | "emerald" }) {
-  const tones = { ink: "text-ink-900", brand: "text-brand-600", emerald: "text-emerald-600" };
+  const tones = { ink: "text-fg", brand: "text-brand-600", emerald: "text-emerald-600" };
   return (
-    <div className="rounded-2xl border border-ink-100 bg-white p-3 text-center shadow-card">
+    <div className="rounded-2xl border border-line bg-surface p-3 text-center shadow-card">
       <p className={`text-2xl font-extrabold ${tones[tone]}`}>{value}</p>
-      <p className="mt-0.5 text-[11px] font-medium leading-tight text-ink-400">{label}</p>
+      <p className="mt-0.5 text-[11px] font-medium leading-tight text-subtle">{label}</p>
     </div>
   );
 }

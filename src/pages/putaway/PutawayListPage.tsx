@@ -40,22 +40,22 @@ export default function PutawayListPage() {
         backTo="/home"
         right={
           <div className="relative hidden sm:block">
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-300" />
+            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("putaway.search")} className="field-input w-72 pl-11" />
           </div>
         }
       />
       <div className="relative mb-5 sm:hidden">
-        <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-300" />
+        <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("putaway.search")} className="field-input pl-11" />
       </div>
 
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2">
-          {[0, 1, 2, 3].map((i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-ink-100" />)}
+          {[0, 1, 2, 3].map((i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-elevated" />)}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-ink-300">
+        <div className="flex flex-col items-center justify-center py-20 text-subtle">
           <Warehouse className="mb-2 h-10 w-10" />
           <p className="text-sm">{t("putaway.allPlaced")}</p>
         </div>
@@ -66,14 +66,14 @@ export default function PutawayListPage() {
               <button
                 key={i.id}
                 onClick={() => navigate(`/putaway/${i.id}`)}
-                className="flex items-center gap-4 rounded-2xl border border-ink-100 bg-white p-4 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
+                className="flex items-center gap-4 rounded-2xl border border-line bg-surface p-4 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
               >
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-100">
                   <span className="text-sm font-bold text-violet-600">{i.qty}</span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-ink-900">{i.product.name}</p>
-                  <div className="mt-0.5 flex items-center gap-2 text-xs text-ink-400">
+                  <p className="truncate font-semibold text-fg">{i.product.name}</p>
+                  <div className="mt-0.5 flex items-center gap-2 text-xs text-subtle">
                     <span className="inline-flex items-center gap-1">
                       <MapPin className="h-3.5 w-3.5" />
                       <span className="font-mono font-semibold text-violet-600">{i.suggestedLocation}</span>
@@ -81,7 +81,7 @@ export default function PutawayListPage() {
                     <span className="font-mono">· {i.sourceRef}</span>
                   </div>
                 </div>
-                <ChevronRight className="h-5 w-5 shrink-0 text-ink-300" />
+                <ChevronRight className="h-5 w-5 shrink-0 text-subtle" />
               </button>
             ))}
           </div>

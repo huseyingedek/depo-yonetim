@@ -38,13 +38,13 @@ export default function PickingSummaryPage() {
         <div className="mb-5 flex h-24 w-24 animate-pop-in items-center justify-center rounded-full bg-emerald-100">
           <CheckCircle2 className="h-12 w-12 text-emerald-600" />
         </div>
-        <h1 className="text-2xl font-extrabold text-ink-900">{t("picking.completed")}</h1>
+        <h1 className="text-2xl font-extrabold text-fg">{t("picking.completed")}</h1>
         <div className="mt-1 flex items-center gap-1.5 text-sm text-emerald-600">
           <Send className="h-4 w-4" />
           <span>{t("picking.sentToCanias")}</span>
         </div>
 
-        <div className="mt-6 w-full rounded-2xl border border-ink-100 bg-white p-5 shadow-card">
+        <div className="mt-6 w-full rounded-2xl border border-line bg-surface p-5 shadow-card">
           <Row label={t("picking.order")} value={order.id} mono />
           <Row label={t("picking.reference")} value={caniasRef} mono />
           <Row label={t("picking.totalItems")} value={`${lineCount}`} />
@@ -84,7 +84,7 @@ export default function PickingSummaryPage() {
         {order.lines.map((line) => {
           const lineDone = line.pickedQty >= line.requestedQty;
           return (
-            <div key={line.id} className="flex items-center gap-3 rounded-2xl border border-ink-100 bg-white p-3.5 shadow-card">
+            <div key={line.id} className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-card">
               <div
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
                   lineDone ? "bg-emerald-100" : "bg-rose-100"
@@ -92,8 +92,8 @@ export default function PickingSummaryPage() {
               >
                 <Check className={`h-4 w-4 ${lineDone ? "text-emerald-600" : "text-rose-400"}`} />
               </div>
-              <p className="min-w-0 flex-1 truncate text-sm font-medium text-ink-800">{line.product.name}</p>
-              <span className="font-mono text-sm font-bold text-ink-900">
+              <p className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{line.product.name}</p>
+              <span className="font-mono text-sm font-bold text-fg">
                 {line.pickedQty}/{line.requestedQty}
               </span>
             </div>
@@ -130,9 +130,9 @@ function Row({
   last?: boolean;
 }) {
   return (
-    <div className={`flex items-center justify-between py-2 ${last ? "" : "border-b border-ink-100"}`}>
-      <span className="text-sm text-ink-400">{label}</span>
-      <span className={`text-sm font-bold ${danger ? "text-rose-500" : "text-ink-900"} ${mono ? "font-mono" : ""}`}>
+    <div className={`flex items-center justify-between py-2 ${last ? "" : "border-b border-line"}`}>
+      <span className="text-sm text-subtle">{label}</span>
+      <span className={`text-sm font-bold ${danger ? "text-rose-500" : "text-fg"} ${mono ? "font-mono" : ""}`}>
         {value}
       </span>
     </div>
@@ -141,15 +141,15 @@ function Row({
 
 function Stat({ value, label, tone }: { value: number; label: string; tone: "ink" | "brand" | "rose" | "emerald" }) {
   const tones = {
-    ink: "text-ink-900",
+    ink: "text-fg",
     brand: "text-brand-600",
     rose: "text-rose-500",
     emerald: "text-emerald-600",
   };
   return (
-    <div className="rounded-2xl border border-ink-100 bg-white p-3 text-center shadow-card">
+    <div className="rounded-2xl border border-line bg-surface p-3 text-center shadow-card">
       <p className={`text-2xl font-extrabold ${tones[tone]}`}>{value}</p>
-      <p className="mt-0.5 text-[11px] font-medium leading-tight text-ink-400">{label}</p>
+      <p className="mt-0.5 text-[11px] font-medium leading-tight text-subtle">{label}</p>
     </div>
   );
 }

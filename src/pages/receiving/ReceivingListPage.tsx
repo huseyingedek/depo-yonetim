@@ -39,23 +39,23 @@ export default function ReceivingListPage() {
         backTo="/home"
         right={
           <div className="relative hidden sm:block">
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-300" />
+            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("receiving.search")} className="field-input w-72 pl-11" />
           </div>
         }
       />
 
       <div className="relative mb-5 sm:hidden">
-        <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-300" />
+        <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("receiving.search")} className="field-input pl-11" />
       </div>
 
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {[0, 1, 2].map((i) => <div key={i} className="h-32 animate-pulse rounded-2xl bg-ink-100" />)}
+          {[0, 1, 2].map((i) => <div key={i} className="h-32 animate-pulse rounded-2xl bg-elevated" />)}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-ink-300">
+        <div className="flex flex-col items-center justify-center py-20 text-subtle">
           <PackageCheck className="mb-2 h-10 w-10" />
           <p className="text-sm">{t("common.noResults")}</p>
         </div>
@@ -70,27 +70,27 @@ export default function ReceivingListPage() {
                 <button
                   key={d.id}
                   onClick={() => navigate(`/receiving/${d.id}`)}
-                  className="rounded-2xl border border-ink-100 bg-white p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
+                  className="rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
                 >
                   <div className="flex items-start justify-between">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-base font-bold text-ink-900">{d.id}</span>
+                        <span className="font-mono text-base font-bold text-fg">{d.id}</span>
                         <span className={`chip ${started ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
                           {started ? t("picking.status.inProgress") : t("picking.status.new")}
                         </span>
                       </div>
-                      <p className="mt-1 flex items-center gap-1.5 text-sm text-ink-500">
-                        <Truck className="h-4 w-4 text-ink-300" /> {d.supplier}
+                      <p className="mt-1 flex items-center gap-1.5 text-sm text-muted">
+                        <Truck className="h-4 w-4 text-subtle" /> {d.supplier}
                       </p>
                     </div>
-                    <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-ink-300" />
+                    <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-subtle" />
                   </div>
                   <div className="mt-4 flex items-center gap-3">
-                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-ink-100">
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-elevated">
                       <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${progress}%` }} />
                     </div>
-                    <span className="whitespace-nowrap text-xs font-semibold text-ink-400">
+                    <span className="whitespace-nowrap text-xs font-semibold text-subtle">
                       {lineCount} {t("receiving.items")} · {expected} adet
                     </span>
                   </div>

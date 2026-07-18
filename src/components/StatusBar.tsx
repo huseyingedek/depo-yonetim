@@ -4,7 +4,7 @@ import { Signal, Wifi, BatteryFull } from "lucide-react";
 export default function StatusBar({ dark = false }: { dark?: boolean }) {
   const now = new Date();
   const time = now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
-  const color = dark ? "text-white" : "text-ink-900";
+  const color = dark ? "text-white" : "text-fg";
   return (
     <div className={`flex h-9 items-center justify-between px-6 pt-1 text-[13px] font-semibold ${color}`}>
       <span>{time}</span>

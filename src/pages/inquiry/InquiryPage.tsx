@@ -45,16 +45,16 @@ export default function InquiryPage() {
         {/* Sonuç */}
         <div>
           {loading ? (
-            <div className="flex items-center justify-center py-24 text-ink-300"><Loader2 className="h-6 w-6 animate-spin" /></div>
+            <div className="flex items-center justify-center py-24 text-subtle"><Loader2 className="h-6 w-6 animate-spin" /></div>
           ) : notFound ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-ink-200 bg-white py-16 text-center">
-              <PackageX className="mb-2 h-10 w-10 text-ink-300" />
-              <p className="text-sm text-ink-400">{t("inquiry.notFound")}</p>
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-surface py-16 text-center">
+              <PackageX className="mb-2 h-10 w-10 text-subtle" />
+              <p className="text-sm text-subtle">{t("inquiry.notFound")}</p>
             </div>
           ) : !result ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-ink-200 bg-white py-16 text-center">
-              <ScanSearch className="mb-2 h-10 w-10 text-ink-300" />
-              <p className="max-w-xs px-6 text-sm text-ink-400">{t("inquiry.scanOrEnter")}</p>
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-surface py-16 text-center">
+              <ScanSearch className="mb-2 h-10 w-10 text-subtle" />
+              <p className="max-w-xs px-6 text-sm text-subtle">{t("inquiry.scanOrEnter")}</p>
             </div>
           ) : (
             <div className="animate-slide-up space-y-4">
@@ -65,8 +65,8 @@ export default function InquiryPage() {
                     <Package className="h-6 w-6 text-cyan-600" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-bold text-ink-900">{result.product.name}</p>
-                    <p className="font-mono text-xs text-ink-400">{result.product.code} · {result.product.barcode}</p>
+                    <p className="font-bold text-fg">{result.product.name}</p>
+                    <p className="font-mono text-xs text-subtle">{result.product.code} · {result.product.barcode}</p>
                   </div>
                 </div>
                 <div className="mt-4 flex items-end justify-between rounded-2xl bg-cyan-50 px-4 py-3">
@@ -78,16 +78,16 @@ export default function InquiryPage() {
               {/* Lokasyonlar */}
               <div className="card p-5">
                 <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-ink-500">{t("inquiry.locations")}</h3>
-                  <span className="chip bg-ink-100 text-ink-500">{locations.length}</span>
+                  <h3 className="text-sm font-semibold text-muted">{t("inquiry.locations")}</h3>
+                  <span className="chip bg-elevated text-muted">{locations.length}</span>
                 </div>
                 <div className="space-y-2">
                   {shown.map((loc) => (
-                    <div key={loc.location} className="flex items-center justify-between rounded-xl bg-ink-50 px-4 py-2.5">
-                      <span className="inline-flex items-center gap-2 font-mono font-semibold text-ink-700">
+                    <div key={loc.location} className="flex items-center justify-between rounded-xl bg-elevated px-4 py-2.5">
+                      <span className="inline-flex items-center gap-2 font-mono font-semibold text-muted">
                         <MapPin className="h-4 w-4 text-cyan-500" /> {loc.location}
                       </span>
-                      <span className="font-mono font-bold text-ink-900">{loc.qty} <span className="text-xs font-medium text-ink-400">{result.product.unit}</span></span>
+                      <span className="font-mono font-bold text-fg">{loc.qty} <span className="text-xs font-medium text-subtle">{result.product.unit}</span></span>
                     </div>
                   ))}
                 </div>
