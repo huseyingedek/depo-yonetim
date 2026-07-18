@@ -177,6 +177,12 @@
     "showLess": "Daha Az Göster",
     "recent": "Son sorgular"
   },
+  "nav": {
+    "home": "Ana Sayfa",
+    "picking": "Toplama",
+    "inquiry": "Sorgula",
+    "settings": "Ayarlar"
+  },
   "common": {
     "cancel": "İptal",
     "close": "Kapat",

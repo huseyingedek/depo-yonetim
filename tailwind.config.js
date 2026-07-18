@@ -56,11 +56,16 @@ export default {
           "0%": { transform: "translateY(12px)", opacity: "0" },
           "100%": { transform: "translateY(0)", opacity: "1" },
         },
+        "fade-in": {
+          "0%": { transform: "translateY(6px)", opacity: "0" },
+          "100%": { transform: "translateY(0)", opacity: "1" },
+        },
       },
       animation: {
         "scan-line": "scan-line 2s ease-in-out infinite",
         "pop-in": "pop-in 0.25s ease-out",
         "slide-up": "slide-up 0.3s ease-out",
+        "fade-in": "fade-in 0.22s ease-out",
       },
     },
   },

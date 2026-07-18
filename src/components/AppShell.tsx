@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Boxes, Home, Settings as SettingsIcon, LogOut, Menu, X, Building2 } from "lucide-react";
+import { Boxes, Home, Settings as SettingsIcon, LogOut, Building2, Bell, ClipboardList, ScanSearch } from "lucide-react";
 import { useAppStore } from "../store/appStore";
 import { OPERATIONS } from "./operations";
 
@@ -11,7 +11,6 @@ import { OPERATIONS } from "./operations";
  */
 export default function AppShell() {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
 
@@ -19,7 +18,6 @@ export default function AppShell() {
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, behavior: "auto" });
     window.scrollTo(0, 0);
-    setOpen(false); // mobil menü açıksa kapat
   }, [location.pathname]);
 
   return (
@@ -29,48 +27,73 @@ export default function AppShell() {
         <SidebarContent onNavigate={() => {}} />
       </aside>
 
-      {/* Mobil drawer */}
-      {open && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-ink-900/40" onClick={() => setOpen(false)} />
-          <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[80%] flex-col bg-white shadow-soft">
-            <button
-              onClick={() => setOpen(false)}
-              className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-xl text-ink-400 hover:bg-ink-100"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <SidebarContent onNavigate={() => setOpen(false)} />
-          </aside>
-        </div>
-      )}
-
       {/* Ana bölüm */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Üst bar */}
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-ink-100 bg-white/90 px-4 backdrop-blur lg:px-8">
-          <button
-            onClick={() => setOpen(true)}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-ink-500 hover:bg-ink-100 lg:hidden"
-            aria-label="Menü"
-          >
-            <Menu className="h-6 w-6" />
-          </button>
-          <div className="flex items-center gap-2 lg:hidden">
-            <Boxes className="h-6 w-6 text-brand-600" />
-            <span className="font-bold text-ink-900">{t("app.company")}</span>
+        {/* Üst bar (mobilde app bar, web'de sade) */}
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-ink-100 bg-white px-4 lg:px-8">
+          <div className="flex items-center gap-2.5 lg:hidden">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600">
+              <Boxes className="h-5 w-5 text-white" />
+            </div>
+            <div className="leading-tight">
+              <p className="text-sm font-extrabold text-ink-900">{t("app.company")}</p>
+              <p className="text-[11px] text-ink-400">{t("app.name")}</p>
+            </div>
           </div>
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2">
+            <button className="flex h-10 w-10 items-center justify-center rounded-xl text-ink-400 transition hover:bg-ink-100" aria-label="Bildirimler">
+              <Bell className="h-5 w-5" />
+            </button>
             <UserBadge />
           </div>
         </header>
 
-        {/* İçerik — asıl kaydırma kabı */}
-        <main ref={mainRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <Outlet />
+        {/* İçerik — asıl kaydırma kabı (mobilde alt sekme çubuğu için boşluk) */}
+        <main ref={mainRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-24 lg:pb-0">
+          <div key={location.pathname} className="animate-fade-in">
+            <Outlet />
+          </div>
         </main>
       </div>
+
+      {/* Mobil alt sekme çubuğu (native uygulama hissi) */}
+      <MobileTabBar />
     </div>
+  );
+}
+
+function MobileTabBar() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  const tabClass = (active: boolean) =>
+    `flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-semibold transition active:scale-95 ${
+      active ? "text-brand-600" : "text-ink-400"
+    }`;
+
+  const tabs = [
+    { to: "/home", icon: Home, label: t("nav.home"), active: pathname === "/home" },
+    { to: "/picking", icon: ClipboardList, label: t("nav.picking"), active: pathname.startsWith("/picking") },
+    { to: "/inquiry", icon: ScanSearch, label: t("nav.inquiry"), active: pathname.startsWith("/inquiry") },
+    { to: "/settings", icon: SettingsIcon, label: t("nav.settings"), active: pathname.startsWith("/settings") },
+  ];
+
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-40 flex border-t border-ink-100 bg-white/95 backdrop-blur lg:hidden"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
+      {tabs.map((tab) => {
+        const Icon = tab.icon;
+        return (
+          <button key={tab.to} onClick={() => navigate(tab.to)} className={tabClass(tab.active)}>
+            <Icon className="h-[22px] w-[22px]" />
+            {tab.label}
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 

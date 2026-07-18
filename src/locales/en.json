@@ -177,6 +177,12 @@
     "showLess": "Show Less",
     "recent": "Recent queries"
   },
+  "nav": {
+    "home": "Home",
+    "picking": "Picking",
+    "inquiry": "Inquiry",
+    "settings": "Settings"
+  },
   "common": {
     "cancel": "Cancel",
     "close": "Close",

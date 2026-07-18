@@ -24,7 +24,7 @@ export default function PickingSummaryPage() {
   if (!order) return null;
 
   const progress = orderProgress(order);
-  const { picked, requested, missing, lineCount } = orderTotals(order);
+  const { picked, missing, lineCount } = orderTotals(order);
 
   const handleComplete = async () => {
     const ref = await complete();
