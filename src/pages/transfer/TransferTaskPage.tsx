@@ -95,7 +95,7 @@ export default function TransferTaskPage() {
 
       <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
         <div className="card p-4">
-          <BarcodeScanner onDetected={handleDetected} sampleBarcode={task.product.barcode} />
+          <BarcodeScanner onDetected={handleDetected} />
         </div>
 
         <div className="space-y-4">

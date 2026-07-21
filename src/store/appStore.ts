@@ -2,7 +2,7 @@ import { create } from "zustand";
 import i18n from "../i18n";
 import type { Settings, User } from "../types";
 
-const STORAGE_KEY = "aktuel-wms-state";
+const STORAGE_KEY = "aktuel-wms-state-v3"; // v3: username artık CANIAS kullanıcı adı
 
 export type Theme = "light" | "dark";
 
@@ -12,10 +12,11 @@ interface PersistedState {
   theme: Theme;
 }
 
+// CANIAS kodları — servislere bu değerler gönderilir (isim değil, kod!)
 const defaultSettings: Settings = {
-  company: "Aktüel Ofis",
-  facility: "Merkez Tesis",
-  warehouse: "Ana Depo (D01)",
+  company: "01", // COMPANY
+  facility: "100", // PLANT
+  warehouse: "D1", // WAREHOUSE
   language: "tr",
 };
 
@@ -46,7 +47,7 @@ interface AppState {
   user: User | null;
   settings: Settings;
   theme: Theme;
-  login: (username: string) => void;
+  login: (username: string, displayName?: string) => void;
   logout: () => void;
   updateSettings: (patch: Partial<Settings>) => void;
   setTheme: (theme: Theme) => void;
@@ -70,11 +71,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   user: initial.user,
   settings: initial.settings,
   theme: initial.theme,
-  login: (username: string) => {
+  login: (username: string, displayName?: string) => {
+    // username = CANIAS kullanıcı adı (PWORKER'a bu gider)
+    // displayName = ekranda gösterilecek ad (Ad Soyad)
     const user: User = {
       username,
       displayName:
-        username.replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "Depo Kullanıcısı",
+        displayName ||
+        username.replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) ||
+        "Depo Kullanıcısı",
     };
     set({ user });
     persist({ user, settings: get().settings, theme: get().theme });

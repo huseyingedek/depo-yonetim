@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Boxes, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useAppStore } from "../store/appStore";
+import { api } from "../api/client";
 
 export default function LoginPage() {
   const { t } = useTranslation();
@@ -12,21 +13,27 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(false);
+    setError(null);
     if (!username.trim() || !password.trim()) {
-      setError(true);
+      setError(t("login.error"));
       return;
     }
     setLoading(true);
-    // Mock auth — gerçek serviste POST /auth/login
-    setTimeout(() => {
-      login(username.trim());
+    try {
+      // MZYCheckUser — depocu doğrulaması
+      const user = await api.checkUser(username.trim(), password);
+      // DİKKAT: 1. parametre CANIAS kullanıcı adı olmalı — PWORKER buradan gider.
+      login(username.trim(), user?.displayName);
       navigate("/home", { replace: true });
-    }, 700);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("login.error"));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -73,7 +80,9 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {error && <p className="mb-2 text-sm font-medium text-rose-500">{t("login.error")}</p>}
+          {error && (
+            <p className="mb-2 whitespace-pre-line text-sm font-medium text-rose-500">{error}</p>
+          )}
 
           <button type="submit" disabled={loading} className="btn-primary btn-lg btn-block mt-3">
             {loading ? (
@@ -85,8 +94,6 @@ export default function LoginPage() {
               t("login.signIn")
             )}
           </button>
-
-          <p className="mt-4 text-center text-xs text-subtle">{t("login.demoHint")}</p>
         </form>
       </div>
     </div>

@@ -38,7 +38,7 @@ export default function InquiryPage() {
         {/* Sorgu */}
         <div className="lg:sticky lg:top-24 lg:self-start">
           <div className="card p-4">
-            <BarcodeScanner onDetected={query} sampleBarcode="8690105070307" />
+            <BarcodeScanner onDetected={query} />
           </div>
         </div>
 

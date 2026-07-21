@@ -75,7 +75,7 @@ export default function ReceivingDetailPage() {
       <div className="grid gap-6 lg:grid-cols-[400px_1fr]">
         <div className="lg:sticky lg:top-24 lg:self-start">
           <div className="card p-4">
-            <BarcodeScanner onDetected={handleDetected} sampleBarcode={nextLine?.product.barcode} />
+            <BarcodeScanner onDetected={handleDetected} />
           </div>
           <div className="card mt-4 p-4">
             <div className="mb-2 flex items-center justify-between text-sm">

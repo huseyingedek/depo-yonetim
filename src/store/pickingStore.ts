@@ -6,11 +6,13 @@ interface PickingState {
   order: PickOrder | null;
   loading: boolean;
   completing: boolean;
-  loadOrder: (id: string) => Promise<void>;
+  loadOrder: (id: string, orderType?: string) => Promise<void>;
   clear: () => void;
   /** Barkod okutulduğunda ilgili kalemi bulup miktarı artırır. */
   scan: (barcode: string) => { ok: boolean; lineId?: string; complete?: boolean };
   setQty: (lineId: string, qty: number) => void;
+  /** Parti barkodu okutulunca kaleme parti (ve varsa SKT) yazılır. */
+  setLot: (lineId: string, lot: string, expiry?: string) => void;
   complete: () => Promise<string>; // caniasRef döner
 }
 
@@ -19,10 +21,14 @@ export const usePickingStore = create<PickingState>((set, get) => ({
   loading: false,
   completing: false,
 
-  loadOrder: async (id: string) => {
+  loadOrder: async (id: string, orderType = "") => {
     set({ loading: true, order: null });
-    const order = await api.getPickOrder(id);
-    set({ order: order ?? null, loading: false });
+    try {
+      const order = await api.getPickOrder(id, orderType);
+      set({ order: order ?? null, loading: false });
+    } catch {
+      set({ order: null, loading: false });
+    }
   },
 
   clear: () => set({ order: null }),
@@ -53,13 +59,21 @@ export const usePickingStore = create<PickingState>((set, get) => ({
     set({ order: { ...order, lines } });
   },
 
+  setLot: (lineId: string, lot: string, expiry?: string) => {
+    const order = get().order;
+    if (!order) return;
+    const lines = order.lines.map((l) => (l.id === lineId ? { ...l, lot, expiry } : l));
+    set({ order: { ...order, lines } });
+  },
+
   complete: async () => {
     const order = get().order;
     if (!order) return "";
     set({ completing: true });
-    const res = await api.completePickOrder(order);
+    // "Pakete Yerleştir" → MZYCreateContainer
+    const res = await api.placeInPackage();
     set({ completing: false });
-    return res.caniasRef;
+    return res.containerId || order.id;
   },
 }));
 

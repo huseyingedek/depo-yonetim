@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Search, ChevronRight, Package } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import Pagination, { usePagination } from "../../components/Pagination";
 import { api } from "../../api/client";
-import { orderProgress, orderTotals } from "../../store/pickingStore";
 import type { PickOrder } from "../../types";
 
 export default function PickingListPage() {
@@ -14,12 +13,24 @@ export default function PickingListPage() {
   const [orders, setOrders] = useState<PickOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  // React StrictMode geliştirmede efekti iki kez çalıştırır; bu bekçi
+  // ağa ikinci bir istek çıkmasını engeller.
+  const istendi = useRef(false);
 
   useEffect(() => {
-    api.getPickOrders().then((o) => {
-      setOrders(o);
-      setLoading(false);
-    });
+    if (istendi.current) return;
+    istendi.current = true;
+
+    api
+      .getPickOrders()
+      .then((o) => {
+        console.info("[picking] gelen emir sayısı:", o.length, o);
+        setOrders(o);
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setLoading(false));
   }, []);
 
   const filtered = useMemo(() => {
@@ -63,6 +74,12 @@ export default function PickingListPage() {
         />
       </div>
 
+      {error && (
+        <div className="mb-5 whitespace-pre-line rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm font-medium text-rose-500">
+          {error}
+        </div>
+      )}
+
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((i) => (
@@ -78,40 +95,51 @@ export default function PickingListPage() {
         <>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {pg.pageItems.map((o) => {
-            const progress = orderProgress(o);
-            const { lineCount, requested } = orderTotals(o);
-            const started = progress > 0;
+            // Kalem sayısı/miktar burada YOK — bu bilgi MZYEnterPick'ten geliyor,
+            // liste servisi (MZYListingPick) döndürmüyor. Uydurma sayı basmıyoruz.
+            const devam = o.status === "partial";
             return (
               <button
                 key={o.id}
-                onClick={() => navigate(`/picking/${o.id}`)}
+                onClick={() =>
+                  // Emir tipi de taşınmalı — MZYEnterPick PSORDERTYPE olmadan emri bulamıyor
+                  navigate(`/picking/${o.id}?type=${encodeURIComponent(o.orderType ?? "")}`)
+                }
                 className="rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
               >
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-2">
+                      {/* Öncelik — küçük olan önce toplanır, liste buna göre sıralı */}
+                      {o.priority !== undefined && (
+                        <span
+                          className="chip bg-slate-100 font-mono text-slate-600"
+                          title="Toplama önceliği — küçük olan önce"
+                        >
+                          {o.priority}
+                        </span>
+                      )}
                       <span className="font-mono text-base font-bold text-fg">{o.id}</span>
                       <span
                         className={`chip ${
-                          started ? "bg-amber-100 text-amber-700" : "bg-brand-100 text-brand-700"
+                          devam ? "bg-amber-100 text-amber-700" : "bg-brand-100 text-brand-700"
                         }`}
                       >
-                        {started ? t("picking.status.inProgress") : t("picking.status.new")}
+                        {devam ? t("picking.status.inProgress") : t("picking.status.new")}
                       </span>
                     </div>
-                    <p className="mt-0.5 text-sm text-muted">{o.customer}</p>
+                    {o.customer && <p className="mt-0.5 text-sm text-muted">{o.customer}</p>}
                   </div>
                   <ChevronRight className="mt-1 h-5 w-5 text-subtle" />
                 </div>
 
-                <div className="mt-4 flex items-center gap-3">
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-elevated">
-                    <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${progress}%` }} />
+                {/* Sadece servisten gelen alanlar; boşsa hiç gösterilmiyor */}
+                {(o.reference || o.worker) && (
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-subtle">
+                    {o.reference && <span>{o.reference}</span>}
+                    {o.worker && <span className="font-mono">{o.worker}</span>}
                   </div>
-                  <span className="whitespace-nowrap text-xs font-semibold text-subtle">
-                    {lineCount} {t("picking.items")} · {requested} adet
-                  </span>
-                </div>
+                )}
               </button>
             );
           })}

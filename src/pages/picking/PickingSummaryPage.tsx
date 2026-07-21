@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Check, CheckCircle2, Loader2, Send } from "lucide-react";
+import { Check, CheckCircle2, Loader2, Send, PackagePlus } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import ProgressRing from "../../components/ProgressRing";
 import { usePickingStore, orderProgress, orderTotals } from "../../store/pickingStore";
@@ -108,7 +108,7 @@ export default function PickingSummaryPage() {
           </>
         ) : (
           <>
-            <Send className="h-5 w-5" /> {t("picking.completeOrder")}
+            <PackagePlus className="h-5 w-5" /> {t("picking.placeInPackage")}
           </>
         )}
       </button>

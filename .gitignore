@@ -3,6 +3,24 @@ dist
 dist-ssr
 *.local
 .DS_Store
-.env
-.env.local
 npm-debug.log*
+
+# Ortam dosyaları — şifreler git'e ASLA girmez
+.env
+.env.*
+server/.env
+server/.env.*
+
+# Örnek dosyalar git'e girsin
+!.env.example
+!server/.env.example
+
+# VPN sertifikaları / kimlik dosyaları
+*.ovpn
+*.p12
+*.pem
+*.key
+services-raw.json
+services-raw.xml
+v1-services.json
+v1-services-raw.xml

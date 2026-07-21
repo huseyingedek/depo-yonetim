@@ -30,16 +30,28 @@ export type LineStatus = "pending" | "partial" | "done";
 export interface PickLine {
   id: string;
   product: ProductRef;
-  location: string; // lokasyon
-  requestedQty: number;
-  pickedQty: number;
+  location: string; // raf / stok yeri
+  requestedQty: number; // MOVEQTY
+  pickedQty: number; // MOVEDQTY
+  /** Parti No "*" değilse parti takipli → parti barkodu da okutulur. */
+  lotTracked?: boolean;
+  lot?: string; // okutulan parti
+  expiry?: string; // parti barkodundan gelen SKT (gösterim)
 }
 
+/** CANIAS STATUS: 0 Açık, 1 Kısmi Açık, 2 Kapalı */
+export type PickOrderStatus = "open" | "partial" | "closed";
+
 export interface PickOrder {
-  id: string; // Sipariş no (ör. SO100245)
-  customer: string; // Müşteri / Şube
-  reference: string; // CANIAS referansı
-  createdAt: string;
+  id: string; // ORDERNUM — emir numarası
+  orderType?: string; // ORDERTYPE — emir tipi (EnterPick/ClosePick için gerekli)
+  customer: string; // CUSTOMER — müşteri/tedarikçi no
+  reference: string; // STEXT — emir açıklaması
+  createdAt: string; // CREATEDAT
+  worker?: string; // WORKER — varsayılan çalışan
+  priority?: number; // PRIORITY — öncelik (küçük = önce)
+  status?: PickOrderStatus; // STATUS
+  started?: boolean; // ISSTARTED — toplamaya başlanmış mı
   lines: PickLine[];
 }
 
@@ -108,4 +120,15 @@ export interface ProductStock {
   product: ProductRef;
   totalStock: number;
   locations: StockLocation[];
+}
+
+/** MZYCrtSuggestListPickFromSP çıktısı — bir kalem için toplama önerisi. */
+export interface PickSuggestion {
+  itemNo: number;
+  location: string; // önerilen raf / stok yeri
+  warehouse: string;
+  material: string;
+  lot?: string; // parti (SPECIALSTOCK=1 ise dolu)
+  qty: number; // önerilen miktar
+  unit: string;
 }
