@@ -66,7 +66,8 @@ export default function BarcodeScanner({ onDetected, prompt }: Props) {
   }, [cameraOpen]);
 
   const submit = () => {
-    const code = value.trim();
+    // Barkodlar HEP büyük harf — küçük harfe izin yok (D3$c1 → D3$C1).
+    const code = value.trim().toUpperCase();
     if (!code) return;
     onDetected(code);
     setValue("");
@@ -82,7 +83,7 @@ export default function BarcodeScanner({ onDetected, prompt }: Props) {
             <input
               autoFocus
               value={value}
-              onChange={(e) => setValue(e.target.value)}
+              onChange={(e) => setValue(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === "Enter" && submit()}
               placeholder={t("picking.enterBarcode")}
               autoComplete="off"

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Check, CheckCircle2, Loader2, Send, PackagePlus } from "lucide-react";
+import { Check, CheckCircle2, Loader2, Send, PackagePlus, AlertTriangle } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import ProgressRing from "../../components/ProgressRing";
 import { usePickingStore, orderProgress, orderTotals } from "../../store/pickingStore";
@@ -16,6 +16,10 @@ export default function PickingSummaryPage() {
 
   const [done, setDone] = useState(false);
   const [caniasRef, setCaniasRef] = useState("");
+  const [hata, setHata] = useState<string | null>(null);
+  // Kayıt başarılı olunca okutmalar temizleniyor; özet ekranı 0 göstermesin
+  // diye tamamlanma anındaki değerleri saklıyoruz.
+  const [ozet, setOzet] = useState({ picked: 0, missing: 0, lineCount: 0 });
 
   useEffect(() => {
     if (!order) navigate("/picking", { replace: true });
@@ -27,8 +31,18 @@ export default function PickingSummaryPage() {
   const { picked, missing, lineCount } = orderTotals(order);
 
   const handleComplete = async () => {
-    const ref = await complete();
-    setCaniasRef(ref);
+    setHata(null);
+    // Kayıttan ÖNCE topla — complete() başarıda okutmaları temizliyor.
+    const kayitOzeti = orderTotals(order);
+    const r = await complete();
+    if (!r.ok) {
+      // Palet oluşmadıysa kayıt da yapılmadı — depocu emre geri dönüp
+      // tekrar denesin, "tamamlandı" ekranı gösterilmez.
+      setHata(r.message);
+      return;
+    }
+    setOzet(kayitOzeti);
+    setCaniasRef(r.containerId);
     setDone(true);
   };
 
@@ -47,9 +61,11 @@ export default function PickingSummaryPage() {
         <div className="mt-6 w-full rounded-2xl border border-line bg-surface p-5 shadow-card">
           <Row label={t("picking.order")} value={order.id} mono />
           <Row label={t("picking.reference")} value={caniasRef} mono />
-          <Row label={t("picking.totalItems")} value={`${lineCount}`} />
-          <Row label={t("picking.totalPicked")} value={`${picked}`} />
-          {missing > 0 && <Row label={t("picking.totalMissing")} value={`${missing}`} danger last />}
+          <Row label={t("picking.totalItems")} value={`${ozet.lineCount}`} />
+          <Row label={t("picking.totalPicked")} value={`${ozet.picked}`} />
+          {ozet.missing > 0 && (
+            <Row label={t("picking.totalMissing")} value={`${ozet.missing}`} danger last />
+          )}
         </div>
 
         <button
@@ -67,7 +83,11 @@ export default function PickingSummaryPage() {
 
   return (
     <div className="mx-auto max-w-3xl p-4 lg:p-8">
-      <PageHeader title={t("picking.orderSummary")} subtitle={order.id} backTo={`/picking/${order.id}`} />
+      <PageHeader
+        title={t("picking.orderSummary")}
+        subtitle={order.id}
+        backTo={`/picking/${order.id}?type=${order.orderType ?? ""}`}
+      />
 
       <div className="card p-6">
         <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-center sm:gap-10">
@@ -101,7 +121,26 @@ export default function PickingSummaryPage() {
         })}
       </div>
 
-      <button onClick={handleComplete} disabled={completing} className="btn-primary btn-lg mt-6 w-full sm:w-auto sm:px-10">
+      {hata && (
+        <div className="mt-6 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4">
+          <div className="flex items-start gap-2 text-sm font-semibold text-rose-600">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{hata}</span>
+          </div>
+          <button
+            onClick={() => navigate(`/picking/${order.id}?type=${order.orderType ?? ""}`)}
+            className="mt-3 text-sm font-semibold text-rose-700 underline"
+          >
+            Toplamaya geri dön
+          </button>
+        </div>
+      )}
+
+      <button
+        onClick={handleComplete}
+        disabled={completing}
+        className="btn-primary btn-lg mt-6 w-full sm:w-auto sm:px-10"
+      >
         {completing ? (
           <>
             <Loader2 className="h-5 w-5 animate-spin" /> {t("picking.sentToCanias")}...

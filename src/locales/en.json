@@ -56,6 +56,7 @@
     "title": "Order Picking",
     "openOrders": "Open Orders",
     "searchOrder": "Search order no, customer...",
+    "scanOrder": "Scan order barcode",
     "items": "items",
     "order": "Order",
     "customer": "Customer",

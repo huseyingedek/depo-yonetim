@@ -55,11 +55,12 @@ export default function PickingDetailPage() {
   useEffect(() => {
     if (!id) return;
     const anahtar = `${id}|${orderType}`;
-    // StrictMode aynı mount'ta efekti iki kez çalıştırıyor; bir mount'ta tek
-    // kez yükle. Ama emre HER GİRİŞTE (yeni mount) EnterPick çalışsın —
-    // kayıtlar loadOrder içinde korunuyor (boş dönerse önceki emir kalıyor).
     if (yuklendi.current === anahtar) return;
     yuklendi.current = anahtar;
+    // Emir zaten yüklüyse (kayıtlar sayfasından döndük ya da sayfa yenilendi,
+    // localStorage'dan geri geldi) TEKRAR ÇEKME. MZYEnterPick idempotent değil;
+    // ikinci çağrı boş dönüp emri uçuruyordu ("girip dönünce gidiyordu").
+    if (usePickingStore.getState().order?.id === id) return;
     loadOrder(id, orderType);
   }, [id, orderType, loadOrder]);
 
@@ -83,12 +84,8 @@ export default function PickingDetailPage() {
         // 1) Raf bekleniyor
         if (!shelf) {
           const r = await scanShelf(barkod);
-          if (r.ok) {
-            setRedMesaji(null); // başarıda önceki hata mesajını temizle
-            showToast({ kind: "ok", text: `Raf: ${barkod}` });
-          } else {
-            showToast({ kind: "error", text: r.message });
-          }
+          if (r.ok) showToast({ kind: "ok", text: `Raf: ${barkod}` });
+          else showToast({ kind: "error", text: r.message });
           return;
         }
 
@@ -98,7 +95,6 @@ export default function PickingDetailPage() {
           const lr = await scanLot(lotPending, barkod);
           if (lr.ok) {
             setLotPending(null);
-            setRedMesaji(null); // başarıda önceki hata mesajını temizle
             showToast({ kind: "done", text: `Parti: ${barkod}` });
           } else {
             setRedMesaji(lr.message);
@@ -109,17 +105,18 @@ export default function PickingDetailPage() {
 
         // 3) Ürün — yanındaki miktar kutusunda yazan adet kadar
         const s = await scanProduct(barkod, okutmaAdedi);
+        // Kabul edildiyse miktar 1'e döner; reddedildiyse depocu düzeltsin diye kalır
+        if (s.kind === "ok") setOkutmaAdedi(1);
         setRedMesaji(null);
         if (s.kind === "ok") {
-          setOkutmaAdedi(1);
           flash(s.lineId);
-          showToast({ kind: "ok", text: `${s.name} eklendi` });
-        } else if (s.kind === "needsBatch") {
-          // Parti takipli ürün (SPECIALSTOCK=1). Kayıt HENÜZ açılmadı — parti
-          // barkodu okununca ikinci ReadBarcode ile gerçek parti stoğu gelecek.
-          flash(s.lineId);
-          setLotPending(s.lineId);
-          showToast({ kind: "ok", text: `${s.name} · parti barkodunu okutun` });
+          const line = order?.lines.find((l) => l.id === s.lineId);
+          if (line?.lotTracked && !line.lot) {
+            setLotPending(s.lineId);
+            showToast({ kind: "ok", text: `${s.name} · parti barkodunu okutun` });
+          } else {
+            showToast({ kind: "ok", text: `${s.name} +1` });
+          }
         } else if (s.kind === "notInOrder") {
           showToast({ kind: "error", text: `${s.material} bu emirde yok` });
         } else if (s.kind === "alreadyDone") {

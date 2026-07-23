@@ -8,6 +8,7 @@ import SettingsPage from "./pages/SettingsPage";
 import PickingListPage from "./pages/picking/PickingListPage";
 import PickingDetailPage from "./pages/picking/PickingDetailPage";
 import PickingSummaryPage from "./pages/picking/PickingSummaryPage";
+import PickingRecordsPage from "./pages/picking/PickingRecordsPage";
 import ReceivingListPage from "./pages/receiving/ReceivingListPage";
 import ReceivingDetailPage from "./pages/receiving/ReceivingDetailPage";
 import ReceivingSummaryPage from "./pages/receiving/ReceivingSummaryPage";
@@ -44,6 +45,7 @@ export default function App() {
         {/* Sipariş Toplama */}
         <Route path="/picking" element={<PickingListPage />} />
         <Route path="/picking/:id" element={<PickingDetailPage />} />
+        <Route path="/picking/:id/kayitlar" element={<PickingRecordsPage />} />
         <Route path="/picking/:id/summary" element={<PickingSummaryPage />} />
 
         {/* Mal Kabul */}

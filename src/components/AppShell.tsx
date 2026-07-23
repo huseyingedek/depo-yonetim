@@ -49,8 +49,12 @@ export default function AppShell() {
         </header>
 
         {/* İçerik — asıl kaydırma kabı (mobilde alt sekme çubuğu için boşluk) */}
-        <main ref={mainRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-24 lg:pb-0">
-          <div key={location.pathname} className="animate-fade-in">
+        {/* overflow-x-hidden: tek bir uzun metin bile tüm sayfayı yana kaydırmasın */}
+        <main
+          ref={mainRef}
+          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-24 lg:pb-0"
+        >
+          <div key={location.pathname} className="min-w-0 animate-fade-in">
             <Outlet />
           </div>
         </main>

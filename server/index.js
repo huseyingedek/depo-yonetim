@@ -54,6 +54,7 @@ const ALLOWED = new Set([
   "MZYClosePick",
   "MZYCreateContainer",
   "MZYReadBarcode",
+  "MZYReadBarcodeSP",
   "MZYCrtSuggestListPickFromSP",
   "MZYSavePick",
   "GetCompany",
@@ -90,9 +91,32 @@ const escapeXml = (s) =>
     .replace(/>/g, "&gt;");
 
 /** v2 biçimi: <PARAMETERS><ALAN>deger</ALAN>...</PARAMETERS> */
+/**
+ * Parametre XML'i üretir.
+ *
+ * Değer DİZİ ise tablo olarak yazılır — her eleman bir <ROW>:
+ *   { IASWMSPOITEMREAD: [{COMPANY:"01"}, ...] }
+ *   → <IASWMSPOITEMREAD><ROW><COMPANY>01</COMPANY></ROW>...</IASWMSPOITEMREAD>
+ *
+ * MZYSavePick birden çok okutma satırı taşıdığı için gerekli. Bu biçim
+ * Bora'dan TEYİT EDİLMEDİ; servis yayınlanınca ilk çağrıda doğrulanacak.
+ */
 function buildParametersXml(params = {}) {
   const body = Object.entries(params)
-    .map(([k, v]) => `<${k}>${escapeXml(v)}</${k}>`)
+    .map(([k, v]) => {
+      if (Array.isArray(v)) {
+        const rows = v
+          .map(
+            (row) =>
+              `<ROW>${Object.entries(row ?? {})
+                .map(([rk, rv]) => `<${rk}>${escapeXml(rv)}</${rk}>`)
+                .join("")}</ROW>`
+          )
+          .join("");
+        return `<${k}>${rows}</${k}>`;
+      }
+      return `<${k}>${escapeXml(v)}</${k}>`;
+    })
     .join("");
   return `<PARAMETERS>${body}</PARAMETERS>`;
 }
@@ -179,7 +203,27 @@ function msgText(raw) {
   return found.length ? found.join("\n") : t;
 }
 
-async function callService(serviceId, params, retry = true) {
+/**
+ * CANIAS ÇAĞRI KUYRUĞU — aynı anda TEK istek.
+ *
+ * CANIAS/TROIA oturumu eşzamanlı çağrılara dayanmıyor: aynı sessionId'ye
+ * paralel istek gelince oturum bozulup sonraki yanıtlar BOŞ dönüyor.
+ * (fillLocations her kalem için paralel suggest atıyordu → liste bazen boş
+ * geliyordu.) Bütün çağrıları sıraya sokuyoruz; biri bitmeden diğeri gitmiyor.
+ */
+let cagriKuyrugu = Promise.resolve();
+function siraya(fn) {
+  const p = cagriKuyrugu.then(fn, fn);
+  // Kuyruğu, hatayı yutarak ilerlet (bir çağrı patlasa da sıra devam etsin).
+  cagriKuyrugu = p.then(() => {}, () => {});
+  return p;
+}
+
+function callService(serviceId, params, retry = true) {
+  return siraya(() => callServiceInner(serviceId, params, retry));
+}
+
+async function callServiceInner(serviceId, params, retry = true) {
   const client = await getClient();
   const s = await ensureSession();
 
@@ -222,10 +266,31 @@ async function callService(serviceId, params, retry = true) {
     sysError = r.SYSStatusError || "";
   }
 
-  // Oturum düştüyse bir kez yeniden dene
-  if (retry && /session/i.test(String(sysError) + String(rawResponse))) {
+  /* OTURUM ÖLÜMÜ — CANIAS session'ı zaman aşımına uğrayınca çağrılar HATA
+     DEĞİL, TAMAMEN BOŞ yanıt döndürüyor (rawResponse = ""). "session" kelimesi
+     yok, o yüzden ayrıca boş yanıtı da yakalıyoruz.
+
+     ÖNEMLİ AYRIMLAR (yanlış re-login olmasın diye):
+     • "veri yok" ≠ boş: veri olmasa da servis JSON döner ({"TBLPOLIST":""}).
+       Yalnızca rawResponse'un TAMAMEN boş olması ölü oturumdur.
+     • Oturum YENİ açıldıysa (3 sn) ve hâlâ boşsa, bu ölü oturum değil —
+       servis gerçekten boş/bozuk dönüyor demektir; TEKRAR login ATMAYIZ
+       (aksi halde bozuk serviste sürekli gereksiz login olurdu — kullanıcının
+       uyarısı). Sadece oturum ESKİYSE ölü sayıp yenileriz.
+     • SavePick/CreateContainer başarıda da boş dönebiliyor (data:null) →
+       onları tekrar DENEMEYİZ (çift palet/stok riski); ölü oturuma denk
+       gelirlerse "palet oluşturulamadı" ile güvenli başarısız olurlar. */
+  const yazanServis = serviceId === "MZYSavePick" || serviceId === "MZYCreateContainer";
+  const bosYanit = !String(rawResponse ?? "").trim();
+  const oturumHatasi = /session/i.test(String(sysError) + String(rawResponse));
+  const oturumEski = session ? Date.now() - session.at > 3000 : true;
+  if (retry && (oturumHatasi || (bosYanit && !yazanServis && oturumEski))) {
+    console.warn(`[${serviceId}] boş/ölü oturum — SOAP client + session yenilenip tekrar denenecek`);
+    // RESTART EŞDEĞERİ: sadece login değil, SOAP bağlantısını da yeniliyoruz.
+    // Restart edince düzelmesinin sebebi client'ın da baştan kurulması.
     session = null;
-    return callService(serviceId, params, false);
+    clientPromise = null;
+    return callServiceInner(serviceId, params, false);
   }
 
   // Yanıt JSON string olarak geliyor

@@ -12,7 +12,8 @@ export const SERVICES = {
   enterPick: "MZYEnterPick", // Emri toplamaya BAŞLA (+ kalem detayı)
   closePick: "MZYClosePick", // Toplamaktan VAZGEÇ (tamamlama değil!)
   createContainer: "MZYCreateContainer", // Konteyner oluştur
-  readBarcode: "MZYReadBarcode", // Barkod okutma
+  readBarcode: "MZYReadBarcode", // ÜRÜN barkodu (5 param, MATERIAL döner)
+  readBarcodeSP: "MZYReadBarcodeSP", // RAF barkodu — SP = Stock Place (3 param)
   suggestPick: "MZYCrtSuggestListPickFromSP", // Stok yerinden toplama önerisi
   savePick: "MZYSavePick", // Toplamayı kaydet (MOVEDQTY) — parametreleri bekleniyor
   // Seçim listeleri — dokümanda var ama sunucuda "web service bulunamadı"

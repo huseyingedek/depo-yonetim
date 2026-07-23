@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Search, ChevronRight, Package } from "lucide-react";
+import { Search, ChevronRight, Package, Camera } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
+import CameraScanOverlay from "../../components/CameraScanOverlay";
 import Pagination, { usePagination } from "../../components/Pagination";
 import { api } from "../../api/client";
 import type { PickOrder } from "../../types";
@@ -14,6 +15,8 @@ export default function PickingListPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [kamera, setKamera] = useState(false);
+  const [taramaHatasi, setTaramaHatasi] = useState<string | null>(null);
 
   // React StrictMode geliştirmede efekti iki kez çalıştırır; bu bekçi
   // ağa ikinci bir istek çıkmasını engeller.
@@ -44,6 +47,41 @@ export default function PickingListPage() {
   const pg = usePagination(filtered, 9);
   useEffect(() => pg.reset(), [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Emri aç. Emir tipi de taşınmalı — MZYEnterPick PSORDERTYPE olmadan bulamıyor. */
+  const emreGir = (o: PickOrder) =>
+    navigate(`/picking/${o.id}?type=${encodeURIComponent(o.orderType ?? "")}`);
+
+  /**
+   * Sipariş barkodu okutuldu.
+   *
+   * Depocu yüzlerce emir arasında numara aramasın diye: okutulan kod
+   * emir numarasıyla (ORDERNUM) ya da referansla (STEXT/DOCNUM) eşleşirse
+   * doğrudan o emrin detayına giriyoruz.
+   *
+   * Barkod okuyucular başa sıfır ekleyebildiği için baştaki sıfırlar atılarak
+   * da karşılaştırıyoruz.
+   */
+  const barkodOkundu = (code: string) => {
+    const kod = code.trim().toLowerCase();
+    if (!kod) return;
+    const sadelestir = (s: string) => s.trim().toLowerCase().replace(/^0+/, "");
+    const hedef = sadelestir(kod);
+
+    const emir = orders.find(
+      (o) => sadelestir(o.id) === hedef || (o.reference && sadelestir(o.reference) === hedef)
+    );
+
+    setKamera(false);
+    if (emir) {
+      setTaramaHatasi(null);
+      emreGir(emir);
+      return;
+    }
+    // Emir listede yok: kapanmış, başkasına atanmış ya da barkod başka bir şeye ait.
+    // Sessizce yutmak yerine sebebini yazıyoruz.
+    setTaramaHatasi(`${code} — bu numarada açık emir bulunamadı`);
+  };
+
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8">
       <PageHeader
@@ -57,8 +95,18 @@ export default function PickingListPage() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={t("picking.searchOrder")}
-              className="field-input w-72 pl-11"
+              className="field-input w-72 pl-11 pr-12"
             />
+            {/* Sipariş barkodunu okut — aramadan doğrudan emre girer */}
+            <button
+              type="button"
+              onClick={() => setKamera(true)}
+              aria-label={t("picking.scanOrder")}
+              title={t("picking.scanOrder")}
+              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg"
+            >
+              <Camera className="h-5 w-5" />
+            </button>
           </div>
         }
       />
@@ -70,9 +118,34 @@ export default function PickingListPage() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder={t("picking.searchOrder")}
-          className="field-input pl-11"
+          className="field-input pl-11 pr-12"
         />
+        <button
+          type="button"
+          onClick={() => setKamera(true)}
+          aria-label={t("picking.scanOrder")}
+          className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg"
+        >
+          <Camera className="h-5 w-5" />
+        </button>
       </div>
+
+      {kamera && (
+        <CameraScanOverlay
+          onDetected={barkodOkundu}
+          onClose={() => setKamera(false)}
+          prompt={t("picking.scanOrder")}
+        />
+      )}
+
+      {taramaHatasi && (
+        <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-medium text-amber-600">
+          <span>{taramaHatasi}</span>
+          <button type="button" onClick={() => setTaramaHatasi(null)} className="shrink-0 underline">
+            {t("common.close")}
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="mb-5 whitespace-pre-line rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm font-medium text-rose-500">
@@ -101,10 +174,7 @@ export default function PickingListPage() {
             return (
               <button
                 key={o.id}
-                onClick={() =>
-                  // Emir tipi de taşınmalı — MZYEnterPick PSORDERTYPE olmadan emri bulamıyor
-                  navigate(`/picking/${o.id}?type=${encodeURIComponent(o.orderType ?? "")}`)
-                }
+                onClick={() => emreGir(o)}
                 className="rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
               >
                 <div className="flex items-start justify-between">
