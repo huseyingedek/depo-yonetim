@@ -8,9 +8,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "server": "node server/index.js",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "server": "node server/index.js"
   },
   "dependencies": {
     "@zxing/browser": "^0.1.5",
@@ -32,7 +30,6 @@
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.6.2",
-    "vite": "^5.4.8",
-    "vitest": "^2.1.9"
+    "vite": "^5.4.8"
   }
 }

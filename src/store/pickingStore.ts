@@ -97,6 +97,11 @@ interface PickingState {
 
   loadOrder: (id: string, orderType?: string) => Promise<void>;
   clear: () => void;
+  /**
+   * Emirden çıkarken (geri tuşu) MZYClosePick ile kilidi açar ve emri temizler.
+   * EnterPick emri kilitliyor; açılmazsa tekrar girişte "blokelendi" hatası olur.
+   */
+  leaveOrder: () => void;
 
   /** Raf barkodu okut — MZYReadBarcodeSP */
   scanShelf: (barcode: string) => Promise<{ ok: boolean; message: string }>;
@@ -183,6 +188,15 @@ export const usePickingStore = create<PickingState>()(
   },
 
   clear: () => set({ order: null, shelf: null }),
+
+  leaveOrder: () => {
+    const order = get().order;
+    if (order) {
+      // Kilidi aç (MZYClosePick) — arka planda, dönüşü bekletmeye gerek yok.
+      api.cancelPick(order.id, order.orderType ?? "").catch(() => {});
+    }
+    set({ order: null, shelf: null, pendingProduct: null });
+  },
 
   scanShelf: async (barcode: string) => {
     try {

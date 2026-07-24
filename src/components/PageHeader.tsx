@@ -6,17 +6,20 @@ interface Props {
   title: string;
   subtitle?: string;
   backTo?: string; // verilirse geri butonu gösterilir
+  /** Verilirse geri butonu bunu çağırır (backTo yerine). Ör. çıkarken ClosePick. */
+  onBack?: () => void;
   right?: ReactNode;
 }
 
 /** İçerik alanı başlığı (web + mobil uyumlu). */
-export default function PageHeader({ title, subtitle, backTo, right }: Props) {
+export default function PageHeader({ title, subtitle, backTo, onBack, right }: Props) {
   const navigate = useNavigate();
+  const geriGoster = onBack || backTo;
   return (
     <div className="mb-6 flex items-start gap-3">
-      {backTo && (
+      {geriGoster && (
         <button
-          onClick={() => navigate(backTo)}
+          onClick={() => (onBack ? onBack() : backTo && navigate(backTo))}
           className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line bg-surface text-muted transition hover:bg-elevated active:scale-95"
           aria-label="Geri"
         >

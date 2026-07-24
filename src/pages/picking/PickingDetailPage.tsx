@@ -24,6 +24,7 @@ export default function PickingDetailPage() {
   const locationsLoading = usePickingStore((s) => s.locationsLoading);
   const shelf = usePickingStore((s) => s.shelf);
   const loadOrder = usePickingStore((s) => s.loadOrder);
+  const leaveOrder = usePickingStore((s) => s.leaveOrder);
   const scanShelf = usePickingStore((s) => s.scanShelf);
   const clearShelf = usePickingStore((s) => s.clearShelf);
   const scanProduct = usePickingStore((s) => s.scanProduct);
@@ -160,8 +161,12 @@ export default function PickingDetailPage() {
    * Miktar elle de yazılabildiği için parti adımı atlanabiliyordu; burada
    * yakalanıp emir kapatılmadan önce uyarılıyor.
    */
+  // Parti eksik UYARISI yalnızca BU OTURUMDA okutulan (records) kalemler için.
+  // Önceden toplanmış (MOVEDQTY) parti takipli kalemler CANIAS'ta zaten
+  // partili kaydedilmiştir; yeniden girişte l.lot boş diye "parti eksik"
+  // sanılmamalı. Bu yüzden linePicked (MOVEDQTY dahil) yerine records'a bakıyoruz.
   const partisiEksik = order.lines.filter(
-    (l) => l.lotTracked && linePicked(l) > 0 && !l.lot
+    (l) => l.lotTracked && (l.records?.length ?? 0) > 0 && !l.lot
   );
 
   /**
@@ -210,7 +215,11 @@ export default function PickingDetailPage() {
       <PageHeader
         title={order.id}
         subtitle={[order.customer, order.reference].filter(Boolean).join(" · ")}
-        backTo="/picking"
+        onBack={() => {
+          // Emirden çıkarken kilidi aç (MZYClosePick), sonra listeye dön.
+          leaveOrder();
+          navigate("/picking");
+        }}
         right={
           <div className="flex items-center gap-2">
             <span className="chip bg-brand-100 px-3 py-1 font-mono text-sm text-brand-700">
@@ -256,7 +265,7 @@ export default function PickingDetailPage() {
                 //   Raf   → rafı bırak, yeni raf okut
                 //   Parti → partisi eksik ilk kaleme geç
                 const partiBekleyen = order?.lines.find(
-                  (l) => l.lotTracked && linePicked(l) > 0 && !l.lot
+                  (l) => l.lotTracked && (l.records?.length ?? 0) > 0 && !l.lot
                 );
                 const tiklanabilir =
                   (s === "shelf" && !!shelf) || (s === "lot" && !!partiBekleyen);
@@ -422,8 +431,10 @@ export default function PickingDetailPage() {
           <div className="space-y-2.5">
             {sortedLines.map((line) => {
               const toplanan = linePicked(line);
-              // Parti takipli kalem, partisi okutulmadan TAMAM sayılmaz
-              const partiEksik = !!line.lotTracked && toplanan > 0 && !line.lot;
+              // Parti eksik: yalnızca BU OTURUMDA okutulmuş (records) ama partisi
+              // yazılmamışsa. Önceden toplanmış (MOVEDQTY) kalem partili kabul.
+              const buOturumKayit = (line.records?.length ?? 0) > 0;
+              const partiEksik = !!line.lotTracked && buOturumKayit && !line.lot;
               const done = toplanan >= line.requestedQty && !partiEksik;
 
               /* Miktar kontrolü — Bora'nın örneği:
@@ -475,10 +486,14 @@ export default function PickingDetailPage() {
                           <span className="font-mono font-semibold">{line.product.code}</span>
                         )}
                         {line.product.unit && <span>{line.product.unit}</span>}
-                        {line.lotTracked && (
+                        {/* Rozet: partisi biliniyorsa "Parti: X"; bu oturumda
+                            okutulup parti bekliyorsa "Parti bekleniyor".
+                            Önceden toplanmış (records boş, l.lot boş) kalemde
+                            gösterme — partisi CANIAS'ta, elimizde yok. */}
+                        {line.lotTracked && (line.lot || partiEksik || lotPending === line.id) && (
                           <button
                             type="button"
-                            onClick={() => toplanan > 0 && setLotPending(line.id)}
+                            onClick={() => buOturumKayit && setLotPending(line.id)}
                             className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${
                               line.lot
                                 ? "bg-violet-100 text-violet-700"
