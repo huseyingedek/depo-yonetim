@@ -197,8 +197,10 @@ export const usePickingStore = create<PickingState>()(
     }
     // OKUTULANLAR KORUNUR — order/records temizlenmez. Depocu emirden çıkıp
     // dönünce kaldığı yerden devam etsin (localStorage'da duruyor, dönüşte
-    // mergeRecords geri takıyor). Sadece geçici parti-bekleme durumu sıfırlanır.
-    set({ pendingProduct: null });
+    // mergeRecords geri takıyor). Ama SHELF SIFIRLANIR: emirden çıkınca fiziksel
+    // raf bağlamı biter; dönünce raf yeniden okutulmalı (readBarcodeSP). Aksi
+    // halde bayat shelf yüzünden raf barkodu ürün servisine düşüyor.
+    set({ pendingProduct: null, shelf: null });
   },
 
   scanShelf: async (barcode: string) => {
@@ -444,7 +446,19 @@ export const usePickingStore = create<PickingState>()(
 {
   name: "aktuel-picking", // localStorage anahtarı
   // Yalnızca okutma verisini sakla; loading/completing gibi geçici durumlar değil.
-  partialize: (s) => ({ order: s.order, shelf: s.shelf }),
+  // shelf PERSIST EDİLMEZ: fiziksel raf okuması her oturumda/girişte yeniden
+  // yapılmalı. Bayat shelf kalırsa, raf barkodu (D1$E3R1) yanlışlıkla ürün
+  // servisine (readBarcode) gidiyordu — okuma her zaman scanShelf→readBarcodeSP
+  // olsun diye shelf'i saklamıyoruz.
+  partialize: (s) => ({ order: s.order }),
+  // GÜVENLİK: Eski sürümde shelf persist ediliyordu; mevcut kullanıcıların
+  // localStorage'ında bayat shelf kalmış olabilir. Rehydrate'te shelf'i her
+  // zaman null'a zorla ki eski veri yüzünden bug tek sefer bile tekrar etmesin.
+  merge: (persisted, current) => ({
+    ...current,
+    ...(persisted as Partial<PickingState>),
+    shelf: null,
+  }),
 }));
 
 // Yardımcılar (linePicked pickingLogic'ten import edilip yukarıda yeniden dışa aktarıldı)

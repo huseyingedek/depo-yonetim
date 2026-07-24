@@ -486,23 +486,35 @@ export default function PickingDetailPage() {
                           <span className="font-mono font-semibold">{line.product.code}</span>
                         )}
                         {line.product.unit && <span>{line.product.unit}</span>}
-                        {/* Rozet: partisi biliniyorsa "Parti: X"; bu oturumda
-                            okutulup parti bekliyorsa "Parti bekleniyor".
-                            Önceden toplanmış (records boş, l.lot boş) kalemde
-                            gösterme — partisi CANIAS'ta, elimizde yok. */}
-                        {line.lotTracked && (line.lot || partiEksik || lotPending === line.id) && (
-                          <button
-                            type="button"
-                            onClick={() => buOturumKayit && setLotPending(line.id)}
-                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${
-                              line.lot
-                                ? "bg-violet-100 text-violet-700"
-                                : "bg-amber-100 text-amber-700"
-                            }`}
-                          >
-                            {line.lot ? `Parti: ${line.lot}` : "Parti bekleniyor"}
-                          </button>
-                        )}
+                        {/* Parti rozeti — 3 durum:
+                            • Parti biliniyor        → "Parti: X"        (mor)
+                            • Bu oturumda okutulup   → "Parti bekleniyor" (amber, iş var)
+                              parti bekleniyor
+                            • Parti takipli ama      → "Parti takipli"    (amber çerçeve, bilgi)
+                              henüz okutulmadı — depocu önceden görsün. */}
+                        {line.lotTracked &&
+                          (() => {
+                            const bekliyor = partiEksik || lotPending === line.id;
+                            const stil = line.lot
+                              ? "bg-violet-100 text-violet-700"
+                              : bekliyor
+                              ? "bg-amber-100 text-amber-700"
+                              : "border border-amber-300 bg-amber-50 text-amber-700";
+                            const metin = line.lot
+                              ? `Parti: ${line.lot}`
+                              : bekliyor
+                              ? "Parti bekleniyor"
+                              : "Parti takipli";
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => buOturumKayit && setLotPending(line.id)}
+                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${stil}`}
+                              >
+                                {metin}
+                              </button>
+                            );
+                          })()}
                       </div>
 
                       {/* HANGİ RAFTA — bir ürün birden fazla rafta olabilir.
