@@ -66,6 +66,11 @@ const app = express();
 app.use(cors({ origin: CORS_ORIGIN.split(",").map((s) => s.trim()) }));
 app.use(express.json());
 
+// FRONTEND — build çıktısı (dist/) aynı porttan sunulur. Tek process, CORS yok.
+// Canlı: npm run build → dist/ oluşur → node server/index.js → http://SUNUCU:PORT
+const DIST_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "dist");
+app.use(express.static(DIST_DIR));
+
 /* ---------------- SOAP yardımcıları ---------------- */
 
 /** SOAP yanıtları {attributes,$value} sarmalıyla gelir; gerçek değeri çıkarır. */
@@ -369,6 +374,20 @@ const REQUIRED = {
 const missing = Object.entries(REQUIRED)
   .filter(([, v]) => !v)
   .map(([k]) => k);
+
+// SPA yönlendirmesi — /api, /health, /services DIŞINDAKİ GET'ler index.html'e
+// döner (React Router istemci yolları: /picking/123 vb.). API rotalarından SONRA.
+app.use((req, res, next) => {
+  if (req.method !== "GET") return next();
+  if (
+    req.path.startsWith("/api/") ||
+    req.path === "/health" ||
+    req.path === "/services"
+  ) {
+    return next();
+  }
+  res.sendFile(join(DIST_DIR, "index.html"));
+});
 
 app.listen(PORT, () => {
   console.log(`WMS proxy : http://localhost:${PORT}`);
