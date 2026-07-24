@@ -456,6 +456,8 @@ export const api = {
       PSPLANT: c.plant,
       PSORDERNUM: orderNum,
       PSORDERTYPE: orderType,
+      // Giriş yapan kullanıcı — emir bu depocuya atansın (Bora, 24.07).
+      PSUSER: c.worker,
     });
     // Bora: EnterPick'ten dönen tablo IASWMSPOITEM.
     // (Gözlemde TBLWMSPO adıyla da geliyor — ikisini de tanıyoruz.)

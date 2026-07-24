@@ -195,7 +195,10 @@ export const usePickingStore = create<PickingState>()(
       // Kilidi aç (MZYClosePick) — arka planda, dönüşü bekletmeye gerek yok.
       api.cancelPick(order.id, order.orderType ?? "").catch(() => {});
     }
-    set({ order: null, shelf: null, pendingProduct: null });
+    // OKUTULANLAR KORUNUR — order/records temizlenmez. Depocu emirden çıkıp
+    // dönünce kaldığı yerden devam etsin (localStorage'da duruyor, dönüşte
+    // mergeRecords geri takıyor). Sadece geçici parti-bekleme durumu sıfırlanır.
+    set({ pendingProduct: null });
   },
 
   scanShelf: async (barcode: string) => {
