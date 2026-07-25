@@ -102,7 +102,8 @@
       "partial": "Partial",
       "done": "Done",
       "new": "New",
-      "inProgress": "In progress"
+      "inProgress": "Partially picked",
+      "closed": "Picked"
     }
   },
   "receiving": {

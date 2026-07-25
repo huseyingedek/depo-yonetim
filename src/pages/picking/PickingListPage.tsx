@@ -170,7 +170,19 @@ export default function PickingListPage() {
           {pg.pageItems.map((o) => {
             // Kalem sayısı/miktar burada YOK — bu bilgi MZYEnterPick'ten geliyor,
             // liste servisi (MZYListingPick) döndürmüyor. Uydurma sayı basmıyoruz.
-            const devam = o.status === "partial";
+            // Durum: 0 açık → Yeni, 1 kısmi → Kısmi toplandı, 2 kapandı → Toplandı
+            const durumEtiket =
+              o.status === "closed"
+                ? t("picking.status.closed")
+                : o.status === "partial"
+                ? t("picking.status.inProgress")
+                : t("picking.status.new");
+            const durumStil =
+              o.status === "closed"
+                ? "bg-emerald-100 text-emerald-700"
+                : o.status === "partial"
+                ? "bg-amber-100 text-amber-700"
+                : "bg-brand-100 text-brand-700";
             return (
               <button
                 key={o.id}
@@ -190,13 +202,7 @@ export default function PickingListPage() {
                         </span>
                       )}
                       <span className="font-mono text-base font-bold text-fg">{o.id}</span>
-                      <span
-                        className={`chip ${
-                          devam ? "bg-amber-100 text-amber-700" : "bg-brand-100 text-brand-700"
-                        }`}
-                      >
-                        {devam ? t("picking.status.inProgress") : t("picking.status.new")}
-                      </span>
+                      <span className={`chip ${durumStil}`}>{durumEtiket}</span>
                     </div>
                     {o.customer && <p className="mt-0.5 text-sm text-muted">{o.customer}</p>}
                   </div>

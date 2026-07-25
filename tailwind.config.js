@@ -4,6 +4,11 @@ export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      screens: {
+        // Yatay telefon (kısa yükseklik): header + alt menü gizlenir,
+        // toplama ekranı sabit-sol / kayan-sağ olur.
+        short: { raw: "(max-height: 500px)" },
+      },
       fontFamily: {
         sans: ["Inter", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
       },

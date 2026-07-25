@@ -9,6 +9,7 @@ import BarcodeScanner from "../../components/BarcodeScanner";
 import {
   usePickingStore, orderProgress, orderTotals, linePicked,
 } from "../../store/pickingStore";
+import { isoDateToBatch } from "../../store/pickingLogic";
 
 type Toast = { kind: "ok" | "done" | "error"; text: string } | null;
 
@@ -35,6 +36,8 @@ export default function PickingDetailPage() {
   const [busy, setBusy] = useState(false);
   /** Parti takipli kalem okundu, parti barkodu bekleniyor */
   const [lotPending, setLotPending] = useState<string | null>(null);
+  /** M3: tarih seçiciden gelen, parti alanına yazılacak YYYYAAGG değeri */
+  const [partiPrefill, setPartiPrefill] = useState("");
   /** Kalem başına seçilen raf (birden fazla raf varsa depocu seçer) */
   const [secilenRaf, setSecilenRaf] = useState<Record<string, string>>({});
   /**
@@ -99,6 +102,7 @@ export default function PickingDetailPage() {
           const lr = await scanLot(lotPending, barkod);
           if (lr.ok) {
             setLotPending(null);
+            setPartiPrefill(""); // M3: tarih prefill'i sıfırla
             setRedMesaji(null); // başarıda önceki hata mesajını temizle
             showToast({ kind: "done", text: `Parti: ${barkod}` });
           } else {
@@ -211,7 +215,7 @@ export default function PickingDetailPage() {
     : "Ürün barkodunu okutun";
 
   return (
-    <div className="mx-auto max-w-6xl p-4 lg:p-8">
+    <div className="mx-auto max-w-6xl p-3 md:p-4 lg:p-8 short:h-[100dvh] short:max-w-none short:flex short:flex-col short:overflow-hidden short:p-2">
       <PageHeader
         title={order.id}
         subtitle={[order.customer, order.reference].filter(Boolean).join(" · ")}
@@ -239,9 +243,11 @@ export default function PickingDetailPage() {
         }
       />
 
-      <div className="grid min-w-0 gap-6 lg:grid-cols-[400px_minmax(0,1fr)]">
-        {/* Sol: raf + okutma + ilerleme */}
-        <div className="min-w-0 lg:sticky lg:top-24 lg:self-start">
+      {/* İki pane: SOL = okutma (md ve üstünde SABİT/sticky, telefon yatay dahil),
+          SAĞ = toplanan ürün listesi (sayfayla birlikte akar). Portrait'ta tek kolon. */}
+      <div className="grid min-w-0 gap-4 md:gap-6 md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-[400px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-3">
+        {/* Sol: raf + okutma + ilerleme — md sticky; short (yatay) tam sabit */}
+        <div className="min-w-0 md:sticky md:top-3 md:self-start lg:top-4 short:!static short:w-[300px] short:shrink-0 short:self-stretch short:overflow-y-auto">
           <div className="card p-4">
             {/* Adım göstergesi: Raf → Ürün → Parti
                 Raf okunduktan sonra "Ürün" adımında KALIR; her üründen sonra
@@ -332,17 +338,31 @@ export default function PickingDetailPage() {
 
             {/* Parti bekleniyor — depocu vazgeçebilsin (etiket yırtıksa vb.) */}
             {lotPending && (
-              <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-amber-50 px-3 py-2">
-                <span className="min-w-0 truncate text-xs font-medium text-amber-800">
-                  Parti barkodu bekleniyor
-                </span>
-                <button
-                  onClick={() => setLotPending(null)}
-                  className="shrink-0 text-xs font-semibold text-amber-700 hover:underline"
-                >
-                  Vazgeç
-                </button>
-              </div>
+              <>
+                <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-amber-50 px-3 py-2">
+                  <span className="min-w-0 truncate text-xs font-medium text-amber-800">
+                    Parti barkodu bekleniyor
+                  </span>
+                  <button
+                    onClick={() => {
+                      setLotPending(null);
+                      setPartiPrefill("");
+                    }}
+                    className="shrink-0 text-xs font-semibold text-amber-700 hover:underline"
+                  >
+                    Vazgeç
+                  </button>
+                </div>
+                {/* M3: SKT/parti tarihini seç → parti barkodu alanına YYYYAAGG gelir */}
+                <div className="mb-3 flex items-center gap-2 rounded-xl bg-elevated px-3 py-2">
+                  <span className="shrink-0 text-xs font-medium text-muted">Tarih seç</span>
+                  <input
+                    type="date"
+                    onChange={(e) => setPartiPrefill(isoDateToBatch(e.target.value))}
+                    className="h-8 flex-1 rounded-lg border border-line bg-surface px-2 font-mono text-sm text-fg outline-none focus:border-brand-500"
+                  />
+                </div>
+              </>
             )}
 
             {/* Kaç tane alındı — çuval/koli sayısı.
@@ -385,7 +405,11 @@ export default function PickingDetailPage() {
               </div>
             )}
 
-            <BarcodeScanner onDetected={handleDetected} prompt={promptText} />
+            <BarcodeScanner
+              onDetected={handleDetected}
+              prompt={promptText}
+              prefill={lotPending ? partiPrefill : undefined}
+            />
 
             {busy && (
               <p className="mt-2 flex items-center gap-1.5 text-xs text-subtle">
@@ -426,8 +450,8 @@ export default function PickingDetailPage() {
           </div>
         </div>
 
-        {/* Sağ: kalem listesi */}
-        <div className="min-w-0">
+        {/* Sağ: kalem listesi — short (yatay) modda tek kayan alan */}
+        <div className="min-w-0 short:flex-1 short:overflow-y-auto short:pr-1">
           <div className="space-y-2.5">
             {sortedLines.map((line) => {
               const toplanan = linePicked(line);
@@ -486,6 +510,14 @@ export default function PickingDetailPage() {
                           <span className="font-mono font-semibold">{line.product.code}</span>
                         )}
                         {line.product.unit && <span>{line.product.unit}</span>}
+                        {/* Ağırlık / hacim / adet (WEIGHTCAPACITY / VOLUMECAPACITY / MOVEQTY) */}
+                        <span className="font-medium text-muted">· {line.requestedQty} adet</span>
+                        {line.weight !== undefined && (
+                          <span className="font-medium text-muted">· {line.weight} ağırlık</span>
+                        )}
+                        {line.volume !== undefined && (
+                          <span className="font-medium text-muted">· {line.volume} hacim</span>
+                        )}
                         {/* Parti rozeti — 3 durum:
                             • Parti biliniyor        → "Parti: X"        (mor)
                             • Bu oturumda okutulup   → "Parti bekleniyor" (amber, iş var)

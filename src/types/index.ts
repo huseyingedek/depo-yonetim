@@ -139,6 +139,10 @@ export interface PickLine {
    * ayarlardaki depo değil.
    */
   targetWarehouse?: string;
+  /** WEIGHTCAPACITY — ağırlık (gösterim). */
+  weight?: number;
+  /** VOLUMECAPACITY — hacim (gösterim). */
+  volume?: number;
 }
 
 /** CANIAS STATUS: 0 Açık, 1 Kısmi Açık, 2 Kapalı */

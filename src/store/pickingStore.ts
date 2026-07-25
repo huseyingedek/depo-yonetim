@@ -65,18 +65,26 @@ function kayitUpsert(
  * kalem eşleşmesine göre records geri takılıyor. Yoksa yenileyince kayıtlar
  * ekranda kaybolurdu (veri hâlâ localStorage'da ama order taze geldiği için).
  */
-function mergeRecords(fresh: PickOrder, saklanan: PickOrder | null): PickOrder {
+export function mergeRecords(fresh: PickOrder, saklanan: PickOrder | null): PickOrder {
   if (!saklanan || saklanan.id !== fresh.id) return fresh;
-  const kayitHaritasi = new Map(
-    // Bayat/geçersiz kayıtları (partisiz "1") burada ELE — eski koddan kalıp
-    // SavePick'e sızmasın, ekranda toplanmış gibi görünmesin.
-    saklanan.lines.map((l) => [l.id, (l.records ?? []).filter(gecerliKayit)])
-  );
+  // Saklanan kalemleri id'ye göre indexle — records + parti (lot/expiry) geri gelsin.
+  const saklananHaritasi = new Map(saklanan.lines.map((l) => [l.id, l]));
   return {
     ...fresh,
     lines: fresh.lines.map((l) => {
-      const kayitlar = kayitHaritasi.get(l.id);
-      return kayitlar?.length ? { ...l, records: kayitlar } : l;
+      const sl = saklananHaritasi.get(l.id);
+      // Bayat/geçersiz kayıtları (partisiz "1") ELE — SavePick'e sızmasın,
+      // ekranda toplanmış gibi görünmesin.
+      const kayitlar = (sl?.records ?? []).filter(gecerliKayit);
+      if (!kayitlar.length) return l;
+      // records ile BİRLİKTE parti bilgisini de geri yükle. Yoksa "okutulanlar"a
+      // girip çıkınca l.lot kaybolup "parti eksik" hatası veriliyordu (M11).
+      return {
+        ...l,
+        records: kayitlar,
+        lot: sl?.lot && sl.lot !== "*" ? sl.lot : l.lot,
+        expiry: sl?.expiry ?? l.expiry,
+      };
     }),
   };
 }
@@ -187,7 +195,7 @@ export const usePickingStore = create<PickingState>()(
     }
   },
 
-  clear: () => set({ order: null, shelf: null }),
+  clear: () => set({ order: null, shelf: null, pendingProduct: null }),
 
   leaveOrder: () => {
     const order = get().order;
@@ -378,10 +386,18 @@ export const usePickingStore = create<PickingState>()(
   complete: async () => {
     const order = get().order;
     if (!order) return { ok: false, message: "Emir yüklü değil" };
-    // Hiç okutma yoksa palet bile oluşturma — önce ürün okutulmalı.
+    // Bu oturumda yeni okutma yoksa palet oluşturma. Mesajı ayır: zaten
+    // kaydedilmiş (MOVEDQTY>0) kalem varken "hiç toplanmadı" demek kafa
+    // karıştırıyor (ekranda 1/1 görünürken). Ona ayrı, net mesaj ver.
     const okutmaVar = order.lines.some((l) => (l.records ?? []).length > 0);
     if (!okutmaVar) {
-      return { ok: false, message: "Önce ürün okutun — henüz toplanan yok." };
+      const oncedenKayitli = order.lines.some((l) => l.pickedQty > 0);
+      return {
+        ok: false,
+        message: oncedenKayitli
+          ? "Bu oturumda yeni okutma yok — kalan ürünleri okutun."
+          : "Önce ürün okutun — henüz toplanan yok.",
+      };
     }
     set({ completing: true });
     try {

@@ -46,6 +46,10 @@ export const DATE_MAX = "01.01.2100";
 /** Boş string yerine joker. */
 export const ANY = "%";
 
+// Etiket baskı sayısı — MZYSavePick'e giden PILABELCOUNT parametresi.
+// Test sürecinde 0 (etiket basılmaz); canlıya alınca 1 yapılır.
+export const LABEL_COUNT = 0;
+
 /**
  * CANIAS'ın Messages alanını kullanıcıya gösterilebilir metne çevirir.
  *
@@ -78,7 +82,10 @@ export function serviceMessage(r: MzyResult): string {
 /** data içindeki JSON mesaj tablolarından SYSTEMMSG/TEXT toplar. */
 function mesajTablosu(data: Record<string, unknown> | null): string {
   if (!data) return "";
-  const adlar = ["MESSAGETABLE", "TBLMESSAGE", "TROIAMESSAGES", "MSGTABLE", "TBLMSG"];
+  // "ROW": bazı servisler (ör. MZYCreateContainer hata) mesajı üst seviye
+  // {ROW:{TYPE,SYSTEMMSG,MSGNUMBER}} olarak döndürüyor. Başarı yanıtında ROW
+  // her zaman bir tablo (TBLCONTSP.ROW) altında nested; üst seviye ROW = hata.
+  const adlar = ["MESSAGETABLE", "TBLMESSAGE", "TROIAMESSAGES", "MSGTABLE", "TBLMSG", "ROW"];
   const lines: string[] = [];
   for (const ad of adlar) {
     if (!(ad in data)) continue;
@@ -337,7 +344,7 @@ const yok = (v: string) => !v || v === "*";
  * Bu yüzden toplamada `location` boş kalıyor — depocuya sevk alanını
  * "raf" diye göstermektense hiç göstermemek doğru.
  */
-function toPickLine(row: Row, i: number): PickLine {
+export function toPickLine(row: Row, i: number): PickLine {
   const isPick = pick(row, ["ISPICK"]) === "1";
   const lot = pick(row, ["BATCHNUM"]);
   const specialStock = pick(row, ["SPECIALSTOCK"]);
@@ -361,11 +368,14 @@ function toPickLine(row: Row, i: number): PickLine {
     targetArea: isPick && !yok(pick(row, ["TRANSAREA"])) ? pick(row, ["TRANSAREA"]) : undefined,
     // WAREHOUSETA — MZYCreateContainer'a giden hedef depo (Bora)
     targetWarehouse: pick(row, ["WAREHOUSETA"]) || undefined,
+    // WEIGHTCAPACITY / VOLUMECAPACITY — kartta ağırlık/hacim göstermek için.
+    weight: num(row, ["WEIGHTCAPACITY"]) || undefined,
+    volume: num(row, ["VOLUMECAPACITY"]) || undefined,
   };
 }
 
 /** STATUS: 0 Açık, 1 Kısmi Açık, 2 Kapalı */
-function toStatus(v: string): PickOrder["status"] {
+export function toStatus(v: string): PickOrder["status"] {
   return v === "2" ? "closed" : v === "1" ? "partial" : "open";
 }
 
@@ -686,10 +696,14 @@ export const api = {
     const r = await call(SERVICES.savePick, {
       PSCOMPANY: c.company,
       PSPLANT: c.plant,
+      // Login olan kullanıcı — EnterPick'te olduğu gibi SavePick'e de gönderilir.
+      PSUSER: c.worker,
       PSORDERNUM: order.id,
       PSORDERTYPE: order.orderType ?? "",
       PSCONTWAREHOUSE: containerWarehouse,
       PSCONTSTOCKPLACE: containerId,
+      // Etiket baskı sayısı — test: 0, canlı: 1 (LABEL_COUNT ile ayarlanır)
+      PILABELCOUNT: LABEL_COUNT,
       // Dizi gönderiliyor; sunucu <ROW> listesine çeviriyor
       PSIASWMSPOITEMXML: rows,
     });

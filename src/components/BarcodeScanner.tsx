@@ -7,6 +7,8 @@ interface Props {
   onDetected: (barcode: string) => void;
   /** Kamera üstünde / input altında gösterilecek yönerge. */
   prompt?: string;
+  /** Dışarıdan giriş alanını doldur (M3: parti tarih seçici → YYYYAAGG). */
+  prefill?: string;
 }
 
 /**
@@ -20,7 +22,7 @@ interface Props {
  */
 const SCAN_COOLDOWN = 1200; // aynı barkodun tekrar tetiklenmesini engelle (ms)
 
-export default function BarcodeScanner({ onDetected, prompt }: Props) {
+export default function BarcodeScanner({ onDetected, prompt, prefill }: Props) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
@@ -29,6 +31,12 @@ export default function BarcodeScanner({ onDetected, prompt }: Props) {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState(false);
   const [value, setValue] = useState("");
+
+  // Dışarıdan doldurma (M3): prefill değişince alana yaz. Depocu görüp
+  // onaylar (Enter) — otomatik göndermez.
+  useEffect(() => {
+    if (prefill) setValue(prefill);
+  }, [prefill]);
 
   // Sürekli tarama tek okutmayı çok kez tetiklemesin
   const emit = (code: string) => {

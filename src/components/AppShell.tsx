@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Boxes, Home, Settings as SettingsIcon, LogOut, Building2, Bell, ClipboardList, ScanSearch } from "lucide-react";
+import { Boxes, Home, Settings as SettingsIcon, LogOut, Building2, Bell, ClipboardList, ScanSearch, Menu, ChevronDown } from "lucide-react";
 import { useAppStore } from "../store/appStore";
+import { usePickingStore } from "../store/pickingStore";
 import { OPERATIONS } from "./operations";
 
 /**
@@ -30,7 +31,7 @@ export default function AppShell() {
       {/* Ana bölüm */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Üst bar (mobilde app bar, web'de sade) */}
-        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface px-4 lg:px-8">
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface px-4 lg:px-8 short:hidden">
           <div className="flex items-center gap-2.5 lg:hidden">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600">
               <Boxes className="h-5 w-5 text-white" />
@@ -52,7 +53,7 @@ export default function AppShell() {
         {/* overflow-x-hidden: tek bir uzun metin bile tüm sayfayı yana kaydırmasın */}
         <main
           ref={mainRef}
-          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-24 lg:pb-0"
+          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-24 lg:pb-0 short:pb-0"
         >
           <div key={location.pathname} className="min-w-0 animate-fade-in">
             <Outlet />
@@ -70,6 +71,8 @@ function MobileTabBar() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  // Yatay (kısa ekran) modunda alt menü aç/kapa durumu.
+  const [acik, setAcik] = useState(false);
 
   const tabs = [
     { to: "/home", icon: Home, label: t("nav.home"), active: pathname === "/home" },
@@ -79,8 +82,21 @@ function MobileTabBar() {
   ];
 
   return (
+    <>
+      {/* Yatay (kısa ekran) modunda alt menü varsayılan gizli; bu düğmeyle aç/kapa.
+          Dikey ve masaüstünde düğme görünmez, menü normal davranır. */}
+      <button
+        type="button"
+        onClick={() => setAcik((v) => !v)}
+        aria-label={acik ? "Menüyü kapat" : "Menüyü aç"}
+        className="fixed bottom-2 right-2 z-50 hidden h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white shadow-soft active:scale-95 short:flex"
+      >
+        {acik ? <ChevronDown className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+      </button>
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-surface/95 backdrop-blur lg:hidden"
+      className={`fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-surface/95 backdrop-blur transition-transform lg:hidden ${
+        acik ? "short:translate-y-0" : "short:translate-y-full"
+      }`}
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       {tabs.map((tab) => {
@@ -88,7 +104,7 @@ function MobileTabBar() {
         return (
           <button
             key={tab.to}
-            onClick={() => navigate(tab.to)}
+            onClick={() => { navigate(tab.to); setAcik(false); }}
             className={`flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-semibold transition-colors duration-200 ease-soft active:scale-95 ${
               tab.active ? "text-brand-600" : "text-subtle"
             }`}
@@ -105,6 +121,7 @@ function MobileTabBar() {
         );
       })}
     </nav>
+    </>
   );
 }
 
@@ -185,6 +202,9 @@ function LogoutButton() {
   return (
     <button
       onClick={() => {
+        // Kullanıcı çıkarken kendi picking ilerlemesi de temizlensin —
+        // ortak terminalde sonraki kullanıcıya sızmasın (M6).
+        usePickingStore.getState().clear();
         logout();
         navigate("/login", { replace: true });
       }}
