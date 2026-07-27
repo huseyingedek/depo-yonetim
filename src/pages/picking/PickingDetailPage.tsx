@@ -45,7 +45,7 @@ export default function PickingDetailPage() {
    * Kayda giren miktar = barkodun birim değeri × bu sayı.
    * Okutmadan sonra 1'e döner ki unutulup üst üste binmesin.
    */
-  const [okutmaAdedi, setOkutmaAdedi] = useState(1);
+  const [okutmaAdedi, setOkutmaAdedi] = useState("");
   /**
    * Reddedilen okutmanın açıklaması. Toast 2 saniyede kayboluyor, depocu
    * ne yapacağını okuyamıyordu — bu kutu düzeltilene kadar ekranda kalır.
@@ -113,10 +113,10 @@ export default function PickingDetailPage() {
         }
 
         // 3) Ürün — yanındaki miktar kutusunda yazan adet kadar
-        const s = await scanProduct(barkod, okutmaAdedi);
+        const s = await scanProduct(barkod, Number(okutmaAdedi) || 1);
         setRedMesaji(null);
         if (s.kind === "ok") {
-          setOkutmaAdedi(1);
+          setOkutmaAdedi("");
           flash(s.lineId);
           showToast({ kind: "ok", text: `${s.name} eklendi` });
         } else if (s.kind === "needsBatch") {
@@ -135,7 +135,7 @@ export default function PickingDetailPage() {
           flash(s.lineId);
           setRedMesaji(s.message);
           // Sığan miktarı hazır yapalım — depocu tekrar okutsun, uğraşmasın
-          if (s.kind === "exceedsOrder" && s.enFazla > 0) setOkutmaAdedi(s.enFazla);
+          if (s.kind === "exceedsOrder" && s.enFazla > 0) setOkutmaAdedi(String(s.enFazla));
         } else {
           showToast({ kind: "error", text: s.message });
         }
@@ -396,7 +396,8 @@ export default function PickingDetailPage() {
                   inputMode="numeric"
                   min={1}
                   value={okutmaAdedi}
-                  onChange={(e) => setOkutmaAdedi(Math.max(1, Number(e.target.value) || 1))}
+                  onChange={(e) => setOkutmaAdedi(e.target.value.replace(/[^0-9]/g, "").replace(/^0+/, ""))}
+                  placeholder="1"
                   className="h-8 w-16 rounded-lg border border-line bg-surface text-center font-mono text-sm font-bold text-fg outline-none focus:border-brand-500"
                 />
                 <span className="text-[11px] text-subtle">
