@@ -410,16 +410,23 @@ export const api = {
       PSUSER: username,
       PSPASSWORD: password,
     });
-    // Doğru bilgide TBLUSER dolu gelir; yanlışta TBLMESSAGE (boş veya hata metni).
+    // GÜVENLİK: Doğru bilgide TBLUSER dolu gelir. Hata yanıtı ise
+    // {ROW:{TYPE:"E",SYSTEMMSG}} veya TBLMESSAGE olarak gelir — bu hata satırını
+    // KULLANICI SANIP içeri ALMAYIZ. Aksi halde geçersiz kullanıcı login olurdu.
+    const mesaj = serviceMessage(r);
     const rows = rowsOf(r, ["TBLUSER", "TBLCHECKUSER"]);
-    if (!rows.length) {
-      const hata = unwrapRows(r.data?.TBLMESSAGE)
+    const u = rows[0];
+    // Gerçek kullanıcı satırı: hata satırları TYPE:"E" / SYSTEMMSG taşır, kullanıcı taşımaz.
+    const hataSatiri = !u || pick(u, ["TYPE"]) === "E" || !!pick(u, ["SYSTEMMSG"]);
+    if (mesaj || hataSatiri) {
+      const tblMsg = unwrapRows(r.data?.TBLMESSAGE)
         .map((m) => pick(m, ["TEXT", "MESSAGE", "VALUE"]))
         .filter(Boolean)
         .join("\n");
-      throw new WmsError(hata || serviceMessage(r) || "Kullanıcı adı veya parola hatalı");
+      throw new WmsError(
+        tblMsg || mesaj || pick(u ?? {}, ["SYSTEMMSG"]) || "Kullanıcı adı veya parola hatalı"
+      );
     }
-    const u = rows[0];
     const name = pick(u, ["NAME"]);
     const surname = pick(u, ["SURNAME"]);
     console.info("[MZYCheckUser] kullanıcı:", u);
