@@ -186,23 +186,22 @@ function call(service: string, params: Record<string, unknown>): Promise<MzyResu
 let ardArdaBaglantiHatasi = 0;
 const BAGLANTI_ESIK = 3;
 function baglantiHatasi(detay = ""): WmsError {
-  // Kullanıcıya HER ZAMAN aynı, tanınır mesaj: "İstek cevaplanmadı" → bağlantı
-  // sorunu olduğu net anlaşılsın. Gerçek teknik sebep (timeout/502/network)
-  // sadece debug için console'a yazılır.
+  // Servisten cevap alınamadı (fetch başarısız / HTTP 502). Kullanıcıya HER
+  // DURUMDA tek, sabit mesaj: "İstek cevaplanmadı". Gerçek teknik sebep sadece
+  // debug için console'a yazılır.
   if (detay) console.warn("[bağlantı] istek cevapsız:", detay);
   ardArdaBaglantiHatasi++;
   if (ardArdaBaglantiHatasi >= BAGLANTI_ESIK) {
     ardArdaBaglantiHatasi = 0;
-    // Kalıcı CANIAS kopması → oturumu kapat (RequireAuth login'e yönlendirir).
-    // Sadece appStore.logout — picking ilerlemesi KORUNUR (temizlenmez).
+    // Üst üste 3 kez cevapsız → sessiz güvenlik önlemi: oturumu kapat (login'e
+    // döner). Mesaj yine "İstek cevaplanmadı" — picking ilerlemesi KORUNUR.
     try {
       useAppStore.getState().logout();
     } catch {
       /* yoksay */
     }
-    return new WmsError("İstek cevaplanmadı — CANIAS bağlantısı kurulamadı, lütfen yeniden giriş yapın.");
   }
-  return new WmsError("İstek cevaplanmadı — bağlantı sorunu olabilir, tekrar deneyin.");
+  return new WmsError("İstek cevaplanmadı");
 }
 
 async function doCall(service: string, params: Record<string, unknown>): Promise<MzyResult> {
@@ -217,13 +216,13 @@ async function doCall(service: string, params: Record<string, unknown>): Promise
       body: JSON.stringify(params),
     });
   } catch {
-    throw baglantiHatasi("Sunucuya ulaşılamıyor (proxy/VPN?)");
+    throw baglantiHatasi("fetch başarısız (cihaz proxy'ye ulaşamadı)");
   }
   const body = (await res.json().catch(() => ({}))) as MzyResult & { error?: string };
   const msg = serviceMessage(body);
 
-  // 5xx = proxy/CANIAS ulaşılamıyor → bağlantı hatası (sayılır, eşikte logout).
-  if (res.status >= 500) throw baglantiHatasi(body.error || msg || "CANIAS'a ulaşılamıyor");
+  // 5xx = servisten cevap yok (proxy/CANIAS) → "İstek cevaplanmadı"
+  if (res.status >= 500) throw baglantiHatasi(body.error || msg || `HTTP ${res.status}`);
   ardArdaBaglantiHatasi = 0; // CANIAS yanıt verdi → bağlantı OK, sayaç sıfır
 
   if (!res.ok) throw new WmsError(body.error || msg || `${service} → HTTP ${res.status}`);
