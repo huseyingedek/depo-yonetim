@@ -204,19 +204,33 @@ function baglantiHatasi(detay = ""): WmsError {
   return new WmsError("İstek cevaplanmadı");
 }
 
+// İSTEK ZAMAN AŞIMI: proxy bağlantıyı açık tutup hiç cevap vermezse (CANIAS
+// yazmada asılırsa / bağlantı tam istek anında koparsa) fetch'in kendi timeout'u
+// olmadığı için SONSUZA kadar bekler → "gönderiliyor" sonsuz döner. Bu süre
+// sonunda iptal edip "İstek cevaplanmadı" döneriz (Bora'nın yakaladığı durum).
+const ISTEK_TIMEOUT_MS = 30000;
+
 async function doCall(service: string, params: Record<string, unknown>): Promise<MzyResult> {
   if (!wmsConfig.baseUrl) {
     throw new WmsError("Proxy adresi tanımlı değil (VITE_WMS_BASE_URL)");
   }
   let res: Response;
+  const iptal = new AbortController();
+  const zamanAsimi = setTimeout(() => iptal.abort(), ISTEK_TIMEOUT_MS);
   try {
     res = await fetch(`${wmsConfig.baseUrl}/${service}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
+      signal: iptal.signal,
     });
   } catch {
-    throw baglantiHatasi("fetch başarısız (cihaz proxy'ye ulaşamadı)");
+    // fetch başarısız VEYA zaman aşımı (abort) → yanıt yok = "İstek cevaplanmadı"
+    throw baglantiHatasi(
+      iptal.signal.aborted ? "zaman aşımı (yanıt gelmedi)" : "fetch başarısız (cihaz proxy'ye ulaşamadı)"
+    );
+  } finally {
+    clearTimeout(zamanAsimi);
   }
   const body = (await res.json().catch(() => ({}))) as MzyResult & { error?: string };
   const msg = serviceMessage(body);
