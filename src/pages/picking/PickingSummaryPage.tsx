@@ -5,6 +5,7 @@ import { Check, CheckCircle2, Loader2, Send, PackagePlus, AlertTriangle } from "
 import PageHeader from "../../components/PageHeader";
 import ProgressRing from "../../components/ProgressRing";
 import { usePickingStore, orderProgress, orderTotals } from "../../store/pickingStore";
+import { qtyRound } from "../../store/pickingLogic";
 
 export default function PickingSummaryPage() {
   const { t } = useTranslation();
@@ -114,7 +115,7 @@ export default function PickingSummaryPage() {
               </div>
               <p className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{line.product.name}</p>
               <span className="font-mono text-sm font-bold text-fg">
-                {line.pickedQty}/{line.requestedQty}
+                {qtyRound(line.pickedQty)}/{qtyRound(line.requestedQty)}
               </span>
             </div>
           );

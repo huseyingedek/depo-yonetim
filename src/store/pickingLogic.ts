@@ -48,12 +48,20 @@ export function gecerliKayit(r: PickRecord): boolean {
  * İkisi AYRI kaynak; toplanmaları gerekir. Geçersiz (partisiz "1") kayıtlar
  * sayılmaz.
  */
+/**
+ * Miktar yuvarlama — Kg/ondalıklı miktarlarda kayan-nokta artığını temizler.
+ * Ör. 16.39552268322588 → 16.396. Tam sayılar aynen kalır (500 → 500).
+ * Hem gösterimde hem toplamada kullanılır ki ekranda 14 haneli çöp çıkmasın.
+ */
+export const qtyRound = (n: number): number =>
+  Math.round((Number(n) + Number.EPSILON) * 1000) / 1000;
+
 export function linePicked(line: PickLine): number {
   const onceki = line.pickedQty; // MOVEDQTY — servisten gelen baz
   const buOturum = (line.records ?? [])
     .filter(gecerliKayit)
     .reduce((s, r) => s + r.qty, 0);
-  return onceki + buOturum;
+  return qtyRound(onceki + buOturum);
 }
 
 export interface ScanInput {

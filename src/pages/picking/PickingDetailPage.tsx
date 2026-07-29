@@ -2,16 +2,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  MapPin, Check, AlertTriangle, Loader2, PackagePlus, X,
+  MapPin, Check, AlertTriangle, Loader2, PackagePlus, X, RotateCcw,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import BarcodeScanner from "../../components/BarcodeScanner";
 import {
-  usePickingStore, orderProgress, orderTotals, linePicked,
+  usePickingStore, orderProgress, linePicked,
 } from "../../store/pickingStore";
-import { isoDateToBatch } from "../../store/pickingLogic";
+import { isoDateToBatch, qtyRound } from "../../store/pickingLogic";
 
 type Toast = { kind: "ok" | "done" | "error"; text: string } | null;
+
+/** Bağlantı/servis cevapsızlığı mı? "Tekrar Dene" yalnız bunlarda gösterilir. */
+const baglantiHatasiMi = (m?: string) => !!m && /cevaplanmad|ulaşılamıyor|bağlantı/i.test(m);
 
 export default function PickingDetailPage() {
   const { t } = useTranslation();
@@ -51,6 +54,8 @@ export default function PickingDetailPage() {
    * ne yapacağını okuyamıyordu — bu kutu düzeltilene kadar ekranda kalır.
    */
   const [redMesaji, setRedMesaji] = useState<string | null>(null);
+  /** Bağlantı hatası alan son okutulan barkod — "Tekrar Dene" bunu yeniden gönderir. */
+  const [sonCevapsiz, setSonCevapsiz] = useState<string | null>(null);
 
   // StrictMode efekti iki kez çalıştırıyor; MZYEnterPick VERİ YAZDIĞI için
   // ikinci çağrının gitmemesi önemli.
@@ -83,6 +88,7 @@ export default function PickingDetailPage() {
       const barkod = code.trim();
       if (!barkod || busy) return;
       setBusy(true);
+      setSonCevapsiz(null); // her okutmada sıfırla; bağlantı hatasında aşağıda tekrar set edilir
       try {
         // 1) Raf bekleniyor
         if (!shelf) {
@@ -91,6 +97,7 @@ export default function PickingDetailPage() {
             setRedMesaji(null); // başarıda önceki hata mesajını temizle
             showToast({ kind: "ok", text: `Raf: ${barkod}` });
           } else {
+            if (baglantiHatasiMi(r.message)) setSonCevapsiz(barkod);
             showToast({ kind: "error", text: r.message });
           }
           return;
@@ -106,6 +113,7 @@ export default function PickingDetailPage() {
             setRedMesaji(null); // başarıda önceki hata mesajını temizle
             showToast({ kind: "done", text: `Parti: ${barkod}` });
           } else {
+            if (baglantiHatasiMi(lr.message)) setSonCevapsiz(barkod);
             setRedMesaji(lr.message);
             showToast({ kind: "error", text: lr.message });
           }
@@ -137,6 +145,7 @@ export default function PickingDetailPage() {
           // Sığan miktarı hazır yapalım — depocu tekrar okutsun, uğraşmasın
           if (s.kind === "exceedsOrder" && s.enFazla > 0) setOkutmaAdedi(String(s.enFazla));
         } else {
+          if (baglantiHatasiMi(s.message)) setSonCevapsiz(barkod);
           showToast({ kind: "error", text: s.message });
         }
       } finally {
@@ -158,7 +167,10 @@ export default function PickingDetailPage() {
   }
 
   const progress = orderProgress(order);
-  const { picked, requested } = orderTotals(order);
+  // ÜST BAR: farklı birimler (adet/KO/Kg) toplanamaz → miktar toplamı yerine
+  // "kaç kalem tamamlandı / toplam kalem" gösteriyoruz.
+  const toplamKalem = order.lines.length;
+  const tamamlananKalem = order.lines.filter((l) => linePicked(l) >= l.requestedQty).length;
 
   /**
    * Parti takipli olup miktarı girilmiş ama partisi okutulmamış kalemler.
@@ -187,7 +199,7 @@ export default function PickingDetailPage() {
           .join(", ")}. Bu ürünler son kullanma tarihi takipli, parti girilmeden paketlenemez.`
       : fazlaToplanan.length > 0
       ? `Fazla toplanmış kalem var: ${fazlaToplanan
-          .map((l) => `${l.product.code} (${linePicked(l)}/${l.requestedQty})`)
+          .map((l) => `${l.product.code} (${linePicked(l)}/${qtyRound(l.requestedQty)})`)
           .join(", ")}. Düzeltilmeden paketlenemez.`
       : "";
 
@@ -226,8 +238,11 @@ export default function PickingDetailPage() {
         }}
         right={
           <div className="flex items-center gap-2">
-            <span className="chip bg-brand-100 px-3 py-1 font-mono text-sm text-brand-700">
-              {picked}/{requested}
+            <span
+              title="Tamamlanan kalem / toplam kalem"
+              className="chip bg-brand-100 px-3 py-1 font-mono text-sm text-brand-700"
+            >
+              {tamamlananKalem}/{toplamKalem} kalem
             </span>
             {/* Paketleme başlıkta — liste uzadıkça aşağı kaçmasın */}
             <button
@@ -384,6 +399,26 @@ export default function PickingDetailPage() {
               </div>
             )}
 
+            {/* Bağlantı hatasında (servis cevapsız) son okutmayı aynı bilgiyle yeniden gönder */}
+            {sonCevapsiz && (
+              <div className="mb-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
+                <p className="mb-2 text-xs font-semibold text-amber-800">
+                  İstek cevaplanmadı — bağlantı sorunu olabilir. Aynı okutmayı tekrar gönderebilirsiniz.
+                </p>
+                <button
+                  onClick={() => {
+                    const k = sonCevapsiz;
+                    setSonCevapsiz(null);
+                    if (k) handleDetected(k);
+                  }}
+                  disabled={busy}
+                  className="btn-primary inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm disabled:opacity-40"
+                >
+                  <RotateCcw className="h-4 w-4" /> Tekrar Dene
+                </button>
+              </div>
+            )}
+
             {shelf && !lotPending && (
               <div
                 className={`mb-3 flex items-center gap-2 rounded-xl px-3 py-2 ${
@@ -472,9 +507,9 @@ export default function PickingDetailPage() {
                 ) ?? line.suggestions?.[0];
               let uyari = "";
               if (toplanan > line.requestedQty) {
-                uyari = `İstenen ${line.requestedQty} ${line.product.unit}, okutulan ${toplanan}. Fazla toplandı — kayıt silin ya da azaltın.`;
+                uyari = `İstenen ${qtyRound(line.requestedQty)} ${line.product.unit}, okutulan ${toplanan}. Fazla toplandı — kayıt silin ya da azaltın.`;
               } else if (raf && raf.total > 0 && toplanan > raf.total) {
-                uyari = `${raf.barcode} rafında ${raf.total} ${raf.unit} var, ${toplanan} okutuldu. Kalanı başka raftan al.`;
+                uyari = `${raf.barcode} rafında ${qtyRound(raf.total)} ${raf.unit} var, ${toplanan} okutuldu. Kalanı başka raftan al.`;
               }
               const partial = toplanan > 0 && !done;
               const flashing = flashLine === line.id;
@@ -512,12 +547,12 @@ export default function PickingDetailPage() {
                         )}
                         {line.product.unit && <span>{line.product.unit}</span>}
                         {/* Ağırlık / hacim / adet (WEIGHTCAPACITY / VOLUMECAPACITY / MOVEQTY) */}
-                        <span className="font-medium text-muted">· {line.requestedQty}</span>
+                        <span className="font-medium text-muted">· {qtyRound(line.requestedQty)}</span>
                         {line.weight !== undefined && (
-                          <span className="font-medium text-muted">· Ağırlık: {line.weight}</span>
+                          <span className="font-medium text-muted">· Ağırlık: {qtyRound(line.weight)}</span>
                         )}
                         {line.volume !== undefined && (
-                          <span className="font-medium text-muted">· Hacim: {line.volume}</span>
+                          <span className="font-medium text-muted">· Hacim: {qtyRound(line.volume)}</span>
                         )}
                         {/* Parti rozeti — 3 durum:
                             • Parti biliniyor        → "Parti: X"        (mor)
@@ -608,7 +643,7 @@ export default function PickingDetailPage() {
                         Elle artırma yok: her artış gerçek bir okutma olmalı. */}
                     <div className="flex shrink-0 items-center gap-1">
                       <span className="font-mono text-sm font-bold text-fg">{toplanan}</span>
-                      <span className="font-mono text-sm text-subtle">/ {line.requestedQty}</span>
+                      <span className="font-mono text-sm text-subtle">/ {qtyRound(line.requestedQty)}</span>
                     </div>
                   </div>
                 </div>

@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { PickOrder, PickRecord } from "../types";
 import { api } from "../api/client";
-import { evaluateScan, linePicked, gecerliKayit } from "./pickingLogic";
+import { evaluateScan, linePicked, gecerliKayit, qtyRound } from "./pickingLogic";
 import type { ShelfContext, ScanOutcome } from "./pickingLogic";
 
 // Tipleri tek kaynaktan (pickingLogic) dışa aktar — eski importlar kırılmasın.
@@ -480,13 +480,16 @@ export const usePickingStore = create<PickingState>()(
 // Yardımcılar (linePicked pickingLogic'ten import edilip yukarıda yeniden dışa aktarıldı)
 
 export function orderProgress(order: PickOrder): number {
-  const req = order.lines.reduce((s, l) => s + l.requestedQty, 0);
-  const pick = order.lines.reduce((s, l) => s + linePicked(l), 0);
-  return req === 0 ? 0 : Math.min(100, (pick / req) * 100);
+  // İlerleme KALEM bazında — farklı birimler (adet/KO/Kg) toplanamaz.
+  // Tamamlanan kalem = toplanan miktar istenen miktara ulaşmış kalem.
+  const total = order.lines.length;
+  if (total === 0) return 0;
+  const done = order.lines.filter((l) => linePicked(l) >= l.requestedQty).length;
+  return (done / total) * 100;
 }
 
 export function orderTotals(order: PickOrder) {
-  const requested = order.lines.reduce((s, l) => s + l.requestedQty, 0);
-  const picked = order.lines.reduce((s, l) => s + linePicked(l), 0);
-  return { requested, picked, missing: requested - picked, lineCount: order.lines.length };
+  const requested = qtyRound(order.lines.reduce((s, l) => s + l.requestedQty, 0));
+  const picked = qtyRound(order.lines.reduce((s, l) => s + linePicked(l), 0));
+  return { requested, picked, missing: qtyRound(requested - picked), lineCount: order.lines.length };
 }
