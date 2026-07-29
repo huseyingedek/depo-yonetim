@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { PickOrder, PickRecord } from "../types";
+import type { PickOrder, PickRecord, StockBatch } from "../types";
 import { api } from "../api/client";
 import { evaluateScan, linePicked, gecerliKayit, qtyRound } from "./pickingLogic";
 import type { ShelfContext, ScanOutcome } from "./pickingLogic";
@@ -102,6 +102,10 @@ interface PickingState {
    * Parti okununca ikinci ReadBarcode bu barkod + adetle çağrılır.
    */
   pendingProduct: { lineId: string; barcode: string; adet: number } | null;
+  /** Parti takipli üründe MZYGetStock'tan gelen parti listesi (combobox için). */
+  batchList: StockBatch[];
+  /** getStock başarısızsa dönen hata (combobox içinde göstermek için). */
+  batchError: string | null;
 
   loadOrder: (id: string, orderType?: string) => Promise<void>;
   clear: () => void;
@@ -142,6 +146,8 @@ interface PickingState {
    * Rastgele/yanlış parti girişini engeller.
    */
   scanLot: (lineId: string, lot: string) => Promise<{ ok: boolean; message: string }>;
+  /** Combobox'tan parti SEÇ — BATCHNUM zaten parti no (getStock'tan geldi, tarih dönüşümü yok). */
+  selectBatch: (lineId: string, batchNum: string) => Promise<{ ok: boolean; message: string }>;
   /**
    * Palet oluştur + toplananı kaydet. Palet numarası alınamazsa kayıt
    * yapılmaz ve ok:false döner — ekran hatayı gösterip geri döner.
@@ -162,6 +168,8 @@ export const usePickingStore = create<PickingState>()(
   locationsLoading: false,
   shelf: null,
   pendingProduct: null,
+  batchList: [],
+  batchError: null,
 
   loadOrder: async (id: string, orderType = "") => {
     // Emre HER GİRİŞTE EnterPick çalışır (Bora: emir kullanıcıya atanır).
@@ -195,7 +203,7 @@ export const usePickingStore = create<PickingState>()(
     }
   },
 
-  clear: () => set({ order: null, shelf: null, pendingProduct: null }),
+  clear: () => set({ order: null, shelf: null, pendingProduct: null, batchList: [], batchError: null }),
 
   leaveOrder: () => {
     const order = get().order;
@@ -208,7 +216,7 @@ export const usePickingStore = create<PickingState>()(
     // mergeRecords geri takıyor). Ama SHELF SIFIRLANIR: emirden çıkınca fiziksel
     // raf bağlamı biter; dönünce raf yeniden okutulmalı (readBarcodeSP). Aksi
     // halde bayat shelf yüzünden raf barkodu ürün servisine düşüyor.
-    set({ pendingProduct: null, shelf: null });
+    set({ pendingProduct: null, shelf: null, batchList: [], batchError: null });
   },
 
   scanShelf: async (barcode: string) => {
@@ -260,13 +268,23 @@ export const usePickingStore = create<PickingState>()(
     // Parti takipli (SPECIALSTOCK=1) → kayıt açma, parti barkodu bekle.
     // Ürün bağlamını sakla; parti okununca ikinci ReadBarcode bununla çağrılır.
     if (karar.outcome.kind === "needsBatch") {
+      const bekLineId = karar.outcome.lineId;
       set({
-        pendingProduct: {
-          lineId: karar.outcome.lineId,
-          barcode: barcode.trim(),
-          adet: Math.max(1, Math.floor(adet)),
-        },
+        pendingProduct: { lineId: bekLineId, barcode: barcode.trim(), adet: Math.max(1, Math.floor(adet)) },
+        batchList: [],
+        batchError: null,
       });
+      // Parti listesini çek (combobox). Parti takipli üründe partisiz availStock
+      // 0 dönebildiği için availStock>0 şartını KOYMUYORUZ — partileri her zaman
+      // listeleyip stoğunu getStock'tan gösteriyoruz. Arka planda, adımı bekletmez.
+      api
+        .getStock(sonuc.material, shelf?.warehouse ?? "", shelf?.stockPlace ?? "")
+        .then((batches) => { if (get().pendingProduct?.lineId === bekLineId) set({ batchList: batches }); })
+        .catch((e) => {
+          if (get().pendingProduct?.lineId === bekLineId) {
+            set({ batchError: e instanceof Error ? e.message : String(e) });
+          }
+        });
       return karar.outcome;
     }
 
@@ -379,6 +397,40 @@ export const usePickingStore = create<PickingState>()(
     set({
       order: kayitUpsert(order, lineId, karar.record, karar.mergedInto),
       pendingProduct: null,
+      batchList: [],
+    });
+    return { ok: true, message: "" };
+  },
+
+  selectBatch: async (lineId, batchNum) => {
+    const order = get().order;
+    const shelf = get().shelf;
+    const pending = get().pendingProduct;
+    if (!order) return { ok: false, message: "Emir yüklü değil" };
+    const line = order.lines.find((l) => l.id === lineId);
+    if (!line) return { ok: false, message: "Kalem bulunamadı" };
+    const barkod = pending?.barcode || line.product.barcode || `${line.product.code}$*$`;
+    const adet = pending?.adet ?? 1;
+    // batchNum ZATEN parti no (MZYGetStock'tan geldi) — tarih dönüşümü YOK.
+    let sonuc;
+    try {
+      sonuc = await api.readBarcode(barkod, shelf?.warehouse ?? "", shelf?.stockPlace ?? "", adet, batchNum);
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : String(e) };
+    }
+    if (!sonuc.ok) return { ok: false, message: sonuc.message || "Parti okunamadı" };
+    if (sonuc.material && sonuc.material !== line.product.code) {
+      return { ok: false, message: "Bu parti bu ürüne ait değil" };
+    }
+    const karar = evaluateScan({ order, shelf, scan: sonuc, barcode: barkod, adet, batchDate: batchNum });
+    if (karar.outcome.kind !== "ok" || !karar.record) {
+      const msg = "message" in karar.outcome ? karar.outcome.message : "Parti eklenemedi";
+      return { ok: false, message: msg };
+    }
+    set({
+      order: kayitUpsert(order, lineId, karar.record, karar.mergedInto),
+      pendingProduct: null,
+      batchList: [],
     });
     return { ok: true, message: "" };
   },

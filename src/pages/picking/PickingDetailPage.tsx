@@ -33,6 +33,9 @@ export default function PickingDetailPage() {
   const clearShelf = usePickingStore((s) => s.clearShelf);
   const scanProduct = usePickingStore((s) => s.scanProduct);
   const scanLot = usePickingStore((s) => s.scanLot);
+  const batchList = usePickingStore((s) => s.batchList);
+  const batchError = usePickingStore((s) => s.batchError);
+  const selectBatch = usePickingStore((s) => s.selectBatch);
 
   const [toast, setToast] = useState<Toast>(null);
   const [flashLine, setFlashLine] = useState<string | null>(null);
@@ -154,6 +157,26 @@ export default function PickingDetailPage() {
     },
     [busy, shelf, lotPending, order, okutmaAdedi, scanShelf, scanProduct, scanLot]
   );
+
+  /** Combobox'tan parti SEÇ → selectBatch (BATCHNUM zaten parti no, doğrulanır). */
+  const partiSec = async (batchNum: string) => {
+    if (!lotPending || !batchNum || busy) return;
+    setBusy(true);
+    try {
+      const r = await selectBatch(lotPending, batchNum);
+      if (r.ok) {
+        setLotPending(null);
+        setPartiPrefill("");
+        setRedMesaji(null);
+        showToast({ kind: "done", text: `Parti: ${batchNum}` });
+      } else {
+        setRedMesaji(r.message);
+        showToast({ kind: "error", text: r.message });
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
 
   if (loading || !order) {
     return (
@@ -368,6 +391,35 @@ export default function PickingDetailPage() {
                     Vazgeç
                   </button>
                 </div>
+                {/* Parti listesi (MZYGetStock) — parti adımında HER ZAMAN görünür;
+                    dolu değilse durum yazısı gösterir (getStock boş/erişilemez). */}
+                <div className="mb-3 rounded-xl bg-elevated px-3 py-2">
+                  <span className="mb-1 block text-xs font-medium text-muted">Parti seç (stoktakiler)</span>
+                  <select
+                    defaultValue=""
+                    disabled={batchList.length === 0}
+                    onChange={(e) => e.target.value && partiSec(e.target.value)}
+                    className="h-9 w-full rounded-lg border border-line bg-surface px-2 font-mono text-sm text-fg outline-none focus:border-brand-500 disabled:opacity-70"
+                  >
+                    {batchList.length > 0 ? (
+                      <>
+                        <option value="" disabled>
+                          Parti seçin…
+                        </option>
+                        {batchList.map((b) => (
+                          <option key={b.batchNum} value={b.batchNum}>
+                            {b.batchNum} — {qtyRound(b.availStock)} {b.unit}
+                          </option>
+                        ))}
+                      </>
+                    ) : (
+                      <option value="" disabled>
+                        {batchError ? `Veri yüklenemedi — ${batchError}` : "Parti listesi yükleniyor / boş"}
+                      </option>
+                    )}
+                  </select>
+                </div>
+
                 {/* M3: SKT/parti tarihini seç → parti barkodu alanına YYYYAAGG gelir */}
                 <div className="mb-3 flex items-center gap-2 rounded-xl bg-elevated px-3 py-2">
                   <span className="shrink-0 text-xs font-medium text-muted">Tarih seç</span>

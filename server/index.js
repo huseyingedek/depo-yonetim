@@ -70,6 +70,7 @@ const ALLOWED = new Set([
   "MZYReadBarcodeSP",
   "MZYCrtSuggestListPickFromSP",
   "MZYSavePick",
+  "MZYGetStock",
   "GetCompany",
   "GetPlant",
   "GetWarehouse",

@@ -159,6 +159,11 @@ export interface PickOrder {
   status?: PickOrderStatus; // STATUS
   started?: boolean; // ISSTARTED — toplamaya başlanmış mı
   lines: PickLine[];
+  // --- YERLEŞTİRME (putaway) alanları — toplamada boş kalır ---
+  // Listing (PIISPICK=0) XML'inde gelen KAYNAK depo/raf. 2. adımda okutulan
+  // depo bunlarla doğrulanır. TODO: alan adlarını gerçek yanıtla teyit et.
+  sourceWarehouse?: string; // WAREHOUSEFA — kaynak/çıkış deposu
+  sourceShelf?: string; // FRONTAREA — kaynak raf
 }
 
 /* ---------- Mal Kabul (Receiving) ---------- */
@@ -233,6 +238,13 @@ export interface ProductStock {
  * MZYCrtSuggestListPickFromSP → SUGGESTEDLISTFROM tablosu.
  * "Bu kalemi hangi raftan al" önerisi: raf, oradaki stok, mesafe, giriş tarihi.
  */
+/** MZYGetStock TBLSTOCK satırı — ürünün bir parti stoğu. */
+export interface StockBatch {
+  batchNum: string; // BATCHNUM
+  availStock: number; // AVAILSTOCK
+  unit: string; // QUNIT — birim (combobox'ta birlikte gösterilir)
+}
+
 export interface PickSuggestion {
   itemNo: number;
   location: string; // STOCKPLACE — stok yeri

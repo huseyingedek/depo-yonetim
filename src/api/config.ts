@@ -15,7 +15,13 @@ export const SERVICES = {
   readBarcode: "MZYReadBarcode", // ÜRÜN barkodu (5 param, MATERIAL döner)
   readBarcodeSP: "MZYReadBarcodeSP", // RAF barkodu — SP = Stock Place (3 param)
   suggestPick: "MZYCrtSuggestListPickFromSP", // Stok yerinden toplama önerisi
+  getStock: "MZYGetStock", // Ürün parti/stok listesi (TBLSTOCK: BATCHNUM + AVAILSTOCK)
   savePick: "MZYSavePick", // Toplamayı kaydet (MOVEDQTY) — parametreleri bekleniyor
+  // --- YERLEŞTİRME (putaway) ---
+  // Listing aynı: MZYListingPick ama PIISPICK=0. Aşağıdakiler Bora'dan gelecek;
+  // gelene kadar enterPlacement şimdilik MZYEnterPick'e düşer, savePlacement STUB.
+  enterPlacement: "MZYEnterPlacement", // emri yerleştirmeye başla (Bora verecek)
+  savePlacement: "MZYSavePlacement", // yerleştirmeyi kaydet (Bora verecek — HENÜZ BAĞLI DEĞİL)
   // Seçim listeleri — dokümanda var ama sunucuda "web service bulunamadı"
   // dönüyordu; adları/erişimi Bora ile teyit edilecek.
   getCompany: "GetCompany", // parametresiz

@@ -19,6 +19,7 @@ import type {
   CountTask,
   ProductStock,
   PickSuggestion,
+  StockBatch,
 } from "../types";
 
 /** Proxy yanıtı */
@@ -629,6 +630,36 @@ export const api = {
     // sıralamış, hazır sıralı geliyor, ona göre çek."
   },
 
+  /**
+   * MZYGetStock — bir ürünün okutulan raf+depodaki PARTİ listesi ve stokları.
+   * Ürün okutulup (readBarcode olumlu, availStock>0) parti listesini göstermek için.
+   * Bora: PSMATERIAL = readBarcode'un MATERIAL'ı (WMSXMLTABLE_MATERIAL);
+   *       PSWAREHOUSE/PSSTOCKPLACE = okutulan raf (readBarcodeSP değerleri);
+   *       PSBATCHNUM / PSSPECIALSTOCK / PSVOPTIONS / PSBARCODE boş.
+   * Yanıt: TBLSTOCK (BATCHNUM, AVAILSTOCK).
+   */
+  async getStock(material: string, warehouse = "", stockPlace = ""): Promise<StockBatch[]> {
+    const c = ctx();
+    const r = await call(SERVICES.getStock, {
+      PSCOMPANY: c.company,
+      PSPLANT: c.plant,
+      PSMATERIAL: material,
+      PSWAREHOUSE: warehouse,
+      PSSTOCKPLACE: stockPlace,
+      PSBATCHNUM: "",
+      PSSPECIALSTOCK: "",
+      PSVOPTIONS: "",
+      PSBARCODE: "",
+    });
+    return rowsOf(r, ["TBLSTOCK"])
+      .map((row) => ({
+        batchNum: pick(row, ["BATCHNUM"]),
+        availStock: num(row, ["AVAILSTOCK"], 0),
+        unit: pick(row, ["QUNIT"]),
+      }))
+      .filter((b) => b.batchNum || b.availStock > 0);
+  },
+
   /** MZYClosePick — toplamaktan vazgeç (tamamlama DEĞİL). */
   async cancelPick(orderNum: string, orderType = ""): Promise<void> {
     const c = ctx();
@@ -952,5 +983,69 @@ export const api = {
   },
   async queryProduct(_term: string): Promise<ProductStock | undefined> {
     return undefined;
+  },
+
+  /* ===================== YERLEŞTİRME (putaway) — TASARIM =====================
+   * Toplamanın tersi: TEK kaynaktan al → ÇOK rafa dağıt, tek tek.
+   * Listing aynı (MZYListingPick) ama PIISPICK=0. Ürün/raf okuma toplamayla
+   * birebir aynı (readShelfBarcode + readBarcode). Emri aç/kaydet için Bora
+   * yeni servis verecek (MZYEnterPlacement / MZYSavePlacement).
+   * ========================================================================= */
+
+  /** MZYListingPick, PIISPICK=0 → yerleştirme emirleri. */
+  async getPutawayOrders(): Promise<PickOrder[]> {
+    const c = ctx();
+    const r = await call(SERVICES.listingPick, {
+      PSCOMPANY: c.company,
+      PSPLANT: c.plant,
+      PSWORKER: c.worker,
+      PISTATUS: 3,
+      PIISPICK: 0, // ← TOPLAMA=1, YERLEŞTİRME=0 (tek fark)
+      PDSTARTDATE: DATE_MIN,
+      PDENDDATE: DATE_MAX,
+      PIISDELETE: 0,
+      PIISSTARTED: 1,
+      PIORDER: 0,
+    });
+    return rowsOf(r, ["TBLPOLIST"])
+      .map((row) => ({
+        ...toPickOrder(row),
+        // Kaynak depo/raf: ürünlerin ALINACAĞI yer (2. adımda doğrulanır).
+        // TODO: WAREHOUSEFA/FRONTAREA alan adlarını gerçek yanıtla teyit et.
+        sourceWarehouse: pick(row, ["WAREHOUSEFA"]),
+        sourceShelf: pick(row, ["FRONTAREA"]),
+      }))
+      .sort((a, b) => {
+        const pa = a.priority ?? Number.MAX_SAFE_INTEGER;
+        const pb = b.priority ?? Number.MAX_SAFE_INTEGER;
+        return pa !== pb ? pa - pb : a.id.localeCompare(b.id);
+      });
+  },
+
+  /**
+   * Emri yerleştirmeye başlat + kalemler. Bora: MZYEnterPlacement gelecek;
+   * ŞİMDİLİK MZYEnterPick (getPickOrder ile aynı). Servis gelince değişecek.
+   */
+  async enterPutaway(orderNum: string, orderType = ""): Promise<PickOrder | undefined> {
+    // TODO: MZYEnterPlacement gelince SERVICES.enterPlacement çağrılacak.
+    return api.getPickOrder(orderNum, orderType);
+  },
+
+  /**
+   * Bir yerleştirmeyi CANIAS'a yaz — Bora'nın vereceği MZYSavePlacement.
+   * HENÜZ BAĞLI DEĞİL: parametreler (okutulanlar) hazır ama servis yok → net hata döner.
+   */
+  async savePlacement(_input: {
+    order: PickOrder;
+    sourceWarehouse: string;
+    sourceShelf: string;
+    targetWarehouse: string;
+    targetShelf: string;
+    material: string;
+    lot?: string;
+    qty: number;
+  }): Promise<{ ok: boolean; message: string }> {
+    void SERVICES.savePlacement; // TODO: buildArgs ile MZYSavePlacement'a gönder
+    return { ok: false, message: "Yerleştirme servisi (MZYSavePlacement) henüz bağlı değil — Bora verecek." };
   },
 };
