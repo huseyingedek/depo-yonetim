@@ -106,6 +106,8 @@ interface PickingState {
   batchList: StockBatch[];
   /** getStock başarısızsa dönen hata (combobox içinde göstermek için). */
   batchError: string | null;
+  /** getStock çağrısı sürüyor mu (combobox'ta "yükleniyor" göstermek için). */
+  batchLoading: boolean;
 
   loadOrder: (id: string, orderType?: string) => Promise<void>;
   clear: () => void;
@@ -170,6 +172,7 @@ export const usePickingStore = create<PickingState>()(
   pendingProduct: null,
   batchList: [],
   batchError: null,
+  batchLoading: false,
 
   loadOrder: async (id: string, orderType = "") => {
     // Emre HER GİRİŞTE EnterPick çalışır (Bora: emir kullanıcıya atanır).
@@ -203,7 +206,7 @@ export const usePickingStore = create<PickingState>()(
     }
   },
 
-  clear: () => set({ order: null, shelf: null, pendingProduct: null, batchList: [], batchError: null }),
+  clear: () => set({ order: null, shelf: null, pendingProduct: null, batchList: [], batchError: null, batchLoading: false }),
 
   leaveOrder: () => {
     const order = get().order;
@@ -216,7 +219,7 @@ export const usePickingStore = create<PickingState>()(
     // mergeRecords geri takıyor). Ama SHELF SIFIRLANIR: emirden çıkınca fiziksel
     // raf bağlamı biter; dönünce raf yeniden okutulmalı (readBarcodeSP). Aksi
     // halde bayat shelf yüzünden raf barkodu ürün servisine düşüyor.
-    set({ pendingProduct: null, shelf: null, batchList: [], batchError: null });
+    set({ pendingProduct: null, shelf: null, batchList: [], batchError: null, batchLoading: false });
   },
 
   scanShelf: async (barcode: string) => {
@@ -273,16 +276,17 @@ export const usePickingStore = create<PickingState>()(
         pendingProduct: { lineId: bekLineId, barcode: barcode.trim(), adet: Math.max(1, Math.floor(adet)) },
         batchList: [],
         batchError: null,
+        batchLoading: true,
       });
       // Parti listesini çek (combobox). Parti takipli üründe partisiz availStock
       // 0 dönebildiği için availStock>0 şartını KOYMUYORUZ — partileri her zaman
       // listeleyip stoğunu getStock'tan gösteriyoruz. Arka planda, adımı bekletmez.
       api
         .getStock(sonuc.material, shelf?.warehouse ?? "", shelf?.stockPlace ?? "")
-        .then((batches) => { if (get().pendingProduct?.lineId === bekLineId) set({ batchList: batches }); })
+        .then((batches) => { if (get().pendingProduct?.lineId === bekLineId) set({ batchList: batches, batchLoading: false }); })
         .catch((e) => {
           if (get().pendingProduct?.lineId === bekLineId) {
-            set({ batchError: e instanceof Error ? e.message : String(e) });
+            set({ batchError: e instanceof Error ? e.message : String(e), batchLoading: false });
           }
         });
       return karar.outcome;

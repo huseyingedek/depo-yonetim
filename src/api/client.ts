@@ -643,6 +643,9 @@ export const api = {
     const r = await call(SERVICES.getStock, {
       PSCOMPANY: c.company,
       PSPLANT: c.plant,
+      // Bora: parametre adı PSMATERIAL (başında PS!), DEĞERİ readBarcode'un
+      // döndürdüğü MATERIAL (WMSXMLTABLE_MATERIAL). PS'siz gönderince servise
+      // malzeme boş/tanımsız gidiyordu.
       PSMATERIAL: material,
       PSWAREHOUSE: warehouse,
       PSSTOCKPLACE: stockPlace,
@@ -651,13 +654,24 @@ export const api = {
       PSVOPTIONS: "",
       PSBARCODE: "",
     });
+    const gorulen = new Set<string>();
     return rowsOf(r, ["TBLSTOCK"])
+      // GÜVENLİK: servis rafın TÜM ürünlerini döndürebiliyor (farklı birimler).
+      // Sadece OKUTULAN malzemeyle sınırlıyoruz.
+      .filter((row) => !material || pick(row, ["MATERIAL"]).trim() === material.trim())
       .map((row) => ({
         batchNum: pick(row, ["BATCHNUM"]),
         availStock: num(row, ["AVAILSTOCK"], 0),
         unit: pick(row, ["QUNIT"]),
       }))
-      .filter((b) => b.batchNum || b.availStock > 0);
+      .filter((b) => {
+        if (!(b.batchNum || b.availStock > 0)) return false;
+        // Tekrar eden partileri ele (aynı BATCHNUM birden çok satır gelebiliyor).
+        const anahtar = b.batchNum || "*";
+        if (gorulen.has(anahtar)) return false;
+        gorulen.add(anahtar);
+        return true;
+      });
   },
 
   /** MZYClosePick — toplamaktan vazgeç (tamamlama DEĞİL). */

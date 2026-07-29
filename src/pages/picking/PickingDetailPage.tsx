@@ -35,6 +35,7 @@ export default function PickingDetailPage() {
   const scanLot = usePickingStore((s) => s.scanLot);
   const batchList = usePickingStore((s) => s.batchList);
   const batchError = usePickingStore((s) => s.batchError);
+  const batchLoading = usePickingStore((s) => s.batchLoading);
   const selectBatch = usePickingStore((s) => s.selectBatch);
 
   const [toast, setToast] = useState<Toast>(null);
@@ -414,7 +415,11 @@ export default function PickingDetailPage() {
                       </>
                     ) : (
                       <option value="" disabled>
-                        {batchError ? `Veri yüklenemedi — ${batchError}` : "Parti listesi yükleniyor / boş"}
+                        {batchLoading
+                          ? "Yükleniyor…"
+                          : batchError
+                          ? `Veri yüklenemedi — ${batchError}`
+                          : "Parti bulunamadı"}
                       </option>
                     )}
                   </select>

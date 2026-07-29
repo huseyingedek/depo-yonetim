@@ -115,7 +115,10 @@ export function evaluateScan(input: ScanInput): ScanDecision {
   /* MİKTAR — servisten HAZIR geliyor, çarpma YAPILMAZ (QUANTITY = katsayı×adet).
      Kalem seçiminden ÖNCE hesaplıyoruz; hangi kalemin yeteceğini bilmek için. */
   const kacTane = Math.max(1, Math.floor(adet));
-  const miktar = scan.quantity > 0 ? scan.quantity : kacTane;
+  // Miktarı kaynakta yuvarla — Kg/ondalıklı barkodlarda QUANTITY 15 haneli kayan
+  // nokta çöpü dönebiliyor (0.791045366451766). Yuvarlanmış değer hem ekranda
+  // (Okutulanlar) hem CANIAS'a giden READQTY'de temiz olur.
+  const miktar = qtyRound(scan.quantity > 0 ? scan.quantity : kacTane);
   const barkodBirim = kacTane > 0 ? miktar / kacTane : miktar;
 
   /* KALEM SEÇİMİ — Bora (16:13-16:14): aynı MALZEMEDEN birden çok kalem
