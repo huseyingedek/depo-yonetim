@@ -512,12 +512,12 @@ export default function PickingDetailPage() {
                         )}
                         {line.product.unit && <span>{line.product.unit}</span>}
                         {/* Ağırlık / hacim / adet (WEIGHTCAPACITY / VOLUMECAPACITY / MOVEQTY) */}
-                        <span className="font-medium text-muted">· {line.requestedQty} adet</span>
+                        <span className="font-medium text-muted">· {line.requestedQty}</span>
                         {line.weight !== undefined && (
-                          <span className="font-medium text-muted">· {line.weight} ağırlık</span>
+                          <span className="font-medium text-muted">· Ağırlık: {line.weight}</span>
                         )}
                         {line.volume !== undefined && (
-                          <span className="font-medium text-muted">· {line.volume} hacim</span>
+                          <span className="font-medium text-muted">· Hacim: {line.volume}</span>
                         )}
                         {/* Parti rozeti — 3 durum:
                             • Parti biliniyor        → "Parti: X"        (mor)
