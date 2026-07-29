@@ -523,11 +523,18 @@ export const api = {
     const rows = rowsOf(r, ["IASWMSPOITEM", "TBLWMSPO", "TBLPODETAIL"]);
     if (!rows.length) return undefined;
     const head = rows[0];
-    const siraliKalemler = rows.map(toPickLine).sort((a, b) => {
-      const pa = a.priority ?? Number.MAX_SAFE_INTEGER;
-      const pb = b.priority ?? Number.MAX_SAFE_INTEGER;
-      return pa !== pb ? pa - pb : Number(a.id) - Number(b.id);
-    });
+    const siraliKalemler = rows
+      .map(toPickLine)
+      // HAYALET SATIR FİLTRESİ: CANIAS bazı emirlerde ürünsüz/miktarsız boş satır
+      // döndürebiliyor (ör. 650491) → "Adet · 0 / 0/0" boş kart oluşuyordu. Ürün
+      // kimliği (kod/ad) OLMAYAN ve miktarı 0 olan satırları eliyoruz. Gerçek
+      // ürünlü satırlara (kod/ad ya da MOVEQTY>0) dokunulmaz.
+      .filter((l) => !!(l.product.code || l.product.name) || l.requestedQty > 0)
+      .sort((a, b) => {
+        const pa = a.priority ?? Number.MAX_SAFE_INTEGER;
+        const pb = b.priority ?? Number.MAX_SAFE_INTEGER;
+        return pa !== pb ? pa - pb : Number(a.id) - Number(b.id);
+      });
     return {
       id: pick(head, ["ORDERNUM"], orderNum),
       orderType: pick(head, ["ORDERTYPE"], orderType),

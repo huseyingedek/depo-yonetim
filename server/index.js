@@ -43,9 +43,22 @@ const {
   CANIAS_DBNAME = "",
   CANIAS_APPSERVER = "",
   CORS_ORIGIN = "http://localhost:5173",
+  USE_POOL = "false",
 } = process.env;
 
 const V1 = CANIAS_WS_VERSION.toLowerCase() !== "v2";
+// Oturum modu: USE_POOL=true → çok oturumlu havuz (max 5/min 1); false → mevcut tek oturum.
+const POOL_MODE = String(USE_POOL).toLowerCase() === "true";
+let _caniasPool = null;
+// Havuz modülü SADECE USE_POOL=true iken (lazy) yüklenir. Kapalıyken
+// caniasPool.mjs sunucuda olmasa bile proxy sorunsuz açılır (havuz canlıda yok).
+async function getPool() {
+  if (!_caniasPool) {
+    const { createCaniasPool } = await import("./caniasPool.mjs");
+    _caniasPool = createCaniasPool(process.env);
+  }
+  return _caniasPool;
+}
 
 const ALLOWED = new Set([
   "MZYCheckUser",
@@ -225,6 +238,7 @@ function siraya(fn) {
 }
 
 function callService(serviceId, params, retry = true) {
+  if (POOL_MODE) return getPool().then((p) => p.run(serviceId, params));
   return siraya(() => callServiceInner(serviceId, params, retry));
 }
 
@@ -322,6 +336,19 @@ async function callServiceInner(serviceId, params, retry = true) {
 
 /* ---------------- HTTP uçları ---------------- */
 
+/* ---------------- Loglama (canlı takip için) ---------------- */
+const ts = () => new Date().toLocaleString("tr-TR", { hour12: false });
+const log = (...a) => console.log(ts(), ...a);
+const logErr = (...a) => console.error(ts(), "✗", ...a);
+// Parametreleri kısalt + parolayı maskele (log dosyasına açık parola yazılmasın)
+const kisaParam = (p = {}) => {
+  const o = {};
+  for (const [k, v] of Object.entries(p)) {
+    o[k] = /pass|parola|sifre/i.test(k) ? "***" : typeof v === "object" ? "[…]" : String(v).slice(0, 40);
+  }
+  return JSON.stringify(o);
+};
+
 app.get("/health", async (_req, res) => {
   try {
     const s = await ensureSession();
@@ -349,14 +376,23 @@ app.post("/api/mzy/:service", async (req, res) => {
   if (!ALLOWED.has(service)) {
     return res.status(404).json({ error: `Bilinmeyen servis: ${service}` });
   }
+  const t0 = Date.now();
+  log(`→ ${service} ${kisaParam(req.body)}`);
   try {
     const result = await callService(service, req.body ?? {});
-    if (result.messages) console.log(`[${service}] Mesaj:`, msgText(result.messages));
-    if (result.sysError) console.warn(`[${service}] Hata:`, result.sysError);
-    console.log(`[${service}] Yanıt:`, String(result.raw).replace(/\s+/g, " ").slice(0, 300));
+    const ms = Date.now() - t0;
+    const mesaj = result.messages ? msgText(result.messages) : "";
+    if (result.sysError) logErr(`${service} sysError: ${result.sysError} (${ms}ms)`);
+    const bos = !String(result.raw ?? "").trim();
+    log(
+      `← ${service} ${bos ? "BOŞ" : "OK"} ${ms}ms` +
+        (mesaj ? ` | mesaj: ${mesaj.replace(/\s+/g, " ").slice(0, 120)}` : "") +
+        ` | ${String(result.raw).replace(/\s+/g, " ").slice(0, 200)}`
+    );
     res.json(result);
   } catch (e) {
-    console.error(`[${service}]`, e?.message || e);
+    const ms = Date.now() - t0;
+    logErr(`${service} ${ms}ms — ${e?.message || e}`);
     res.status(502).json({ error: String(e?.message || e) });
   }
 });
@@ -394,6 +430,7 @@ app.listen(PORT, () => {
   console.log(`Sürüm     : ${V1 ? "v1 (args virgülle)" : "v2 (Parameters XML)"}`);
   console.log(`CANIAS    : ${CANIAS_WSDL_URL || "(tanımsız)"}`);
   console.log(`CORS      : ${CORS_ORIGIN}`);
+  console.log(`Oturum    : ${POOL_MODE ? "HAVUZ (max 5 / min 1)" : "tek oturum (mevcut)"}`);
   if (missing.length) {
     console.warn("⚠  server/.env içinde eksik:", missing.join(", "));
   }
