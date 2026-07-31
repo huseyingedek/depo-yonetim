@@ -2,9 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { PickOrder, PickRecord, StockBatch } from "../types";
 import { api } from "../api/client";
-// applyRestoredPicks — kısmi sipariş geri yükleme DEVRE DIŞI (Hüseyin). Açınca
-// aşağıdaki import'a "applyRestoredPicks" ekle + scanShelf'teki bloğu aç.
-import { evaluateScan, linePicked, gecerliKayit, qtyRound } from "./pickingLogic";
+import { evaluateScan, linePicked, gecerliKayit, qtyRound, applyRestoredPicks } from "./pickingLogic";
 import type { ShelfContext, ScanOutcome } from "./pickingLogic";
 
 // Tipleri tek kaynaktan (pickingLogic) dışa aktar — eski importlar kırılmasın.
@@ -119,8 +117,8 @@ interface PickingState {
    */
   leaveOrder: () => void;
 
-  /** Raf barkodu okut — MZYReadBarcodeSP */
-  scanShelf: (barcode: string) => Promise<{ ok: boolean; message: string }>;
+  /** Raf barkodu okut — MZYReadBarcodeSP. restoreErrors: geri yükleme kontrol hataları. */
+  scanShelf: (barcode: string) => Promise<{ ok: boolean; message: string; restoreErrors?: string[] }>;
   /** Rafı bırak (başka rafa geçmeden önce) */
   clearShelf: () => void;
 
@@ -240,18 +238,17 @@ export const usePickingStore = create<PickingState>()(
 
       // KISMİ SİPARİŞ GERİ YÜKLEME: yanıt, önceden konteynıra toplanmış kalem
       // listesi döndürdüyse ve bunlar bu siparişe aitse, tek tek okutulmuş gibi
-      // otomatik kayda geçir (idempotent — tekrar okutmada şişmez).
-      // >>> DEVRE DIŞI (Hüseyin talebi): "ben aç diyene kadar kapalı kalsın".
-      //     Açmak için aşağıdaki bloğun yorumunu kaldır. Mantık (parseRestoredPicks
-      //     + applyRestoredPicks) yerinde duruyor, sadece uygulanmıyor.
-      // const order = get().order;
-      // if (order && r.restored?.length) {
-      //   const yeni = applyRestoredPicks(order, r.restored);
-      //   if (yeni !== order) set({ order: yeni });
-      // }
-      // <<< DEVRE DIŞI SONU
+      // otomatik kayda geçir (idempotent — tekrar okutmada şişmez). Kontrol
+      // hataları (emirde yok / fazla toplama) toplanıp çağırana döner.
+      const order = get().order;
+      let restoreErrors: string[] = [];
+      if (order && r.restored?.length) {
+        const res = applyRestoredPicks(order, r.restored);
+        if (res.order !== order) set({ order: res.order });
+        restoreErrors = res.errors;
+      }
 
-      return { ok: true, message: "" };
+      return { ok: true, message: "", restoreErrors };
     } catch (e) {
       return { ok: false, message: e instanceof Error ? e.message : String(e) };
     }

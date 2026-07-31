@@ -269,19 +269,25 @@ export function isoDateToBatch(iso: string): string {
  *
  * Emirde olmayan kalem (itemNo/malzeme eşleşmeyen) atlanır.
  */
+export interface RestoreResult {
+  order: PickOrder;
+  /** Kontrol hataları — HEPSİ toplanır, kullanıcıya birlikte gösterilir. */
+  errors: string[];
+}
+
 export function applyRestoredPicks(
   order: PickOrder,
   restored: RestoredPick[],
   makeId: (i: number) => string = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
   now: () => number = () => Date.now()
-): PickOrder {
-  const bana = restored.filter(
-    (p) =>
-      !!p.orderNum &&
-      p.orderNum.trim() === order.id.trim() &&
-      (!p.orderType || !order.orderType || p.orderType.trim() === order.orderType.trim())
-  );
-  if (!bana.length) return order;
+): RestoreResult {
+  const errors: string[] = [];
+  // SİPARİŞ EŞLEŞTİRME KONTROLÜ KAPALI (Hüseyin: "kontrol yapma, okundu diye
+  // yerleştir otomatik"). Gelen MATLIST'in tamamı, bulunulan emre uygulanır;
+  // hangi siparişe ait olduğuna BAKILMAZ. (Madde başta "aynı sipariş ise"
+  // diyordu; talep üzerine devre dışı.) Kalem/fazla kontrolleri aşağıda kalıyor.
+  const bana = restored;
+  if (!bana.length) return { order, errors };
 
   let lines = order.lines;
   let degisti = false;
@@ -291,28 +297,53 @@ export function applyRestoredPicks(
     // Kalem: önce ITEMNO ile, yoksa malzeme kodu ile eşleştir.
     let idx = lines.findIndex((l) => l.id === p.itemNo);
     if (idx < 0) idx = lines.findIndex((l) => l.product.code === p.material);
-    if (idx < 0) continue; // emirde yok — atla
+    if (idx < 0) {
+      // KONTROL: emirde olmayan ürün — sessizce atlamıyoruz, hata topluyoruz.
+      errors.push(`${p.material}: bu emirde yok — atlandı`);
+      continue;
+    }
 
     const line = lines[idx];
     const parti = p.specialStock === "1" ? p.lot ?? "*" : "*";
-    const zatenVar = (line.records ?? []).some(
+
+    // MATLIST MANTIĞI: her okutmada palet miktarı EKLENİR ve BİRİKİR
+    // (2/6 → 4/6 → 6/6). "Zaten okundu" engeli YOK. Sadece sipariş miktarını
+    // aşan kısım eklenmez → "fazla, geri yerine koyunuz" mesajı verilir.
+    const mevcut = linePicked(line);
+    const kalan = qtyRound(line.requestedQty - mevcut); // daha ne kadar gerekiyor
+    const eklenecek = kalan > 0 ? Math.min(p.qty, kalan) : 0;
+    const fazla = qtyRound(p.qty - eklenecek);
+
+    if (fazla > 0) {
+      // Kod + ürün adı (ad çok uzun olabilir → 20 karakterde kısalt, "…" ekle).
+      const ad = line.product.name ? line.product.name.trim() : "";
+      const kisaAd = ad.length > 20 ? ad.slice(0, 20).trim() + "…" : ad;
+      const etiket = [line.product.code || p.material, kisaAd].filter(Boolean).join(" ");
+      errors.push(
+        `Diğer paletteki ${etiket} malzemesi ${fazla} ${line.product.unit} fazla — geri yerine koyunuz`
+      );
+    }
+    if (eklenecek <= 0) continue; // tamamı fazla — eklenecek bir şey yok
+
+    // BİRLEŞTİRME (elle okutmadaki kural): aynı malzeme + depo + raf + özel stok
+    // + parti varsa YENİ SATIR AÇMA, mevcut kaydın miktarını artır. Böylece
+    // "Okutulanlar"da aynı raf/belge/birim için tek satır kalır.
+    const eslesen = (line.records ?? []).find(
       (r) =>
-        r.itemNo === line.id &&
+        r.material === p.material &&
         r.warehouse === p.warehouse &&
         r.stockPlace === p.stockPlace &&
         r.specialStock === p.specialStock &&
         (r.lot ?? "*") === parti
     );
-    if (zatenVar) continue; // idempotent
-
     const record: PickRecord = {
-      id: makeId(sayac++),
+      id: eslesen?.id ?? makeId(sayac++),
       material: p.material,
       warehouse: p.warehouse,
       stockPlace: p.stockPlace,
       specialStock: p.specialStock,
       lot: parti,
-      qty: p.qty,
+      qty: qtyRound((eslesen?.qty ?? 0) + eklenecek),
       unit: p.unit || line.product.unit,
       docType: order.orderType ?? "",
       docNum: order.id,
@@ -322,13 +353,19 @@ export function applyRestoredPicks(
     };
     lines = lines.map((l, i) =>
       i === idx
-        ? { ...l, records: [...(l.records ?? []), record], lot: parti !== "*" ? parti : l.lot }
+        ? {
+            ...l,
+            records: eslesen
+              ? (l.records ?? []).map((r) => (r.id === eslesen.id ? record : r))
+              : [...(l.records ?? []), record],
+            lot: parti !== "*" ? parti : l.lot,
+          }
         : l
     );
     degisti = true;
   }
 
-  return degisti ? { ...order, lines } : order;
+  return { order: degisti ? { ...order, lines } : order, errors };
 }
 
 /**

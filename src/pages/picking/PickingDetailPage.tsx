@@ -60,6 +60,8 @@ export default function PickingDetailPage() {
   const [redMesaji, setRedMesaji] = useState<string | null>(null);
   /** Bağlantı hatası alan son okutulan barkod — "Tekrar Dene" bunu yeniden gönderir. */
   const [sonCevapsiz, setSonCevapsiz] = useState<string | null>(null);
+  /** Konteyner geri yükleme kontrol hataları — HEPSİ listelenir, kullanıcı kapatır. */
+  const [geriYuklemeHatalari, setGeriYuklemeHatalari] = useState<string[]>([]);
 
   // StrictMode efekti iki kez çalıştırıyor; MZYEnterPick VERİ YAZDIĞI için
   // ikinci çağrının gitmemesi önemli.
@@ -99,6 +101,9 @@ export default function PickingDetailPage() {
           const r = await scanShelf(barkod);
           if (r.ok) {
             setRedMesaji(null); // başarıda önceki hata mesajını temizle
+            // Geri yükleme kontrol hataları — HEPSİNİ kalıcı panelde göster.
+            // Hata yoksa önceki okutmadan kalan panel temizlensin.
+            setGeriYuklemeHatalari(r.restoreErrors ?? []);
             showToast({ kind: "ok", text: `Raf: ${barkod}` });
           } else {
             if (baglantiHatasiMi(r.message)) setSonCevapsiz(barkod);
@@ -545,6 +550,36 @@ export default function PickingDetailPage() {
 
         {/* Sağ: kalem listesi — short (yatay) modda tek kayan alan */}
         <div className="min-w-0 short:flex-1 short:overflow-y-auto short:pr-1">
+          {/* KONTEYNER KONTROL HATALARI — modal DEĞİL: ekranda kalıcı durur,
+              kapatınca "neyi fazla/eksik ekledi" bilgisi kaybolmasın (Hüseyin).
+              Yalnızca yeni raf okutmada / emirden çıkınca sıfırlanır. */}
+          {geriYuklemeHatalari.length > 0 && (
+            <div className="mb-3 rounded-2xl border border-rose-300 bg-rose-50 p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600" />
+                <span className="text-sm font-bold text-rose-700">
+                  Konteyner kontrol ({geriYuklemeHatalari.length})
+                </span>
+                {/* Kalıcı panel; ama isteyen kendisi kapatabilir (Hüseyin). */}
+                <button
+                  type="button"
+                  onClick={() => setGeriYuklemeHatalari([])}
+                  aria-label="Kapat"
+                  className="ml-auto rounded-lg p-1 text-rose-500 hover:bg-rose-100"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <ul className="space-y-1.5">
+                {geriYuklemeHatalari.map((h, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm font-medium text-rose-700">
+                    <span className="font-bold">{i + 1}.</span>
+                    <span>{h}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="space-y-2.5">
             {sortedLines.map((line) => {
               const toplanan = linePicked(line);
@@ -561,20 +596,6 @@ export default function PickingDetailPage() {
               const partiEksik = !!line.lotTracked && buOturumKayit && !line.lot;
               const done = toplanan >= line.requestedQty && !partiEksik;
 
-              /* Miktar kontrolü — Bora'nın örneği:
-                 sipariş 1 koli, 1 koli = 10 adet, ama rafta 6 adet var.
-                 Barkod okutunca 10 girer → rafta o kadar yok, uyar.
-                 Ayrıca istenenden fazla toplanmışsa da uyar. */
-              const raf =
-                line.suggestions?.find(
-                  (s) => s.barcode === (secilenRaf[line.id] ?? line.suggestions?.[0]?.barcode)
-                ) ?? line.suggestions?.[0];
-              let uyari = "";
-              if (toplanan > line.requestedQty) {
-                uyari = `İstenen ${qtyRound(line.requestedQty)} ${line.product.unit}, okutulan ${toplanan}. Fazla toplandı — kayıt silin ya da azaltın.`;
-              } else if (raf && raf.total > 0 && toplanan > raf.total) {
-                uyari = `${raf.barcode} rafında ${qtyRound(raf.total)} ${raf.unit} var, ${toplanan} okutuldu. Kalanı başka raftan al.`;
-              }
               const partial = toplanan > 0 && !done;
               const flashing = flashLine === line.id;
               return (
@@ -693,15 +714,6 @@ export default function PickingDetailPage() {
                         )}
                       </div>
 
-                      {/* MİKTAR UYARISI
-                          Örnek (Bora): 1 koli barkodu = 10 adet, rafta 6 adet var.
-                          Barkod okutulunca 10 girer ama rafta o kadar yok. */}
-                      {uyari && (
-                        <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-rose-50 px-2 py-1.5 text-[11px] font-semibold text-rose-700">
-                          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
-                          {uyari}
-                        </p>
-                      )}
 
                     </div>
 
@@ -756,6 +768,7 @@ export default function PickingDetailPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

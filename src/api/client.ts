@@ -396,11 +396,28 @@ export function toPickLine(row: Row, i: number): PickLine {
   // Yerleştirmede kaynak alan gerçekten okutulacak yerdir; toplamada değil.
   const kaynak = isPick ? "" : pick(row, ["FRONTAREA"]);
 
+  // HEDEF MİKTAR: MOVEQTY (stok) bazen sipariş miktarıyla (AKLSQUANTITY)
+  // TUTARSIZ geliyor (ör. BAR06: MOVEQTY 3 ama sipariş 6). Depocu ekranda
+  // sipariş miktarını görüyor; tamamlanma da ona göre olmalı. Bu yüzden
+  // AKLSQUANTITY varsa hedefi ondan türetiyoruz: stok hedef = sipariş * cfactor.
+  // (Tutarlı veride sipariş*cfactor == MOVEQTY olduğundan bir şey değişmez.)
+  const moveQty = num(row, ["MOVEQTY"]);
+  const orderQtyRaw = pick(row, ["AKLSQUANTITY"]) === "" ? undefined : num(row, ["AKLSQUANTITY"], 0);
+  const cfactorRaw = pick(row, ["CFACTOR"]) === "" ? undefined : num(row, ["CFACTOR"], 0);
+  const cf = cfactorRaw && cfactorRaw > 0 ? cfactorRaw : 1;
+  const hedefStok =
+    orderQtyRaw !== undefined && orderQtyRaw > 0
+      ? Math.round((orderQtyRaw * cf + Number.EPSILON) * 1000) / 1000
+      : moveQty;
+
   return {
-    id: pick(row, ["ITEMNUM", "ITEMNO"], String(i + 1)),
+    // DİKKAT: EnterPick satırında ITEMNUM=0 diye bir alan da geliyor; gerçek
+    // kalem no ITEMNO (ör. 8). Bu yüzden ITEMNO ÖNCE okunmalı — yoksa hep 0
+    // gidip öneri servisi (PIITEMNO) boş dönüyordu.
+    id: pick(row, ["ITEMNO", "ITEMNUM"], String(i + 1)),
     product: toProduct(row),
     location: yok(kaynak) ? "" : kaynak,
-    requestedQty: num(row, ["MOVEQTY"]),
+    requestedQty: hedefStok, // sipariş miktarıyla tutarlı hedef (yukarıya bak)
     pickedQty: num(row, ["MOVEDQTY"]),
     // Parti barkodu SADECE özel stok (SKT'li) ürünlerde istenir
     lotTracked: specialStock === "1",
@@ -410,9 +427,9 @@ export function toPickLine(row: Row, i: number): PickLine {
     priority: pick(row, ["PRIORITY"]) === "" ? undefined : num(row, ["PRIORITY"], 0),
     // Sipariş birimi gösterimi: AKLSQUANTITY (sipariş miktarı),
     // AKLSQUNIT (sipariş birimi), CFACTOR (stok→sipariş çevrim katsayısı).
-    orderQty: pick(row, ["AKLSQUANTITY"]) === "" ? undefined : num(row, ["AKLSQUANTITY"], 0),
+    orderQty: orderQtyRaw,
     orderUnit: pick(row, ["AKLSQUNIT"]) || undefined,
-    cfactor: pick(row, ["CFACTOR"]) === "" ? undefined : num(row, ["CFACTOR"], 0),
+    cfactor: cfactorRaw,
     // Toplamada hedef: toplanan malın konduğu paletin bırakılacağı yer
     targetArea: isPick && !yok(pick(row, ["TRANSAREA"])) ? pick(row, ["TRANSAREA"]) : undefined,
     // WAREHOUSETA — MZYCreateContainer'a giden hedef depo (Bora)
@@ -458,31 +475,70 @@ function toPickOrder(row: Row): PickOrder {
  *   READQTY | QUANTITY, QUNIT, ORDERNUM, ORDERTYPE, ITEMNO
  * Sipariş eşleşmesi (ORDERNUM) sonra pickingLogic.applyRestoredPicks'te yapılır.
  */
+/**
+ * STOCKPLACE'ten sipariş bilgisini türet. Konteyner adı sipariş no'yu taşıyor:
+ *   "SO-650492" → { type: "SO", num: "650492" }
+ * MATLIST kalemlerinde ORDERNUM/ORDERTYPE alanı yok; eşleşme buradan yapılır.
+ */
+function orderFromStockPlace(sp: string): { num: string; type: string } {
+  const m = /^([A-Za-z]+)-(.+)$/.exec((sp ?? "").trim());
+  return m ? { type: m[1], num: m[2] } : { type: "", num: "" };
+}
+
+/** Ham veride MATERIAL taşıyan tüm nesneleri (MATLIST kalemleri dahil) topla. */
+function collectMaterialRows(node: unknown, acc: Row[]): void {
+  if (!node) return;
+  if (Array.isArray(node)) {
+    for (const el of node) collectMaterialRows(el, acc);
+    return;
+  }
+  if (typeof node !== "object") return;
+  const o = node as Record<string, unknown>;
+  const inner = (o["#item"] && typeof o["#item"] === "object" ? o["#item"] : o) as Record<
+    string,
+    unknown
+  >;
+  // MATERIAL alanı dolu bir düz satırsa → geri-yükleme kalemi.
+  if (typeof inner.MATERIAL === "string" && inner.MATERIAL.trim() !== "") acc.push(inner as Row);
+  // Her durumda içeri in — MATLIST gibi iç dizileri de tara.
+  for (const v of Object.values(inner)) {
+    if (v && typeof v === "object") collectMaterialRows(v, acc);
+  }
+}
+
 function parseRestoredPicks(data: Record<string, unknown> | null): RestoredPick[] {
   if (!data) return [];
-  const out: RestoredPick[] = [];
+  const rows: Row[] = [];
   for (const [name, value] of Object.entries(data)) {
     if (/MESSAGE/i.test(name)) continue; // hata/mesaj tablolarını atla
-    for (const row of unwrapRows(value)) {
-      const material = pick(row, ["MATERIAL"]);
-      if (!material) continue; // malzeme yoksa geri-yükleme satırı değil
-      const qty = num(row, ["READQTY", "QUANTITY", "MOVEDQTY"], 0);
-      if (qty <= 0) continue;
-      const lot = pick(row, ["BATCHNUM"]);
-      const partiTakipli = pick(row, ["SPECIALSTOCK"]) || (yok(lot) ? "*" : "1");
-      out.push({
-        warehouse: pick(row, ["WAREHOUSE"]),
-        stockPlace: pick(row, ["STOCKPLACE"]),
-        material,
-        lot: yok(lot) ? undefined : lot,
-        specialStock: partiTakipli,
-        qty,
-        unit: pick(row, ["QUNIT", "UNIT"]),
-        orderNum: pick(row, ["ORDERNUM"]),
-        orderType: pick(row, ["ORDERTYPE"]),
-        itemNo: pick(row, ["ITEMNO", "ITEMNUM"]),
-      });
-    }
+    collectMaterialRows(value, rows);
+  }
+  const out: RestoredPick[] = [];
+  for (const row of rows) {
+    const material = pick(row, ["MATERIAL"]);
+    if (!material) continue;
+    // Konteynır/paket miktarı: TOTALSTOCK (IASINV007.MATLIST) ya da okutma alanları.
+    const qty = num(row, ["TOTALSTOCK", "READQTY", "QUANTITY", "MOVEDQTY"], 0);
+    if (qty <= 0) continue;
+    const lot = pick(row, ["BATCHNUM"]);
+    // "*" parti = parti yok. SPECIALSTOCK "1" → partili.
+    const lotVar = !yok(lot) && lot !== "*";
+    const partiTakipli = pick(row, ["SPECIALSTOCK"]) || (lotVar ? "1" : "*");
+    const stockPlace = pick(row, ["STOCKPLACE"]);
+    const sp = orderFromStockPlace(stockPlace);
+    out.push({
+      warehouse: pick(row, ["WAREHOUSE"]),
+      stockPlace,
+      material,
+      lot: lotVar ? lot : undefined,
+      specialStock: partiTakipli,
+      qty,
+      unit: pick(row, ["QUNIT", "UNIT"]),
+      // Önce gerçek alanlar; yoksa STOCKPLACE'ten türetilen (SO-650492).
+      orderNum: pick(row, ["ORDERNUM"]) || sp.num,
+      orderType: pick(row, ["ORDERTYPE"]) || sp.type,
+      itemNo: pick(row, ["ITEMNO", "ITEMNUM"]),
+    });
   }
   return out;
 }
