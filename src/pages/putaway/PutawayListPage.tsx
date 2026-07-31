@@ -1,42 +1,51 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Search, ChevronRight, Warehouse, MapPin } from "lucide-react";
+import { Search, ChevronRight, Warehouse } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import Pagination, { usePagination } from "../../components/Pagination";
 import { api } from "../../api/client";
-import type { PutawayItem } from "../../types";
+import type { PickOrder } from "../../types";
 
+/**
+ * Yerleştirme emir listesi — MZYListingPick, PIISPICK=0 (toplama ile aynı servis).
+ * Toplama listesinin aynısı; sadece emir kaynağı getPutawayOrders.
+ */
 export default function PutawayListPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [items, setItems] = useState<PutawayItem[]>([]);
+  const [orders, setOrders] = useState<PickOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const istendi = useRef(false);
 
   useEffect(() => {
-    api.getPutawayItems().then((d) => {
-      setItems(d);
-      setLoading(false);
-    });
+    if (istendi.current) return;
+    istendi.current = true;
+    api
+      .getPutawayOrders()
+      .then(setOrders)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setLoading(false));
   }, []);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return items;
-    return items.filter(
-      (i) => i.product.name.toLowerCase().includes(s) || i.sourceRef.toLowerCase().includes(s) || i.product.barcode.includes(s)
-    );
-  }, [items, q]);
+    if (!s) return orders;
+    return orders.filter((o) => o.id.toLowerCase().includes(s) || o.customer.toLowerCase().includes(s));
+  }, [orders, q]);
 
-  const pg = usePagination(filtered, 8);
+  const pg = usePagination(filtered, 9);
   useEffect(() => pg.reset(), [q]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const emreGir = (o: PickOrder) => navigate(`/putaway/${o.id}?type=${encodeURIComponent(o.orderType ?? "")}`);
 
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8">
       <PageHeader
-        title={t("putaway.waiting")}
-        subtitle={t("putaway.title")}
+        title={t("putaway.title")}
+        subtitle={t("putaway.waiting")}
         backTo="/home"
         right={
           <div className="relative hidden sm:block">
@@ -50,9 +59,13 @@ export default function PutawayListPage() {
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("putaway.search")} className="field-input pl-11" />
       </div>
 
+      {error && (
+        <div className="mb-5 whitespace-pre-line rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm font-medium text-rose-500">{error}</div>
+      )}
+
       {loading ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          {[0, 1, 2, 3].map((i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-elevated" />)}
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2].map((i) => <div key={i} className="h-32 animate-pulse rounded-2xl bg-elevated" />)}
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-subtle">
@@ -61,27 +74,35 @@ export default function PutawayListPage() {
         </div>
       ) : (
         <>
-          <div className="grid gap-3 md:grid-cols-2">
-            {pg.pageItems.map((i) => (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {pg.pageItems.map((o) => (
               <button
-                key={i.id}
-                onClick={() => navigate(`/putaway/${i.id}`)}
-                className="flex items-center gap-4 rounded-2xl border border-line bg-surface p-4 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
+                key={o.id}
+                onClick={() => emreGir(o)}
+                className="rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
               >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-100">
-                  <span className="text-sm font-bold text-violet-600">{i.qty}</span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-fg">{i.product.name}</p>
-                  <div className="mt-0.5 flex items-center gap-2 text-xs text-subtle">
-                    <span className="inline-flex items-center gap-1">
-                      <MapPin className="h-3.5 w-3.5" />
-                      <span className="font-mono font-semibold text-violet-600">{i.suggestedLocation}</span>
-                    </span>
-                    <span className="font-mono">· {i.sourceRef}</span>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      {o.priority !== undefined && (
+                        <span className="chip bg-slate-100 font-mono text-slate-600">{o.priority}</span>
+                      )}
+                      <span className="font-mono text-base font-bold text-fg">{o.id}</span>
+                    </div>
+                    {o.customer && <p className="mt-0.5 text-sm text-muted">{o.customer}</p>}
                   </div>
+                  <ChevronRight className="mt-1 h-5 w-5 text-subtle" />
                 </div>
-                <ChevronRight className="h-5 w-5 shrink-0 text-subtle" />
+                {(o.reference || o.sourceWarehouse) && (
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-subtle">
+                    {o.reference && <span>{o.reference}</span>}
+                    {o.sourceWarehouse && (
+                      <span className="font-mono text-violet-600">
+                        kaynak: {o.sourceWarehouse}{o.sourceShelf ? "/" + o.sourceShelf : ""}
+                      </span>
+                    )}
+                  </div>
+                )}
               </button>
             ))}
           </div>

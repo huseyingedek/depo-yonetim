@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { PickOrder, PickRecord, StockBatch } from "../types";
 import { api } from "../api/client";
+// applyRestoredPicks — kısmi sipariş geri yükleme DEVRE DIŞI (Hüseyin). Açınca
+// aşağıdaki import'a "applyRestoredPicks" ekle + scanShelf'teki bloğu aç.
 import { evaluateScan, linePicked, gecerliKayit, qtyRound } from "./pickingLogic";
 import type { ShelfContext, ScanOutcome } from "./pickingLogic";
 
@@ -235,6 +237,20 @@ export const usePickingStore = create<PickingState>()(
           stockPlace: r.stockPlace,
         },
       });
+
+      // KISMİ SİPARİŞ GERİ YÜKLEME: yanıt, önceden konteynıra toplanmış kalem
+      // listesi döndürdüyse ve bunlar bu siparişe aitse, tek tek okutulmuş gibi
+      // otomatik kayda geçir (idempotent — tekrar okutmada şişmez).
+      // >>> DEVRE DIŞI (Hüseyin talebi): "ben aç diyene kadar kapalı kalsın".
+      //     Açmak için aşağıdaki bloğun yorumunu kaldır. Mantık (parseRestoredPicks
+      //     + applyRestoredPicks) yerinde duruyor, sadece uygulanmıyor.
+      // const order = get().order;
+      // if (order && r.restored?.length) {
+      //   const yeni = applyRestoredPicks(order, r.restored);
+      //   if (yeni !== order) set({ order: yeni });
+      // }
+      // <<< DEVRE DIŞI SONU
+
       return { ok: true, message: "" };
     } catch (e) {
       return { ok: false, message: e instanceof Error ? e.message : String(e) };

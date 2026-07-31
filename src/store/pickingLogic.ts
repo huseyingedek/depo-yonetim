@@ -7,7 +7,7 @@
 // pickingStore'da kalır; buradaki fonksiyonlar onların beynidir.
 // -----------------------------------------------------------------------------
 
-import type { PickOrder, PickLine, PickRecord, BarcodeResult } from "../types";
+import type { PickOrder, PickLine, PickRecord, BarcodeResult, RestoredPick } from "../types";
 
 /** Depocunun o an önünde durduğu raf. */
 export interface ShelfContext {
@@ -55,6 +55,16 @@ export function gecerliKayit(r: PickRecord): boolean {
  */
 export const qtyRound = (n: number): number =>
   Math.round((Number(n) + Number.EPSILON) * 1000) / 1000;
+
+/**
+ * Stok birimindeki miktarı SİPARİŞ birimine çevirir: stok / CFACTOR.
+ * CFACTOR yok / 0 / 1 ise çevrim yapılmaz (miktar aynen döner).
+ * Ör. 10 adet, cfactor 10 → 1 koli. Ondalıklar qtyRound ile temizlenir.
+ */
+export function toOrderQty(stockQty: number, cfactor?: number): number {
+  const f = cfactor && cfactor > 0 ? cfactor : 1;
+  return qtyRound(stockQty / f);
+}
 
 export function linePicked(line: PickLine): number {
   const onceki = line.pickedQty; // MOVEDQTY — servisten gelen baz
@@ -241,4 +251,117 @@ export function evaluateScan(input: ScanInput): ScanDecision {
 export function isoDateToBatch(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((iso ?? "").trim());
   return m ? `${m[1]}${m[2]}${m[3]}` : "";
+}
+
+/**
+ * KISMİ SİPARİŞ GERİ YÜKLEME — raf okutmada dönen "önceden konteynıra toplanmış"
+ * kalemleri, tek tek okutulmuş gibi kayda çevirir (saf, idempotent).
+ *
+ * Kural (Hüseyin): liste yalnızca İÇİNDE BULUNULAN siparişe aitse işlenir.
+ * Kalemler CANIAS'ta zaten kayıtlı (bir konteynırda); ekranda "toplanan" olarak
+ * görünsün ve "paketle" deyince yeni konteynıra taşınsın diye normal kayıt gibi
+ * eklenir. Listedeki bilgi (malzeme/parti/miktar/raf) yeterli — readBarcode'a
+ * gidilmez.
+ *
+ * IDEMPOTENT: Aynı index'te (kalem + depo + stok yeri + özel stok + parti) kayıt
+ * zaten varsa TEKRAR EKLENMEZ — raf iki kez okutulsa ya da kayıtlar
+ * localStorage'dan geri gelse bile miktar şişmez.
+ *
+ * Emirde olmayan kalem (itemNo/malzeme eşleşmeyen) atlanır.
+ */
+export function applyRestoredPicks(
+  order: PickOrder,
+  restored: RestoredPick[],
+  makeId: (i: number) => string = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  now: () => number = () => Date.now()
+): PickOrder {
+  const bana = restored.filter(
+    (p) =>
+      !!p.orderNum &&
+      p.orderNum.trim() === order.id.trim() &&
+      (!p.orderType || !order.orderType || p.orderType.trim() === order.orderType.trim())
+  );
+  if (!bana.length) return order;
+
+  let lines = order.lines;
+  let degisti = false;
+  let sayac = 0;
+
+  for (const p of bana) {
+    // Kalem: önce ITEMNO ile, yoksa malzeme kodu ile eşleştir.
+    let idx = lines.findIndex((l) => l.id === p.itemNo);
+    if (idx < 0) idx = lines.findIndex((l) => l.product.code === p.material);
+    if (idx < 0) continue; // emirde yok — atla
+
+    const line = lines[idx];
+    const parti = p.specialStock === "1" ? p.lot ?? "*" : "*";
+    const zatenVar = (line.records ?? []).some(
+      (r) =>
+        r.itemNo === line.id &&
+        r.warehouse === p.warehouse &&
+        r.stockPlace === p.stockPlace &&
+        r.specialStock === p.specialStock &&
+        (r.lot ?? "*") === parti
+    );
+    if (zatenVar) continue; // idempotent
+
+    const record: PickRecord = {
+      id: makeId(sayac++),
+      material: p.material,
+      warehouse: p.warehouse,
+      stockPlace: p.stockPlace,
+      specialStock: p.specialStock,
+      lot: parti,
+      qty: p.qty,
+      unit: p.unit || line.product.unit,
+      docType: order.orderType ?? "",
+      docNum: order.id,
+      itemNo: line.id,
+      barcode: "", // otomatik geri yükleme — elle okutulan ham barkod yok
+      at: now(),
+    };
+    lines = lines.map((l, i) =>
+      i === idx
+        ? { ...l, records: [...(l.records ?? []), record], lot: parti !== "*" ? parti : l.lot }
+        : l
+    );
+    degisti = true;
+  }
+
+  return degisti ? { ...order, lines } : order;
+}
+
+/**
+ * ÖNCELİK KİLİDİ — bir emre girmeden önce çalışan engel kontrolü.
+ *
+ * Kural (Hüseyin): PRIORITY 0–9; küçük olan daha ÖNCELİKLİ. Personel öncelik
+ * sırasına uymak zorunda. Seçilen emrin önceliğinden KÜÇÜK (daha öncelikli) ve
+ * HİÇ BAŞLANMAMIŞ (status "open" = Yeni) bir emir varsa, giriş engellenir;
+ * önce o emir(ler) toplanmalı.
+ *
+ * Sayılmayanlar:
+ *   • Kısmen toplanmış (status "partial") emirler — kullanıcı kararı: dikkate alma.
+ *   • Kapanmış (status "closed") emirler — zaten toplanmış.
+ *   • Önceliksiz emirler (priority undefined) — en düşük öncelik, engellemez.
+ *
+ * Seçilen emrin önceliği yoksa (undefined) eşik = +∞ sayılır: 0–9 önceliğe
+ * sahip tüm YENİ emirler ondan önce gelir (önceliksiz en sona toplanır).
+ *
+ * Dönen liste önceliğe göre artan sıralı — [0]. eleman en öncelikli engel.
+ * Ağa çıkmaz, state tutmaz — girdi alır, karar döner (test edilebilir).
+ */
+export function blockingHigherPriorityOrders(
+  selected: PickOrder,
+  all: PickOrder[]
+): PickOrder[] {
+  const esik = selected.priority ?? Number.POSITIVE_INFINITY;
+  return all
+    .filter(
+      (o) =>
+        o.id !== selected.id &&
+        o.priority !== undefined &&
+        o.priority < esik &&
+        (o.status ?? "open") === "open" // yalnızca hiç başlanmamış (Yeni)
+    )
+    .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
 }

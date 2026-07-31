@@ -6,8 +6,7 @@
   "description": "Aktüel Ofis WMS - CANIAS/Mizoye servisleri için güvenli backend proxy",
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js",
-    "test-services": "node test-services.mjs"
+    "dev": "node --watch index.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -7,10 +7,28 @@ export function createPool({
   login, logout, callSvc, validate,
   now = () => Date.now(),
   limit = 5, min = 1, idleMs = 5000, callTimeoutMs = 500,
+  breakerThreshold = 5, cooldownMs = 10000,
 }) {
   const pool = [];        // { sid, busy, lastUsed }
   const waiters = [];     // { resolve, reject } — hepsi meşgulse bekleyenler
   const persisted = new Set(); // "token log dosyası" karşılığı (restart recovery)
+
+  // Devre kesici: art arda bağlantı hatasında "aç" (hızlı fail, CANIAS'ı yorma),
+  // cooldown sonrası tek yoklama (half-open), başarıda "kapat".
+  let ardArdaHata = 0;
+  let devreAcik = false;
+  let acilmaZamani = 0;
+  const baglantiHatasiMi = (e) => {
+    const c = e?.code;
+    return c === "TIMEOUT" || c === "ETIMEDOUT" || c === "LOGIN" ||
+      /timeout|etimedout|login başarısız|ulaş/i.test(String(e?.message));
+  };
+  const hataKaydet = (e) => {
+    if (!baglantiHatasiMi(e)) return;                 // sadece CANIAS/bağlantı hatası sayılır
+    ardArdaHata++;
+    if (ardArdaHata >= breakerThreshold) { devreAcik = true; acilmaZamani = now(); }
+  };
+  const basari = () => { ardArdaHata = 0; devreAcik = false; };
 
   const size = () => pool.length;
   const free = () => pool.find((p) => !p.busy && p.sid);
@@ -57,15 +75,32 @@ export function createPool({
   }
 
   async function run(serviceId, params, _retry = true) {
-    const p = await acquire();
+    // Devre açık + cooldown dolmadıysa → HIZLI FAIL (20sn beklemeden, CANIAS'ı yormadan)
+    if (devreAcik && now() - acilmaZamani < cooldownMs) {
+      throw Object.assign(new Error("CANIAS'a ulaşılamıyor (devre açık)"), { code: "CIRCUIT" });
+    }
+    let p;
+    try {
+      p = await acquire();
+    } catch (e) {
+      hataKaydet(e);                                 // login patladı → bağlantı hatası
+      throw e;
+    }
     try {
       const r = await withTimeout(callSvc(p.sid, serviceId, params), callTimeoutMs, "call");
       release(p);
+      basari();                                      // başarı → devreyi kapat
       return r;
     } catch (e) {
       const sessionErr = /session|invalid/i.test(String(e?.message));
-      release(p, sessionErr);                       // session hatasıysa tokeni öldür
-      if (sessionErr && _retry) return run(serviceId, params, false); // taze tokenle 1 kez dene
+      const zamanAsimi = e?.code === "TIMEOUT";
+      // ÖNEMLİ: timeout'ta alttaki çağrı ARKADA hâlâ çalışıyor olabilir. Tokeni
+      // havuza geri verirsek başka istek kapar → AYNI oturuma paralel çağrı → liste
+      // bozulması. Bu yüzden timeout'ta da tokeni ÖLDÜR. Ama RETRY YAPMA (yazma
+      // servisinde çift kayıt olmasın — sadece ölü-oturumda taze dene).
+      release(p, sessionErr || zamanAsimi);
+      if (sessionErr && _retry) return run(serviceId, params, false); // ölü oturum → 1 kez taze dene
+      hataKaydet(e);                                 // timeout/diğer → bağlantı hatası say
       throw e;
     }
   }
@@ -86,8 +121,11 @@ export function createPool({
   // CANIAS gerçeğiyle uzlaştır: listede olmayan (dış kapatılan) boştaları at
   async function reconcile() {
     if (!validate) return;
-    let aktif;
-    try { aktif = new Set(await validate()); } catch { return; }
+    let liste;
+    try { liste = await validate(); } catch { return; }
+    // GÜVENLİK: boş/hatalı liste gelirse DOKUNMA (yanlışlıkla hepsini atma).
+    if (!Array.isArray(liste) || liste.length === 0) return;
+    const aktif = new Set(liste);
     for (const p of [...pool]) {
       if (p.sid && !p.busy && !aktif.has(p.sid)) {
         pool.splice(pool.indexOf(p), 1);
@@ -115,5 +153,5 @@ export function createPool({
     }
   }
 
-  return { run, reap, reconcile, keepAlive, recover, size, _pool: pool, _waiters: waiters, _persisted: persisted };
+  return { run, reap, reconcile, keepAlive, recover, size, _pool: pool, _waiters: waiters, _persisted: persisted, _circuit: () => ({ open: devreAcik, fails: ardArdaHata }) };
 }

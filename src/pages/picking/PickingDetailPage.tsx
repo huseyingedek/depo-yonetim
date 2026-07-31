@@ -9,7 +9,7 @@ import BarcodeScanner from "../../components/BarcodeScanner";
 import {
   usePickingStore, orderProgress, linePicked,
 } from "../../store/pickingStore";
-import { isoDateToBatch, qtyRound } from "../../store/pickingLogic";
+import { isoDateToBatch, qtyRound, toOrderQty } from "../../store/pickingLogic";
 
 type Toast = { kind: "ok" | "done" | "error"; text: string } | null;
 
@@ -548,6 +548,13 @@ export default function PickingDetailPage() {
           <div className="space-y-2.5">
             {sortedLines.map((line) => {
               const toplanan = linePicked(line);
+
+              // SİPARİŞ BİRİMİ gösterimi — stok biriminde toplanır, sipariş
+              // biriminde gösterilir (stok / CFACTOR). Çevrim yoksa stok birimi.
+              const cevrimVar = !!(line.cfactor && line.cfactor > 1);
+              const siparisBirim = line.orderUnit || line.product.unit;
+              const istenenSiparis = line.orderQty ?? toOrderQty(line.requestedQty, line.cfactor);
+              const toplananSiparis = toOrderQty(toplanan, line.cfactor);
               // Parti eksik: yalnızca BU OTURUMDA okutulmuş (records) ama partisi
               // yazılmamışsa. Önceden toplanmış (MOVEDQTY) kalem partili kabul.
               const buOturumKayit = (line.records?.length ?? 0) > 0;
@@ -603,8 +610,10 @@ export default function PickingDetailPage() {
                           <span className="font-mono font-semibold">{line.product.code}</span>
                         )}
                         {line.product.unit && <span>{line.product.unit}</span>}
-                        {/* Ağırlık / hacim / adet (WEIGHTCAPACITY / VOLUMECAPACITY / MOVEQTY) */}
-                        <span className="font-medium text-muted">· {qtyRound(line.requestedQty)}</span>
+                        {/* Sipariş miktarı + birimi (AKLSQUANTITY / AKLSQUNIT) */}
+                        <span className="font-medium text-muted">
+                          · Sipariş: {qtyRound(istenenSiparis)} {siparisBirim}
+                        </span>
                         {line.weight !== undefined && (
                           <span className="font-medium text-muted">· Ağırlık: {qtyRound(line.weight)}</span>
                         )}
@@ -696,11 +705,19 @@ export default function PickingDetailPage() {
 
                     </div>
 
-                    {/* Miktar SALT OKUNUR — kayıtların toplamı.
-                        Elle artırma yok: her artış gerçek bir okutma olmalı. */}
-                    <div className="flex shrink-0 items-center gap-1">
-                      <span className="font-mono text-sm font-bold text-fg">{toplanan}</span>
-                      <span className="font-mono text-sm text-subtle">/ {qtyRound(line.requestedQty)}</span>
+                    {/* Miktar SALT OKUNUR — kayıtların toplamı. Elle artırma yok.
+                        Sipariş birimi öncelikli; çevrim varsa stok birimi altta. */}
+                    <div className="flex shrink-0 flex-col items-end">
+                      <div className="flex items-center gap-1">
+                        <span className="font-mono text-sm font-bold text-fg">{qtyRound(toplananSiparis)}</span>
+                        <span className="font-mono text-sm text-subtle">/ {qtyRound(istenenSiparis)}</span>
+                        {siparisBirim && <span className="font-mono text-[11px] text-subtle">{siparisBirim}</span>}
+                      </div>
+                      {cevrimVar && (
+                        <div className="mt-0.5 font-mono text-[11px] text-subtle">
+                          {toplanan} / {qtyRound(line.requestedQty)} {line.product.unit}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

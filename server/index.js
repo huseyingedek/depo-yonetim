@@ -43,16 +43,25 @@ const {
   CANIAS_DBNAME = "",
   CANIAS_APPSERVER = "",
   CORS_ORIGIN = "http://localhost:5173",
-  USE_POOL = "false",
+  // USE_POOL burada okunmaz — aşağıda raw process.env.USE_POOL ile kontrol edilir
+  // (env'de yoksa havuz kesinlikle açılmasın diye).
 } = process.env;
 
 const V1 = CANIAS_WS_VERSION.toLowerCase() !== "v2";
-// Oturum modu: USE_POOL=true → çok oturumlu havuz (max 5/min 1); false → mevcut tek oturum.
-const POOL_MODE = String(USE_POOL).toLowerCase() === "true";
+// Oturum modu: USE_POOL=true → çok oturumlu havuz (max 5/min 1); aksi halde tek oturum.
+//
+// GÜVENLİK (Hüseyin): Havuz login'i CANLIDA SADECE USE_POOL ortam değişkeni
+// AÇIKÇA "true" ise devreye girer. Değişken env'de HİÇ YOKSA (undefined) ya da
+// "true" dışında herhangi bir değerse → havuz hiçbir şekilde aktif olmaz, tek
+// oturum modunda kalınır. Raw process.env okunur; yanlışlıkla açılmasın diye
+// destructuring default'una güvenilmez.
+const POOL_MODE = String(process.env.USE_POOL ?? "").trim().toLowerCase() === "true";
 let _caniasPool = null;
 // Havuz modülü SADECE USE_POOL=true iken (lazy) yüklenir. Kapalıyken
 // caniasPool.mjs sunucuda olmasa bile proxy sorunsuz açılır (havuz canlıda yok).
 async function getPool() {
+  // Çift koruma: POOL_MODE kapalıyken havuz ASLA örneklenmez/çağrılmaz.
+  if (!POOL_MODE) throw new Error("Havuz devre dışı (USE_POOL≠true) — tek oturum kullanılmalı");
   if (!_caniasPool) {
     const { createCaniasPool } = await import("./caniasPool.mjs");
     _caniasPool = createCaniasPool(process.env);

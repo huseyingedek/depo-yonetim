@@ -98,12 +98,40 @@ export interface BarcodeResult {
   message: string;
 }
 
+/**
+ * Raf okutmada (MZYReadBarcodeSP) dönebilen "önceden konteynıra toplanmış" kalem.
+ *
+ * Kısmi sipariş senaryosu: depocu daha önce bu ürünleri okutup toplamış ve bir
+ * konteynıra koymuş (CANIAS'ta kayıtlı). Rafı tekrar okutunca servis, o rafta/
+ * konteynırda bu SİPARİŞE ait duran kalemleri liste olarak döndürür. Frontend
+ * bu listeyi, içinde bulunulan siparişle aynıysa "tek tek okutulmuş gibi"
+ * otomatik kayda geçer (paketle deyince yeni konteynıra taşınır).
+ */
+export interface RestoredPick {
+  warehouse: string; // WAREHOUSE — kalemin bulunduğu depo
+  stockPlace: string; // STOCKPLACE — raf / stok yeri
+  material: string; // MATERIAL
+  lot?: string; // BATCHNUM — parti ("*" ise yok)
+  specialStock: string; // SPECIALSTOCK — "1" parti takipli, "*" değil
+  qty: number; // toplanan miktar (READQTY / QUANTITY)
+  unit: string; // QUNIT
+  orderNum: string; // ORDERNUM — hangi siparişe ait (eşleşme buradan)
+  orderType: string; // ORDERTYPE
+  itemNo: string; // ITEMNO — kalem no
+}
+
 /** MZYReadBarcodeSP — raf barkodu çözümü. */
 export interface ShelfResult {
   ok: boolean;
   warehouse: string;
   stockPlace: string;
   message: string;
+  /**
+   * Bazı yanıtlarda gelen "önceden toplanmış" kalem listesi (kısmi sipariş).
+   * Boş/yoksa normal raf okutması. Dolu ise scanShelf, aynı siparişe ait
+   * olanları otomatik kayda geçer.
+   */
+  restored?: RestoredPick[];
 }
 
 export interface PickLine {
@@ -122,6 +150,18 @@ export interface PickLine {
   expiry?: string; // parti barkodundan gelen SKT (gösterim)
   /** PRIORITY — toplama önceliği, küçük olan önce. Kalem seviyesinde gelir. */
   priority?: number;
+  /**
+   * SİPARİŞ BİRİMİ gösterimi (EnterPick tablosundan):
+   *   orderQty  = AKLSQUANTITY — sipariş miktarı (sipariş biriminde, ör. 1 koli)
+   *   orderUnit = AKLSQUNIT    — sipariş birimi (ör. "koli")
+   *   cfactor   = CFACTOR      — stok→sipariş çevrim katsayısı.
+   * Toplama STOK biriminde yapılır (requestedQty/records = adet); sipariş
+   * birimindeki miktar = stok miktarı / cfactor (10 adet ÷ 10 = 1 koli).
+   * Alanlar yoksa çevrim yapılmaz, stok birimi gösterilir (geriye dönük uyumlu).
+   */
+  orderQty?: number;
+  orderUnit?: string;
+  cfactor?: number;
   /**
    * Bu kalemin alınabileceği raflar — MZYCrtSuggestListPickFromSP'den.
    * Bir ürün birden fazla rafta olabilir; mesafeye göre sıralı gelir.

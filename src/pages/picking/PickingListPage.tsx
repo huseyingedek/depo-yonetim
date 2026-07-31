@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Search, ChevronRight, Package, Camera } from "lucide-react";
+import { Search, ChevronRight, Package, Camera, AlertTriangle, X } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import CameraScanOverlay from "../../components/CameraScanOverlay";
 import Pagination, { usePagination } from "../../components/Pagination";
 import { api } from "../../api/client";
+import { blockingHigherPriorityOrders } from "../../store/pickingLogic";
 import type { PickOrder } from "../../types";
 
 export default function PickingListPage() {
@@ -17,6 +18,8 @@ export default function PickingListPage() {
   const [error, setError] = useState<string | null>(null);
   const [kamera, setKamera] = useState(false);
   const [taramaHatasi, setTaramaHatasi] = useState<string | null>(null);
+  // Öncelik kilidi uyarısı — daha öncelikli (başlanmamış) emir varken giriş engeli.
+  const [oncelikUyari, setOncelikUyari] = useState<string | null>(null);
 
   // React StrictMode geliştirmede efekti iki kez çalıştırır; bu bekçi
   // ağa ikinci bir istek çıkmasını engeller.
@@ -47,9 +50,24 @@ export default function PickingListPage() {
   const pg = usePagination(filtered, 9);
   useEffect(() => pg.reset(), [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Emri aç. Emir tipi de taşınmalı — MZYEnterPick PSORDERTYPE olmadan bulamıyor. */
-  const emreGir = (o: PickOrder) =>
+  /**
+   * Emri aç. Emir tipi de taşınmalı — MZYEnterPick PSORDERTYPE olmadan bulamıyor.
+   *
+   * ÖNCELİK KİLİDİ: Daha öncelikli (priority değeri KÜÇÜK) ve hiç başlanmamış
+   * bir emir varken bu emre girilemez — personel önce onu toplamalı. Kontrol
+   * ekrandaki (bellekteki) liste üzerinden yapılır; engel varsa uyarı gösterilip
+   * giriş yapılmaz. Engel yoksa uyarı temizlenir ve detaya geçilir.
+   */
+  const emreGir = (o: PickOrder) => {
+    const engel = blockingHigherPriorityOrders(o, orders);
+    if (engel.length) {
+      // Sade mesaj (Hüseyin): sipariş no / öncelik / "N sipariş daha" gösterilmez.
+      setOncelikUyari(t("picking.priorityLock"));
+      return;
+    }
+    setOncelikUyari(null);
     navigate(`/picking/${o.id}?type=${encodeURIComponent(o.orderType ?? "")}`);
+  };
 
   /**
    * Sipariş barkodu okutuldu.
@@ -144,6 +162,49 @@ export default function PickingListPage() {
           <button type="button" onClick={() => setTaramaHatasi(null)} className="shrink-0 underline">
             {t("common.close")}
           </button>
+        </div>
+      )}
+
+      {/* Öncelik kilidi — daha öncelikli (başlanmamış) emir toplanmadan bu emre
+          girilemez. Modal: liste aşağı kaydırılmış olsa da mesaj her zaman görünür. */}
+      {oncelikUyari && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-ink-900/40 p-0 sm:items-center sm:p-4"
+          onClick={() => setOncelikUyari(null)}
+        >
+          <div
+            className="w-full max-w-md animate-slide-up rounded-t-3xl bg-surface p-6 shadow-soft sm:rounded-3xl"
+            onClick={(e) => e.stopPropagation()}
+            role="alertdialog"
+            aria-modal="true"
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-500/10">
+                  <AlertTriangle className="h-6 w-6 text-rose-500" />
+                </div>
+                <h3 className="text-lg font-bold text-fg">{t("picking.priorityLockTitle")}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOncelikUyari(null)}
+                aria-label={t("common.close")}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-subtle hover:bg-elevated"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="text-sm font-medium text-muted">{oncelikUyari}</p>
+
+            <button
+              type="button"
+              onClick={() => setOncelikUyari(null)}
+              className="btn-primary mt-6 w-full"
+            >
+              {t("common.done")}
+            </button>
+          </div>
         </div>
       )}
 

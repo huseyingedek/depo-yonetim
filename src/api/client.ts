@@ -9,6 +9,7 @@ import { useAppStore } from "../store/appStore";
 import type {
   BarcodeResult,
   ShelfResult,
+  RestoredPick,
   PickOrder,
   PickLine,
   ProductRef,
@@ -407,6 +408,11 @@ export function toPickLine(row: Row, i: number): PickLine {
     // PRIORITY kalem seviyesinde geliyor (emir listesinde değil).
     // Küçük olan önce toplanır — Bora.
     priority: pick(row, ["PRIORITY"]) === "" ? undefined : num(row, ["PRIORITY"], 0),
+    // Sipariş birimi gösterimi: AKLSQUANTITY (sipariş miktarı),
+    // AKLSQUNIT (sipariş birimi), CFACTOR (stok→sipariş çevrim katsayısı).
+    orderQty: pick(row, ["AKLSQUANTITY"]) === "" ? undefined : num(row, ["AKLSQUANTITY"], 0),
+    orderUnit: pick(row, ["AKLSQUNIT"]) || undefined,
+    cfactor: pick(row, ["CFACTOR"]) === "" ? undefined : num(row, ["CFACTOR"], 0),
     // Toplamada hedef: toplanan malın konduğu paletin bırakılacağı yer
     targetArea: isPick && !yok(pick(row, ["TRANSAREA"])) ? pick(row, ["TRANSAREA"]) : undefined,
     // WAREHOUSETA — MZYCreateContainer'a giden hedef depo (Bora)
@@ -440,6 +446,45 @@ function toPickOrder(row: Row): PickOrder {
     started: pick(row, ["ISSTARTED"], "0") === "1",
     lines: [],
   };
+}
+
+/**
+ * Raf okutma yanıtındaki "önceden konteynıra toplanmış" kalemleri ayıklar.
+ *
+ * Tablo adı serviste netleşene kadar ESNEK davranıyoruz: mesaj tabloları
+ * dışındaki tüm tablolarda, MATERIAL taşıyan ve miktarı > 0 olan satırları
+ * geri-yükleme kalemi sayıyoruz. Beklenen alanlar (Bora ile teyit edilecek):
+ *   WAREHOUSE, STOCKPLACE, MATERIAL, BATCHNUM, SPECIALSTOCK,
+ *   READQTY | QUANTITY, QUNIT, ORDERNUM, ORDERTYPE, ITEMNO
+ * Sipariş eşleşmesi (ORDERNUM) sonra pickingLogic.applyRestoredPicks'te yapılır.
+ */
+function parseRestoredPicks(data: Record<string, unknown> | null): RestoredPick[] {
+  if (!data) return [];
+  const out: RestoredPick[] = [];
+  for (const [name, value] of Object.entries(data)) {
+    if (/MESSAGE/i.test(name)) continue; // hata/mesaj tablolarını atla
+    for (const row of unwrapRows(value)) {
+      const material = pick(row, ["MATERIAL"]);
+      if (!material) continue; // malzeme yoksa geri-yükleme satırı değil
+      const qty = num(row, ["READQTY", "QUANTITY", "MOVEDQTY"], 0);
+      if (qty <= 0) continue;
+      const lot = pick(row, ["BATCHNUM"]);
+      const partiTakipli = pick(row, ["SPECIALSTOCK"]) || (yok(lot) ? "*" : "1");
+      out.push({
+        warehouse: pick(row, ["WAREHOUSE"]),
+        stockPlace: pick(row, ["STOCKPLACE"]),
+        material,
+        lot: yok(lot) ? undefined : lot,
+        specialStock: partiTakipli,
+        qty,
+        unit: pick(row, ["QUNIT", "UNIT"]),
+        orderNum: pick(row, ["ORDERNUM"]),
+        orderType: pick(row, ["ORDERTYPE"]),
+        itemNo: pick(row, ["ITEMNO", "ITEMNUM"]),
+      });
+    }
+  }
+  return out;
 }
 
 /* ---------------- API ---------------- */
@@ -920,9 +965,24 @@ export const api = {
     const warehouse = row ? pick(row, ["WAREHOUSE"]) : "";
     const stockPlace = row ? pick(row, ["STOCKPLACE"]) : "";
 
+    // KISMİ SİPARİŞ: yanıtta "önceden konteynıra toplanmış" kalem listesi de
+    // gelebilir. Ayrı bir tabloda ya da aynı tabloda olabildiği için, MATERIAL
+    // taşıyan tüm satırları esnek tarıyoruz (raf/mesaj tabloları hariç).
+    const restored = parseRestoredPicks(r.data);
+
     // Depo ve stok yeri dolu geldiyse raf geçerli. Barkod biçimini ($) kontrol
     // etmiyoruz — servis alanları ayrı veriyor.
     if (!warehouse || !stockPlace) {
+      // Raf satırı yoksa ama geri-yükleme listesi geldiyse, rafı ilk kalemden al.
+      if (restored.length) {
+        return {
+          ok: true,
+          warehouse: restored[0].warehouse,
+          stockPlace: restored[0].stockPlace,
+          message: "",
+          restored,
+        };
+      }
       return {
         ok: false,
         warehouse: "",
@@ -930,7 +990,7 @@ export const api = {
         message: serviceMessage(r) || "Raf barkodu okunamadı",
       };
     }
-    return { ok: true, warehouse, stockPlace, message: "" };
+    return { ok: true, warehouse, stockPlace, message: "", restored };
   },
 
   /* ---- Seçim listeleri (Ayarlar ekranı) ---- */
