@@ -1,7 +1,5 @@
 // -----------------------------------------------------------------------------
-// GERÇEK SERVİS KATMANI — mock yok.
-// Ekranlar sadece buradaki `api` fonksiyonlarını çağırır.
-// Zincir: frontend → proxy (server/) → CANIAS login + callService
+
 // -----------------------------------------------------------------------------
 
 import { wmsConfig, SERVICES } from "./config";
@@ -23,7 +21,6 @@ import type {
   StockBatch,
 } from "../types";
 
-/** Proxy yanıtı */
 interface MzyResult {
   data: Record<string, unknown> | null;
   messages?: string;
@@ -35,44 +32,26 @@ interface MzyResult {
 export class WmsError extends Error {}
 
 // Bora'nın parametre kuralları:
-//   • boş string  → "%"  (joker; "" gönderme)
+
 //   • integer     → 0
-//   • tarih       → alt sınır 01.01.1975, üst sınır 01.01.2100
-//
-// DİKKAT — gün ve ay İKİ HANELİ olmak zorunda: GG.AA.YYYY
-// "1.01.1975" gibi tek haneli gün gönderilirse servis tarihi çözemiyor,
-// sessizce çöpe atıyor ve aralık boşa düştüğü için liste boş dönüyor.
-// (Deneyle bulundu: aynı sorguda "1.01" boş, "01.01" 6 emir döndürdü.)
+
 export const DATE_MIN = "01.01.1975";
 export const DATE_MAX = "01.01.2100";
-/** Boş string yerine joker. */
+
 export const ANY = "%";
 
-// Etiket baskı sayısı — MZYSavePick'e giden PILABELCOUNT parametresi.
-// Test sürecinde 0 (etiket basılmaz); canlıya alınca 1 yapılır.
 export const LABEL_COUNT = 0;
 
-/**
- * CANIAS'ın Messages alanını kullanıcıya gösterilebilir metne çevirir.
- *
- * Üç biçimde gelebiliyor:
- *   1) TROIA XML : <TROIAMESSAGES><MESSAGE><TEXT>...</TEXT><TYPE>E</TYPE>...
- *   2) JSON      : [{"TEXT":"..."}] veya {"TEXT":"..."}
- *   3) düz metin
- * Hepsinden sadece okunabilir METNİ çıkarır; etiketleri ve kodları atar.
- */
 export function serviceMessage(r: MzyResult): string {
-  // 1) CANIAS'ın Messages alanı (XML ya da JSON string)
+
   const m1 = mesajCoz(r.messages);
   if (m1) return m1;
 
-  // 2) JSON mesaj tablosu — servisler artık hatayı da JSON dönüyor:
   //    {"MESSAGETABLE":{"ROW":[{"TYPE":"E","SYSTEMMSG":"...","MSGNUMBER":"1306"}]}}
-  //    Sadece MESAJ tablolarına bakıyoruz (veri tablosuna değil).
+
   const m2 = mesajTablosu(r.data);
   if (m2) return m2;
 
-  // 3) data ham XML olarak geldiyse ({raw:"<MESSAGETABLE>..."}) yine oku.
   const dataStr = dataToText(r.data);
   if (/SYSTEMMSG|MESSAGETABLE|TBLMESSAGE|<TEXT>/i.test(dataStr)) {
     const m3 = mesajCoz(dataStr);
@@ -81,12 +60,9 @@ export function serviceMessage(r: MzyResult): string {
   return "";
 }
 
-/** data içindeki JSON mesaj tablolarından SYSTEMMSG/TEXT toplar. */
 function mesajTablosu(data: Record<string, unknown> | null): string {
   if (!data) return "";
-  // "ROW": bazı servisler (ör. MZYCreateContainer hata) mesajı üst seviye
-  // {ROW:{TYPE,SYSTEMMSG,MSGNUMBER}} olarak döndürüyor. Başarı yanıtında ROW
-  // her zaman bir tablo (TBLCONTSP.ROW) altında nested; üst seviye ROW = hata.
+
   const adlar = ["MESSAGETABLE", "TBLMESSAGE", "TROIAMESSAGES", "MSGTABLE", "TBLMSG", "ROW"];
   const lines: string[] = [];
   for (const ad of adlar) {
@@ -99,7 +75,6 @@ function mesajTablosu(data: Record<string, unknown> | null): string {
   return lines.join("\n");
 }
 
-/** data alanını metne çevirir (raw XML ya da JSON). */
 function dataToText(data: unknown): string {
   if (!data) return "";
   if (typeof data === "string") return data;
@@ -111,13 +86,11 @@ function dataToText(data: unknown): string {
   return String(data);
 }
 
-/** Ham mesajı (XML/JSON/düz metin) okunabilir metne çevirir. */
 function mesajCoz(raw: unknown): string {
   if (!raw) return "";
   const text = String(raw).trim();
   if (!text) return "";
 
-  // 1) XML — <TEXT> veya <SYSTEMMSG> içeriklerini topla
   if (text.includes("<")) {
     const found = [
       ...text.matchAll(/<(?:TEXT|SYSTEMMSG)>([\s\S]*?)<\/(?:TEXT|SYSTEMMSG)>/gi),
@@ -143,14 +116,13 @@ function mesajCoz(raw: unknown): string {
       .filter(Boolean);
     if (lines.length) return lines.join("\n");
   } catch {
-    /* düz metin */
+
   }
 
   // 3) düz metin
   return text;
 }
 
-/** &amp; &lt; &quot; gibi kaçışları çöz. */
 function decodeEntities(s: string): string {
   return s
     .replace(/&lt;/g, "<")
@@ -160,16 +132,9 @@ function decodeEntities(s: string): string {
     .replace(/&amp;/g, "&");
 }
 
-/**
- * Aynı anda giden aynı isteği tekilleştirir.
- * React StrictMode geliştirmede efektleri iki kez çalıştırıyor; ayrıca kullanıcı
- * hızlı gidip gelirse aynı sorgu tekrar gidebiliyor. Sadece OKUMA servisleri
- * için — yazan servisler (EnterPick, CreateContainer) her zaman gerçekten gider.
- */
 const READ_ONLY = new Set<string>([SERVICES.listingPick]);
 const inflight = new Map<string, Promise<MzyResult>>();
 
-/** Proxy üzerinden CANIAS servisini çağırır. */
 function call(service: string, params: Record<string, unknown>): Promise<MzyResult> {
   if (!READ_ONLY.has(service)) return doCall(service, params);
 
@@ -182,34 +147,25 @@ function call(service: string, params: Record<string, unknown>): Promise<MzyResu
   return p;
 }
 
-// Üst üste BAĞLANTI/OTURUM hatası sayacı (P5). Eşiği geçince depocuyu login'e
-// atarız. İş hatası (stok yok, parti vb.) SAYILMAZ — sadece CANIAS'a ulaşılamama
-// / oturum kurulamama. Başarılı yanıt gelince sayaç sıfırlanır.
 let ardArdaBaglantiHatasi = 0;
 const BAGLANTI_ESIK = 3;
 function baglantiHatasi(detay = ""): WmsError {
-  // Servisten cevap alınamadı (fetch başarısız / HTTP 502). Kullanıcıya HER
-  // DURUMDA tek, sabit mesaj: "İstek cevaplanmadı". Gerçek teknik sebep sadece
+
   // debug için console'a yazılır.
   if (detay) console.warn("[bağlantı] istek cevapsız:", detay);
   ardArdaBaglantiHatasi++;
   if (ardArdaBaglantiHatasi >= BAGLANTI_ESIK) {
     ardArdaBaglantiHatasi = 0;
-    // Üst üste 3 kez cevapsız → sessiz güvenlik önlemi: oturumu kapat (login'e
-    // döner). Mesaj yine "İstek cevaplanmadı" — picking ilerlemesi KORUNUR.
+
     try {
       useAppStore.getState().logout();
     } catch {
-      /* yoksay */
+
     }
   }
   return new WmsError("İstek cevaplanmadı");
 }
 
-// İSTEK ZAMAN AŞIMI: proxy bağlantıyı açık tutup hiç cevap vermezse (CANIAS
-// yazmada asılırsa / bağlantı tam istek anında koparsa) fetch'in kendi timeout'u
-// olmadığı için SONSUZA kadar bekler → "gönderiliyor" sonsuz döner. Bu süre
-// sonunda iptal edip "İstek cevaplanmadı" döneriz (Bora'nın yakaladığı durum).
 const ISTEK_TIMEOUT_MS = 30000;
 
 async function doCall(service: string, params: Record<string, unknown>): Promise<MzyResult> {
@@ -227,7 +183,7 @@ async function doCall(service: string, params: Record<string, unknown>): Promise
       signal: iptal.signal,
     });
   } catch {
-    // fetch başarısız VEYA zaman aşımı (abort) → yanıt yok = "İstek cevaplanmadı"
+
     throw baglantiHatasi(
       iptal.signal.aborted ? "zaman aşımı (yanıt gelmedi)" : "fetch başarısız (cihaz proxy'ye ulaşamadı)"
     );
@@ -237,38 +193,31 @@ async function doCall(service: string, params: Record<string, unknown>): Promise
   const body = (await res.json().catch(() => ({}))) as MzyResult & { error?: string };
   const msg = serviceMessage(body);
 
-  // 5xx = servisten cevap yok (proxy/CANIAS) → "İstek cevaplanmadı"
   if (res.status >= 500) throw baglantiHatasi(body.error || msg || `HTTP ${res.status}`);
-  ardArdaBaglantiHatasi = 0; // CANIAS yanıt verdi → bağlantı OK, sayaç sıfır
+  ardArdaBaglantiHatasi = 0;
 
   if (!res.ok) throw new WmsError(body.error || msg || `${service} → HTTP ${res.status}`);
 
-  // CANIAS sistem hatası — servisin kendi metnini tercih et
   if (body.sysError) throw new WmsError(msg || body.sysError);
 
-  // Veri yok ama servis bir şey söylüyorsa, onu aynen kullanıcıya göster
   if (!body.data && msg) throw new WmsError(msg);
 
   if (msg) console.info(`[${service}] servis mesajı:`, msg);
   return body;
 }
 
-/** Ayarlar'dan işlem bağlamı (CANIAS kodları). */
 function ctx() {
   const st = useAppStore.getState();
   return {
     company: st.settings.company,
     plant: st.settings.facility,
     warehouse: st.settings.warehouse,
-    worker: st.user?.username ?? "", // PWORKER = login olan kullanıcı
+    worker: st.user?.username ?? "",
   };
 }
 
-/* ---------------- yardımcı eşleyiciler ---------------- */
-
 type Row = Record<string, unknown>;
 
-/** Satırdan ilk bulunan alanı döner (alan adları netleşene kadar toleranslı). */
 function pick(row: Row, names: string[], fallback = ""): string {
   for (const n of names) {
     const v = row[n] ?? row[n.toUpperCase()] ?? row[n.toLowerCase()];
@@ -282,14 +231,6 @@ function num(row: Row, names: string[], fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-/**
- * Servis yanıtından tablo satırlarını çıkarır.
- *
- * CANIAS iki katmanlı gönderiyor:
- *   { "TBLUSER": { "ROW": {...} } }        → tek satır
- *   { "TBLPOLIST": { "ROW": [{...},{...}] } } → çok satır
- *   { "TBLPOLIST": "" }                    → boş
- */
 function unwrapRows(t: unknown): Row[] {
   if (!t) return [];
   if (Array.isArray(t)) return (t as unknown[]).map(flattenRow);
@@ -301,17 +242,6 @@ function unwrapRows(t: unknown): Row[] {
   return [];
 }
 
-/**
- * CANIAS'ın JSON çıktısı bozuk geliyor: bir satırın alanlarının çoğu,
- * ilk dizi tipli alanın (ör. PLANT) içine "#item" sarmalıyla sıkışıyor:
- *
- *   { "COMPANY": "01",
- *     "PLANT": ["100", {"#item":{"ORDERNUM":"00002215"}},
- *                      {"#item":{"STATUS":"0"}}, ...] }
- *
- * Bu fonksiyon hepsini tek düzeye çıkarır:
- *   { COMPANY:"01", PLANT:"100", ORDERNUM:"00002215", STATUS:"0", ... }
- */
 function flattenRow(input: unknown): Row {
   const out: Row = {};
   if (!input || typeof input !== "object") return out;
@@ -323,7 +253,7 @@ function flattenRow(input: unknown): Row {
           const inner = (el as Record<string, unknown>)["#item"] ?? el;
           if (inner && typeof inner === "object") Object.assign(out, inner);
         } else if (out[key] === undefined) {
-          out[key] = el; // dizinin ilk düz değeri asıl alandır
+          out[key] = el;
         }
       }
     } else if (value && typeof value === "object") {
@@ -345,7 +275,7 @@ function rowsOf(result: MzyResult, tableNames: string[]): Row[] {
       if (rows.length) return rows;
     }
   }
-  // Adı bilinmiyorsa ilk dolu tabloyu al (TBLMESSAGE hariç — o hata tablosu)
+
   for (const [k, v] of Object.entries(d)) {
     if (/MESSAGE/i.test(k)) continue;
     const rows = unwrapRows(v);
@@ -358,49 +288,23 @@ function toProduct(row: Row): ProductRef {
   return {
     code: pick(row, ["MATERIAL"]),
     name: pick(row, ["MTEXT"]) || pick(row, ["MATERIAL"]),
-    // Bora EnterPick yanıtına barkodları ekleyecek — alan adı netleşince
-    // buraya eklenecek. Şimdilik gelen ilk eşleşen ad kullanılıyor.
+
     barcode: pick(row, ["BARCODE", "BARCODENUM", "EAN"]),
+    // 2. barkod (koli barkodu) — Bora'nın göndereceği alan; esnek adla okunur.
+    barcode2: pick(row, ["BARCODE2", "BARCODENUM2", "EAN2", "ALTBARCODE", "PACKBARCODE"]) || undefined,
     unit: pick(row, ["UNIT"], "Adet"),
   };
 }
 
-/** CANIAS "*" değerini "belirlenmemiş / farketmez" anlamında kullanır. */
 const yok = (v: string) => !v || v === "*";
 
-/**
- * Emir kalemi — MZYEnterPick / IASWMSPOITEM tablosundan.
- *
- * Bora'nın açıkladığı kurallar:
- *   • MOVEQTY   = sipariş miktarı (toplanması gereken toplam)
- *   • MOVEDQTY  = toplanmış/kapanmış miktar  (D = "done")
- *   • SPECIALSTOCK = "1" → SKT'li ürün, BATCHNUM dolu, PARTİ BARKODU OKUTULUR
- *   • SPECIALSTOCK = "*" → parti takibi yok, parti barkodu okutulmaz
- *
- * Alan anlamları (Bora):
- *   • FRONTAREA + WAREHOUSEFA → YERLEŞTİRME emrinde: nereden alınacak (kaynak)
- *   • TRANSAREA + WAREHOUSETA → TOPLAMA emrinde: nereye konulacak (hedef/target)
- *
- * DİKKAT — toplamada TRANSAREA ürünün alınacağı RAF DEĞİLDİR.
- * Toplanan malların içine konduğu paletin/aracın bırakılacağı yerdir.
- * Ürünün hangi rafta durduğu bilgisi bu tabloda hiç YOK; onu ReadBarcodeSP
- * (Bora yazıyor) ve MZYCrtSuggestListPickFromSP verecek.
- * Bu yüzden toplamada `location` boş kalıyor — depocuya sevk alanını
- * "raf" diye göstermektense hiç göstermemek doğru.
- */
 export function toPickLine(row: Row, i: number): PickLine {
   const isPick = pick(row, ["ISPICK"]) === "1";
   const lot = pick(row, ["BATCHNUM"]);
   const specialStock = pick(row, ["SPECIALSTOCK"]);
 
-  // Yerleştirmede kaynak alan gerçekten okutulacak yerdir; toplamada değil.
   const kaynak = isPick ? "" : pick(row, ["FRONTAREA"]);
 
-  // HEDEF MİKTAR: MOVEQTY (stok) bazen sipariş miktarıyla (AKLSQUANTITY)
-  // TUTARSIZ geliyor (ör. BAR06: MOVEQTY 3 ama sipariş 6). Depocu ekranda
-  // sipariş miktarını görüyor; tamamlanma da ona göre olmalı. Bu yüzden
-  // AKLSQUANTITY varsa hedefi ondan türetiyoruz: stok hedef = sipariş * cfactor.
-  // (Tutarlı veride sipariş*cfactor == MOVEQTY olduğundan bir şey değişmez.)
   const moveQty = num(row, ["MOVEQTY"]);
   const orderQtyRaw = pick(row, ["AKLSQUANTITY"]) === "" ? undefined : num(row, ["AKLSQUANTITY"], 0);
   const cfactorRaw = pick(row, ["CFACTOR"]) === "" ? undefined : num(row, ["CFACTOR"], 0);
@@ -411,53 +315,46 @@ export function toPickLine(row: Row, i: number): PickLine {
       : moveQty;
 
   return {
-    // DİKKAT: EnterPick satırında ITEMNUM=0 diye bir alan da geliyor; gerçek
-    // kalem no ITEMNO (ör. 8). Bu yüzden ITEMNO ÖNCE okunmalı — yoksa hep 0
-    // gidip öneri servisi (PIITEMNO) boş dönüyordu.
+
     id: pick(row, ["ITEMNO", "ITEMNUM"], String(i + 1)),
     product: toProduct(row),
     location: yok(kaynak) ? "" : kaynak,
-    requestedQty: hedefStok, // sipariş miktarıyla tutarlı hedef (yukarıya bak)
+    requestedQty: hedefStok,
     pickedQty: num(row, ["MOVEDQTY"]),
-    // Parti barkodu SADECE özel stok (SKT'li) ürünlerde istenir
+
     lotTracked: specialStock === "1",
     lot: yok(lot) ? undefined : lot,
-    // PRIORITY kalem seviyesinde geliyor (emir listesinde değil).
-    // Küçük olan önce toplanır — Bora.
+
     priority: pick(row, ["PRIORITY"]) === "" ? undefined : num(row, ["PRIORITY"], 0),
-    // Sipariş birimi gösterimi: AKLSQUANTITY (sipariş miktarı),
-    // AKLSQUNIT (sipariş birimi), CFACTOR (stok→sipariş çevrim katsayısı).
+
     orderQty: orderQtyRaw,
     orderUnit: pick(row, ["AKLSQUNIT"]) || undefined,
     cfactor: cfactorRaw,
-    // Toplamada hedef: toplanan malın konduğu paletin bırakılacağı yer
+
     targetArea: isPick && !yok(pick(row, ["TRANSAREA"])) ? pick(row, ["TRANSAREA"]) : undefined,
-    // WAREHOUSETA — MZYCreateContainer'a giden hedef depo (Bora)
+
     targetWarehouse: pick(row, ["WAREHOUSETA"]) || undefined,
-    // WEIGHTCAPACITY / VOLUMECAPACITY — kartta ağırlık/hacim göstermek için.
+
     weight: num(row, ["WEIGHTCAPACITY"]) || undefined,
     volume: num(row, ["VOLUMECAPACITY"]) || undefined,
   };
 }
 
-/** STATUS: 0 Açık, 1 Kısmi Açık, 2 Kapalı */
 export function toStatus(v: string): PickOrder["status"] {
   return v === "2" ? "closed" : v === "1" ? "partial" : "open";
 }
 
-/** Emir başlığı (liste tablosu). */
 function toPickOrder(row: Row): PickOrder {
   const worker = pick(row, ["WORKER"]);
   return {
     id: pick(row, ["ORDERNUM"]),
     orderType: pick(row, ["ORDERTYPE"]),
-    // CUSNAME1/NAME1 müşteri adı, yoksa müşteri numarası
+
     customer: pick(row, ["CUSNAME1", "NAME1", "CUSTOMER"]),
     reference: pick(row, ["STEXT", "DOCNUM"]), // Emir açıklaması
     createdAt: pick(row, ["CREATEDAT"]),
     worker: worker && worker !== "*" ? worker : undefined, // "*" = atanmamış
-    // PRIORITY: küçük olan önce toplanır. Alan boşsa 0 sayma —
-    // 0 sıralamada en başa fırlar ve öncelikli emirlerin önüne geçer.
+
     priority: pick(row, ["PRIORITY"]) === "" ? undefined : num(row, ["PRIORITY"], 0),
     status: toStatus(pick(row, ["STATUS"], "0")),
     started: pick(row, ["ISSTARTED"], "0") === "1",
@@ -465,27 +362,11 @@ function toPickOrder(row: Row): PickOrder {
   };
 }
 
-/**
- * Raf okutma yanıtındaki "önceden konteynıra toplanmış" kalemleri ayıklar.
- *
- * Tablo adı serviste netleşene kadar ESNEK davranıyoruz: mesaj tabloları
- * dışındaki tüm tablolarda, MATERIAL taşıyan ve miktarı > 0 olan satırları
- * geri-yükleme kalemi sayıyoruz. Beklenen alanlar (Bora ile teyit edilecek):
- *   WAREHOUSE, STOCKPLACE, MATERIAL, BATCHNUM, SPECIALSTOCK,
- *   READQTY | QUANTITY, QUNIT, ORDERNUM, ORDERTYPE, ITEMNO
- * Sipariş eşleşmesi (ORDERNUM) sonra pickingLogic.applyRestoredPicks'te yapılır.
- */
-/**
- * STOCKPLACE'ten sipariş bilgisini türet. Konteyner adı sipariş no'yu taşıyor:
- *   "SO-650492" → { type: "SO", num: "650492" }
- * MATLIST kalemlerinde ORDERNUM/ORDERTYPE alanı yok; eşleşme buradan yapılır.
- */
 function orderFromStockPlace(sp: string): { num: string; type: string } {
   const m = /^([A-Za-z]+)-(.+)$/.exec((sp ?? "").trim());
   return m ? { type: m[1], num: m[2] } : { type: "", num: "" };
 }
 
-/** Ham veride MATERIAL taşıyan tüm nesneleri (MATLIST kalemleri dahil) topla. */
 function collectMaterialRows(node: unknown, acc: Row[]): void {
   if (!node) return;
   if (Array.isArray(node)) {
@@ -498,9 +379,9 @@ function collectMaterialRows(node: unknown, acc: Row[]): void {
     string,
     unknown
   >;
-  // MATERIAL alanı dolu bir düz satırsa → geri-yükleme kalemi.
+
   if (typeof inner.MATERIAL === "string" && inner.MATERIAL.trim() !== "") acc.push(inner as Row);
-  // Her durumda içeri in — MATLIST gibi iç dizileri de tara.
+
   for (const v of Object.values(inner)) {
     if (v && typeof v === "object") collectMaterialRows(v, acc);
   }
@@ -517,11 +398,11 @@ function parseRestoredPicks(data: Record<string, unknown> | null): RestoredPick[
   for (const row of rows) {
     const material = pick(row, ["MATERIAL"]);
     if (!material) continue;
-    // Konteynır/paket miktarı: TOTALSTOCK (IASINV007.MATLIST) ya da okutma alanları.
+
     const qty = num(row, ["TOTALSTOCK", "READQTY", "QUANTITY", "MOVEDQTY"], 0);
     if (qty <= 0) continue;
     const lot = pick(row, ["BATCHNUM"]);
-    // "*" parti = parti yok. SPECIALSTOCK "1" → partili.
+
     const lotVar = !yok(lot) && lot !== "*";
     const partiTakipli = pick(row, ["SPECIALSTOCK"]) || (lotVar ? "1" : "*");
     const stockPlace = pick(row, ["STOCKPLACE"]);
@@ -534,7 +415,7 @@ function parseRestoredPicks(data: Record<string, unknown> | null): RestoredPick[
       specialStock: partiTakipli,
       qty,
       unit: pick(row, ["QUNIT", "UNIT"]),
-      // Önce gerçek alanlar; yoksa STOCKPLACE'ten türetilen (SO-650492).
+
       orderNum: pick(row, ["ORDERNUM"]) || sp.num,
       orderType: pick(row, ["ORDERTYPE"]) || sp.type,
       itemNo: pick(row, ["ITEMNO", "ITEMNUM"]),
@@ -543,24 +424,18 @@ function parseRestoredPicks(data: Record<string, unknown> | null): RestoredPick[
   return out;
 }
 
-/* ---------------- API ---------------- */
-// Parametre adları ve değerleri Mizoye'nin resmi servis dokümanından.
-// Önek servise göre değişiyor: MZYListingPick "P...", diğerleri "PS...".
-
 export const api = {
-  /** MZYCheckUser — depocu girişi. */
+
   async checkUser(username: string, password: string): Promise<User | null> {
     const r = await call(SERVICES.checkUser, {
       PSUSER: username,
       PSPASSWORD: password,
     });
-    // GÜVENLİK: Doğru bilgide TBLUSER dolu gelir. Hata yanıtı ise
-    // {ROW:{TYPE:"E",SYSTEMMSG}} veya TBLMESSAGE olarak gelir — bu hata satırını
-    // KULLANICI SANIP içeri ALMAYIZ. Aksi halde geçersiz kullanıcı login olurdu.
+
     const mesaj = serviceMessage(r);
     const rows = rowsOf(r, ["TBLUSER", "TBLCHECKUSER"]);
     const u = rows[0];
-    // Gerçek kullanıcı satırı: hata satırları TYPE:"E" / SYSTEMMSG taşır, kullanıcı taşımaz.
+
     const hataSatiri = !u || pick(u, ["TYPE"]) === "E" || !!pick(u, ["SYSTEMMSG"]);
     if (mesaj || hataSatiri) {
       const tblMsg = unwrapRows(r.data?.TBLMESSAGE)
@@ -580,18 +455,14 @@ export const api = {
     };
   },
 
-  /**
-   * MZYListingPick — açık toplama emirleri.
-   * Sıralama PRIORITY'ye göre artan: küçük olan önce toplanır (Bora).
-   */
   async getPickOrders(): Promise<PickOrder[]> {
     const c = ctx();
     const r = await call(SERVICES.listingPick, {
-      // Önek kuralı: PS = STRING, PI = INTEGER, PD = DATETIME
+
       PSCOMPANY: c.company,
       PSPLANT: c.plant,
       PSWORKER: c.worker, // giriş yapan kullanıcı
-      PISTATUS: 3, // Bora (23.07): 0 yerine 3
+      PISTATUS: 3,
       PIISPICK: 1, // Toplama emri
       PDSTARTDATE: DATE_MIN,
       PDENDDATE: DATE_MAX,
@@ -602,14 +473,13 @@ export const api = {
     return rowsOf(r, ["TBLPOLIST"])
       .map(toPickOrder)
       .sort((a, b) => {
-        // Önceliksiz emirler en sona; eşitlikte emir numarasına göre sabit sıra
+
         const pa = a.priority ?? Number.MAX_SAFE_INTEGER;
         const pb = b.priority ?? Number.MAX_SAFE_INTEGER;
         return pa !== pb ? pa - pb : a.id.localeCompare(b.id);
       });
   },
 
-  /** MZYEnterPick — emri toplamaya başlat + kalem detayı. */
   async getPickOrder(orderNum: string, orderType = ""): Promise<PickOrder | undefined> {
     const c = ctx();
     const r = await call(SERVICES.enterPick, {
@@ -617,20 +487,16 @@ export const api = {
       PSPLANT: c.plant,
       PSORDERNUM: orderNum,
       PSORDERTYPE: orderType,
-      // Giriş yapan kullanıcı — emir bu depocuya atansın (Bora, 24.07).
+
       PSUSER: c.worker,
     });
-    // Bora: EnterPick'ten dönen tablo IASWMSPOITEM.
-    // (Gözlemde TBLWMSPO adıyla da geliyor — ikisini de tanıyoruz.)
+
     const rows = rowsOf(r, ["IASWMSPOITEM", "TBLWMSPO", "TBLPODETAIL"]);
     if (!rows.length) return undefined;
     const head = rows[0];
     const siraliKalemler = rows
       .map(toPickLine)
-      // HAYALET SATIR FİLTRESİ: CANIAS bazı emirlerde ürünsüz/miktarsız boş satır
-      // döndürebiliyor (ör. 650491) → "Adet · 0 / 0/0" boş kart oluşuyordu. Ürün
-      // kimliği (kod/ad) OLMAYAN ve miktarı 0 olan satırları eliyoruz. Gerçek
-      // ürünlü satırlara (kod/ad ya da MOVEQTY>0) dokunulmaz.
+
       .filter((l) => !!(l.product.code || l.product.name) || l.requestedQty > 0)
       .sort((a, b) => {
         const pa = a.priority ?? Number.MAX_SAFE_INTEGER;
@@ -645,23 +511,11 @@ export const api = {
       createdAt: pick(head, ["CREATEDAT"]),
       status: toStatus(pick(head, ["STATUS"], "0")),
       started: pick(head, ["ISSTARTED"], "0") === "1",
-      // Toplama sırası PRIORITY'ye göre: küçük olan önce (Bora).
-      // Önceliksiz kalemler sona; eşitlikte ITEMNO ile sabit sıra.
+
       lines: siraliKalemler,
     };
   },
 
-  /**
-   * Kalemlerin raf bilgisini doldurur — her kalem için öneri servisi çağrılır.
-   *
-   * Ayrı bir fonksiyon çünkü:
-   *   • kalem sayısı kadar istek çıkıyor, emir ekranını bekletmemek gerekiyor
-   *   • Bora: "uzun siparişlerde tekrar sorgulamakta fayda var, toplarken
-   *     stok eksilebilir" — yani bu bilgi tazelenebilir olmalı
-   *
-   * Öneri servisi stok yoksa boş döner; o durumda kalem raf bilgisiz kalır,
-   * uydurma bir raf yazmıyoruz.
-   */
   async fillLocations(order: PickOrder): Promise<PickOrder> {
     const lines = await Promise.all(
       order.lines.map(async (line) => {
@@ -673,26 +527,13 @@ export const api = {
           );
           return oneriler.length ? { ...line, suggestions: oneriler } : line;
         } catch {
-          return line; // öneri alınamadıysa kalem raf bilgisiz kalsın
+          return line;
         }
       })
     );
     return { ...order, lines };
   },
 
-  /**
-   * MZYCrtSuggestListPickFromSP — "Stok Yerinden Toplama Önerisi".
-   *
-   * Bir kalemin hangi raftan alınacağını söyler. Dönen tablo: SUGGESTEDLISTFROM
-   *   WAREHOUSE + STOCKPLACE → raf ("D3" + "C1" → barkod "D3$C1")
-   *   TOTAL + QUNIT          → o rafta bu üründen ne kadar var (96 AD)
-   *   DISTANCE               → rafın uzaklığı, küçük olan daha yakın
-   *   ENTRYDATE              → stoğun rafa giriş tarihi (FIFO)
-   *   BATCHNUM / SPECIALSTOCK→ o raftaki partinin bilgisi
-   *
-   * Aynı ürün birden çok rafta olabilir; her raf ayrı satır olarak gelir.
-   * Sonuç mesafeye göre sıralanır — depocu en yakın rafa gitsin.
-   */
   async suggestForLine(
     orderNum: string,
     orderType: string,
@@ -715,7 +556,7 @@ export const api = {
           itemNo,
           warehouse,
           location,
-          // Raf barkodu biçimi: DEPO$STOKYERİ (Bora)
+
           barcode: warehouse && location ? `${warehouse}$${location}` : "",
           material: pick(row, ["MATERIAL"]),
           lot: yok(lot) ? undefined : lot,
@@ -726,26 +567,15 @@ export const api = {
         };
       })
       .filter((s) => s.barcode);
-    // SIRALAMA YOK — servis rafları zaten kendi sırasıyla gönderiyor, biz
-    // kendi kafamıza göre (mesafe vb.) yeniden sıralamıyoruz. Bora: "adamlar
-    // sıralamış, hazır sıralı geliyor, ona göre çek."
+
   },
 
-  /**
-   * MZYGetStock — bir ürünün okutulan raf+depodaki PARTİ listesi ve stokları.
-   * Ürün okutulup (readBarcode olumlu, availStock>0) parti listesini göstermek için.
-   * Bora: PSMATERIAL = readBarcode'un MATERIAL'ı (WMSXMLTABLE_MATERIAL);
-   *       PSWAREHOUSE/PSSTOCKPLACE = okutulan raf (readBarcodeSP değerleri);
-   *       PSBATCHNUM / PSSPECIALSTOCK / PSVOPTIONS / PSBARCODE boş.
-   * Yanıt: TBLSTOCK (BATCHNUM, AVAILSTOCK).
-   */
   async getStock(material: string, warehouse = "", stockPlace = ""): Promise<StockBatch[]> {
     const c = ctx();
     const r = await call(SERVICES.getStock, {
       PSCOMPANY: c.company,
       PSPLANT: c.plant,
-      // Bora: parametre adı PSMATERIAL (başında PS!), DEĞERİ readBarcode'un
-      // döndürdüğü MATERIAL (WMSXMLTABLE_MATERIAL). PS'siz gönderince servise
+
       // malzeme boş/tanımsız gidiyordu.
       PSMATERIAL: material,
       PSWAREHOUSE: warehouse,
@@ -757,7 +587,7 @@ export const api = {
     });
     const gorulen = new Set<string>();
     return rowsOf(r, ["TBLSTOCK"])
-      // GÜVENLİK: servis rafın TÜM ürünlerini döndürebiliyor (farklı birimler).
+
       // Sadece OKUTULAN malzemeyle sınırlıyoruz.
       .filter((row) => !material || pick(row, ["MATERIAL"]).trim() === material.trim())
       .map((row) => ({
@@ -767,7 +597,7 @@ export const api = {
       }))
       .filter((b) => {
         if (!(b.batchNum || b.availStock > 0)) return false;
-        // Tekrar eden partileri ele (aynı BATCHNUM birden çok satır gelebiliyor).
+
         const anahtar = b.batchNum || "*";
         if (gorulen.has(anahtar)) return false;
         gorulen.add(anahtar);
@@ -775,7 +605,6 @@ export const api = {
       });
   },
 
-  /** MZYClosePick — toplamaktan vazgeç (tamamlama DEĞİL). */
   async cancelPick(orderNum: string, orderType = ""): Promise<void> {
     const c = ctx();
     await call(SERVICES.closePick, {
@@ -786,14 +615,6 @@ export const api = {
     });
   },
 
-  /**
-   * MZYCreateContainer — "Palet Oluştur" (Bora'nın Excel'indeki adı).
-   * Parametreler: PSCOMPANY, PSPLANT, PSWAREHOUSE, PSMATERIAL
-   *
-   * DEPO: ayarlardaki depo DEĞİL — EnterPick'ten gelen WAREHOUSETA
-   * (IASWMSPOITEM_WAREHOUSETA, örn. "10"). Bora: "enterpickle gelen
-   * warehouseta". Yani paletin bırakılacağı hedef depo.
-   */
   async placeInPackage(
     targetWarehouse: string,
     material = "KONPAKET",
@@ -806,48 +627,30 @@ export const api = {
       PSPLANT: c.plant,
       PSWAREHOUSE: targetWarehouse,
       PSMATERIAL: material,
-      // Emir bilgisi de gönderiliyor (spec'te yok ama isteğe göre ekli).
+
       PSORDERNUM: orderNum,
       PSORDERTYPE: orderType,
     });
-    // CreateContainer paleti "TBLCONTSP" tablosunda döndürüyor (canlı, 23.07):
-    //   { WAREHOUSE:"10", BATCHNUM:"SO-26935282", COMPANY:"01", PLANT:"100" }
-    // Yani paletin DEPOSU = WAREHOUSE, NUMARASI = BATCHNUM.
-    // (Eski IASINVITEM/STOCKPLACE biçimi de yedekte duruyor.)
+
     const rows = rowsOf(r, ["TBLCONTSP", "IASINVITEM", "TBLCONTAINER"]);
     const row = rows[0] ?? {};
     const paletNo = pick(row, [
       "BATCHNUM", "STOCKPLACE", "CONTAINER", "CONTAINERNUM", "HU", "CONTAINERNO",
     ]);
-    // PSCONTWAREHOUSE = paletin GERÇEK deposu (yanıttan gelen WAREHOUSE).
-    // Palet her zaman 10'da oluşuyor; WAREHOUSETA "100" olsa da container 10'da.
-    // "Gönderdiğin depo" (targetWarehouse) 100 ise SavePick "Depo 100 bulunamadı"
-    // diyordu — bu yüzden container'ın döndürdüğü depoyu kullanıyoruz.
+
     return {
       containerWarehouse: pick(row, ["WAREHOUSE"]) || targetWarehouse,
       containerId: paletNo,
-      // CANIAS hata mesajı (ör. "envanter hareketi yetkiniz yok"). Boş palette
-      // kullanıcıya bunu göstereceğiz — genel "boş döndü" yerine gerçek sebep.
+
       message: serviceMessage(r),
     };
   },
 
-  /**
-   * Okutma kayıtlarını CANIAS'ın beklediği tablo biçimine çevirir.
-   *
-   * Bora'nın verdiği yapı — IASWMSPOITEMREAD:
-   *   COMPANY, PLANT, MATERIAL, WAREHOUSE, STOCKPLACE, SPECIALSTOCK,
-   *   BATCHNUM, QUANTITY, QUNIT, ORDERTYPE, ORDERNUM, ITEMNO
-   *
-   * Servis henüz yazılmadı; gelince bu satırlar olduğu gibi gönderilecek.
-   * Burada hazır tutuluyor ki servis geldiğinde tek bağlantı kalsın.
-   */
   buildPickRows(order: PickOrder): Row[] {
     const c = ctx();
     return order.lines.flatMap((line) =>
       (line.records ?? [])
-        // Bora (23.07): SPECIALSTOCK=1 ise parti "*" olamaz. Parti takipli ama
-        // partisi girilmemiş (okutulmamış) kayıt SavePick'e GÖNDERİLMEZ.
+
         .filter((r) => !(r.specialStock === "1" && (!r.lot || r.lot === "*")))
         .map((r) => ({
         COMPANY: c.company,
@@ -857,35 +660,21 @@ export const api = {
         STOCKPLACE: r.stockPlace,
         SPECIALSTOCK: r.specialStock,
         BATCHNUM: r.lot ?? "*",
-        // Okutulan miktar — Bora (23.07): servis READQTY bekliyor. Tek alan.
+
         READQTY: String(r.qty),
         QUNIT: r.unit,
         ORDERTYPE: order.orderType ?? "",
         ORDERNUM: order.id,
         ITEMNO: r.itemNo,
-        // Bora (23.07): kendi kontrol açısından sipariş ve önceden toplanan.
+
         MOVEQTY: String(line.requestedQty),
         MOVEDQTY: String(line.pickedQty),
-        // Bora (23.07): şimdilik BOŞ gönderilecek, altyapı için alan dursun.
+
         VOPTIONS: "",
       }))
     );
   },
 
-  /**
-   * MZYSavePick — toplananı CANIAS'a yazar. MOVEDQTY bununla güncellenir.
-   *
-   * Bora'nın son spec'i (23.07) — parametreler:
-   *   PSCOMPANY, PSPLANT,
-   *   PSORDERNUM, PSORDERTYPE → toplanan emir
-   *   PSCONTWAREHOUSE   → CreateContainer'a gönderilen depo
-   *   PSCONTSTOCKPLACE  → CreateContainer'dan dönen BATCHNUM (palet no)
-   *   PSIASWMSPOITEMXML → okutulanlar tablosu, XML olarak
-   *
-   * PSIASWMSPOITEMXML bir XML bloğu: her okutma satırı bir <ROW>. Sunucu
-   * dizi verildiğinde <PSIASWMSPOITEMXML><ROW>...</ROW></PSIASWMSPOITEMXML>
-   * olarak seri hale getiriyor.
-   */
   async savePick(
     order: PickOrder,
     containerWarehouse: string,
@@ -898,51 +687,32 @@ export const api = {
     const r = await call(SERVICES.savePick, {
       PSCOMPANY: c.company,
       PSPLANT: c.plant,
-      // Login olan kullanıcı — EnterPick'te olduğu gibi SavePick'e de gönderilir.
+
       PSUSER: c.worker,
       PSORDERNUM: order.id,
       PSORDERTYPE: order.orderType ?? "",
       PSCONTWAREHOUSE: containerWarehouse,
       PSCONTSTOCKPLACE: containerId,
-      // Etiket baskı sayısı — test: 0, canlı: 1 (LABEL_COUNT ile ayarlanır)
+
       PILABELCOUNT: LABEL_COUNT,
-      // Dizi gönderiliyor; sunucu <ROW> listesine çeviriyor
+
+      PDTSTARTTIME: order.startTime ?? "",
+
       PSIASWMSPOITEMXML: rows,
     });
 
     const mesaj = serviceMessage(r);
-    // Hata mesajı varsa başarısız say; boş mesaj başarı kabul ediliyor
+
     if (mesaj) return { ok: false, message: mesaj };
     return { ok: true, message: "" };
   },
 
-  /**
-   * MZYReadBarcode — ÜRÜN barkodu çözümü.
-   * Parametreler: PSCOMPANY, PSPLANT, PSWAREHOUSE, PSSTOCKPLACE, PSBARCODE
-   * Depo/stok yeri = önce okutulan raf; boş geçilebilir.
-   *
-   * Yanıt tek tablo (WMSXMLTABLE) ama İKİ FARKLI BİÇİMDE geliyor:
-   *
-   *   BAŞARILI → tek satır, malzeme alanları dolu:
-   *     {MATERIAL:"UD009", MTEXT:"Uludağ...", UNIT:"AD", QUANTITY:"0.0", ...}
-   *
-   *   BAŞARISIZ → iki satır, anahtar-değer:
-   *     [{FIELD:"RETVALUE", VALUE:"0"}, {FIELD:"SYSTEMMSG", VALUE:"..."}]
-   *
-   * Ayrımı MATERIAL alanının varlığından yapıyoruz — RETVALUE başarılı
-   * yanıtta hiç gelmiyor, ona bakmak yanıltıcı olurdu.
-   *
-   * Bir ürünün birden çok barkodu var (EAN'lar + "UD009$*$" biçimi), hepsi
-   * aynı MATERIAL'a çıkıyor. Bu yüzden kalem eşleştirmesi BARKODLA DEĞİL,
-   * dönen MATERIAL ile yapılmalı.
-   */
   async readBarcode(
     barcode: string,
     warehouse = "",
     stockPlace = "",
     quantity = 1,
-    /** Parti doğrulaması için gönderilir (parti takipli üründe). Boşsa
-        gönderilmez — normal ürün okumasında parti barkodun içinde gelir. */
+
     batchNum = ""
   ): Promise<BarcodeResult> {
     const c = ctx();
@@ -952,10 +722,10 @@ export const api = {
       PSWAREHOUSE: warehouse,
       PSSTOCKPLACE: stockPlace,
       PSBARCODE: barcode,
-      // Ekranda girilen "kaç tane" değeri. Ad: TBLPARAM_PDCQUANTITY
+
       PDCQUANTITY: quantity,
     };
-    // Parti verilmişse doğrulama için PSBATCHNUM eklenir (o partinin stoğu döner).
+
     if (batchNum) params.PSBATCHNUM = batchNum;
     const r = await call(SERVICES.readBarcode, params);
 
@@ -992,21 +762,13 @@ export const api = {
       lot: yok(lot) ? undefined : lot,
       quantity: num(satir, ["QUANTITY"], 0),
       availStock: num(satir, ["AVAILSTOCK"], 0),
-      // "1" → parti takipli, "*" → değil. Parti akışını buna göre tetikleyeceğiz.
+
       specialStock: pick(satir, ["SPECIALSTOCK"]),
       fields: satir as Record<string, string>,
       message: "",
     };
   },
 
-  /**
-   * MZYReadBarcodeSP — RAF barkodu çözümü. Biçim: WAREHOUSE$STOCKPLACE (D3$C1)
-   *
-   * DİKKAT: Servis DOĞRULAMA YAPMIYOR. Olmayan raf ("ZZ$YY99") gönderilse de
-   * normal cevap dönüyor. Yani buradan gelen "ok" değeri rafın gerçekten
-   * var olduğunu göstermez; sadece barkodun ayrıştırılabildiğini gösterir.
-   * Gerçek doğrulama Bora'dan bekleniyor.
-   */
   async readShelfBarcode(barcode: string): Promise<ShelfResult> {
     const c = ctx();
     const r = await call(SERVICES.readBarcodeSP, {
@@ -1014,22 +776,16 @@ export const api = {
       PSPLANT: c.plant,
       PSBARCODE: barcode,
     });
-    // Servis WAREHOUSE ve STOCKPLACE'i AYRI döndürüyor — barkodu parse etmiyoruz.
-    // Tablo adı değişti: artık IASINV007 (eski TBLWHSP yedekte).
+
     const rows = rowsOf(r, ["IASINV007", "TBLWHSP"]);
     const row = rows[0];
     const warehouse = row ? pick(row, ["WAREHOUSE"]) : "";
     const stockPlace = row ? pick(row, ["STOCKPLACE"]) : "";
 
-    // KISMİ SİPARİŞ: yanıtta "önceden konteynıra toplanmış" kalem listesi de
-    // gelebilir. Ayrı bir tabloda ya da aynı tabloda olabildiği için, MATERIAL
-    // taşıyan tüm satırları esnek tarıyoruz (raf/mesaj tabloları hariç).
     const restored = parseRestoredPicks(r.data);
 
-    // Depo ve stok yeri dolu geldiyse raf geçerli. Barkod biçimini ($) kontrol
-    // etmiyoruz — servis alanları ayrı veriyor.
     if (!warehouse || !stockPlace) {
-      // Raf satırı yoksa ama geri-yükleme listesi geldiyse, rafı ilk kalemden al.
+
       if (restored.length) {
         return {
           ok: true,
@@ -1048,8 +804,6 @@ export const api = {
     }
     return { ok: true, warehouse, stockPlace, message: "", restored };
   },
-
-  /* ---- Seçim listeleri (Ayarlar ekranı) ---- */
 
   async getCompanies(): Promise<{ code: string; name: string }[]> {
     const r = await call(SERVICES.getCompany, {});
@@ -1077,10 +831,6 @@ export const api = {
     }));
   },
 
-  /* ---------------------------------------------------------------------
-   * Diğer modüller — CANIAS servisleri henüz yok, ekranlar bozulmasın diye
-   * boş dönüyorlar.
-   * ------------------------------------------------------------------- */
   async getReceipts(): Promise<Receipt[]> {
     return [];
   },
@@ -1115,22 +865,14 @@ export const api = {
     return undefined;
   },
 
-  /* ===================== YERLEŞTİRME (putaway) — TASARIM =====================
-   * Toplamanın tersi: TEK kaynaktan al → ÇOK rafa dağıt, tek tek.
-   * Listing aynı (MZYListingPick) ama PIISPICK=0. Ürün/raf okuma toplamayla
-   * birebir aynı (readShelfBarcode + readBarcode). Emri aç/kaydet için Bora
-   * yeni servis verecek (MZYEnterPlacement / MZYSavePlacement).
-   * ========================================================================= */
-
-  /** MZYListingPick, PIISPICK=0 → yerleştirme emirleri. */
   async getPutawayOrders(): Promise<PickOrder[]> {
     const c = ctx();
-    const r = await call(SERVICES.listingPick, {
+    const r = await call(SERVICES.listingPlacement, {
       PSCOMPANY: c.company,
       PSPLANT: c.plant,
       PSWORKER: c.worker,
       PISTATUS: 3,
-      PIISPICK: 0, // ← TOPLAMA=1, YERLEŞTİRME=0 (tek fark)
+      PIISPICK: 0,
       PDSTARTDATE: DATE_MIN,
       PDENDDATE: DATE_MAX,
       PIISDELETE: 0,
@@ -1140,8 +882,7 @@ export const api = {
     return rowsOf(r, ["TBLPOLIST"])
       .map((row) => ({
         ...toPickOrder(row),
-        // Kaynak depo/raf: ürünlerin ALINACAĞI yer (2. adımda doğrulanır).
-        // TODO: WAREHOUSEFA/FRONTAREA alan adlarını gerçek yanıtla teyit et.
+
         sourceWarehouse: pick(row, ["WAREHOUSEFA"]),
         sourceShelf: pick(row, ["FRONTAREA"]),
       }))
@@ -1152,30 +893,143 @@ export const api = {
       });
   },
 
-  /**
-   * Emri yerleştirmeye başlat + kalemler. Bora: MZYEnterPlacement gelecek;
-   * ŞİMDİLİK MZYEnterPick (getPickOrder ile aynı). Servis gelince değişecek.
-   */
   async enterPutaway(orderNum: string, orderType = ""): Promise<PickOrder | undefined> {
-    // TODO: MZYEnterPlacement gelince SERVICES.enterPlacement çağrılacak.
-    return api.getPickOrder(orderNum, orderType);
+    const c = ctx();
+    const r = await call(SERVICES.enterPlacement, {
+      PSCOMPANY: c.company,
+      PSPLANT: c.plant,
+      PSORDERNUM: orderNum,
+      PSORDERTYPE: orderType,
+    });
+    const rows = rowsOf(r, ["IASWMSPOITEM", "TBLWMSPO", "TBLPODETAIL"]);
+    if (!rows.length) return undefined;
+    const head = rows[0];
+    const kalemler = rows
+      .map(toPickLine)
+      .filter((l) => !!(l.product.code || l.product.name) || l.requestedQty > 0)
+      .sort((a, b) => {
+        const pa = a.priority ?? Number.MAX_SAFE_INTEGER;
+        const pb = b.priority ?? Number.MAX_SAFE_INTEGER;
+        return pa !== pb ? pa - pb : Number(a.id) - Number(b.id);
+      });
+    return {
+      id: pick(head, ["ORDERNUM"], orderNum),
+      orderType: pick(head, ["ORDERTYPE"], orderType),
+      customer: pick(head, ["CUSNAME1", "CUSTOMER"]),
+      reference: pick(head, ["STEXT", "DOCNUM"]),
+      createdAt: pick(head, ["CREATEDAT"]),
+      status: toStatus(pick(head, ["STATUS"], "0")),
+      started: pick(head, ["ISSTARTED"], "0") === "1",
+
+      sourceWarehouse: pick(head, ["WAREHOUSEFA"]),
+      sourceShelf: pick(head, ["FRONTAREA"]),
+      lines: kalemler,
+    };
   },
 
-  /**
-   * Bir yerleştirmeyi CANIAS'a yaz — Bora'nın vereceği MZYSavePlacement.
-   * HENÜZ BAĞLI DEĞİL: parametreler (okutulanlar) hazır ama servis yok → net hata döner.
-   */
-  async savePlacement(_input: {
+  async suggestPlacementForLine(
+    orderNum: string,
+    orderType: string,
+    itemNo: number
+  ): Promise<PickSuggestion[]> {
+    const c = ctx();
+    const r = await call(SERVICES.suggestPlacement, {
+      PSCOMPANY: c.company,
+      PSPLANT: c.plant,
+      PSORDERNUM: orderNum,
+      PSORDERTYPE: orderType,
+      PIITEMNO: itemNo,
+    });
+
+    return rowsOf(r, ["SUGGESTEDLISTTO", "SUGGESTEDLIST", "SUGGESTEDLISTFROM"])
+      .map((row) => {
+        const warehouse = pick(row, ["WAREHOUSE"]);
+        const location = pick(row, ["STOCKPLACE"]);
+        const lot = pick(row, ["BATCHNUM"]);
+        return {
+          itemNo,
+          warehouse,
+          location,
+          barcode: warehouse && location ? `${warehouse}$${location}` : "",
+          material: pick(row, ["MATERIAL"]),
+          lot: yok(lot) ? undefined : lot,
+          total: num(row, ["TOTAL"], 0),
+          unit: pick(row, ["QUNIT"], "Adet"),
+          distance: num(row, ["DISTANCE"], 0) || undefined,
+          entryDate: pick(row, ["ENTRYDATE"]) || undefined,
+        };
+      })
+      .filter((s) => s.barcode);
+  },
+
+  async fillPlacementLocations(order: PickOrder): Promise<PickOrder> {
+    const lines = await Promise.all(
+      order.lines.map(async (line) => {
+        try {
+          const oneriler = await api.suggestPlacementForLine(
+            order.id,
+            order.orderType ?? "",
+            Number(line.id)
+          );
+          return oneriler.length ? { ...line, suggestions: oneriler } : line;
+        } catch {
+          return line;
+        }
+      })
+    );
+    return { ...order, lines };
+  },
+
+  async cancelPutaway(orderNum: string, orderType = ""): Promise<void> {
+    const c = ctx();
+    await call(SERVICES.closePlacement, {
+      PSCOMPANY: c.company,
+      PSPLANT: c.plant,
+      PSORDERNUM: orderNum,
+      PSORDERTYPE: orderType,
+    });
+  },
+
+  async savePlacement(input: {
     order: PickOrder;
-    sourceWarehouse: string;
-    sourceShelf: string;
-    targetWarehouse: string;
-    targetShelf: string;
-    material: string;
-    lot?: string;
-    qty: number;
+    itemNo: string; // PIITEMNO — kalem no
+    material: string; // PSMATERIAL — malzeme kodu
+    targetWarehouse: string; // PSWAREHOUSE — yerleştirilen depo
+    targetShelf: string; // PSSTOCKPLACE — yerleştirilen raf
+    specialStock: string; // PSSPECIALSTOCK
+    lot: string; // PSBATCHNUM
+    qty: number; // PDCQUANTITY
+    startTime?: string; // PDSTARTTIME
   }): Promise<{ ok: boolean; message: string }> {
-    void SERVICES.savePlacement; // TODO: buildArgs ile MZYSavePlacement'a gönder
-    return { ok: false, message: "Yerleştirme servisi (MZYSavePlacement) henüz bağlı değil — Bora verecek." };
+    const c = ctx();
+    const r = await call(SERVICES.savePlacement, {
+      PSCOMPANY: c.company,
+      PSPLANT: c.plant,
+      PSORDERNUM: input.order.id,
+      PSORDERTYPE: input.order.orderType ?? "",
+      PIITEMNO: Number(input.itemNo) || 0,
+      PSMATERIAL: input.material,
+      PSWAREHOUSE: input.targetWarehouse,
+      PSSTOCKPLACE: input.targetShelf,
+      PSSPECIALSTOCK: input.specialStock,
+      PSBATCHNUM: input.lot || "*",
+      PDCQUANTITY: input.qty,
+      PSUSER: c.worker,
+      PDSTARTTIME: input.startTime ?? "",
+    });
+    const mesaj = serviceMessage(r);
+    if (mesaj) return { ok: false, message: mesaj };
+
+    const bosYanit =
+      !r.data ||
+      (typeof r.data === "object" && Object.keys(r.data).length === 0) ||
+      String(r.raw ?? "").trim().toLowerCase() === "null";
+    if (bosYanit) {
+      return {
+        ok: false,
+        message: "Yerleştirme kaydedilemedi — servis boş (null) yanıt döndü. Parametre/birim kontrolü gerekebilir.",
+      };
+    }
+    return { ok: true, message: "" };
   },
 };

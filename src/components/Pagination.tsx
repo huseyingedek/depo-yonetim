@@ -1,10 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-/**
- * Basit istemci-taraflı sayfalama. Gerçek serviste sunucu-taraflı sayfalamaya
- * (page/size parametreleri) kolayca çevrilebilir.
- */
 export function usePagination<T>(items: T[], pageSize = 9) {
   const [page, setPage] = useState(1);
   const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
@@ -36,7 +32,6 @@ interface Props {
 export default function Pagination({ page, pageCount, onChange, rangeStart, rangeEnd, total, label }: Props) {
   if (total === 0) return null;
 
-  // Görünecek sayfa numaraları (aktif etrafında pencere)
   const pages: (number | "…")[] = [];
   const window = 1;
   for (let i = 1; i <= pageCount; i++) {

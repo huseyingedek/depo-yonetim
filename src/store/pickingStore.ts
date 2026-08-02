@@ -5,42 +5,23 @@ import { api } from "../api/client";
 import { evaluateScan, linePicked, gecerliKayit, qtyRound, applyRestoredPicks } from "./pickingLogic";
 import type { ShelfContext, ScanOutcome } from "./pickingLogic";
 
-// Tipleri tek kaynaktan (pickingLogic) dışa aktar — eski importlar kırılmasın.
 export type { ShelfContext, ScanOutcome } from "./pickingLogic";
 export { linePicked } from "./pickingLogic";
 
-/* ─────────────────────────────────────────────────────────────────────────
- * SAVEPICK KİLİDİ (23.07 — kullanıcı isteği)
- * SavePick CANIAS'a gerçekten YAZAR (stok düşer). CreateContainer yanıtı
- * doğrulanana kadar KAPALI tutuyoruz. "Pakete Yerleştir" paleti oluşturur ama
- * SavePick'i çağırmaz; ekranda "kapalı" uyarısı çıkar.
- * AÇMAK İÇİN: aşağıyı true yap.
- * ───────────────────────────────────────────────────────────────────────── */
 const SAVEPICK_AKTIF = true;
 
-/**
- * Parti/tarihi CANIAS'ın beklediği YYYYAAGG biçimine çevirir (Bora: 20260908).
- * Depocu GG.AA.YYYY (08.09.2026) girse de servise YYYYAAGG gider; zaten
- * 8 haneli (YYYYAAGG) girilmişse olduğu gibi bırakır.
- */
 function partiToBatchnum(s: string): string {
   const t = (s ?? "").trim();
-  // GG.AA.YYYY / GG/AA/YYYY / GG-AA-YYYY  → YYYYAAGG
+
   let m = t.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})$/);
   if (m) return `${m[3]}${m[2].padStart(2, "0")}${m[1].padStart(2, "0")}`;
-  // YYYY-AA-GG / YYYY.AA.GG → YYYYAAGG
+
   m = t.match(/^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})$/);
   if (m) return `${m[1]}${m[2].padStart(2, "0")}${m[3].padStart(2, "0")}`;
-  // Zaten YYYYAAGG (8 hane) ya da bilinmeyen biçim → olduğu gibi gönder.
+
   return t;
 }
 
-/**
- * Okutma kaydını kaleme ekler ya da aynı index'teki kaydı günceller (Bora'nın
- * birleştirme kuralı). `mergedInto` doluysa o kayıt `record` ile değiştirilir
- * (miktar zaten toplanmış gelir), yoksa yeni satır eklenir. Parti takipliyse
- * kaleme parti no'yu da yazar (gösterim ve "parti bekleniyor" kapısı için).
- */
 function kayitUpsert(
   order: PickOrder,
   lineId: string,
@@ -59,26 +40,26 @@ function kayitUpsert(
   return { ...order, lines };
 }
 
-/**
- * Taze çekilen emre, sayfa yenilenmeden önce yapılmış okutmaları geri harmanlar.
- * Okutmalar localStorage'da duruyor; emir servisten baz haliyle gelince
- * kalem eşleşmesine göre records geri takılıyor. Yoksa yenileyince kayıtlar
- * ekranda kaybolurdu (veri hâlâ localStorage'da ama order taze geldiği için).
- */
+export function caniasDateTime(d: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(
+    d.getMinutes()
+  )}:${p(d.getSeconds())}`;
+}
+
 export function mergeRecords(fresh: PickOrder, saklanan: PickOrder | null): PickOrder {
   if (!saklanan || saklanan.id !== fresh.id) return fresh;
-  // Saklanan kalemleri id'ye göre indexle — records + parti (lot/expiry) geri gelsin.
+
   const saklananHaritasi = new Map(saklanan.lines.map((l) => [l.id, l]));
   return {
     ...fresh,
     lines: fresh.lines.map((l) => {
       const sl = saklananHaritasi.get(l.id);
-      // Bayat/geçersiz kayıtları (partisiz "1") ELE — SavePick'e sızmasın,
+
       // ekranda toplanmış gibi görünmesin.
       const kayitlar = (sl?.records ?? []).filter(gecerliKayit);
       if (!kayitlar.length) return l;
-      // records ile BİRLİKTE parti bilgisini de geri yükle. Yoksa "okutulanlar"a
-      // girip çıkınca l.lot kaybolup "parti eksik" hatası veriliyordu (M11).
+
       return {
         ...l,
         records: kayitlar,
@@ -93,67 +74,40 @@ interface PickingState {
   order: PickOrder | null;
   loading: boolean;
   completing: boolean;
-  /** Raf bilgileri yükleniyor mu (öneri servisi kalem sayısı kadar çağrılıyor) */
+
   locationsLoading: boolean;
-  /** Okutulan raf — ürün okuturken servise bu gönderilir */
+
   shelf: ShelfContext | null;
-  /**
-   * Parti takipli üründe (SPECIALSTOCK=1) ürün okundu, parti bekleniyor.
-   * Parti okununca ikinci ReadBarcode bu barkod + adetle çağrılır.
-   */
+
   pendingProduct: { lineId: string; barcode: string; adet: number } | null;
-  /** Parti takipli üründe MZYGetStock'tan gelen parti listesi (combobox için). */
+
   batchList: StockBatch[];
-  /** getStock başarısızsa dönen hata (combobox içinde göstermek için). */
+
   batchError: string | null;
-  /** getStock çağrısı sürüyor mu (combobox'ta "yükleniyor" göstermek için). */
+
   batchLoading: boolean;
 
   loadOrder: (id: string, orderType?: string) => Promise<void>;
   clear: () => void;
-  /**
-   * Emirden çıkarken (geri tuşu) MZYClosePick ile kilidi açar ve emri temizler.
-   * EnterPick emri kilitliyor; açılmazsa tekrar girişte "blokelendi" hatası olur.
-   */
+
   leaveOrder: () => void;
 
-  /** Raf barkodu okut — MZYReadBarcodeSP. restoreErrors: geri yükleme kontrol hataları. */
   scanShelf: (barcode: string) => Promise<{ ok: boolean; message: string; restoreErrors?: string[] }>;
-  /** Rafı bırak (başka rafa geçmeden önce) */
+
   clearShelf: () => void;
 
-  /**
-   * Ürün barkodu okut — MZYReadBarcode.
-   *
-   * @param adet Bu barkoddan kaç tane alındı (çuval/koli sayısı). Varsayılan 1.
-   *
-   * Kayda giren miktar STOK BİRİMİNDE olur:
-   *   barkod 25 KG'lık çuval (QUANTITY=25), depocu 2 çuval aldı (adet=2)
-   *   → kayda 50 KG yazılır
-   */
   scanProduct: (barcode: string, adet?: number) => Promise<ScanOutcome>;
 
-  /** Kaydı sil — yanlış okutulmuşsa */
   removeRecord: (lineId: string, recordId: string) => void;
-  /** Kayıt miktarını AZALT. Artırma yok: artırmak yeni okutma demektir. */
+
   decreaseRecord: (lineId: string, recordId: string, qty: number) => void;
-  /**
-   * Parti barkodu okutulunca kaleme ve kayıtlara parti yazılır.
-   * Servise gitmez, doğrulama yapılmaz — okutulan değer olduğu gibi alınır.
-   */
+
   setLot: (lineId: string, lot: string, expiry?: string) => void;
-  /**
-   * Parti okutulunca MZYReadBarcode ile DOĞRULAR: parti gerçekten o ürüne ait
-   * mi ve o rafta stoğu var mı? Geçerliyse partiyi yazar, değilse hata döner.
-   * Rastgele/yanlış parti girişini engeller.
-   */
+
   scanLot: (lineId: string, lot: string) => Promise<{ ok: boolean; message: string }>;
-  /** Combobox'tan parti SEÇ — BATCHNUM zaten parti no (getStock'tan geldi, tarih dönüşümü yok). */
+
   selectBatch: (lineId: string, batchNum: string) => Promise<{ ok: boolean; message: string }>;
-  /**
-   * Palet oluştur + toplananı kaydet. Palet numarası alınamazsa kayıt
-   * yapılmaz ve ok:false döner — ekran hatayı gösterip geri döner.
-   */
+
   complete: () => Promise<CompleteResult>;
 }
 
@@ -175,28 +129,26 @@ export const usePickingStore = create<PickingState>()(
   batchLoading: false,
 
   loadOrder: async (id: string, orderType = "") => {
-    // Emre HER GİRİŞTE EnterPick çalışır (Bora: emir kullanıcıya atanır).
-    // Ama kayıtları kaybetmeyiz: aynı emirse önceki order'ı saklarız, taze
-    // emre records'ları harmanlarız. EnterPick BOŞ dönerse (idempotent değil,
-    // ikinci çağrı boş dönebiliyor) önceki emri KORURUZ — uçmaz.
+
     const oncekiOrder = get().order?.id === id ? get().order : null;
     const oncekiShelf = get().order?.id === id ? get().shelf : null;
-    // Yüklenirken önceki emri ekranda tut (boş ekran yanıp sönmesin).
+
     set({ loading: true, order: oncekiOrder, shelf: oncekiShelf });
     try {
       const taze = await api.getPickOrder(id, orderType);
-      // Taze geldiyse records'ları harmanla; boş döndüyse öncekini koru.
-      const order = taze ? mergeRecords(taze, oncekiOrder) : oncekiOrder;
+
+      let order = taze ? mergeRecords(taze, oncekiOrder) : oncekiOrder;
+
+      if (order && !order.startTime) {
+        order = { ...order, startTime: oncekiOrder?.startTime ?? caniasDateTime() };
+      }
       set({ order, loading: false });
       if (!order) return;
 
-      // Raf bilgisi ayrı çekiliyor — kalem sayısı kadar istek çıkıyor,
-      // kalem listesini bunun için bekletmeye gerek yok.
-      // fillLocations ...line ile records'ları koruyor.
       set({ locationsLoading: true });
       try {
         const rafli = await api.fillLocations(order);
-        // Bu sırada kullanıcı başka emre geçmiş olabilir; kontrol et
+
         if (get().order?.id === rafli.id) set({ order: rafli });
       } finally {
         set({ locationsLoading: false });
@@ -211,14 +163,10 @@ export const usePickingStore = create<PickingState>()(
   leaveOrder: () => {
     const order = get().order;
     if (order) {
-      // Kilidi aç (MZYClosePick) — arka planda, dönüşü bekletmeye gerek yok.
+
       api.cancelPick(order.id, order.orderType ?? "").catch(() => {});
     }
-    // OKUTULANLAR KORUNUR — order/records temizlenmez. Depocu emirden çıkıp
-    // dönünce kaldığı yerden devam etsin (localStorage'da duruyor, dönüşte
-    // mergeRecords geri takıyor). Ama SHELF SIFIRLANIR: emirden çıkınca fiziksel
-    // raf bağlamı biter; dönünce raf yeniden okutulmalı (readBarcodeSP). Aksi
-    // halde bayat shelf yüzünden raf barkodu ürün servisine düşüyor.
+
     set({ pendingProduct: null, shelf: null, batchList: [], batchError: null, batchLoading: false });
   },
 
@@ -226,8 +174,7 @@ export const usePickingStore = create<PickingState>()(
     try {
       const r = await api.readShelfBarcode(barcode.trim());
       if (!r.ok) return { ok: false, message: r.message || "Raf barkodu okunamadı" };
-      // Barkod'u servisin döndürdüğü DEPO+STOK YERİ'nden kuruyoruz (parse yok);
-      // kayıt eşleştirmesi bununla tutarlı olsun diye.
+
       set({
         shelf: {
           barcode: `${r.warehouse}$${r.stockPlace}`,
@@ -236,10 +183,6 @@ export const usePickingStore = create<PickingState>()(
         },
       });
 
-      // KISMİ SİPARİŞ GERİ YÜKLEME: yanıt, önceden konteynıra toplanmış kalem
-      // listesi döndürdüyse ve bunlar bu siparişe aitse, tek tek okutulmuş gibi
-      // otomatik kayda geçir (idempotent — tekrar okutmada şişmez). Kontrol
-      // hataları (emirde yok / fazla toplama) toplanıp çağırana döner.
       const order = get().order;
       let restoreErrors: string[] = [];
       if (order && r.restored?.length) {
@@ -263,11 +206,7 @@ export const usePickingStore = create<PickingState>()(
 
     let sonuc;
     try {
-      // Raf okutulmuşsa depo/stok yeri de gönderilir (Bora: "hafızadaki depo")
-      /* PARTİ AYRI PARAMETRE DEĞİL — Bora'nın resmi spec'i (22.07):
-         ReadBarcode parti/özel stoğu ayrı almıyor, barkodun içinden okuyor.
-         Bu yüzden burada sadece okutulan barkodu + rafı + "kaç tane"yi
-         gönderiyoruz. AVAILSTOCK o barkod için raftaki gerçek stoğu döner. */
+
       sonuc = await api.readBarcode(
         barcode.trim(),
         shelf?.warehouse ?? "",
@@ -278,11 +217,8 @@ export const usePickingStore = create<PickingState>()(
       return { kind: "error", message: e instanceof Error ? e.message : String(e) };
     }
 
-    // Karar mantığı saf fonksiyonda (pickingLogic) — test edilebilir.
     const karar = evaluateScan({ order, shelf, scan: sonuc, barcode, adet });
 
-    // Parti takipli (SPECIALSTOCK=1) → kayıt açma, parti barkodu bekle.
-    // Ürün bağlamını sakla; parti okununca ikinci ReadBarcode bununla çağrılır.
     if (karar.outcome.kind === "needsBatch") {
       const bekLineId = karar.outcome.lineId;
       set({
@@ -291,9 +227,7 @@ export const usePickingStore = create<PickingState>()(
         batchError: null,
         batchLoading: true,
       });
-      // Parti listesini çek (combobox). Parti takipli üründe partisiz availStock
-      // 0 dönebildiği için availStock>0 şartını KOYMUYORUZ — partileri her zaman
-      // listeleyip stoğunu getStock'tan gösteriyoruz. Arka planda, adımı bekletmez.
+
       api
         .getStock(sonuc.material, shelf?.warehouse ?? "", shelf?.stockPlace ?? "")
         .then((batches) => { if (get().pendingProduct?.lineId === bekLineId) set({ batchList: batches, batchLoading: false }); })
@@ -305,7 +239,6 @@ export const usePickingStore = create<PickingState>()(
       return karar.outcome;
     }
 
-    // Kabul edildiyse kaydı upsert et (aynı index varsa miktarı artır).
     if (karar.outcome.kind === "ok" && karar.record) {
       set({
         order: kayitUpsert(order, karar.outcome.lineId, karar.record, karar.mergedInto),
@@ -332,8 +265,7 @@ export const usePickingStore = create<PickingState>()(
       if (l.id !== lineId) return l;
       const records = (l.records ?? []).map((r) => {
         if (r.id !== recordId) return r;
-        // Yalnızca azaltma: mevcut değerin üstüne çıkılamaz.
-        // Alt sınır 1 — sıfırlamak kaydı anlamsız kılar, silmek gerekir.
+
         const yeni = Math.max(1, Math.min(r.qty, qty));
         return { ...r, qty: yeni };
       });
@@ -345,8 +277,7 @@ export const usePickingStore = create<PickingState>()(
   setLot: (lineId: string, lot: string, expiry?: string) => {
     const order = get().order;
     if (!order) return;
-    // Parti hem kaleme hem kayıtlara yazılır — servise satır satır
-    // giderken her kayıtta parti bilgisi bulunsun diye.
+
     const lines = order.lines.map((l) =>
       l.id === lineId
         ? {
@@ -368,13 +299,9 @@ export const usePickingStore = create<PickingState>()(
     const line = order.lines.find((l) => l.id === lineId);
     if (!line) return { ok: false, message: "Kalem bulunamadı" };
 
-    /* Bora: parti okununca, ürün barkodu + parti ile İKİNCİ ReadBarcode.
-       Partisiz ilk okumada tüm partilerin toplam stoğu döner (yüksek); parti
-       verilince o partinin GERÇEK stoğu döner (daha düşük). Miktar/adet ilk
-       okumadan (pendingProduct) gelir. */
     const barkod = pending?.barcode || line.product.barcode || `${line.product.code}$*$`;
     const adet = pending?.adet ?? 1;
-    // Parti → CANIAS biçimi YYYYAAGG (08.09.2026 → 20260908).
+
     const parti = partiToBatchnum(lot);
     let sonuc;
     try {
@@ -383,13 +310,12 @@ export const usePickingStore = create<PickingState>()(
         shelf?.warehouse ?? "",
         shelf?.stockPlace ?? "",
         adet,
-        parti // PSBATCHNUM — okutulan parti (YYYYAAGG)
+        parti
       );
     } catch (e) {
       return { ok: false, message: e instanceof Error ? e.message : String(e) };
     }
 
-    // Servis reddederse (geçersiz parti, 30 gün kuralı vb.) mesajını göster.
     if (!sonuc.ok) {
       return { ok: false, message: sonuc.message || "Parti okunamadı" };
     }
@@ -397,7 +323,6 @@ export const usePickingStore = create<PickingState>()(
       return { ok: false, message: "Bu parti bu ürüne ait değil" };
     }
 
-    // Parti ile kaydı oluştur/birleştir — "*" akışıyla aynı, batchDate=parti.
     const karar = evaluateScan({
       order,
       shelf,
@@ -428,7 +353,7 @@ export const usePickingStore = create<PickingState>()(
     if (!line) return { ok: false, message: "Kalem bulunamadı" };
     const barkod = pending?.barcode || line.product.barcode || `${line.product.code}$*$`;
     const adet = pending?.adet ?? 1;
-    // batchNum ZATEN parti no (MZYGetStock'tan geldi) — tarih dönüşümü YOK.
+
     let sonuc;
     try {
       sonuc = await api.readBarcode(barkod, shelf?.warehouse ?? "", shelf?.stockPlace ?? "", adet, batchNum);
@@ -455,9 +380,7 @@ export const usePickingStore = create<PickingState>()(
   complete: async () => {
     const order = get().order;
     if (!order) return { ok: false, message: "Emir yüklü değil" };
-    // Bu oturumda yeni okutma yoksa palet oluşturma. Mesajı ayır: zaten
-    // kaydedilmiş (MOVEDQTY>0) kalem varken "hiç toplanmadı" demek kafa
-    // karıştırıyor (ekranda 1/1 görünürken). Ona ayrı, net mesaj ver.
+
     const okutmaVar = order.lines.some((l) => (l.records ?? []).length > 0);
     if (!okutmaVar) {
       const oncedenKayitli = order.lines.some((l) => l.pickedQty > 0);
@@ -470,7 +393,7 @@ export const usePickingStore = create<PickingState>()(
     }
     set({ completing: true });
     try {
-      // 1) Palet oluştur — depo, EnterPick'ten gelen WAREHOUSETA (Bora)
+
       const hedefDepo = order.lines.find((l) => l.targetWarehouse)?.targetWarehouse ?? "";
       const kap = await api.placeInPackage(
         hedefDepo,
@@ -481,17 +404,13 @@ export const usePickingStore = create<PickingState>()(
       if (!kap.containerId) {
         return {
           ok: false,
-          // CANIAS ne dediyse onu göster (ör. "Firma:01 Tesis:100 de envanter
-          // hareketi yapacak yetkiniz bulunmamaktadır. / Konteyner Oluşturulamadı!")
+
           message: kap.message
             ? `Palet oluşturulamadı: ${kap.message}`
             : "Palet oluşturulamadı (MZYCreateContainer boş döndü). Toplama kaydedilmedi.",
         };
       }
 
-      // 2) Toplananı kaydet — paletin deposu + numarasıyla birlikte.
-      //    GEÇİCİ KİLİT: SavePick, CreateContainer yanıtı doğrulanana kadar
-      //    KAPALI (kullanıcı isteği, 23.07). Açmak için SAVEPICK_AKTIF = true yap.
       if (!SAVEPICK_AKTIF) {
         return {
           ok: false,
@@ -511,8 +430,6 @@ export const usePickingStore = create<PickingState>()(
         };
       }
 
-      // Kayıt CANIAS'a yazıldı — yerel okutmaları temizle. Yoksa aynı emre
-      // tekrar girince localStorage'daki eski kayıtlar yeniden sayılır (çift).
       set({
         order: { ...order, lines: order.lines.map((l) => ({ ...l, records: [] })) },
         shelf: null,
@@ -530,15 +447,10 @@ export const usePickingStore = create<PickingState>()(
 }),
 {
   name: "aktuel-picking", // localStorage anahtarı
-  // Yalnızca okutma verisini sakla; loading/completing gibi geçici durumlar değil.
-  // shelf PERSIST EDİLMEZ: fiziksel raf okuması her oturumda/girişte yeniden
-  // yapılmalı. Bayat shelf kalırsa, raf barkodu (D1$E3R1) yanlışlıkla ürün
-  // servisine (readBarcode) gidiyordu — okuma her zaman scanShelf→readBarcodeSP
+
   // olsun diye shelf'i saklamıyoruz.
   partialize: (s) => ({ order: s.order }),
-  // GÜVENLİK: Eski sürümde shelf persist ediliyordu; mevcut kullanıcıların
-  // localStorage'ında bayat shelf kalmış olabilir. Rehydrate'te shelf'i her
-  // zaman null'a zorla ki eski veri yüzünden bug tek sefer bile tekrar etmesin.
+
   merge: (persisted, current) => ({
     ...current,
     ...(persisted as Partial<PickingState>),
@@ -546,11 +458,8 @@ export const usePickingStore = create<PickingState>()(
   }),
 }));
 
-// Yardımcılar (linePicked pickingLogic'ten import edilip yukarıda yeniden dışa aktarıldı)
-
 export function orderProgress(order: PickOrder): number {
-  // İlerleme KALEM bazında — farklı birimler (adet/KO/Kg) toplanamaz.
-  // Tamamlanan kalem = toplanan miktar istenen miktara ulaşmış kalem.
+
   const total = order.lines.length;
   if (total === 0) return 0;
   const done = order.lines.filter((l) => linePicked(l) >= l.requestedQty).length;

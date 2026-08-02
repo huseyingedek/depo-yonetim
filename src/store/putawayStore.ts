@@ -1,20 +1,17 @@
 // -----------------------------------------------------------------------------
-// YERLEŞTİRME STORE — pickingStore'un aynası (yan etkiler: servis + state).
-// -----------------------------------------------------------------------------
-// TASARIM İSKELETİ: akış ve state hazır; canlıya bağlı OLMAYAN kısımlar:
-//   • enterPutaway → şimdilik MZYEnterPick (Bora MZYEnterPlacement verecek)
-//   • savePlacement → STUB (Bora MZYSavePlacement verecek) — kayıt henüz CANIAS'a YAZILMIYOR
-// Okuma (kaynak/hedef raf, ürün) toplamayla birebir aynı servisleri kullanır.
+
 // -----------------------------------------------------------------------------
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { api } from "../api/client";
 import type { PickOrder } from "../types";
+import { caniasDateTime } from "./pickingStore";
 import {
   validateSource,
   evaluatePlacementScan,
+  buildPlacementRecord,
   type SourceContext,
-  type TargetContext,
+  type ReadyPlacement,
   type PlacementRecord,
   type PlacementOutcome,
 } from "./putawayLogic";
@@ -23,26 +20,27 @@ interface PutawayState {
   order: PickOrder | null;
   loading: boolean;
   placing: boolean;
-  /** 2. adım: kaynak (çıkış) deposu — bir kez okutulur, saklanır. */
+
   source: SourceContext | null;
-  /** 3. adım: o an okutulan hedef raf (nereye konacak). */
-  target: TargetContext | null;
-  /** Bu oturumda yapılan yerleştirmeler (tek tek). */
+
+  ready: ReadyPlacement | null;
+
   records: PlacementRecord[];
-  /** Parti takipli üründe ürün okundu, parti bekleniyor. */
+
   pendingProduct: { barcode: string; adet: number } | null;
 
   loadOrder: (id: string, orderType?: string) => Promise<void>;
   clear: () => void;
-  /** 2. adım — KAYNAK depo okut (readBarcodeSP) + emirle doğrula. */
+
   scanSource: (barcode: string) => Promise<{ ok: boolean; message: string }>;
-  /** 3. adım — HEDEF raf okut (readBarcodeSP). */
-  scanTarget: (barcode: string) => Promise<{ ok: boolean; message: string }>;
-  clearTarget: () => void;
-  /** 3. adım — ürün okut. readBarcode'a KAYNAK depo/stok yeri gönderilir. */
+
   scanProduct: (barcode: string, adet?: number) => Promise<PlacementOutcome>;
-  /** Parti takipli üründe parti okutulunca tekrar dener. */
+
   setBatch: (batchDate: string) => Promise<PlacementOutcome>;
+
+  scanTarget: (barcode: string, adet?: number) => Promise<{ ok: boolean; message: string }>;
+
+  clearReady: () => void;
   removeRecord: (id: string) => void;
 }
 
@@ -53,84 +51,129 @@ export const usePutawayStore = create<PutawayState>()(
       loading: false,
       placing: false,
       source: null,
-      target: null,
+      ready: null,
       records: [],
       pendingProduct: null,
 
       loadOrder: async (id, orderType = "") => {
         set({ loading: true });
         try {
-          // TODO: MZYEnterPlacement gelince api.enterPutaway onu çağıracak.
           const order = await api.enterPutaway(id, orderType);
-          // Yeni emir → kaynak/hedef/kayıtlar sıfırlanır (fiziksel bağlam yeniden okutulur).
-          set({ order: order ?? null, loading: false, source: null, target: null, records: [], pendingProduct: null });
+
+          const orderWithStart = order ? { ...order, startTime: order.startTime ?? caniasDateTime() } : null;
+
+          set({ order: orderWithStart, loading: false, source: null, ready: null, records: [], pendingProduct: null });
+
+          if (orderWithStart) {
+            const rafli = await api.fillPlacementLocations(orderWithStart);
+            if (get().order?.id === rafli.id) set({ order: rafli });
+          }
         } catch {
           set({ order: null, loading: false });
         }
       },
 
-      clear: () => set({ order: null, source: null, target: null, records: [], pendingProduct: null }),
+      clear: () => set({ order: null, source: null, ready: null, records: [], pendingProduct: null }),
 
       scanSource: async (barcode) => {
         const order = get().order;
         if (!order) return { ok: false, message: "Emir yüklü değil" };
         const r = await api.readShelfBarcode(barcode.trim());
         if (!r.ok) return { ok: false, message: r.message || "Kaynak depo okunamadı" };
-        // Emrin kaynak depo/rafıyla (WAREHOUSEFA/FRONTAREA) doğrula.
+        // Okutulan WAREHOUSE+STOCKPLACE, emrin WAREHOUSEFA+FRONTAREA'sıyla aynı olmalı.
         const v = validateSource(order, r.warehouse, r.stockPlace);
         if (!v.ok) return { ok: false, message: v.message };
         set({ source: { warehouse: r.warehouse, stockPlace: r.stockPlace } });
         return { ok: true, message: "" };
       },
 
-      scanTarget: async (barcode) => {
-        const r = await api.readShelfBarcode(barcode.trim());
-        if (!r.ok) return { ok: false, message: r.message || "Hedef raf okunamadı" };
-        set({ target: { barcode: barcode.trim(), warehouse: r.warehouse, stockPlace: r.stockPlace } });
-        return { ok: true, message: "" };
-      },
-
-      clearTarget: () => set({ target: null }),
-
       scanProduct: async (barcode, adet = 1) => {
-        const { order, source, target } = get();
+        const { order, source } = get();
         if (!order) return { kind: "error", message: "Emir yüklü değil" };
         if (!source) return { kind: "error", message: "Önce kaynak depoyu okutun." };
-        if (!target) return { kind: "noTarget", message: "Önce hedef rafı okutun." };
         const kod = barcode.trim();
-        // ÖNEMLİ (Bora): readBarcode'a bu adımda okutulan hedef raf DEĞİL,
-        // 2. adımdaki KAYNAK depo/stok yeri gönderilir → availStock = kaynak stok.
+
         const scan = await api.readBarcode(kod, source.warehouse, source.stockPlace, adet);
-        const { outcome, record } = evaluatePlacementScan({ order, source, target, scan, adet });
+
+        const oturumKayit = get().records.filter((r) => r.material === scan.material).reduce((s, r) => s + r.qty, 0);
+        const yerlesen = Math.max(order.lines.find((l) => l.product.code === scan.material)?.pickedQty ?? 0, oturumKayit);
+        const { outcome, ready } = evaluatePlacementScan({ order, source, scan, adet, alreadyPlaced: yerlesen });
         if (outcome.kind === "needsBatch") {
           set({ pendingProduct: { barcode: kod, adet } });
           return outcome;
         }
-        if (outcome.kind === "ok" && record) {
-          // TASARIM: gerçekte her okutma anında MZYSavePlacement ile CANIAS'a yazılacak.
-          // TODO: const s = await api.savePlacement({...record, order}); if (!s.ok) hata göster.
-          set({ records: [...get().records, record], pendingProduct: null });
-        }
+        if (outcome.kind === "ok" && ready) set({ ready, pendingProduct: null });
         return outcome;
       },
 
       setBatch: async (batchDate) => {
-        const { pendingProduct: p, order, source, target } = get();
+        const { pendingProduct: p, order, source } = get();
         if (!p) return { kind: "error", message: "Bekleyen ürün yok" };
-        if (!order || !source || !target) return { kind: "error", message: "Bağlam eksik (emir/kaynak/hedef)" };
+        if (!order || !source) return { kind: "error", message: "Bağlam eksik (emir/kaynak)" };
         const scan = await api.readBarcode(p.barcode, source.warehouse, source.stockPlace, p.adet, batchDate);
-        const { outcome, record } = evaluatePlacementScan({ order, source, target, scan, adet: p.adet, batchDate });
-        if (outcome.kind === "ok" && record) {
-          set({ records: [...get().records, record], pendingProduct: null });
-        }
+        const yerlesen = order.lines.find((l) => l.product.code === scan.material)?.pickedQty ?? 0;
+        const { outcome, ready } = evaluatePlacementScan({ order, source, scan, adet: p.adet, batchDate, alreadyPlaced: yerlesen });
+        if (outcome.kind === "ok" && ready) set({ ready, pendingProduct: null });
         return outcome;
       },
+
+      scanTarget: async (barcode, adet) => {
+        const { order, source, ready } = get();
+        if (!order || !source) return { ok: false, message: "Bağlam eksik (emir/kaynak)" };
+        if (!ready) return { ok: false, message: "Önce ürünü (ve gerekiyorsa partisini) okutun." };
+        const line = order.lines.find((l) => l.product.code === ready.material);
+        // Yerleştirilen = CANIAS (pickedQty) ile bu oturum kayıtlarının BÜYÜĞÜ —
+        // EnterPlacement tazelemesi boş dönse bile doğru kalan hesaplanır.
+        const oturumKayit = get().records.filter((r) => r.material === ready.material).reduce((s, r) => s + r.qty, 0);
+        const yerlesen = Math.max(line?.pickedQty ?? 0, oturumKayit);
+        const kalan = (line?.requestedQty ?? ready.qty) - yerlesen;
+        if (kalan <= 0) return { ok: false, message: "Bu kalem zaten tamamlandı" };
+        const istenen = adet && adet > 0 ? Math.floor(adet) : kalan; // boşsa kalanın tamamı
+        // FAZLA MAL: girilen miktar kalandan büyükse SavePlacement HİÇ çağrılmaz.
+        if (istenen > kalan) {
+          return { ok: false, message: `Fazla mal — en fazla ${kalan} yerleştirebilirsiniz (kalan ${kalan})` };
+        }
+        const miktar = istenen;
+        const r = await api.readShelfBarcode(barcode.trim());
+        if (!r.ok) return { ok: false, message: r.message || "Hedef raf okunamadı" };
+        const target = { barcode: barcode.trim(), warehouse: r.warehouse, stockPlace: r.stockPlace };
+        const record = buildPlacementRecord(ready, source, target, miktar);
+        const s = await api.savePlacement({
+          order,
+          itemNo: ready.lineId, // PIITEMNO
+          material: ready.material, // PSMATERIAL
+          targetWarehouse: target.warehouse,
+          targetShelf: target.stockPlace,
+          specialStock: ready.specialStock,
+          lot: ready.lot,
+          qty: miktar,
+          startTime: order.startTime, // PDSTARTTIME
+        });
+        if (!s.ok) return { ok: false, message: s.message || "Yerleştirme kaydedilemedi" };
+
+        const kalanYeni = kalan - miktar;
+        set({ records: [...get().records, record], ready: kalanYeni > 0 ? ready : null });
+
+        try {
+          const taze = await api.enterPutaway(order.id, order.orderType ?? "");
+          if (taze && get().order?.id === taze.id) {
+            const oncekiOneri = new Map((get().order?.lines ?? []).map((l) => [l.id, l.suggestions]));
+            const yeniLines = taze.lines.map((l) => ({ ...l, suggestions: oncekiOneri.get(l.id) }));
+            set({ order: { ...taze, startTime: get().order?.startTime, lines: yeniLines } });
+          }
+        } catch {
+
+        }
+        return { ok: true, message: "" };
+      },
+
+      clearReady: () => set({ ready: null, pendingProduct: null }),
 
       removeRecord: (id) => set({ records: get().records.filter((r) => r.id !== id) }),
     }),
     {
       name: "aktuel-putaway", // localStorage anahtarı
-      // Yalnızca emri sakla; kaynak/hedef fiziksel bağlam her girişte yeniden okutulur.
+
       partialize: (s) => ({ order: s.order }),
     }
   )

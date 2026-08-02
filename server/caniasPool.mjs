@@ -1,19 +1,15 @@
 // -----------------------------------------------------------------------------
-// CANIAS Havuz Adaptörü — sessionPool'u GERÇEK CANIAS'a bağlar.
-//   • max 5 / min 1 oturum  • keepAlive (heartbeat)  • reconcile (MZYActiveUserList)
-//   • ölü oturum tespiti → re-login  • timeout  • orphan recover
-// Kullanım (server/index.js): const pool = createCaniasPool(); await pool.run(serviceId, params)
+
 // -----------------------------------------------------------------------------
 import soap from "soap";
 import { createPool } from "./sessionPool.mjs";
 
-// ---- Ayarlar (env ile override edilebilir) ----
-const LIMIT = Number(process.env.POOL_LIMIT || 5);        // max eşzamanlı oturum (lisansa göre)
+const LIMIT = Number(process.env.POOL_LIMIT || 5);
 const MIN = Number(process.env.POOL_MIN || 1);            // en az sıcak
-const IDLE_MS = Number(process.env.POOL_IDLE_MS || 60000);        // fazla oturum bu kadar boştaysa logout (min'e kadar)
+const IDLE_MS = Number(process.env.POOL_IDLE_MS || 60000);
 const CALL_TIMEOUT_MS = Number(process.env.POOL_CALL_TIMEOUT_MS || 20000);
-const BREAKER = Number(process.env.POOL_BREAKER || 5);            // kaç art arda bağlantı hatasında devre açılır
-const COOLDOWN_MS = Number(process.env.POOL_COOLDOWN_MS || 15000); // devre açıkken hızlı-fail süresi, sonra tek yoklama
+const BREAKER = Number(process.env.POOL_BREAKER || 5);
+const COOLDOWN_MS = Number(process.env.POOL_COOLDOWN_MS || 15000);
 const KEEPALIVE_MS = Number(process.env.POOL_KEEPALIVE_MS || 90000);  // min-1'i canlı tut (<3dk)
 const RECONCILE_MS = Number(process.env.POOL_RECONCILE_MS || 30000);  // CANIAS gerçeğiyle uzlaş
 const MZY_COMPANY = process.env.T_COMPANY || "01";
@@ -21,7 +17,6 @@ const MZY_PLANT = process.env.T_PLANT || "100";
 
 const YAZAN_SERVIS = new Set(["MZYSavePick", "MZYCreateContainer"]);
 
-/* ---- SOAP yardımcıları (index.js ile aynı mantık) ---- */
 function val(x) {
   if (x === null || x === undefined) return x;
   if (Array.isArray(x)) return x.map(val);
@@ -54,7 +49,6 @@ export function createCaniasPool(env = process.env) {
   let clientPromise = null;
   const getClient = () => (clientPromise ??= soap.createClientAsync(CANIAS_WSDL_URL, { timeout: CALL_TIMEOUT_MS }));
 
-  // ---- CANIAS primitifleri (havuza enjekte edilir) ----
   async function login() {
     const client = await getClient();
     const [res] = await client.loginAsync({
@@ -70,7 +64,7 @@ export function createCaniasPool(env = process.env) {
   }
   async function logout(sid) {
     const client = await getClient();
-    try { await client.logoutAsync({ p_strSessionId: sid }); } catch { /* logout hatası yutulur */ }
+    try { await client.logoutAsync({ p_strSessionId: sid }); } catch { }
   }
   async function callSvc(sid, serviceId, params) {
     const client = await getClient();
@@ -80,8 +74,7 @@ export function createCaniasPool(env = process.env) {
     const out = val(res?.callIASServiceReturn ?? res);
     const raw = typeof out === "string" ? out : JSON.stringify(out ?? "");
     const bos = !String(raw ?? "").trim();
-    // Ölü oturum: yazan-olmayan serviste TAMAMEN boş yanıt → THROW (havuz re-login yapsın).
-    // Yazan serviste (SavePick/CreateContainer) boş dönebilir → retry YOK (çift kayıt riski).
+
     if (bos && !YAZAN_SERVIS.has(serviceId)) throw Object.assign(new Error("session invalid (empty)"), { code: "SESSION" });
     let data = null;
     if (raw) { try { data = JSON.parse(raw); } catch { data = { raw }; } }

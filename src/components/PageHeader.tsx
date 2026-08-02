@@ -6,12 +6,11 @@ interface Props {
   title: string;
   subtitle?: string;
   backTo?: string; // verilirse geri butonu gösterilir
-  /** Verilirse geri butonu bunu çağırır (backTo yerine). Ör. çıkarken ClosePick. */
+
   onBack?: () => void;
   right?: ReactNode;
 }
 
-/** İçerik alanı başlığı (web + mobil uyumlu). */
 export default function PageHeader({ title, subtitle, backTo, onBack, right }: Props) {
   const navigate = useNavigate();
   const geriGoster = onBack || backTo;

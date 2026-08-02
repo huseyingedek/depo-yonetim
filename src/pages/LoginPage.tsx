@@ -26,7 +26,7 @@ export default function LoginPage() {
     try {
       // MZYCheckUser — depocu doğrulaması
       const user = await api.checkUser(username.trim(), password);
-      // DİKKAT: 1. parametre CANIAS kullanıcı adı olmalı — PWORKER buradan gider.
+
       login(username.trim(), user?.displayName);
       navigate("/home", { replace: true });
     } catch (err) {
@@ -39,7 +39,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-gradient-to-br from-ink-900 via-brand-900 to-brand-950 p-4">
       <div className="w-full max-w-sm">
-        {/* Marka */}
+        {}
         <div className="mb-8 flex flex-col items-center text-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20 backdrop-blur">
             <Boxes className="h-8 w-8 text-white" />
@@ -48,7 +48,7 @@ export default function LoginPage() {
           <p className="text-sm font-medium text-brand-200">{t("app.name")}</p>
         </div>
 
-        {/* Form kartı */}
+        {}
         <form onSubmit={submit} className="rounded-3xl bg-surface p-6 shadow-soft">
           <h2 className="text-lg font-bold text-fg">{t("login.welcome")}</h2>
           <p className="mb-5 text-sm text-subtle">{t("login.subtitle")}</p>

@@ -1,29 +1,27 @@
-// WMS / CANIAS (Mizoye) frontend yapılandırması.
-// Frontend yalnızca backend proxy adresini bilir; WS kimlik bilgisi server tarafındadır.
+
 
 export const wmsConfig = {
   baseUrl: import.meta.env.VITE_WMS_BASE_URL ?? "", // backend proxy adresi
 };
 
-/** Mizoye servis adları (proxy route'ları da bu adlarla). */
 export const SERVICES = {
   checkUser: "MZYCheckUser", // Kullanıcı kontrol
   listingPick: "MZYListingPick", // Toplama emirleri listesi
-  enterPick: "MZYEnterPick", // Emri toplamaya BAŞLA (+ kalem detayı)
+  enterPick: "MZYEnterPick",
   closePick: "MZYClosePick", // Toplamaktan VAZGEÇ (tamamlama değil!)
   createContainer: "MZYCreateContainer", // Konteyner oluştur
-  readBarcode: "MZYReadBarcode", // ÜRÜN barkodu (5 param, MATERIAL döner)
-  readBarcodeSP: "MZYReadBarcodeSP", // RAF barkodu — SP = Stock Place (3 param)
+  readBarcode: "MZYReadBarcode",
+  readBarcodeSP: "MZYReadBarcodeSP",
   suggestPick: "MZYCrtSuggestListPickFromSP", // Stok yerinden toplama önerisi
-  getStock: "MZYGetStock", // Ürün parti/stok listesi (TBLSTOCK: BATCHNUM + AVAILSTOCK)
-  savePick: "MZYSavePick", // Toplamayı kaydet (MOVEDQTY) — parametreleri bekleniyor
-  // --- YERLEŞTİRME (putaway) ---
-  // Listing aynı: MZYListingPick ama PIISPICK=0. Aşağıdakiler Bora'dan gelecek;
-  // gelene kadar enterPlacement şimdilik MZYEnterPick'e düşer, savePlacement STUB.
-  enterPlacement: "MZYEnterPlacement", // emri yerleştirmeye başla (Bora verecek)
-  savePlacement: "MZYSavePlacement", // yerleştirmeyi kaydet (Bora verecek — HENÜZ BAĞLI DEĞİL)
-  // Seçim listeleri — dokümanda var ama sunucuda "web service bulunamadı"
-  // dönüyordu; adları/erişimi Bora ile teyit edilecek.
+  getStock: "MZYGetStock",
+  savePick: "MZYSavePick",
+
+  listingPlacement: "MZYListingPlacement", // yerleştirme emirleri listesi
+  enterPlacement: "MZYEnterPlacement",
+  closePlacement: "MZYClosePlacement", // yerleştirmeden VAZGEÇ
+  savePlacement: "MZYSavePlacement",
+  suggestPlacement: "MZYCrtSuggestListPlacement",
+
   getCompany: "GetCompany", // parametresiz
   getPlant: "GetPlant", // PSCOMPANY
   getWarehouse: "GetWarehouse", // PSCOMPANY, PSPLANT

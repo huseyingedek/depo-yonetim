@@ -1,7 +1,5 @@
 // -----------------------------------------------------------------------------
-// SessionPool — CANIAS'tan BAĞIMSIZ, enjekte edilebilir oturum havuzu.
-// Bağımlılıklar dışarıdan verilir: login, logout, callSvc, validate, now.
-// Değişmezler: 1 <= boyut <= limit; bir token aynı anda TEK çağrı.
+
 // -----------------------------------------------------------------------------
 export function createPool({
   login, logout, callSvc, validate,
@@ -9,12 +7,10 @@ export function createPool({
   limit = 5, min = 1, idleMs = 5000, callTimeoutMs = 500,
   breakerThreshold = 5, cooldownMs = 10000,
 }) {
-  const pool = [];        // { sid, busy, lastUsed }
-  const waiters = [];     // { resolve, reject } — hepsi meşgulse bekleyenler
-  const persisted = new Set(); // "token log dosyası" karşılığı (restart recovery)
+  const pool = [];
+  const waiters = [];
+  const persisted = new Set();
 
-  // Devre kesici: art arda bağlantı hatasında "aç" (hızlı fail, CANIAS'ı yorma),
-  // cooldown sonrası tek yoklama (half-open), başarıda "kapat".
   let ardArdaHata = 0;
   let devreAcik = false;
   let acilmaZamani = 0;
@@ -51,8 +47,8 @@ export function createPool({
         slot.sid = await withTimeout(login(), callTimeoutMs, "login");
         persisted.add(slot.sid);
       } catch (e) {
-        pool.splice(pool.indexOf(slot), 1); // login patladı → slotu geri al (limit aşılmasın)
-        const w = waiters.shift();          // bekleyen varsa denesin (o da patlarsa reject olur)
+        pool.splice(pool.indexOf(slot), 1);
+        const w = waiters.shift();
         if (w) acquire().then(w.resolve, w.reject);
         throw e;
       }
@@ -75,7 +71,7 @@ export function createPool({
   }
 
   async function run(serviceId, params, _retry = true) {
-    // Devre açık + cooldown dolmadıysa → HIZLI FAIL (20sn beklemeden, CANIAS'ı yormadan)
+
     if (devreAcik && now() - acilmaZamani < cooldownMs) {
       throw Object.assign(new Error("CANIAS'a ulaşılamıyor (devre açık)"), { code: "CIRCUIT" });
     }
@@ -83,7 +79,7 @@ export function createPool({
     try {
       p = await acquire();
     } catch (e) {
-      hataKaydet(e);                                 // login patladı → bağlantı hatası
+      hataKaydet(e);
       throw e;
     }
     try {
@@ -94,18 +90,14 @@ export function createPool({
     } catch (e) {
       const sessionErr = /session|invalid/i.test(String(e?.message));
       const zamanAsimi = e?.code === "TIMEOUT";
-      // ÖNEMLİ: timeout'ta alttaki çağrı ARKADA hâlâ çalışıyor olabilir. Tokeni
-      // havuza geri verirsek başka istek kapar → AYNI oturuma paralel çağrı → liste
-      // bozulması. Bu yüzden timeout'ta da tokeni ÖLDÜR. Ama RETRY YAPMA (yazma
-      // servisinde çift kayıt olmasın — sadece ölü-oturumda taze dene).
+
       release(p, sessionErr || zamanAsimi);
-      if (sessionErr && _retry) return run(serviceId, params, false); // ölü oturum → 1 kez taze dene
-      hataKaydet(e);                                 // timeout/diğer → bağlantı hatası say
+      if (sessionErr && _retry) return run(serviceId, params, false);
+      hataKaydet(e);
       throw e;
     }
   }
 
-  // Boştaları min'e kadar logout et
   async function reap() {
     const t = now();
     for (const p of [...pool]) {
@@ -118,12 +110,11 @@ export function createPool({
     }
   }
 
-  // CANIAS gerçeğiyle uzlaştır: listede olmayan (dış kapatılan) boştaları at
   async function reconcile() {
     if (!validate) return;
     let liste;
     try { liste = await validate(); } catch { return; }
-    // GÜVENLİK: boş/hatalı liste gelirse DOKUNMA (yanlışlıkla hepsini atma).
+
     if (!Array.isArray(liste) || liste.length === 0) return;
     const aktif = new Set(liste);
     for (const p of [...pool]) {
@@ -134,7 +125,6 @@ export function createPool({
     }
   }
 
-  // min sıcak tokenı idle-ölmekten koru (heartbeat)
   async function keepAlive(svc, params) {
     for (const p of pool) {
       if (!p.busy && p.sid) {
@@ -143,7 +133,6 @@ export function createPool({
     }
   }
 
-  // Restart sonrası: kalıcı listedeki orphan oturumları CANIAS'la uzlaştırıp temizle
   async function recover(persistedSids) {
     if (!validate) return;
     let aktif;

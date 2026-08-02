@@ -6,11 +6,6 @@ import BarcodeScanner from "../../components/BarcodeScanner";
 import { api } from "../../api/client";
 import type { BarcodeResult, StockBatch } from "../../types";
 
-/**
- * ÜRÜN SORGULAMA — barkod okut, stok var mı/parti listesi gör.
- * Akış (Bora): raf okut (readBarcodeSP) → ürün okut (readBarcode) → readBarcode
- * olumlu + availStock>0 ise MZYGetStock ile parti listesi (BATCHNUM + AVAILSTOCK).
- */
 export default function InquiryPage() {
   const { t } = useTranslation();
   const [shelf, setShelf] = useState<{ warehouse: string; stockPlace: string } | null>(null);
@@ -25,14 +20,14 @@ export default function InquiryPage() {
     setBusy(true);
     setError(null);
     try {
-      // 1) Raf yoksa: raf okut
+
       if (!shelf) {
         const r = await api.readShelfBarcode(barkod);
         if (!r.ok) { setError(r.message || "Raf okunamadı"); return; }
         setShelf({ warehouse: r.warehouse, stockPlace: r.stockPlace });
         return;
       }
-      // 2) Ürün okut → readBarcode → availStock>0 ise parti listesi (getStock)
+
       setProduct(null);
       setBatches([]);
       const scan = await api.readBarcode(barkod, shelf.warehouse, shelf.stockPlace, 1);
@@ -57,7 +52,7 @@ export default function InquiryPage() {
       <PageHeader title={t("inquiry.title")} subtitle="Barkod okut → stok / parti" backTo="/home" />
 
       <div className="grid gap-6 lg:grid-cols-[400px_1fr]">
-        {/* Okutma */}
+        {}
         <div className="lg:sticky lg:top-24 lg:self-start">
           <div className="card p-4">
             {shelf ? (
@@ -78,7 +73,7 @@ export default function InquiryPage() {
           </div>
         </div>
 
-        {/* Sonuç */}
+        {}
         <div>
           {!product ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-surface py-16 text-center">
@@ -87,7 +82,7 @@ export default function InquiryPage() {
             </div>
           ) : (
             <div className="animate-slide-up space-y-4">
-              {/* Ürün + stok var/yok */}
+              {}
               <div className="card p-5">
                 <div className="flex items-start gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan-100">
@@ -106,7 +101,7 @@ export default function InquiryPage() {
                 </div>
               </div>
 
-              {/* Parti listesi */}
+              {}
               {batches.length > 0 && (
                 <div className="card p-5">
                   <div className="mb-3 flex items-center justify-between">

@@ -5,7 +5,7 @@ import { Check, CheckCircle2, Loader2, Send, PackagePlus, AlertTriangle } from "
 import PageHeader from "../../components/PageHeader";
 import ProgressRing from "../../components/ProgressRing";
 import { usePickingStore, orderProgress, orderTotals } from "../../store/pickingStore";
-import { qtyRound } from "../../store/pickingLogic";
+import { qtyRound, linePicked } from "../../store/pickingLogic";
 
 export default function PickingSummaryPage() {
   const { t } = useTranslation();
@@ -18,8 +18,7 @@ export default function PickingSummaryPage() {
   const [done, setDone] = useState(false);
   const [caniasRef, setCaniasRef] = useState("");
   const [hata, setHata] = useState<string | null>(null);
-  // Kayıt başarılı olunca okutmalar temizleniyor; özet ekranı 0 göstermesin
-  // diye tamamlanma anındaki değerleri saklıyoruz.
+
   const [ozet, setOzet] = useState({ picked: 0, missing: 0, lineCount: 0 });
 
   useEffect(() => {
@@ -33,12 +32,11 @@ export default function PickingSummaryPage() {
 
   const handleComplete = async () => {
     setHata(null);
-    // Kayıttan ÖNCE topla — complete() başarıda okutmaları temizliyor.
+
     const kayitOzeti = orderTotals(order);
     const r = await complete();
     if (!r.ok) {
-      // Palet oluşmadıysa kayıt da yapılmadı — depocu emre geri dönüp
-      // tekrar denesin, "tamamlandı" ekranı gösterilmez.
+
       setHata(r.message);
       return;
     }
@@ -82,13 +80,35 @@ export default function PickingSummaryPage() {
     );
   }
 
+  const paketButonu = (
+    <button
+      onClick={handleComplete}
+      disabled={completing}
+      className="btn-primary inline-flex items-center gap-2 whitespace-nowrap px-4 py-2.5 text-sm"
+    >
+      {completing ? (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" /> Gönderiliyor…
+        </>
+      ) : (
+        <>
+          <PackagePlus className="h-4 w-4" /> {t("picking.placeInPackage")}
+        </>
+      )}
+    </button>
+  );
+
   return (
     <div className="mx-auto max-w-3xl p-4 lg:p-8">
-      <PageHeader
-        title={t("picking.orderSummary")}
-        subtitle={order.id}
-        backTo={`/picking/${order.id}?type=${order.orderType ?? ""}`}
-      />
+      {}
+      <div className="sticky top-0 z-20 -mx-4 mb-2 border-b border-line bg-surface/95 px-4 pt-4 backdrop-blur lg:-mx-8 lg:px-8">
+        <PageHeader
+          title={t("picking.orderSummary")}
+          subtitle={order.id}
+          backTo={`/picking/${order.id}?type=${order.orderType ?? ""}`}
+          right={paketButonu}
+        />
+      </div>
 
       <div className="card p-6">
         <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-center sm:gap-10">
@@ -102,24 +122,28 @@ export default function PickingSummaryPage() {
       </div>
 
       <div className="mt-5 space-y-2">
-        {order.lines.map((line) => {
-          const lineDone = line.pickedQty >= line.requestedQty;
-          return (
-            <div key={line.id} className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-card">
-              <div
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                  lineDone ? "bg-emerald-100" : "bg-rose-100"
-                }`}
-              >
-                <Check className={`h-4 w-4 ${lineDone ? "text-emerald-600" : "text-rose-400"}`} />
+        {}
+        {order.lines
+          .filter((line) => linePicked(line) > 0)
+          .map((line) => {
+            const toplanan = linePicked(line);
+            const lineDone = toplanan >= line.requestedQty;
+            return (
+              <div key={line.id} className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-card">
+                <div
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                    lineDone ? "bg-emerald-100" : "bg-amber-100"
+                  }`}
+                >
+                  <Check className={`h-4 w-4 ${lineDone ? "text-emerald-600" : "text-amber-500"}`} />
+                </div>
+                <p className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{line.product.name}</p>
+                <span className="font-mono text-sm font-bold text-fg">
+                  {qtyRound(toplanan)}/{qtyRound(line.requestedQty)}
+                </span>
               </div>
-              <p className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{line.product.name}</p>
-              <span className="font-mono text-sm font-bold text-fg">
-                {qtyRound(line.pickedQty)}/{qtyRound(line.requestedQty)}
-              </span>
-            </div>
-          );
-        })}
+            );
+          })}
       </div>
 
       {hata && (
@@ -137,21 +161,6 @@ export default function PickingSummaryPage() {
         </div>
       )}
 
-      <button
-        onClick={handleComplete}
-        disabled={completing}
-        className="btn-primary btn-lg mt-6 w-full sm:w-auto sm:px-10"
-      >
-        {completing ? (
-          <>
-            <Loader2 className="h-5 w-5 animate-spin" /> {t("picking.sentToCanias")}...
-          </>
-        ) : (
-          <>
-            <PackagePlus className="h-5 w-5" /> {t("picking.placeInPackage")}
-          </>
-        )}
-      </button>
     </div>
   );
 }

@@ -1,17 +1,9 @@
 // -----------------------------------------------------------------------------
-// YÜK TESTİ — gerçek CANIAS'a, havuz üzerinden. "Kaç saniyede yanıt dönüyor?"
+
 // -----------------------------------------------------------------------------
-// Çalıştır (VPN açık, kendi makinende):
+
 //   cd server
-//   node loadtest.mjs                 → 50 eşzamanlı istek (varsayılan)
-//   node loadtest.mjs --n=100         → 100 eşzamanlı istek
-//   node loadtest.mjs --barcode=8690… → ayrıca ÜRÜN barkodu okuma testi
-//
-// Kimlik: server/.env'deki WMS_USER / WMS_PASSWORD ile login olur (havuz).
-//   .env'de bunlar olmalı:  WMS_USER=WMSWSUSER   WMS_PASSWORD=1WmS00*
-//
-// Servisler app ile birebir aynı: MZYListingPick (emir/ürün çek), MZYReadBarcode.
-// Hepsi READ — veriye dokunmaz. Havuz max 5 eşzamanlı oturum kullanır.
+
 // -----------------------------------------------------------------------------
 import dotenv from "dotenv";
 import { performance } from "node:perf_hooks";
@@ -33,7 +25,6 @@ const WH = arg("--warehouse", "D1");
 const WK = arg("--worker", process.env.WMS_USER || "WMSWSUSER");
 const BARCODE = arg("--barcode", "");
 
-// app'teki (client.ts) MZYListingPick isteğiyle BİREBİR aynı
 const listArgs = {
   PSCOMPANY: CO, PSPLANT: PL, PSWORKER: WK,
   PISTATUS: 3, PIISPICK: 1,
@@ -69,7 +60,6 @@ async function olc(fn) {
 console.log("========== YÜK TESTİ ==========");
 console.log(`Hedef: ${process.env.CANIAS_APPSERVER || "(env)"} | Kullanıcı: ${WK} | Firma/Tesis: ${CO}/${PL}\n`);
 
-// ---- 1) LOGIN + ürünleri çek (doğrulama) ----
 console.log("[1] Login + toplama emirleri çekiliyor...");
 let ornek = [], adet = 0;
 const ilk = await olc(async () => {
@@ -88,7 +78,6 @@ if (ornek.length) {
   console.log("   örnek emirler:", ornek.map((o) => o.ORDERNUM || o.PONUM || JSON.stringify(o).slice(0, 40)).join(" | "));
 }
 
-// ---- 2) TEK KULLANICI latency (10 ardışık istek) ----
 console.log("\n[2] TEK istek latency (10 ardışık — tek depocu gibi):");
 const seri = [];
 for (let i = 0; i < 10; i++) {
@@ -97,7 +86,6 @@ for (let i = 0; i < 10; i++) {
 }
 rapor("MZYListingPick (ardışık)", seri);
 
-// ---- 3) YÜK: N eşzamanlı istek ----
 console.log(`\n[3] YÜK: ${N} EŞZAMANLI istek (havuz max 5 oturum paylaştırır):`);
 const t0 = performance.now();
 const sonuc = await Promise.all(Array.from({ length: N }, () => olc(() => pool.run("MZYListingPick", listArgs))));
@@ -109,7 +97,6 @@ if (sureler.length) rapor("her istek (eşzamanlı yükte)", sureler);
 const hatalar = sonuc.filter((x) => !x.ok);
 if (hatalar.length) console.log(`   ⚠ ${hatalar.length} hata, örnek: ${hatalar[0].err}`);
 
-// ---- 4) (opsiyonel) BARKOD okuma testi ----
 if (BARCODE) {
   const bcArgs = { PSCOMPANY: CO, PSPLANT: PL, PSWAREHOUSE: WH, PSSTOCKPLACE: "", PSBARCODE: BARCODE, PDCQUANTITY: 1 };
   console.log(`\n[4] BARKOD okuma testi (${BARCODE}):`);

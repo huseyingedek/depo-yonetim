@@ -18,11 +18,9 @@ export default function PickingListPage() {
   const [error, setError] = useState<string | null>(null);
   const [kamera, setKamera] = useState(false);
   const [taramaHatasi, setTaramaHatasi] = useState<string | null>(null);
-  // Öncelik kilidi uyarısı — daha öncelikli (başlanmamış) emir varken giriş engeli.
+
   const [oncelikUyari, setOncelikUyari] = useState<string | null>(null);
 
-  // React StrictMode geliştirmede efekti iki kez çalıştırır; bu bekçi
-  // ağa ikinci bir istek çıkmasını engeller.
   const istendi = useRef(false);
 
   useEffect(() => {
@@ -50,18 +48,10 @@ export default function PickingListPage() {
   const pg = usePagination(filtered, 9);
   useEffect(() => pg.reset(), [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /**
-   * Emri aç. Emir tipi de taşınmalı — MZYEnterPick PSORDERTYPE olmadan bulamıyor.
-   *
-   * ÖNCELİK KİLİDİ: Daha öncelikli (priority değeri KÜÇÜK) ve hiç başlanmamış
-   * bir emir varken bu emre girilemez — personel önce onu toplamalı. Kontrol
-   * ekrandaki (bellekteki) liste üzerinden yapılır; engel varsa uyarı gösterilip
-   * giriş yapılmaz. Engel yoksa uyarı temizlenir ve detaya geçilir.
-   */
   const emreGir = (o: PickOrder) => {
     const engel = blockingHigherPriorityOrders(o, orders);
     if (engel.length) {
-      // Sade mesaj (Hüseyin): sipariş no / öncelik / "N sipariş daha" gösterilmez.
+
       setOncelikUyari(t("picking.priorityLock"));
       return;
     }
@@ -69,16 +59,6 @@ export default function PickingListPage() {
     navigate(`/picking/${o.id}?type=${encodeURIComponent(o.orderType ?? "")}`);
   };
 
-  /**
-   * Sipariş barkodu okutuldu.
-   *
-   * Depocu yüzlerce emir arasında numara aramasın diye: okutulan kod
-   * emir numarasıyla (ORDERNUM) ya da referansla (STEXT/DOCNUM) eşleşirse
-   * doğrudan o emrin detayına giriyoruz.
-   *
-   * Barkod okuyucular başa sıfır ekleyebildiği için baştaki sıfırlar atılarak
-   * da karşılaştırıyoruz.
-   */
   const barkodOkundu = (code: string) => {
     const kod = code.trim().toLowerCase();
     if (!kod) return;
@@ -95,8 +75,7 @@ export default function PickingListPage() {
       emreGir(emir);
       return;
     }
-    // Emir listede yok: kapanmış, başkasına atanmış ya da barkod başka bir şeye ait.
-    // Sessizce yutmak yerine sebebini yazıyoruz.
+
     setTaramaHatasi(`${code} — bu numarada açık emir bulunamadı`);
   };
 
@@ -115,7 +94,7 @@ export default function PickingListPage() {
               placeholder={t("picking.searchOrder")}
               className="field-input w-72 pl-11 pr-12"
             />
-            {/* Sipariş barkodunu okut — aramadan doğrudan emre girer */}
+            {}
             <button
               type="button"
               onClick={() => setKamera(true)}
@@ -129,7 +108,7 @@ export default function PickingListPage() {
         }
       />
 
-      {/* Mobil arama */}
+      {}
       <div className="relative mb-5 sm:hidden">
         <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
         <input
@@ -165,8 +144,7 @@ export default function PickingListPage() {
         </div>
       )}
 
-      {/* Öncelik kilidi — daha öncelikli (başlanmamış) emir toplanmadan bu emre
-          girilemez. Modal: liste aşağı kaydırılmış olsa da mesaj her zaman görünür. */}
+      {}
       {oncelikUyari && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-ink-900/40 p-0 sm:items-center sm:p-4"
@@ -229,9 +207,7 @@ export default function PickingListPage() {
         <>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {pg.pageItems.map((o) => {
-            // Kalem sayısı/miktar burada YOK — bu bilgi MZYEnterPick'ten geliyor,
-            // liste servisi (MZYListingPick) döndürmüyor. Uydurma sayı basmıyoruz.
-            // Durum: 0 açık → Yeni, 1 kısmi → Kısmi toplandı, 2 kapandı → Toplandı
+
             const durumEtiket =
               o.status === "closed"
                 ? t("picking.status.closed")
@@ -253,7 +229,7 @@ export default function PickingListPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-2">
-                      {/* Öncelik — küçük olan önce toplanır, liste buna göre sıralı */}
+                      {}
                       {o.priority !== undefined && (
                         <span
                           className="chip bg-slate-100 font-mono text-slate-600"
@@ -270,7 +246,7 @@ export default function PickingListPage() {
                   <ChevronRight className="mt-1 h-5 w-5 text-subtle" />
                 </div>
 
-                {/* Sadece servisten gelen alanlar; boşsa hiç gösterilmiyor */}
+                {}
                 {(o.reference || o.worker) && (
                   <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-subtle">
                     {o.reference && <span>{o.reference}</span>}

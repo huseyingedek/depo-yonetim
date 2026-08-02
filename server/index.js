@@ -1,23 +1,10 @@
 // -----------------------------------------------------------------------------
-// Aktüel Ofis WMS — CANIAS Proxy
+
 // -----------------------------------------------------------------------------
-// Frontend:  POST /api/mzy/:service   { PCOMPANY: "01", PPLANT: "100", ... }
-// Proxy:     login (oturum cache'li) → servis çağrısı → sade JSON döner
-//
-// İKİ SÜRÜM DESTEKLENİR (server/.env → CANIAS_WS_VERSION):
-//
+
 //   v1  (ÇALIŞAN SÜRÜM)
 //     login(p_strClient, p_strLanguage, p_strDBName, p_strDBServer,
-//           p_strAppServer, p_strUserName, p_strPassword) → sessionId (düz string)
-//     callIASService(sessionid, serviceid, args, returntype, permanent)
-//     args = <PARAMETERS><PSUSER>x</PSUSER>...</PARAMETERS>  ← XML, adlarıyla
-//
-//   v2  (parametreleri okumuyordu — bkz. server/NOTLAR.md)
-//     login(Client, Language, DBServer, DBName, ApplicationServer, ...)
-//     callService(SessionId, SecurityKey, ServiceId, Parameters=XML, ...)
-//
-// ÖNEMLİ: parametreler ADLARIYLA gider (sıra değil). client.ts'teki anahtar
-// adları Mizoye dokümanındaki adlarla birebir aynı olmalı.
+
 // -----------------------------------------------------------------------------
 
 import express from "express";
@@ -27,7 +14,6 @@ import soap from "soap";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-// Her zaman server/.env okunsun — proje kökünden çalıştırılsa bile
 // yanlışlıkla frontend .env'i yüklenmesin.
 dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), ".env") });
 
@@ -43,24 +29,17 @@ const {
   CANIAS_DBNAME = "",
   CANIAS_APPSERVER = "",
   CORS_ORIGIN = "http://localhost:5173",
-  // USE_POOL burada okunmaz — aşağıda raw process.env.USE_POOL ile kontrol edilir
-  // (env'de yoksa havuz kesinlikle açılmasın diye).
+
 } = process.env;
 
 const V1 = CANIAS_WS_VERSION.toLowerCase() !== "v2";
-// Oturum modu: USE_POOL=true → çok oturumlu havuz (max 5/min 1); aksi halde tek oturum.
-//
-// GÜVENLİK (Hüseyin): Havuz login'i CANLIDA SADECE USE_POOL ortam değişkeni
-// AÇIKÇA "true" ise devreye girer. Değişken env'de HİÇ YOKSA (undefined) ya da
-// "true" dışında herhangi bir değerse → havuz hiçbir şekilde aktif olmaz, tek
-// oturum modunda kalınır. Raw process.env okunur; yanlışlıkla açılmasın diye
+
 // destructuring default'una güvenilmez.
 const POOL_MODE = String(process.env.USE_POOL ?? "").trim().toLowerCase() === "true";
 let _caniasPool = null;
-// Havuz modülü SADECE USE_POOL=true iken (lazy) yüklenir. Kapalıyken
-// caniasPool.mjs sunucuda olmasa bile proxy sorunsuz açılır (havuz canlıda yok).
+
 async function getPool() {
-  // Çift koruma: POOL_MODE kapalıyken havuz ASLA örneklenmez/çağrılmaz.
+
   if (!POOL_MODE) throw new Error("Havuz devre dışı (USE_POOL≠true) — tek oturum kullanılmalı");
   if (!_caniasPool) {
     const { createCaniasPool } = await import("./caniasPool.mjs");
@@ -80,6 +59,12 @@ const ALLOWED = new Set([
   "MZYCrtSuggestListPickFromSP",
   "MZYSavePick",
   "MZYGetStock",
+
+  "MZYListingPlacement",
+  "MZYEnterPlacement",
+  "MZYClosePlacement",
+  "MZYSavePlacement",
+  "MZYCrtSuggestListPlacement",
   "GetCompany",
   "GetPlant",
   "GetWarehouse",
@@ -89,14 +74,9 @@ const app = express();
 app.use(cors({ origin: CORS_ORIGIN.split(",").map((s) => s.trim()) }));
 app.use(express.json());
 
-// FRONTEND — build çıktısı (dist/) aynı porttan sunulur. Tek process, CORS yok.
-// Canlı: npm run build → dist/ oluşur → node server/index.js → http://SUNUCU:PORT
 const DIST_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "dist");
 app.use(express.static(DIST_DIR));
 
-/* ---------------- SOAP yardımcıları ---------------- */
-
-/** SOAP yanıtları {attributes,$value} sarmalıyla gelir; gerçek değeri çıkarır. */
 function val(x) {
   if (x === null || x === undefined) return x;
   if (Array.isArray(x)) return x.map(val);
@@ -118,17 +98,6 @@ const escapeXml = (s) =>
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-/** v2 biçimi: <PARAMETERS><ALAN>deger</ALAN>...</PARAMETERS> */
-/**
- * Parametre XML'i üretir.
- *
- * Değer DİZİ ise tablo olarak yazılır — her eleman bir <ROW>:
- *   { IASWMSPOITEMREAD: [{COMPANY:"01"}, ...] }
- *   → <IASWMSPOITEMREAD><ROW><COMPANY>01</COMPANY></ROW>...</IASWMSPOITEMREAD>
- *
- * MZYSavePick birden çok okutma satırı taşıdığı için gerekli. Bu biçim
- * Bora'dan TEYİT EDİLMEDİ; servis yayınlanınca ilk çağrıda doğrulanacak.
- */
 function buildParametersXml(params = {}) {
   const body = Object.entries(params)
     .map(([k, v]) => {
@@ -149,12 +118,6 @@ function buildParametersXml(params = {}) {
   return `<PARAMETERS>${body}</PARAMETERS>`;
 }
 
-/**
- * v1 biçimi — DENEYLE BULUNDU:
- * args alanı da <PARAMETERS><AD>deger</AD>...</PARAMETERS> XML'i ister.
- * Virgülle ayrık gönderim sessizce yok sayılıyor (boş tablo döner).
- * Doğrulama: MZYCheckUser doğru şifrede TBLUSER, yanlışta TBLMESSAGE döndü.
- */
 function buildArgs(params = {}) {
   return buildParametersXml(params);
 }
@@ -168,9 +131,7 @@ async function getClient() {
   return clientPromise;
 }
 
-/* ---------------- Oturum yönetimi ---------------- */
-
-let session = null; // { sessionId, securityKey, at }
+let session = null;
 const SESSION_TTL = 20 * 60 * 1000; // 20 dk
 
 async function login() {
@@ -221,9 +182,6 @@ async function ensureSession() {
   return login();
 }
 
-/* ---------------- Servis çağrısı ---------------- */
-
-/** TROIA mesaj XML'inden okunur metni çıkarır. */
 function msgText(raw) {
   if (!raw) return "";
   const t = String(raw);
@@ -231,18 +189,10 @@ function msgText(raw) {
   return found.length ? found.join("\n") : t;
 }
 
-/**
- * CANIAS ÇAĞRI KUYRUĞU — aynı anda TEK istek.
- *
- * CANIAS/TROIA oturumu eşzamanlı çağrılara dayanmıyor: aynı sessionId'ye
- * paralel istek gelince oturum bozulup sonraki yanıtlar BOŞ dönüyor.
- * (fillLocations her kalem için paralel suggest atıyordu → liste bazen boş
- * geliyordu.) Bütün çağrıları sıraya sokuyoruz; biri bitmeden diğeri gitmiyor.
- */
 let cagriKuyrugu = Promise.resolve();
 function siraya(fn) {
   const p = cagriKuyrugu.then(fn, fn);
-  // Kuyruğu, hatayı yutarak ilerlet (bir çağrı patlasa da sıra devam etsin).
+
   cagriKuyrugu = p.then(() => {}, () => {});
   return p;
 }
@@ -295,34 +245,18 @@ async function callServiceInner(serviceId, params, retry = true) {
     sysError = r.SYSStatusError || "";
   }
 
-  /* OTURUM ÖLÜMÜ — CANIAS session'ı zaman aşımına uğrayınca çağrılar HATA
-     DEĞİL, TAMAMEN BOŞ yanıt döndürüyor (rawResponse = ""). "session" kelimesi
-     yok, o yüzden ayrıca boş yanıtı da yakalıyoruz.
-
-     ÖNEMLİ AYRIMLAR (yanlış re-login olmasın diye):
-     • "veri yok" ≠ boş: veri olmasa da servis JSON döner ({"TBLPOLIST":""}).
-       Yalnızca rawResponse'un TAMAMEN boş olması ölü oturumdur.
-     • Oturum YENİ açıldıysa (3 sn) ve hâlâ boşsa, bu ölü oturum değil —
-       servis gerçekten boş/bozuk dönüyor demektir; TEKRAR login ATMAYIZ
-       (aksi halde bozuk serviste sürekli gereksiz login olurdu — kullanıcının
-       uyarısı). Sadece oturum ESKİYSE ölü sayıp yenileriz.
-     • SavePick/CreateContainer başarıda da boş dönebiliyor (data:null) →
-       onları tekrar DENEMEYİZ (çift palet/stok riski); ölü oturuma denk
-       gelirlerse "palet oluşturulamadı" ile güvenli başarısız olurlar. */
   const yazanServis = serviceId === "MZYSavePick" || serviceId === "MZYCreateContainer";
   const bosYanit = !String(rawResponse ?? "").trim();
   const oturumHatasi = /session/i.test(String(sysError) + String(rawResponse));
   const oturumEski = session ? Date.now() - session.at > 3000 : true;
   if (retry && (oturumHatasi || (bosYanit && !yazanServis && oturumEski))) {
     console.warn(`[${serviceId}] boş/ölü oturum — SOAP client + session yenilenip tekrar denenecek`);
-    // RESTART EŞDEĞERİ: sadece login değil, SOAP bağlantısını da yeniliyoruz.
-    // Restart edince düzelmesinin sebebi client'ın da baştan kurulması.
+
     session = null;
     clientPromise = null;
     return callServiceInner(serviceId, params, false);
   }
 
-  // Yanıt JSON string olarak geliyor
   let data = null;
   if (rawResponse) {
     try {
@@ -332,7 +266,6 @@ async function callServiceInner(serviceId, params, retry = true) {
     }
   }
 
-  // v1'de mesajlar yanıtın içinde gelebiliyor (TBLMESSAGE / SYSTEMMSG)
   if (V1 && data && !messages) {
     const t = JSON.stringify(data);
     if (/TBLMESSAGE|SYSTEMMSG|MESSAGE/i.test(t)) {
@@ -344,13 +277,10 @@ async function callServiceInner(serviceId, params, retry = true) {
   return { data, messages, sysStatus, sysError, raw: rawResponse };
 }
 
-/* ---------------- HTTP uçları ---------------- */
-
-/* ---------------- Loglama (canlı takip için) ---------------- */
 const ts = () => new Date().toLocaleString("tr-TR", { hour12: false });
 const log = (...a) => console.log(ts(), ...a);
 const logErr = (...a) => console.error(ts(), "✗", ...a);
-// Parametreleri kısalt + parolayı maskele (log dosyasına açık parola yazılmasın)
+
 const kisaParam = (p = {}) => {
   const o = {};
   for (const [k, v] of Object.entries(p)) {
@@ -407,7 +337,6 @@ app.post("/api/mzy/:service", async (req, res) => {
   }
 });
 
-// Açılışta eksik ayar varsa sessiz kalma
 const REQUIRED = {
   CANIAS_WSDL_URL,
   WMS_USER,
@@ -421,8 +350,6 @@ const missing = Object.entries(REQUIRED)
   .filter(([, v]) => !v)
   .map(([k]) => k);
 
-// SPA yönlendirmesi — /api, /health, /services DIŞINDAKİ GET'ler index.html'e
-// döner (React Router istemci yolları: /picking/123 vb.). API rotalarından SONRA.
 app.use((req, res, next) => {
   if (req.method !== "GET") return next();
   if (

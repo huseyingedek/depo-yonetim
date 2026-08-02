@@ -5,15 +5,6 @@ import PageHeader from "../../components/PageHeader";
 import { usePickingStore } from "../../store/pickingStore";
 import { api } from "../../api/client";
 
-/**
- * OKUTULANLAR — okutma kayıtlarının tam tablosu.
- *
- * Bu satırlar MZYSavePick'e IASWMSPOITEMREAD tablosu olarak gidecek; stok
- * bunlara göre düşecek. O yüzden gönderilecek TÜM alanlar burada görünür.
- *
- * Eksik alan varsa kırmızı işaretlenir — depocu ya da yönetici görsün diye.
- * Kayıt silinebilir; miktar burada da artırılamaz (artırmak yeni okutma).
- */
 export default function PickingRecordsPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -31,7 +22,6 @@ export default function PickingRecordsPage() {
     (line.records ?? []).map((r) => ({ line, r }))
   );
 
-  /** Servise gitmeden önce dolu olması gereken alanlar */
   const ZORUNLU = [
     "COMPANY", "PLANT", "MATERIAL", "WAREHOUSE", "STOCKPLACE",
     "READQTY", "QUNIT", "ORDERTYPE", "ORDERNUM", "ITEMNO",

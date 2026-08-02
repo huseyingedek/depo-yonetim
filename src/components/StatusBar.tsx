@@ -1,6 +1,5 @@
 import { Signal, Wifi, BatteryFull } from "lucide-react";
 
-/** Telefon durum çubuğu (saat, sinyal, batarya) — sunum görünümü için. */
 export default function StatusBar({ dark = false }: { dark?: boolean }) {
   const now = new Date();
   const time = now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });

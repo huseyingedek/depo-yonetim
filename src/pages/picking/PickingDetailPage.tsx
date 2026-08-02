@@ -10,10 +10,10 @@ import {
   usePickingStore, orderProgress, linePicked,
 } from "../../store/pickingStore";
 import { isoDateToBatch, qtyRound, toOrderQty } from "../../store/pickingLogic";
+import { sesBasarili, sesHata } from "../../sound";
 
 type Toast = { kind: "ok" | "done" | "error"; text: string } | null;
 
-/** Bağlantı/servis cevapsızlığı mı? "Tekrar Dene" yalnız bunlarda gösterilir. */
 const baglantiHatasiMi = (m?: string) => !!m && /cevaplanmad|ulaşılamıyor|bağlantı/i.test(m);
 
 export default function PickingDetailPage() {
@@ -41,44 +41,37 @@ export default function PickingDetailPage() {
   const [toast, setToast] = useState<Toast>(null);
   const [flashLine, setFlashLine] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  /** Parti takipli kalem okundu, parti barkodu bekleniyor */
+
   const [lotPending, setLotPending] = useState<string | null>(null);
-  /** M3: tarih seçiciden gelen, parti alanına yazılacak YYYYAAGG değeri */
+
   const [partiPrefill, setPartiPrefill] = useState("");
-  /** Kalem başına seçilen raf (birden fazla raf varsa depocu seçer) */
+
   const [secilenRaf, setSecilenRaf] = useState<Record<string, string>>({});
-  /**
-   * Bir sonraki okutmada kaç tane alındığı — çuval/koli sayısı.
-   * Kayda giren miktar = barkodun birim değeri × bu sayı.
-   * Okutmadan sonra 1'e döner ki unutulup üst üste binmesin.
-   */
+
   const [okutmaAdedi, setOkutmaAdedi] = useState("");
-  /**
-   * Reddedilen okutmanın açıklaması. Toast 2 saniyede kayboluyor, depocu
-   * ne yapacağını okuyamıyordu — bu kutu düzeltilene kadar ekranda kalır.
-   */
+
   const [redMesaji, setRedMesaji] = useState<string | null>(null);
-  /** Bağlantı hatası alan son okutulan barkod — "Tekrar Dene" bunu yeniden gönderir. */
+
   const [sonCevapsiz, setSonCevapsiz] = useState<string | null>(null);
-  /** Konteyner geri yükleme kontrol hataları — HEPSİ listelenir, kullanıcı kapatır. */
+
   const [geriYuklemeHatalari, setGeriYuklemeHatalari] = useState<string[]>([]);
 
-  // StrictMode efekti iki kez çalıştırıyor; MZYEnterPick VERİ YAZDIĞI için
   // ikinci çağrının gitmemesi önemli.
   const yuklendi = useRef("");
 
   useEffect(() => {
     if (!id) return;
     const anahtar = `${id}|${orderType}`;
-    // StrictMode aynı mount'ta efekti iki kez çalıştırıyor; bir mount'ta tek
-    // kez yükle. Ama emre HER GİRİŞTE (yeni mount) EnterPick çalışsın —
-    // kayıtlar loadOrder içinde korunuyor (boş dönerse önceki emir kalıyor).
+
     if (yuklendi.current === anahtar) return;
     yuklendi.current = anahtar;
     loadOrder(id, orderType);
   }, [id, orderType, loadOrder]);
 
   const showToast = (tst: Toast) => {
+    // Okutma sesi: hata → uyarı sesi, diğerleri → başarılı bip.
+    if (tst?.kind === "error") sesHata();
+    else if (tst) sesBasarili();
     setToast(tst);
     setTimeout(() => setToast(null), 2200);
   };
@@ -88,21 +81,19 @@ export default function PickingDetailPage() {
     setTimeout(() => setFlashLine(null), 600);
   };
 
-  /** Tek giriş noktası: raf yoksa raf, varsa ürün (veya parti) olarak yorumlanır */
   const handleDetected = useCallback(
     async (code: string) => {
       const barkod = code.trim();
       if (!barkod || busy) return;
       setBusy(true);
-      setSonCevapsiz(null); // her okutmada sıfırla; bağlantı hatasında aşağıda tekrar set edilir
+      setSonCevapsiz(null);
       try {
         // 1) Raf bekleniyor
         if (!shelf) {
           const r = await scanShelf(barkod);
           if (r.ok) {
-            setRedMesaji(null); // başarıda önceki hata mesajını temizle
-            // Geri yükleme kontrol hataları — HEPSİNİ kalıcı panelde göster.
-            // Hata yoksa önceki okutmadan kalan panel temizlensin.
+            setRedMesaji(null);
+
             setGeriYuklemeHatalari(r.restoreErrors ?? []);
             showToast({ kind: "ok", text: `Raf: ${barkod}` });
           } else {
@@ -112,14 +103,12 @@ export default function PickingDetailPage() {
           return;
         }
 
-        // 2) Parti bekleniyor (parti takipli kalem okunmuştu)
-        // MZYReadBarcode ile DOĞRULANIR — rastgele/yanlış parti reddedilir.
         if (lotPending) {
           const lr = await scanLot(lotPending, barkod);
           if (lr.ok) {
             setLotPending(null);
             setPartiPrefill(""); // M3: tarih prefill'i sıfırla
-            setRedMesaji(null); // başarıda önceki hata mesajını temizle
+            setRedMesaji(null);
             showToast({ kind: "done", text: `Parti: ${barkod}` });
           } else {
             if (baglantiHatasiMi(lr.message)) setSonCevapsiz(barkod);
@@ -129,7 +118,6 @@ export default function PickingDetailPage() {
           return;
         }
 
-        // 3) Ürün — yanındaki miktar kutusunda yazan adet kadar
         const s = await scanProduct(barkod, Number(okutmaAdedi) || 1);
         setRedMesaji(null);
         if (s.kind === "ok") {
@@ -137,8 +125,7 @@ export default function PickingDetailPage() {
           flash(s.lineId);
           showToast({ kind: "ok", text: `${s.name} eklendi` });
         } else if (s.kind === "needsBatch") {
-          // Parti takipli ürün (SPECIALSTOCK=1). Kayıt HENÜZ açılmadı — parti
-          // barkodu okununca ikinci ReadBarcode ile gerçek parti stoğu gelecek.
+
           flash(s.lineId);
           setLotPending(s.lineId);
           showToast({ kind: "ok", text: `${s.name} · parti barkodunu okutun` });
@@ -148,10 +135,10 @@ export default function PickingDetailPage() {
           flash(s.lineId);
           showToast({ kind: "done", text: "Bu kalem tamamlandı" });
         } else if (s.kind === "exceedsOrder" || s.kind === "noStock") {
-          // Kayıt AÇILMADI. Mesaj kalıcı kutuda kalır, depocu düzeltene kadar.
+          sesHata(); // toast yok ama okutma başarısız → hata sesi
           flash(s.lineId);
           setRedMesaji(s.message);
-          // Sığan miktarı hazır yapalım — depocu tekrar okutsun, uğraşmasın
+
           if (s.kind === "exceedsOrder" && s.enFazla > 0) setOkutmaAdedi(String(s.enFazla));
         } else {
           if (baglantiHatasiMi(s.message)) setSonCevapsiz(barkod);
@@ -164,7 +151,6 @@ export default function PickingDetailPage() {
     [busy, shelf, lotPending, order, okutmaAdedi, scanShelf, scanProduct, scanLot]
   );
 
-  /** Combobox'tan parti SEÇ → selectBatch (BATCHNUM zaten parti no, doğrulanır). */
   const partiSec = async (batchNum: string) => {
     if (!lotPending || !batchNum || busy) return;
     setBusy(true);
@@ -196,31 +182,16 @@ export default function PickingDetailPage() {
   }
 
   const progress = orderProgress(order);
-  // ÜST BAR: farklı birimler (adet/KO/Kg) toplanamaz → miktar toplamı yerine
-  // "kaç kalem tamamlandı / toplam kalem" gösteriyoruz.
+
   const toplamKalem = order.lines.length;
   const tamamlananKalem = order.lines.filter((l) => linePicked(l) >= l.requestedQty).length;
 
-  /**
-   * Parti takipli olup miktarı girilmiş ama partisi okutulmamış kalemler.
-   * Miktar elle de yazılabildiği için parti adımı atlanabiliyordu; burada
-   * yakalanıp emir kapatılmadan önce uyarılıyor.
-   */
-  // Parti eksik UYARISI yalnızca BU OTURUMDA okutulan (records) kalemler için.
-  // Önceden toplanmış (MOVEDQTY) parti takipli kalemler CANIAS'ta zaten
-  // partili kaydedilmiştir; yeniden girişte l.lot boş diye "parti eksik"
-  // sanılmamalı. Bu yüzden linePicked (MOVEDQTY dahil) yerine records'a bakıyoruz.
   const partisiEksik = order.lines.filter(
     (l) => l.lotTracked && (l.records?.length ?? 0) > 0 && !l.lot
   );
 
-  /**
-   * Fazla toplanmış kalemler. Okutma sırasında engelleniyor ama emirden
-   * gelen MOVEDQTY zaten fazlaysa burada yakalanır.
-   */
   const fazlaToplanan = order.lines.filter((l) => linePicked(l) > l.requestedQty);
 
-  /** Paketlemeyi engelleyen sebepler */
   const engel =
     partisiEksik.length > 0
       ? `Parti barkodu okutulmayan kalem var: ${partisiEksik
@@ -232,14 +203,11 @@ export default function PickingDetailPage() {
           .join(", ")}. Düzeltilmeden paketlenemez.`
       : "";
 
-  /** Toplam okutma sayısı — detay tablosu ayrı sayfada. */
   const toplamKayit = order.lines.reduce((t, l) => t + (l.records?.length ?? 0), 0);
 
-  /** Bu kalem, okutulan rafta mı? */
   const rafta = (line: { suggestions?: { barcode: string }[] }) =>
     !!shelf && !!line.suggestions?.some((s) => s.barcode === shelf.barcode);
 
-  // Raf okutulmuşsa o raftaki kalemler üste çıkar; sonra tamamlananlar en alta.
   const sortedLines = [...order.lines].sort((a, b) => {
     const aDone = linePicked(a) >= a.requestedQty ? 1 : 0;
     const bDone = linePicked(b) >= b.requestedQty ? 1 : 0;
@@ -261,7 +229,7 @@ export default function PickingDetailPage() {
         title={order.id}
         subtitle={[order.customer, order.reference].filter(Boolean).join(" · ")}
         onBack={() => {
-          // Emirden çıkarken kilidi aç (MZYClosePick), sonra listeye dön.
+
           leaveOrder();
           navigate("/picking");
         }}
@@ -273,7 +241,7 @@ export default function PickingDetailPage() {
             >
               {tamamlananKalem}/{toplamKalem} kalem
             </span>
-            {/* Paketleme başlıkta — liste uzadıkça aşağı kaçmasın */}
+            {}
             <button
               onClick={() => navigate(`/picking/${order.id}/summary`)}
               disabled={!!engel}
@@ -287,15 +255,12 @@ export default function PickingDetailPage() {
         }
       />
 
-      {/* İki pane: SOL = okutma (md ve üstünde SABİT/sticky, telefon yatay dahil),
-          SAĞ = toplanan ürün listesi (sayfayla birlikte akar). Portrait'ta tek kolon. */}
+      {}
       <div className="grid min-w-0 gap-4 md:gap-6 md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-[400px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-3">
-        {/* Sol: raf + okutma + ilerleme — md sticky; short (yatay) tam sabit */}
+        {}
         <div className="min-w-0 md:sticky md:top-3 md:self-start lg:top-4 short:!static short:w-[300px] short:shrink-0 short:self-stretch short:overflow-y-auto">
           <div className="card p-4">
-            {/* Adım göstergesi: Raf → Ürün → Parti
-                Raf okunduktan sonra "Ürün" adımında KALIR; her üründen sonra
-                başa dönmez. Parti yalnız parti takipli kalemde yanar. */}
+            {}
             <div className="mb-3 flex items-center gap-1.5">
               {(
                 [
@@ -311,9 +276,6 @@ export default function PickingDetailPage() {
                 const done =
                   (s === "shelf" && !!shelf) || (s === "product" && !!lotPending);
 
-                // Adımlar tıklanabilir — depocu geri dönebilsin:
-                //   Raf   → rafı bırak, yeni raf okut
-                //   Parti → partisi eksik ilk kaleme geç
                 const partiBekleyen = order?.lines.find(
                   (l) => l.lotTracked && (l.records?.length ?? 0) > 0 && !l.lot
                 );
@@ -352,7 +314,7 @@ export default function PickingDetailPage() {
               })}
             </div>
 
-            {/* Okutulan raf — sabit kalır, ürün okutmak sıfırlamaz */}
+            {}
             {shelf ? (
               <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-emerald-50 px-3 py-2">
                 <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-emerald-800">
@@ -380,7 +342,7 @@ export default function PickingDetailPage() {
               </div>
             )}
 
-            {/* Parti bekleniyor — depocu vazgeçebilsin (etiket yırtıksa vb.) */}
+            {}
             {lotPending && (
               <>
                 <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-amber-50 px-3 py-2">
@@ -397,8 +359,7 @@ export default function PickingDetailPage() {
                     Vazgeç
                   </button>
                 </div>
-                {/* Parti listesi (MZYGetStock) — parti adımında HER ZAMAN görünür;
-                    dolu değilse durum yazısı gösterir (getStock boş/erişilemez). */}
+                {}
                 <div className="mb-3 rounded-xl bg-elevated px-3 py-2">
                   <span className="mb-1 block text-xs font-medium text-muted">Parti seç (stoktakiler)</span>
                   <select
@@ -430,7 +391,7 @@ export default function PickingDetailPage() {
                   </select>
                 </div>
 
-                {/* M3: SKT/parti tarihini seç → parti barkodu alanına YYYYAAGG gelir */}
+                {}
                 <div className="mb-3 flex items-center gap-2 rounded-xl bg-elevated px-3 py-2">
                   <span className="shrink-0 text-xs font-medium text-muted">Tarih seç</span>
                   <input
@@ -442,10 +403,8 @@ export default function PickingDetailPage() {
               </>
             )}
 
-            {/* Kaç tane alındı — çuval/koli sayısı.
-                25 KG'lık çuvaldan 2 tane alındıysa buraya 2 yazılır,
-                kayda 50 KG geçer. Ürün adımında görünür. */}
-            {/* Reddedilen okutma — düzeltilene kadar ekranda kalır */}
+            {}
+            {}
             {redMesaji && (
               <div className="mb-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3">
                 <div className="flex items-start gap-2 text-xs font-semibold text-rose-700">
@@ -461,7 +420,7 @@ export default function PickingDetailPage() {
               </div>
             )}
 
-            {/* Bağlantı hatasında (servis cevapsız) son okutmayı aynı bilgiyle yeniden gönder */}
+            {}
             {sonCevapsiz && (
               <div className="mb-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
                 <p className="mb-2 text-xs font-semibold text-amber-800">
@@ -515,8 +474,7 @@ export default function PickingDetailPage() {
               </p>
             )}
 
-            {/* Okutulanlar ayrı sayfada — burada sadece sayı ve
-                bağlantı. Sol panel barkod okutmaya odaklı kalsın. */}
+            {}
             {toplamKayit > 0 && (
               <button
                 onClick={() => navigate(`/picking/${order.id}/kayitlar`)}
@@ -548,11 +506,9 @@ export default function PickingDetailPage() {
           </div>
         </div>
 
-        {/* Sağ: kalem listesi — short (yatay) modda tek kayan alan */}
+        {}
         <div className="min-w-0 short:flex-1 short:overflow-y-auto short:pr-1">
-          {/* KONTEYNER KONTROL HATALARI — modal DEĞİL: ekranda kalıcı durur,
-              kapatınca "neyi fazla/eksik ekledi" bilgisi kaybolmasın (Hüseyin).
-              Yalnızca yeni raf okutmada / emirden çıkınca sıfırlanır. */}
+          {}
           {geriYuklemeHatalari.length > 0 && (
             <div className="mb-3 rounded-2xl border border-rose-300 bg-rose-50 p-4">
               <div className="mb-2 flex items-center gap-2">
@@ -560,7 +516,7 @@ export default function PickingDetailPage() {
                 <span className="text-sm font-bold text-rose-700">
                   Konteyner kontrol ({geriYuklemeHatalari.length})
                 </span>
-                {/* Kalıcı panel; ama isteyen kendisi kapatabilir (Hüseyin). */}
+                {}
                 <button
                   type="button"
                   onClick={() => setGeriYuklemeHatalari([])}
@@ -584,14 +540,11 @@ export default function PickingDetailPage() {
             {sortedLines.map((line) => {
               const toplanan = linePicked(line);
 
-              // SİPARİŞ BİRİMİ gösterimi — stok biriminde toplanır, sipariş
-              // biriminde gösterilir (stok / CFACTOR). Çevrim yoksa stok birimi.
               const cevrimVar = !!(line.cfactor && line.cfactor > 1);
               const siparisBirim = line.orderUnit || line.product.unit;
               const istenenSiparis = line.orderQty ?? toOrderQty(line.requestedQty, line.cfactor);
               const toplananSiparis = toOrderQty(toplanan, line.cfactor);
-              // Parti eksik: yalnızca BU OTURUMDA okutulmuş (records) ama partisi
-              // yazılmamışsa. Önceden toplanmış (MOVEDQTY) kalem partili kabul.
+
               const buOturumKayit = (line.records?.length ?? 0) > 0;
               const partiEksik = !!line.lotTracked && buOturumKayit && !line.lot;
               const done = toplanan >= line.requestedQty && !partiEksik;
@@ -618,8 +571,9 @@ export default function PickingDetailPage() {
                           className={`text-sm font-bold ${
                             partial ? "text-amber-600" : "text-subtle"
                           }`}
+                          title="Kalan (okutulacak)"
                         >
-                          {toplanan}
+                          {qtyRound(Math.max(0, istenenSiparis - toplananSiparis))}
                         </span>
                       )}
                     </div>
@@ -631,7 +585,7 @@ export default function PickingDetailPage() {
                           <span className="font-mono font-semibold">{line.product.code}</span>
                         )}
                         {line.product.unit && <span>{line.product.unit}</span>}
-                        {/* Sipariş miktarı + birimi (AKLSQUANTITY / AKLSQUNIT) */}
+                        {}
                         <span className="font-medium text-muted">
                           · Sipariş: {qtyRound(istenenSiparis)} {siparisBirim}
                         </span>
@@ -641,12 +595,7 @@ export default function PickingDetailPage() {
                         {line.volume !== undefined && (
                           <span className="font-medium text-muted">· Hacim: {qtyRound(line.volume)}</span>
                         )}
-                        {/* Parti rozeti — 3 durum:
-                            • Parti biliniyor        → "Parti: X"        (mor)
-                            • Bu oturumda okutulup   → "Parti bekleniyor" (amber, iş var)
-                              parti bekleniyor
-                            • Parti takipli ama      → "Parti takipli"    (amber çerçeve, bilgi)
-                              henüz okutulmadı — depocu önceden görsün. */}
+                        {}
                         {line.lotTracked &&
                           (() => {
                             const bekliyor = partiEksik || lotPending === line.id;
@@ -672,9 +621,7 @@ export default function PickingDetailPage() {
                           })()}
                       </div>
 
-                      {/* HANGİ RAFTA — bir ürün birden fazla rafta olabilir.
-                          Select: mesafeye göre sıralı, ilki en yakın raf.
-                          Seçilen raf, miktar kontrolünde kıyas noktası olur. */}
+                      {}
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         {line.suggestions?.length ? (
                           <label className="inline-flex items-center gap-1.5">
@@ -687,8 +634,7 @@ export default function PickingDetailPage() {
                               className="rounded-lg border border-line bg-surface px-2 py-1 font-mono text-[11px] font-semibold text-fg outline-none focus:border-brand-500"
                             >
                               {line.suggestions.map((s) => {
-                                // Depo ve stok yerini AYRI sütun gibi hizala
-                                // (font-mono + kırılmaz boşlukla tablo görünümü).
+
                                 const depo = s.warehouse.padEnd(4, " ");
                                 const yer = s.location.padEnd(9, " ");
                                 return (
@@ -705,20 +651,35 @@ export default function PickingDetailPage() {
                           <span className="text-[11px] text-subtle">raf bilgisi yok</span>
                         )}
 
-                        {/* Barkod — EnterPick'ten geliyor. Depocu okutacağı
-                            barkodu gözüyle karşılaştırabilsin diye rafın yanında. */}
+                        {}
                         {line.product.barcode && (
-                          <span className="rounded-lg bg-elevated px-2 py-1 font-mono text-[11px] font-semibold text-muted">
-                            {line.product.barcode}
+                          <span
+                            onDoubleClick={() => handleDetected(line.product.barcode)}
+                            title="Çift tıkla → okut"
+                            className="cursor-pointer select-none rounded-lg bg-elevated px-2 py-1 font-mono text-[11px] font-semibold text-muted transition hover:bg-brand-100 hover:text-brand-700"
+                          >
+                            {line.product.barcode} · 1 {line.product.unit}
+                          </span>
+                        )}
+                        {line.product.barcode2 && (
+                          <span
+                            onDoubleClick={() => handleDetected(line.product.barcode2 ?? "")}
+                            title="Çift tıkla → okut (koli)"
+                            className="cursor-pointer select-none rounded-lg bg-violet-50 px-2 py-1 font-mono text-[11px] font-semibold text-violet-600 transition hover:bg-violet-200"
+                          >
+                            koli: {line.product.barcode2} · {qtyRound(line.cfactor && line.cfactor > 1 ? line.cfactor : 1)} {line.product.unit}
+                          </span>
+                        )}
+                        {cevrimVar && (
+                          <span className="rounded-lg bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-700">
+                            1 {siparisBirim} = {qtyRound(line.cfactor ?? 0)} {line.product.unit}
                           </span>
                         )}
                       </div>
 
-
                     </div>
 
-                    {/* Miktar SALT OKUNUR — kayıtların toplamı. Elle artırma yok.
-                        Sipariş birimi öncelikli; çevrim varsa stok birimi altta. */}
+                    {}
                     <div className="flex shrink-0 flex-col items-end">
                       <div className="flex items-center gap-1">
                         <span className="font-mono text-sm font-bold text-fg">{qtyRound(toplananSiparis)}</span>
@@ -737,7 +698,7 @@ export default function PickingDetailPage() {
             })}
           </div>
 
-          {/* Parti eksiği ya da fazlalık varsa emir kapatılamaz */}
+          {}
           {engel && (
             <div className="mt-5 flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-medium text-amber-700">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />

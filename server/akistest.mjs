@@ -1,16 +1,10 @@
 // -----------------------------------------------------------------------------
-// AKIŞ TESTİ — CANLI PROXY üzerinden (eski TEK-OTURUM mantığı, app ile birebir)
+
 // -----------------------------------------------------------------------------
-// Havuza (createCaniasPool) DEĞİL, doğrudan canlı proxy'nin HTTP API'sine vurur.
-// Böylece app'in kullandığı AYNI tek oturumu kullanır — ekstra lisans yemez,
-// canlı davranışı birebir taklit eder. login→list→enterpick→suggest→createcontainer.
-//
+
 // Çalıştır (proxy'ye ulaşabilen makinede):
 //   node akistest.mjs --order=650006
-//   node akistest.mjs --order=650006 --createcontainer     (gönderme adımını dener)
-//   node akistest.mjs --order=650006 --base=http://localhost:8787   (lokal proxy)
-//
-// Her çağrı 35sn timeout'lu → takılırsa "TIMEOUT — TAKILDI" der, nerede asıldığı belli olur.
+
 // -----------------------------------------------------------------------------
 import { performance } from "node:perf_hooks";
 
@@ -60,13 +54,11 @@ const satir = (body, key) => { const t = body?.data?.[key]; const row = t?.ROW ?
 
 console.log(`===== AKIŞ TESTİ (CANLI PROXY) — ${BASE} — Sipariş ${ORDER} =====\n`);
 
-// 0) HEALTH — tüm isteklerin paylaştığı WMS oturumu ayakta mı?
 try {
   const h = await fetch(`${BASE}/health`).then((r) => r.json()).catch(() => null);
   console.log(h?.ok ? `  [0] /health: ✓ oturum ${h.sessionId}` : `  [0] /health: ✗ ${JSON.stringify(h)}`);
 } catch (e) { console.log(`  [0] /health: ✗ proxy'ye ulaşılamadı (${e.message}) — canlı çalışıyor mu?`); }
 
-// 1) LISTE — verilen worker ile dene; 0 dönerse PSWORKER="" (tümü) ile tekrar
 const listeArgs = (worker) => ({ PSCOMPANY: CO, PSPLANT: PL, PSWORKER: worker, PISTATUS: 3, PIISPICK: 1, PDSTARTDATE: "01.01.1975", PDENDDATE: "01.01.2100", PIISDELETE: 0, PIISSTARTED: 1, PIORDER: 0 });
 let s1 = await adim(1, `MZYListingPick (worker="${WK}")`, "MZYListingPick", listeArgs(WK));
 let hepsi = s1.ok ? satir(s1.body, "TBLPOLIST") : [];
@@ -99,14 +91,12 @@ if (s2.ok) {
   console.log(`      → ${kalemler.length} kalem, hedef depo="${hedefDepo || "boş"}"`);
 }
 
-// 3) SUGGEST (her kalem — app gibi ama SIRAYLA, hangisi takılırsa görelim)
 for (const l of kalemler) {
   await adim("3." + l.ITEMNO, `MZYCrtSuggestListPickFromSP (kalem ${l.ITEMNO})`, "MZYCrtSuggestListPickFromSP", {
     PSCOMPANY: CO, PSPLANT: PL, PSORDERNUM: ORDER, PSORDERTYPE: tip, PIITEMNO: Number(l.ITEMNO),
   });
 }
 
-// 4) CREATECONTAINER — Pakete Yerleştir'in ilk adımı (YAZMA, opsiyonel)
 if (CREATE) {
   console.log(`\n  --createcontainer → GÖNDERME adımı (YAZMA):`);
   const s4 = await adim(4, "MZYCreateContainer (Pakete Yerleştir)", "MZYCreateContainer", {

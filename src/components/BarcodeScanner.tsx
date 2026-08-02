@@ -5,22 +5,13 @@ import { useTranslation } from "react-i18next";
 
 interface Props {
   onDetected: (barcode: string) => void;
-  /** Kamera üstünde / input altında gösterilecek yönerge. */
+
   prompt?: string;
-  /** Dışarıdan giriş alanını doldur (M3: parti tarih seçici → YYYYAAGG). */
+
   prefill?: string;
 }
 
-/**
- * Barkod girişi.
- *
- * Varsayılan: elle yazılan/el terminaliyle okutulan metin kutusu (odaklı).
- * Kamera isteğe bağlı — sağdaki butona basınca açılır.
- *
- * El terminalleri barkodu klavye gibi yazıp Enter'a bastığı için
- * metin kutusu hem manuel giriş hem HID okuyucu için çalışır.
- */
-const SCAN_COOLDOWN = 1200; // aynı barkodun tekrar tetiklenmesini engelle (ms)
+const SCAN_COOLDOWN = 1200;
 
 export default function BarcodeScanner({ onDetected, prompt, prefill }: Props) {
   const { t } = useTranslation();
@@ -32,13 +23,10 @@ export default function BarcodeScanner({ onDetected, prompt, prefill }: Props) {
   const [cameraError, setCameraError] = useState(false);
   const [value, setValue] = useState("");
 
-  // Dışarıdan doldurma (M3): prefill değişince alana yaz. Depocu görüp
-  // onaylar (Enter) — otomatik göndermez.
   useEffect(() => {
     if (prefill) setValue(prefill);
   }, [prefill]);
 
-  // Sürekli tarama tek okutmayı çok kez tetiklemesin
   const emit = (code: string) => {
     const now = Date.now();
     const last = lastScanRef.current;
@@ -74,7 +62,7 @@ export default function BarcodeScanner({ onDetected, prompt, prefill }: Props) {
   }, [cameraOpen]);
 
   const submit = () => {
-    // Barkodlar HEP büyük harf — küçük harfe izin yok (D3$c1 → D3$C1).
+
     const code = value.trim().toUpperCase();
     if (!code) return;
     onDetected(code);
@@ -83,7 +71,7 @@ export default function BarcodeScanner({ onDetected, prompt, prefill }: Props) {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Barkod girişi — el terminali de buraya yazar */}
+      {}
       <div className="rounded-2xl bg-surface p-4 shadow-card">
         <label className="field-label">{prompt ?? t("picking.scanProduct")}</label>
         <div className="flex gap-2">
@@ -110,7 +98,7 @@ export default function BarcodeScanner({ onDetected, prompt, prefill }: Props) {
             </button>
           </div>
 
-          {/* Kamerayı aç/kapat */}
+          {}
           <button
             type="button"
             onClick={() => setCameraOpen((v) => !v)}
@@ -126,7 +114,7 @@ export default function BarcodeScanner({ onDetected, prompt, prefill }: Props) {
         </div>
       </div>
 
-      {/* Kamera — yalnızca istenirse */}
+      {}
       {cameraOpen && (
         <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-ink-950">
           {!cameraError ? (

@@ -4,23 +4,15 @@ import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 interface Props {
-  /** Okunan barkod. Aynı kod arka arkaya tetiklenmez. */
+
   onDetected: (barcode: string) => void;
   onClose: () => void;
-  /** Kameranın altında gösterilecek yönerge. */
+
   prompt?: string;
 }
 
-/** Aynı barkodun sürekli taramada defalarca tetiklenmesini engeller (ms). */
 const SCAN_COOLDOWN = 1200;
 
-/**
- * Tam ekran kamera okuyucu.
- *
- * BarcodeScanner'dan farkı: metin kutusu yok, sadece kamera.
- * Zaten bir arama/giriş alanı olan ekranlarda (ör. açık sipariş listesi)
- * o alanın yanındaki kamera ikonuyla açılır.
- */
 export default function CameraScanOverlay({ onDetected, onClose, prompt }: Props) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);

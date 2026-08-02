@@ -1,14 +1,10 @@
 // -----------------------------------------------------------------------------
-// BARKOD STOK TANI — "stok yok" mesajının kaynağını bulur.
+
 // -----------------------------------------------------------------------------
-// MZYReadBarcode ham yanıtını döker; AVAILSTOCK gerçekten 0 mı, yoksa alan adı
-// farklı/başka yerde mi görürsün. Rafsız (toplam) ile raflı (o raf) karşılaştırır.
-//
+
 // Çalıştır (VPN açık):
 //   node barkodtani.mjs --barcode=8690632713052
-//   node barkodtani.mjs --barcode=XXXX --warehouse=D1 --stockplace=D3R1
-//
-// Ekrandaki üründen bir barkod + o rafı (D1 / D3R1 gibi) ver.
+
 // -----------------------------------------------------------------------------
 import dotenv from "dotenv";
 import { fileURLToPath } from "node:url";

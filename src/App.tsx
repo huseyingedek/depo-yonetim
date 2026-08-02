@@ -42,30 +42,30 @@ export default function App() {
         <Route path="/home" element={<HomePage />} />
         <Route path="/settings" element={<SettingsPage />} />
 
-        {/* Sipariş Toplama */}
+        {}
         <Route path="/picking" element={<PickingListPage />} />
         <Route path="/picking/:id" element={<PickingDetailPage />} />
         <Route path="/picking/:id/kayitlar" element={<PickingRecordsPage />} />
         <Route path="/picking/:id/summary" element={<PickingSummaryPage />} />
 
-        {/* Mal Kabul */}
+        {}
         <Route path="/receiving" element={<ReceivingListPage />} />
         <Route path="/receiving/:id" element={<ReceivingDetailPage />} />
         <Route path="/receiving/:id/summary" element={<ReceivingSummaryPage />} />
 
-        {/* Yerleştirme */}
+        {}
         <Route path="/putaway" element={<PutawayListPage />} />
         <Route path="/putaway/:id" element={<PutawayItemPage />} />
 
-        {/* Transfer */}
+        {}
         <Route path="/transfer" element={<TransferListPage />} />
         <Route path="/transfer/:id" element={<TransferTaskPage />} />
 
-        {/* Sayım */}
+        {}
         <Route path="/count" element={<CountListPage />} />
         <Route path="/count/:id" element={<CountDetailPage />} />
 
-        {/* Ürün Sorgulama */}
+        {}
         <Route path="/inquiry" element={<InquiryPage />} />
       </Route>
 

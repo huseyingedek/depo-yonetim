@@ -8,7 +8,7 @@ interface ReceivingState {
   completing: boolean;
   loadReceipt: (id: string) => Promise<void>;
   clear: () => void;
-  /** Barkod okut: lot takipli ürünse modal gerektiğini bildirir. */
+
   scan: (barcode: string) => { ok: boolean; lineId?: string; needsLot?: boolean; complete?: boolean };
   applyLot: (lineId: string, lot: string, expiry: string, qty: number) => void;
   setQty: (lineId: string, qty: number) => void;

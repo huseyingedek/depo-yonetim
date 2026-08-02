@@ -6,16 +6,11 @@ import { useAppStore } from "../store/appStore";
 import { usePickingStore } from "../store/pickingStore";
 import { OPERATIONS } from "./operations";
 
-/**
- * Web kabuğu: masaüstünde üst bar + sol menü + geniş içerik.
- * Mobilde sol menü gizlenir, hamburger ile açılan drawer olur; içerik tek kolon.
- */
 export default function AppShell() {
   const { t } = useTranslation();
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
 
-  // Sayfa (route) değişince içeriği en üste al — "ekran kayması" olmasın
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, behavior: "auto" });
     window.scrollTo(0, 0);
@@ -23,14 +18,14 @@ export default function AppShell() {
 
   return (
     <div className="app-bg flex h-[100dvh] overflow-hidden">
-      {/* Masaüstü sabit menü */}
+      {}
       <aside className="hidden w-72 shrink-0 flex-col border-r border-white/10 bg-gradient-to-b from-ink-900 via-brand-900 to-brand-950 lg:flex">
         <SidebarContent onNavigate={() => {}} />
       </aside>
 
-      {/* Ana bölüm */}
+      {}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Üst bar (mobilde app bar, web'de sade) */}
+        {}
         <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface px-4 lg:px-8 short:hidden">
           <div className="flex items-center gap-2.5 lg:hidden">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600">
@@ -49,8 +44,8 @@ export default function AppShell() {
           </div>
         </header>
 
-        {/* İçerik — asıl kaydırma kabı (mobilde alt sekme çubuğu için boşluk) */}
-        {/* overflow-x-hidden: tek bir uzun metin bile tüm sayfayı yana kaydırmasın */}
+        {}
+        {}
         <main
           ref={mainRef}
           className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-24 lg:pb-0 short:pb-0"
@@ -61,7 +56,7 @@ export default function AppShell() {
         </main>
       </div>
 
-      {/* Mobil alt sekme çubuğu (native uygulama hissi) */}
+      {}
       <MobileTabBar />
     </div>
   );
@@ -71,7 +66,7 @@ function MobileTabBar() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  // Yatay (kısa ekran) modunda alt menü aç/kapa durumu.
+
   const [acik, setAcik] = useState(false);
 
   const tabs = [
@@ -83,8 +78,7 @@ function MobileTabBar() {
 
   return (
     <>
-      {/* Yatay (kısa ekran) modunda alt menü varsayılan gizli; bu düğmeyle aç/kapa.
-          Dikey ve masaüstünde düğme görünmez, menü normal davranır. */}
+      {}
       <button
         type="button"
         onClick={() => setAcik((v) => !v)}
@@ -136,7 +130,7 @@ function SidebarContent({ onNavigate }: { onNavigate: () => void }) {
 
   return (
     <div className="flex h-full flex-col p-4">
-      {/* Marka */}
+      {}
       <div className="flex items-center gap-3 px-2 py-2">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20">
           <Boxes className="h-6 w-6 text-white" />
@@ -147,7 +141,7 @@ function SidebarContent({ onNavigate }: { onNavigate: () => void }) {
         </div>
       </div>
 
-      {/* Çalışma bağlamı */}
+      {}
       <div className="mt-4 flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2.5 ring-1 ring-white/10">
         <Building2 className="h-4 w-4 shrink-0 text-brand-200" />
         <div className="min-w-0 leading-tight">
@@ -156,7 +150,7 @@ function SidebarContent({ onNavigate }: { onNavigate: () => void }) {
         </div>
       </div>
 
-      {/* Menü */}
+      {}
       <nav className="mt-5 flex-1 space-y-1 overflow-y-auto no-scrollbar">
         <NavLink to="/home" className={linkClass} onClick={onNavigate} end>
           <Home className="h-5 w-5" />
@@ -183,7 +177,7 @@ function SidebarContent({ onNavigate }: { onNavigate: () => void }) {
         })}
       </nav>
 
-      {/* Alt */}
+      {}
       <div className="mt-2 space-y-1 border-t border-white/10 pt-3">
         <NavLink to="/settings" className={linkClass} onClick={onNavigate}>
           <SettingsIcon className="h-5 w-5" />
@@ -202,8 +196,7 @@ function LogoutButton() {
   return (
     <button
       onClick={() => {
-        // Kullanıcı çıkarken kendi picking ilerlemesi de temizlensin —
-        // ortak terminalde sonraki kullanıcıya sızmasın (M6).
+
         usePickingStore.getState().clear();
         logout();
         navigate("/login", { replace: true });

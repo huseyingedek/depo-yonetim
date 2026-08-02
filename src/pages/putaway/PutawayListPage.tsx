@@ -1,16 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Search, ChevronRight, Warehouse } from "lucide-react";
+import { Search, ChevronRight, Warehouse, MapPin } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import Pagination, { usePagination } from "../../components/Pagination";
 import { api } from "../../api/client";
 import type { PickOrder } from "../../types";
 
-/**
- * Yerleştirme emir listesi — MZYListingPick, PIISPICK=0 (toplama ile aynı servis).
- * Toplama listesinin aynısı; sadece emir kaynağı getPutawayOrders.
- */
 export default function PutawayListPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -75,36 +71,55 @@ export default function PutawayListPage() {
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {pg.pageItems.map((o) => (
-              <button
-                key={o.id}
-                onClick={() => emreGir(o)}
-                className="rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      {o.priority !== undefined && (
-                        <span className="chip bg-slate-100 font-mono text-slate-600">{o.priority}</span>
-                      )}
-                      <span className="font-mono text-base font-bold text-fg">{o.id}</span>
+            {pg.pageItems.map((o) => {
+              const durumEtiket =
+                o.status === "closed"
+                  ? t("picking.status.closed")
+                  : o.status === "partial"
+                  ? t("picking.status.inProgress")
+                  : t("picking.status.new");
+              const durumStil =
+                o.status === "closed"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : o.status === "partial"
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-brand-100 text-brand-700";
+              return (
+                <button
+                  key={o.id}
+                  onClick={() => emreGir(o)}
+                  className="rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {o.priority !== undefined && (
+                          <span className="chip bg-slate-100 font-mono text-slate-600" title="Öncelik">{o.priority}</span>
+                        )}
+                        <span className="font-mono text-base font-bold text-fg">{o.id}</span>
+                        {o.orderType && (
+                          <span className="chip bg-violet-100 font-mono text-violet-700">{o.orderType}</span>
+                        )}
+                        <span className={`chip ${durumStil}`}>{durumEtiket}</span>
+                      </div>
+                      {o.customer && <p className="mt-0.5 truncate text-sm text-muted">{o.customer}</p>}
                     </div>
-                    {o.customer && <p className="mt-0.5 text-sm text-muted">{o.customer}</p>}
+                    <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-subtle" />
                   </div>
-                  <ChevronRight className="mt-1 h-5 w-5 text-subtle" />
-                </div>
-                {(o.reference || o.sourceWarehouse) && (
-                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-subtle">
-                    {o.reference && <span>{o.reference}</span>}
-                    {o.sourceWarehouse && (
-                      <span className="font-mono text-violet-600">
-                        kaynak: {o.sourceWarehouse}{o.sourceShelf ? "/" + o.sourceShelf : ""}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </button>
-            ))}
+
+                  {(o.reference || o.sourceWarehouse) && (
+                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-subtle">
+                      {o.reference && <span>{o.reference}</span>}
+                      {o.sourceWarehouse && (
+                        <span className="inline-flex items-center gap-1 font-mono font-semibold text-violet-600">
+                          <MapPin className="h-3.5 w-3.5" /> Depo {o.sourceWarehouse}{o.sourceShelf ? " · " + o.sourceShelf : ""}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
           <Pagination page={pg.page} pageCount={pg.pageCount} onChange={pg.setPage} rangeStart={pg.rangeStart} rangeEnd={pg.rangeEnd} total={pg.total} label={t("putaway.items")} />
         </>

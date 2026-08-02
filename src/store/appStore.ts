@@ -2,7 +2,7 @@ import { create } from "zustand";
 import i18n from "../i18n";
 import type { Settings, User } from "../types";
 
-const STORAGE_KEY = "aktuel-wms-state-v3"; // v3: username artık CANIAS kullanıcı adı
+const STORAGE_KEY = "aktuel-wms-state-v3";
 
 export type Theme = "light" | "dark";
 
@@ -12,7 +12,6 @@ interface PersistedState {
   theme: Theme;
 }
 
-// CANIAS kodları — servislere bu değerler gönderilir (isim değil, kod!)
 const defaultSettings: Settings = {
   company: "01", // COMPANY
   facility: "100", // PLANT
@@ -32,7 +31,7 @@ function load(): PersistedState {
       };
     }
   } catch {
-    /* ignore */
+
   }
   return { user: null, settings: defaultSettings, theme: "light" };
 }
@@ -63,7 +62,7 @@ function persist(state: PersistedState) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {
-    /* ignore */
+
   }
 }
 
@@ -72,8 +71,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   settings: initial.settings,
   theme: initial.theme,
   login: (username: string, displayName?: string) => {
-    // username = CANIAS kullanıcı adı (PWORKER'a bu gider)
-    // displayName = ekranda gösterilecek ad (Ad Soyad)
+
     const user: User = {
       username,
       displayName:

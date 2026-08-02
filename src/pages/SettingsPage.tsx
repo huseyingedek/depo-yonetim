@@ -82,7 +82,7 @@ export default function SettingsPage() {
         </button>
       </section>
 
-      {/* Görünüm (tema) — anında uygulanır */}
+      {}
       <section className="card mt-5 p-5 lg:p-6">
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-subtle">
           {t("settings.appearance")}
