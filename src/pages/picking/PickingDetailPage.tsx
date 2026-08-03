@@ -45,6 +45,8 @@ export default function PickingDetailPage() {
   const [lotPending, setLotPending] = useState<string | null>(null);
 
   const [partiPrefill, setPartiPrefill] = useState("");
+  // Raf combosundan seçilince barkod alanına dolacak raf barkodu.
+  const [rafPrefill, setRafPrefill] = useState("");
 
   const [secilenRaf, setSecilenRaf] = useState<Record<string, string>>({});
 
@@ -465,7 +467,7 @@ export default function PickingDetailPage() {
             <BarcodeScanner
               onDetected={handleDetected}
               prompt={promptText}
-              prefill={lotPending ? partiPrefill : undefined}
+              prefill={lotPending ? partiPrefill : rafPrefill}
             />
 
             {busy && (
@@ -628,9 +630,10 @@ export default function PickingDetailPage() {
                             <MapPin className="h-3.5 w-3.5 shrink-0 text-subtle" />
                             <select
                               value={secilenRaf[line.id] ?? line.suggestions[0].barcode}
-                              onChange={(e) =>
-                                setSecilenRaf((s) => ({ ...s, [line.id]: e.target.value }))
-                              }
+                              onChange={(e) => {
+                                setSecilenRaf((s) => ({ ...s, [line.id]: e.target.value }));
+                                setRafPrefill(e.target.value); // barkod alanına taşı
+                              }}
                               className="rounded-lg border border-line bg-surface px-2 py-1 font-mono text-[11px] font-semibold text-fg outline-none focus:border-brand-500"
                             >
                               {line.suggestions.map((s) => {
