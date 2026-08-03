@@ -4,7 +4,8 @@ export type OperationType =
   | "picking" // Toplama
   | "transfer" // Transfer
   | "count" // Sayım
-  | "inquiry"; // Ürün Sorgulama
+  | "inquiry" // Ürün Sorgulama
+  | "label_printing"; // Etiket Yazdırma
 
 export interface User {
   username: string;

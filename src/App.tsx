@@ -19,6 +19,7 @@ import TransferTaskPage from "./pages/transfer/TransferTaskPage";
 import CountListPage from "./pages/count/CountListPage";
 import CountDetailPage from "./pages/count/CountDetailPage";
 import InquiryPage from "./pages/inquiry/InquiryPage";
+import LabelPrintingPage from "./pages/label-printing/LabelPrintingPage";
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const user = useAppStore((s) => s.user);
@@ -67,6 +68,9 @@ export default function App() {
 
         {}
         <Route path="/inquiry" element={<InquiryPage />} />
+
+        {}
+        <Route path="/label-printing" element={<LabelPrintingPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/home" replace />} />

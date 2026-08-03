@@ -25,7 +25,8 @@
       "picking": "Order Picking",
       "transfer": "Transfer",
       "count": "Stock Count",
-      "inquiry": "Product Inquiry"
+      "inquiry": "Product Inquiry",
+      "label_printing": "Label Printing"
     },
     "operationDesc": {
       "receiving": "Receive incoming goods",
@@ -33,7 +34,8 @@
       "picking": "Pick and close orders",
       "transfer": "Move between locations",
       "count": "Perform stock count",
-      "inquiry": "Query stock and location"
+      "inquiry": "Query stock and location",
+      "label_printing": "Print barcode and package labels"
     }
   },
   "settings": {

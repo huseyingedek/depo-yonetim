@@ -25,7 +25,8 @@
       "picking": "Sipariş Toplama",
       "transfer": "Transfer",
       "count": "Sayım",
-      "inquiry": "Ürün Sorgulama"
+      "inquiry": "Ürün Sorgulama",
+      "label_printing": "Etiket Yazdırma"
     },
     "operationDesc": {
       "receiving": "Gelen ürünleri kabul et",
@@ -33,7 +34,8 @@
       "picking": "Siparişleri topla ve kapat",
       "transfer": "Lokasyonlar arası taşı",
       "count": "Stok sayımı yap",
-      "inquiry": "Stok ve lokasyon sorgula"
+      "inquiry": "Stok ve lokasyon sorgula",
+      "label_printing": "Ürün ve koli etiketleri yazdır"
     }
   },
   "settings": {
