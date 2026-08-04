@@ -258,9 +258,9 @@ export default function PickingDetailPage() {
       />
 
       {}
-      <div className="grid min-w-0 gap-4 md:gap-6 md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-[400px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-3">
+      <div className="grid min-w-0 gap-4 md:gap-6 md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-3">
         {}
-        <div className="min-w-0 md:sticky md:top-3 md:self-start lg:top-4 short:!static short:w-[300px] short:shrink-0 short:self-stretch short:overflow-y-auto">
+        <div className="min-w-0 md:sticky md:top-3 md:self-start lg:static xl:sticky xl:top-4 short:!static short:w-[300px] short:shrink-0 short:self-stretch short:overflow-y-auto">
           <div className="card p-4">
             {}
             <div className="mb-3 flex items-center gap-1.5">

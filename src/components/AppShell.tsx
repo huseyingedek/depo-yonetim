@@ -10,6 +10,8 @@ export default function AppShell() {
   const { t } = useTranslation();
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
+  // Kenar çubuğu aç/kapa (masaüstü/tablet). Hamburger ile toggle.
+  const [sidebarAcik, setSidebarAcik] = useState(true);
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, behavior: "auto" });
@@ -19,7 +21,11 @@ export default function AppShell() {
   return (
     <div className="app-bg flex h-[100dvh] overflow-hidden">
       {}
-      <aside className="hidden w-72 shrink-0 flex-col border-r border-white/10 bg-gradient-to-b from-ink-900 via-brand-900 to-brand-950 lg:flex">
+      <aside
+        className={`hidden w-72 shrink-0 flex-col border-r border-white/10 bg-gradient-to-b from-ink-900 via-brand-900 to-brand-950 ${
+          sidebarAcik ? "lg:flex" : "lg:hidden"
+        }`}
+      >
         <SidebarContent onNavigate={() => {}} />
       </aside>
 
@@ -27,6 +33,15 @@ export default function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         {}
         <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface px-4 lg:px-8 short:hidden">
+          {}
+          <button
+            type="button"
+            onClick={() => setSidebarAcik((v) => !v)}
+            aria-label="Menüyü aç/kapat"
+            className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition hover:bg-elevated hover:text-fg lg:flex"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
           <div className="flex items-center gap-2.5 lg:hidden">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600">
               <Boxes className="h-5 w-5 text-white" />

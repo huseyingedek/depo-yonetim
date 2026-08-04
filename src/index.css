@@ -54,6 +54,15 @@ body {
   background: rgb(var(--app-to));
 }
 
+/* Dokunmatik TABLETLERDE arayüzü büyüt (depo kullanımı, kol mesafesi).
+   rem tabanlı tüm ölçüler (yazı, boşluk) ölçeklenir. Fareyle kullanılan
+   masaüstü (pointer: fine) ETKİLENMEZ. */
+@media (pointer: coarse) and (min-width: 700px) {
+  html {
+    font-size: 20px;
+  }
+}
+
 /* Tüm sayfalara uygulanan tema arka plan gradient'i */
 .app-bg {
   background-image: linear-gradient(
