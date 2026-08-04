@@ -217,5 +217,42 @@
     "next": "Sonraki",
     "save": "Kaydet",
     "backToMenu": "Ana Menüye Dön"
+  },
+  "labelPrinting": {
+    "title": "Etiket Yazdırma",
+    "subtitle": "Yazdırmak istediğiniz etiket tipini seçin",
+    "search": "Etiket tipi ara...",
+    "modalTitle": "Etiket Yazdırma Ayarları",
+    "printer": "Yazıcı Seçimi",
+    "labelSize": "Etiket Boyutu",
+    "copies": "Kopya Sayısı",
+    "codeOrRef": "Barkod / Referans No",
+    "codePlaceholder": "Barkod okutun veya kod girin...",
+    "preview": "Etiket Önizleme",
+    "print": "Etiket Yazdır",
+    "printing": "Yazdırılıyor...",
+    "success": "Etiket başarıyla yazıcıya gönderildi",
+    "cards": {
+      "packaging": {
+        "title": "Paketleme Etiketi Yazdırma",
+        "desc": "Sipariş, koli ve kargo paket etiketlerini yazdırın"
+      },
+      "waybill": {
+        "title": "İrsaliye Etiketi Yazdırma",
+        "desc": "Sevkiyat evrakları ve irsaliye detay etiketlerini yazdırın"
+      },
+      "expiry": {
+        "title": "SKT (Son Kullanma Tarihi) Etiketi Yazdırma",
+        "desc": "Parti, lot ve son kullanma tarihli ürün etiketleri yazdırın"
+      },
+      "product_barcode": {
+        "title": "Ürün Barkodu Yazdırma",
+        "desc": "Ürün, malzeme ve EAN/UPC barkod etiketlerini yazdırın"
+      },
+      "shelf_location": {
+        "title": "Depo Raf Etiketi Yazdırma",
+        "desc": "Depo lokasyon, koridor ve raf adres etiketlerini yazdırın"
+      }
+    }
   }
 }

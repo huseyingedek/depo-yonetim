@@ -217,5 +217,42 @@
     "next": "Next",
     "save": "Save",
     "backToMenu": "Back to Menu"
+  },
+  "labelPrinting": {
+    "title": "Label Printing",
+    "subtitle": "Select the label category you want to print",
+    "search": "Search label type...",
+    "modalTitle": "Print Settings",
+    "printer": "Select Printer",
+    "labelSize": "Label Size",
+    "copies": "Number of Copies",
+    "codeOrRef": "Barcode / Ref No",
+    "codePlaceholder": "Scan barcode or enter code...",
+    "preview": "Label Preview",
+    "print": "Print Label",
+    "printing": "Printing...",
+    "success": "Label successfully sent to printer",
+    "cards": {
+      "packaging": {
+        "title": "Packaging Label Printing",
+        "desc": "Print order, parcel and shipping package labels"
+      },
+      "waybill": {
+        "title": "Waybill Label Printing",
+        "desc": "Print dispatch documents and waybill detail labels"
+      },
+      "expiry": {
+        "title": "Expiry Date Label Printing",
+        "desc": "Print batch, lot number and expiration date labels"
+      },
+      "product_barcode": {
+        "title": "Product Barcode Printing",
+        "desc": "Print individual product and EAN/UPC barcode labels"
+      },
+      "shelf_location": {
+        "title": "Warehouse Shelf Label Printing",
+        "desc": "Print warehouse location, aisle and shelf labels"
+      }
+    }
   }
 }
