@@ -5,9 +5,15 @@ export default {
   theme: {
     extend: {
       screens: {
-        // Yatay telefon (kısa yükseklik): header + alt menü gizlenir,
-        // toplama ekranı sabit-sol / kayan-sağ olur.
-        short: { raw: "(max-height: 500px)" },
+        // Kompakt "ekranı doldur" modu: sabit-sol tarayıcı paneli / kayan-sağ liste,
+        // tam yükseklik. İki durumda devreye girer:
+        //   1) Yatay telefon (kısa yükseklik ≤ 500px)
+        //   2) Yatay dokunmatik tablet (ör. Galaxy Tab Active3 → 1280×800):
+        //      geniş (≥1024) + alçak (≤900) + dokunmatik (coarse).
+        // Fareyle kullanılan masaüstü monitörler (pointer: fine) ETKİLENMEZ.
+        short: {
+          raw: "(max-height: 500px), (min-width: 1024px) and (max-height: 900px) and (pointer: coarse)",
+        },
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],

@@ -98,7 +98,7 @@ function MobileTabBar() {
         type="button"
         onClick={() => setAcik((v) => !v)}
         aria-label={acik ? "Menüyü kapat" : "Menüyü aç"}
-        className="fixed bottom-2 right-2 z-50 hidden h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white shadow-soft active:scale-95 short:flex"
+        className="fixed bottom-2 right-2 z-50 hidden h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white shadow-soft active:scale-95 short:flex lg:!hidden"
       >
         {acik ? <ChevronDown className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
       </button>
