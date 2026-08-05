@@ -99,8 +99,13 @@ export default function InquiryPage() {
     void runQuery(shelf, "");
   };
 
-  const toplam = rows.reduce((s, b) => s + b.availStock, 0);
-  const stokVar = toplam > 0;
+  const birimToplam = rows.reduce<Record<string, number>>((acc, b) => {
+    const u = b.unit || "?";
+    acc[u] = (acc[u] ?? 0) + b.availStock;
+    return acc;
+  }, {});
+  const birimler = Object.entries(birimToplam).sort((a, b) => b[1] - a[1]);
+  const stokVar = birimler.some(([, v]) => v > 0);
   const busy = shelfBusy || queryBusy;
 
   return (
@@ -179,7 +184,7 @@ export default function InquiryPage() {
           ) : (
             <div className="animate-slide-up space-y-4">
               {/* Özet */}
-              <div className={`flex items-end justify-between rounded-2xl px-5 py-4 ${stokVar ? "bg-emerald-50" : "bg-rose-50"}`}>
+              <div className={`flex items-center justify-between gap-3 rounded-2xl px-5 py-4 ${stokVar ? "bg-emerald-50" : "bg-rose-50"}`}>
                 <div className="min-w-0">
                   <span className={`text-sm font-semibold ${stokVar ? "text-emerald-700" : "text-rose-700"}`}>
                     {stokVar ? "Toplam stok" : "Stok yok"}
@@ -198,9 +203,18 @@ export default function InquiryPage() {
                     <span className="text-subtle">· {rows.length} kayıt</span>
                   </div>
                 </div>
-                <span className={`shrink-0 font-mono text-3xl font-extrabold ${stokVar ? "text-emerald-700" : "text-rose-700"}`}>
-                  {toplam} <span className="text-base font-semibold">{rows[0]?.unit}</span>
-                </span>
+                {/* Birim bazında ayrı toplamlar — farklı birimler toplanmaz */}
+                <div className={`shrink-0 text-right ${stokVar ? "text-emerald-700" : "text-rose-700"}`}>
+                  {birimler.length ? (
+                    birimler.map(([u, v]) => (
+                      <div key={u} className={`font-mono font-extrabold leading-tight ${birimler.length === 1 ? "text-3xl" : "text-xl"}`}>
+                        {v} <span className="text-sm font-semibold">{u}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="font-mono text-3xl font-extrabold">0</div>
+                  )}
+                </div>
               </div>
 
               {/* Satırlar */}
@@ -222,12 +236,16 @@ export default function InquiryPage() {
                               <MapPin className="h-3 w-3 shrink-0" /> {b.warehouse}{b.stockPlace ? "/" + b.stockPlace : ""}
                             </span>
                           )}
-                          {b.batchNum && b.batchNum !== "*" && <span>parti {b.batchNum}</span>}
                         </div>
                       </div>
-                      <span className="shrink-0 font-mono text-sm font-bold text-fg">
-                        {b.availStock} <span className="text-xs font-medium text-subtle">{b.unit}</span>
-                      </span>
+                      <div className="shrink-0 text-right">
+                        <div className="font-mono text-sm font-bold text-fg">
+                          {b.availStock} <span className="text-xs font-medium text-subtle">{b.unit}</span>
+                        </div>
+                        {b.batchNum && b.batchNum !== "*" && (
+                          <div className="mt-0.5 font-mono text-[11px] text-subtle">parti {b.batchNum}</div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

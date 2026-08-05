@@ -35,7 +35,7 @@ npm run preview    # dist önizlemesi
 - **Sayım** — sayım işleri → lokasyon → sistem/sayılan miktar, **fark** hesabı + not → tamamla
 - **Ürün Sorgulama** — barkod ile toplam stok + lokasyon kırılımı (çok lokasyonda "tümünü gör")
 
-> **Not (Bora):** Bu projede **raf/lokasyon barkodu okutma yoktur**. Yerleştirme ve transfer'de lokasyonlar taranmaz; önerilen değerle gelir, elle onaylanır/değiştirilir. Yalnızca **ürün barkodu** kamerayla okutulur.
+> **Not ():** Bu projede **raf/lokasyon barkodu okutma yoktur**. Yerleştirme ve transfer'de lokasyonlar taranmaz; önerilen değerle gelir, elle onaylanır/değiştirilir. Yalnızca **ürün barkodu** kamerayla okutulur.
 
 ## Sayfalama ve arama
 

@@ -32,9 +32,6 @@ interface MzyResult {
 
 export class WmsError extends Error {}
 
-// Bora'nın parametre kuralları:
-
-//   • integer     → 0
 
 export const DATE_MIN = "01.01.1975";
 export const DATE_MAX = "01.01.2100";
@@ -293,7 +290,7 @@ function toProduct(row: Row): ProductRef {
     barcode: pick(row, ["BARCODE", "BARCODENUM", "EAN"]),
     // 2. barkod (koli barkodu) — Bora'nın göndereceği alan; esnek adla okunur.
     barcode2: pick(row, ["BARCODE2", "BARCODENUM2", "EAN2", "ALTBARCODE", "PACKBARCODE"]) || undefined,
-    unit: pick(row, ["UNIT"], "Adet"),
+    unit: pick(row, ["IUNIT", "UNIT"], "Adet"),
   };
 }
 
@@ -806,7 +803,7 @@ export const api = {
       ok: true,
       material: pick(satir, ["MATERIAL"]),
       name: pick(satir, ["MTEXT"]).trim(),
-      unit: pick(satir, ["UNIT"]),
+      unit: pick(satir, ["IUNIT", "UNIT"]),
       lot: yok(lot) ? undefined : lot,
       quantity: num(satir, ["QUANTITY"], 0),
       availStock: num(satir, ["AVAILSTOCK"], 0),

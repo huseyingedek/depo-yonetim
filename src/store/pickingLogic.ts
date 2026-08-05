@@ -99,7 +99,7 @@ export function evaluateScan(input: ScanInput): ScanDecision {
       l.requestedQty - linePicked(l) > best.requestedQty - linePicked(best) ? l : best
     );
 
-  const birim = scan.unit || line.product.unit;
+  const birim = line.product.unit || scan.unit;
 
   const ozelStok = scan.specialStock || (line.lotTracked ? "1" : "*");
 
