@@ -615,6 +615,8 @@ export const api = {
     material?: string;
     warehouse?: string;
     stockPlace?: string;
+    container?: boolean; // PICONTAINER: konteynerları da getir (öndeğer kapalı)
+    onlyPickWarehouse?: boolean; // PIISPICKWH: yalnızca toplama depoları (öndeğer açık)
   }): Promise<StockRow[]> {
     const c = ctx();
     const r = await call(SERVICES.getStock, {
@@ -627,6 +629,9 @@ export const api = {
       PSSPECIALSTOCK: "",
       PSVOPTIONS: "",
       PSBARCODE: opts.barcode ?? "",
+      // Bora, 05.08: filtreleme artık serviste (WMS destek tablosu).
+      PICONTAINER: opts.container ? 1 : 0,
+      PIISPICKWH: opts.onlyPickWarehouse ? 1 : 0,
     });
     const gorulen = new Set<string>();
     return rowsOf(r, ["TBLSTOCK"])
