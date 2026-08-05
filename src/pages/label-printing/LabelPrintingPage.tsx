@@ -7,14 +7,23 @@ import {
   Barcode,
   Warehouse,
   Search,
+  Printer,
   type LucideIcon,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
+
+// Clean Sub-Component Modals
+import PackagingLabelModal from "./modals/PackagingLabelModal";
+import WaybillLabelModal from "./modals/WaybillLabelModal";
+import ExpiryLabelModal from "./modals/ExpiryLabelModal";
+import ProductBarcodeModal from "./modals/ProductBarcodeModal";
+import ShelfLocationModal from "./modals/ShelfLocationModal";
 
 interface LabelCardItem {
   id: string;
   titleKey: string;
   defaultTitle: string;
+  description: string;
   icon: LucideIcon;
   iconBg: string;
   iconFg: string;
@@ -25,6 +34,7 @@ const LABEL_CARDS: LabelCardItem[] = [
     id: "packaging",
     titleKey: "labelPrinting.cards.packaging.title",
     defaultTitle: "Paketleme Etiketi Yazdırma",
+    description: "Koli, palet ve paket etiketlerini yazdırın (Servis: MZYPrintContainer)",
     icon: Package,
     iconBg: "bg-blue-100 dark:bg-blue-900/30",
     iconFg: "text-blue-600 dark:text-blue-400",
@@ -33,6 +43,7 @@ const LABEL_CARDS: LabelCardItem[] = [
     id: "waybill",
     titleKey: "labelPrinting.cards.waybill.title",
     defaultTitle: "İrsaliye Etiketi Yazdırma",
+    description: "Sevkiyat evrakları ve irsaliye detay etiketlerini yazdırın",
     icon: FileText,
     iconBg: "bg-emerald-100 dark:bg-emerald-900/30",
     iconFg: "text-emerald-600 dark:text-emerald-400",
@@ -41,6 +52,7 @@ const LABEL_CARDS: LabelCardItem[] = [
     id: "expiry",
     titleKey: "labelPrinting.cards.expiry.title",
     defaultTitle: "SKT (Son Kullanma Tarihi) Etiketi Yazdırma",
+    description: "Parti, lot ve son kullanma tarihli ürün etiketleri yazdırın",
     icon: CalendarDays,
     iconBg: "bg-amber-100 dark:bg-amber-900/30",
     iconFg: "text-amber-600 dark:text-amber-400",
@@ -49,6 +61,7 @@ const LABEL_CARDS: LabelCardItem[] = [
     id: "product_barcode",
     titleKey: "labelPrinting.cards.product_barcode.title",
     defaultTitle: "Ürün Barkodu Yazdırma",
+    description: "Ürün, malzeme ve EAN barkod etiketlerini yazdırın",
     icon: Barcode,
     iconBg: "bg-purple-100 dark:bg-purple-900/30",
     iconFg: "text-purple-600 dark:text-purple-400",
@@ -57,6 +70,7 @@ const LABEL_CARDS: LabelCardItem[] = [
     id: "shelf_location",
     titleKey: "labelPrinting.cards.shelf_location.title",
     defaultTitle: "Depo Raf Etiketi Yazdırma",
+    description: "Depo lokasyon ve raf adres etiketlerini (örn: D3$C1) yazdırın",
     icon: Warehouse,
     iconBg: "bg-rose-100 dark:bg-rose-900/30",
     iconFg: "text-rose-600 dark:text-rose-400",
@@ -66,21 +80,26 @@ const LABEL_CARDS: LabelCardItem[] = [
 export default function LabelPrintingPage() {
   const { t } = useTranslation();
   const [q, setQ] = useState("");
+  const [activeModalId, setActiveModalId] = useState<string | null>(null);
 
   const filteredCards = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return LABEL_CARDS;
     return LABEL_CARDS.filter((c) => {
       const title = t(c.titleKey, { defaultValue: c.defaultTitle }).toLowerCase();
-      return title.includes(s);
+      return title.includes(s) || c.description.toLowerCase().includes(s);
     });
   }, [q, t]);
+
+  const closeModal = () => setActiveModalId(null);
 
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8">
       <PageHeader
         title={t("labelPrinting.title", { defaultValue: "Etiket Yazdırma" })}
-        subtitle={t("labelPrinting.subtitle", { defaultValue: "Yazdırmak istediğiniz etiket tipini seçin" })}
+        subtitle={t("labelPrinting.subtitle", {
+          defaultValue: "Yazdırmak istediğiniz etiket tipini seçin",
+        })}
         backTo="/home"
         right={
           <div className="relative hidden sm:block">
@@ -95,7 +114,7 @@ export default function LabelPrintingPage() {
         }
       />
 
-      {/* Mobil Arama İnpudu */}
+      {/* Mobil Arama Input'u */}
       <div className="relative mb-5 sm:hidden">
         <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
         <input
@@ -115,30 +134,41 @@ export default function LabelPrintingPage() {
           return (
             <div
               key={c.id}
+              onClick={() => setActiveModalId(c.id)}
               style={{ animationDelay: `${i * 55}ms` }}
-              className="stagger relative flex flex-col justify-between rounded-2xl border border-line bg-surface p-5 text-left shadow-card"
+              className="stagger relative flex cursor-pointer flex-col justify-between rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition-all hover:border-brand hover:shadow-lg active:scale-[0.99]"
             >
               <div>
                 <div className="flex w-full items-start justify-between">
-                  <div
-                    className={`flex h-14 w-14 items-center justify-center rounded-2xl ${c.iconBg}`}
-                  >
+                  <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${c.iconBg}`}>
                     <Icon className={`h-7 w-7 ${c.iconFg}`} />
                   </div>
+                  <span className="rounded-full border border-line bg-bg px-2.5 py-1 text-xs font-semibold text-subtle">
+                    Yazdır
+                  </span>
                 </div>
 
                 <div className="mt-4 min-w-0">
-                  <h3 className="text-lg font-bold text-fg">
-                    {baslik}
-                  </h3>
+                  <h3 className="text-lg font-bold text-fg">{baslik}</h3>
+                  <p className="mt-1 text-xs text-subtle leading-relaxed">{c.description}</p>
                 </div>
+              </div>
+
+              <div className="mt-5 flex items-center gap-1.5 text-xs font-bold text-brand">
+                <Printer className="h-4 w-4" />
+                <span>Formu Aç</span>
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Modallar */}
+      <PackagingLabelModal isOpen={activeModalId === "packaging"} onClose={closeModal} />
+      <WaybillLabelModal isOpen={activeModalId === "waybill"} onClose={closeModal} />
+      <ExpiryLabelModal isOpen={activeModalId === "expiry"} onClose={closeModal} />
+      <ProductBarcodeModal isOpen={activeModalId === "product_barcode"} onClose={closeModal} />
+      <ShelfLocationModal isOpen={activeModalId === "shelf_location"} onClose={closeModal} />
     </div>
   );
 }
-
-

@@ -25,4 +25,6 @@ export const SERVICES = {
   getCompany: "GetCompany", // parametresiz
   getPlant: "GetPlant", // PSCOMPANY
   getWarehouse: "GetWarehouse", // PSCOMPANY, PSPLANT
+
+  printContainer: "MZYPrintContainer", // Konteyner/paket etiket yazdırma
 } as const;
