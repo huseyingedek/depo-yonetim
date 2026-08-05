@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ScanSearch, MapPin, Package, Loader2, Warehouse, X } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
@@ -21,10 +21,36 @@ import type { StockRow } from "../../types";
 
 type Shelf = { warehouse: string; stockPlace: string };
 
-// Ürün sorgulamada YALNIZCA bu depolar gösterilir (Ali, 05.08).
-// Diğerleri (ör. 20 = irsaliye/mal kabul konteynerleri) gizlenir.
-const GORUNUR_DEPOLAR = new Set(["00", "10", "40", "50", "60", "D1", "D2", "D3"]);
-const depoGorunur = (r: StockRow) => GORUNUR_DEPOLAR.has(r.warehouse.trim().toUpperCase());
+// Filtre switch'leri (Bora, 05.08): ekranda aç/kapa; sonuçlar anında süzülür.
+//   • "Sadece toplama depoları" AÇIKken yalnızca aşağıdaki depolar görünür.
+//     (Ali'nin listesi; ileride WMS destek tablosundan / servis parametresiyle
+//      gelebilir — Bora param adlarını verince arka uca taşınır.)
+const TOPLAMA_DEPOLARI = new Set(["00", "10", "40", "50", "60", "D1", "D2", "D3"]);
+const toplamaDeposu = (r: StockRow) => TOPLAMA_DEPOLARI.has(r.warehouse.trim().toUpperCase());
+
+// Konteyner (HU) stok yeri deseni: harf öbeği + uzun rakam (ör. AKI2026000023425).
+//   • "Konteynerları da getir" KAPALIyken bu satırlar gizlenir.
+const konteynerMi = (r: StockRow) => /^[A-Za-z]{2,}\d{6,}$/.test(r.stockPlace.trim());
+
+function Switch({ on, onToggle, label, hint }: { on: boolean; onToggle: () => void; label: string; hint?: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={onToggle}
+      className="flex w-full items-center justify-between gap-3 text-left"
+    >
+      <span className="min-w-0">
+        <span className="block text-[13px] font-semibold text-fg">{label}</span>
+        {hint && <span className="block text-[11px] text-subtle">{hint}</span>}
+      </span>
+      <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${on ? "bg-brand-500" : "bg-elevated"}`}>
+        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${on ? "left-[22px]" : "left-0.5"}`} />
+      </span>
+    </button>
+  );
+}
 
 export default function InquiryPage() {
   const { t } = useTranslation();
@@ -37,6 +63,10 @@ export default function InquiryPage() {
   const [queryBusy, setQueryBusy] = useState(false);
   const [shelfError, setShelfError] = useState<string | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
+
+  // Filtre switch'leri — öndeğerler Bora spec: konteyner KAPALI(0), toplama AÇIK(1).
+  const [konteynerGetir, setKonteynerGetir] = useState(false);
+  const [sadeceToplama, setSadeceToplama] = useState(true);
 
   // Tek sorgu — dolu olan alan(lar) gider, boş olan boş. (Bora: aynı servis.)
   const runQuery = async (sh: Shelf | null, code: string) => {
@@ -54,8 +84,8 @@ export default function InquiryPage() {
         warehouse: sh?.warehouse ?? "",
         stockPlace: sh?.stockPlace ?? "",
       });
-      // Yalnızca görünür depolar (00/10/40/50/60/D1/D2/D3); 20 vb. gizli.
-      setRows(r.filter(depoGorunur));
+      // Ham satırları sakla; süzme switch'lere göre anında yapılır (gorunurRows).
+      setRows(r);
       setQueried(true);
     } catch (e) {
       setQueryError(e instanceof Error ? e.message : String(e));
@@ -105,7 +135,20 @@ export default function InquiryPage() {
     void runQuery(shelf, "");
   };
 
-  const birimToplam = rows.reduce<Record<string, number>>((acc, b) => {
+  // Switch'lere göre görünür satırlar (yeniden sorgu YOK; anında süzülür).
+  const gorunurRows = useMemo(
+    () =>
+      rows.filter((r) => {
+        if (sadeceToplama && !toplamaDeposu(r)) return false;
+        if (!konteynerGetir && konteynerMi(r)) return false;
+        return true;
+      }),
+    [rows, sadeceToplama, konteynerGetir]
+  );
+  // Filtreyle gizlenen kayıt var mı (kullanıcıya "switch aç" ipucu için).
+  const gizlenen = rows.length - gorunurRows.length;
+
+  const birimToplam = gorunurRows.reduce<Record<string, number>>((acc, b) => {
     const u = b.unit || "?";
     acc[u] = (acc[u] ?? 0) + b.availStock;
     return acc;
@@ -166,6 +209,23 @@ export default function InquiryPage() {
             )}
             {queryError && <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{queryError}</p>}
           </div>
+
+          {/* ── FİLTRELER (aç/kapa) ── */}
+          <div className="card space-y-3 p-4">
+            <p className="text-[13px] font-semibold text-muted">Filtreler</p>
+            <Switch
+              on={sadeceToplama}
+              onToggle={() => setSadeceToplama((v) => !v)}
+              label="Sadece toplama depoları"
+              hint="00, 10, 40, 50, 60, D1, D2, D3"
+            />
+            <Switch
+              on={konteynerGetir}
+              onToggle={() => setKonteynerGetir((v) => !v)}
+              label="Konteynerları da getir"
+              hint="İrsaliye / HU stok yerleri"
+            />
+          </div>
         </div>
 
         {/* Sağ: sonuçlar */}
@@ -177,15 +237,24 @@ export default function InquiryPage() {
                 Rafı ve/veya ürünü okutun; stok durumu ve partiler burada listelenir.
               </p>
             </div>
-          ) : busy && rows.length === 0 ? (
+          ) : busy && gorunurRows.length === 0 ? (
             <div className="flex items-center justify-center rounded-2xl border border-dashed border-line bg-surface py-16 text-subtle">
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>
-          ) : rows.length === 0 ? (
+          ) : gorunurRows.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-surface py-16 text-center">
               <Package className="mb-2 h-10 w-10 text-subtle" />
-              <p className="text-sm font-semibold text-rose-600">Kayıt bulunamadı</p>
-              <p className="mt-1 max-w-xs px-6 text-xs text-subtle">Bu raf / ürün için stok kaydı yok.</p>
+              {gizlenen > 0 ? (
+                <>
+                  <p className="text-sm font-semibold text-amber-600">{gizlenen} kayıt filtreyle gizlendi</p>
+                  <p className="mt-1 max-w-xs px-6 text-xs text-subtle">Konteynerler / toplama dışı depolar gizli. Görmek için soldaki filtre switch'lerini açın.</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-rose-600">Kayıt bulunamadı</p>
+                  <p className="mt-1 max-w-xs px-6 text-xs text-subtle">Bu raf / ürün için stok kaydı yok.</p>
+                </>
+              )}
             </div>
           ) : (
             <div className="animate-slide-up space-y-4">
@@ -206,7 +275,7 @@ export default function InquiryPage() {
                         <Package className="h-3 w-3" /> {productCode}
                       </span>
                     )}
-                    <span className="text-subtle">· {rows.length} kayıt</span>
+                    <span className="text-subtle">· {gorunurRows.length} kayıt{gizlenen > 0 ? ` (+${gizlenen} gizli)` : ""}</span>
                   </div>
                 </div>
                 {/* Birim bazında ayrı toplamlar — farklı birimler toplanmaz */}
@@ -226,7 +295,7 @@ export default function InquiryPage() {
               {/* Satırlar */}
               <div className="card p-4">
                 <div className="space-y-2">
-                  {rows.map((b, i) => (
+                  {gorunurRows.map((b, i) => (
                     <div key={`${b.material}|${b.warehouse}|${b.stockPlace}|${b.batchNum || i}`} className="flex items-start justify-between gap-3 rounded-xl bg-elevated px-4 py-2.5">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">

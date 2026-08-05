@@ -10,6 +10,8 @@ import {
   validateSource,
   evaluatePlacementScan,
   buildPlacementRecord,
+  distributePlacement,
+  materialRemaining,
   type SourceContext,
   type ReadyPlacement,
   type PlacementRecord,
@@ -121,39 +123,52 @@ export const usePutawayStore = create<PutawayState>()(
         const { order, source, ready } = get();
         if (!order || !source) return { ok: false, message: "Bağlam eksik (emir/kaynak)" };
         if (!ready) return { ok: false, message: "Önce ürünü (ve gerekiyorsa partisini) okutun." };
-        const line = order.lines.find((l) => l.product.code === ready.material);
-        // Yerleştirilen = CANIAS (pickedQty) ile bu oturum kayıtlarının BÜYÜĞÜ —
-        // EnterPlacement tazelemesi boş dönse bile doğru kalan hesaplanır.
-        const oturumKayit = get().records.filter((r) => r.material === ready.material).reduce((s, r) => s + r.qty, 0);
-        const yerlesen = Math.max(line?.pickedQty ?? 0, oturumKayit);
-        const kalan = (line?.requestedQty ?? ready.qty) - yerlesen;
-        if (kalan <= 0) return { ok: false, message: "Bu kalem zaten tamamlandı" };
-        const istenen = adet && adet > 0 ? Math.floor(adet) : kalan; // boşsa kalanın tamamı
-        // FAZLA MAL: girilen miktar kalandan büyükse SavePlacement HİÇ çağrılmaz.
-        if (istenen > kalan) {
-          return { ok: false, message: `Fazla mal — en fazla ${kalan} yerleştirebilirsiniz (kalan ${kalan})` };
+
+        // MALZEME GENELİ kalan — aynı malzemenin TÜM açık satırlarının toplamı.
+        const toplamKalan = materialRemaining(order, ready.material);
+        if (toplamKalan <= 0) return { ok: false, message: "Bu kalem zaten tamamlandı" };
+        const istenen = adet && adet > 0 ? Math.floor(adet) : toplamKalan; // boşsa kalanın tamamı
+        // FAZLA MAL: girilen miktar toplam kalandan büyükse HİÇ kaydetme.
+        if (istenen > toplamKalan) {
+          return { ok: false, message: `Fazla mal — en fazla ${toplamKalan} yerleştirebilirsiniz (kalan ${toplamKalan})` };
         }
-        const miktar = istenen;
+
         const r = await api.readShelfBarcode(barcode.trim());
         if (!r.ok) return { ok: false, message: r.message || "Hedef raf okunamadı" };
         const target = { barcode: barcode.trim(), warehouse: r.warehouse, stockPlace: r.stockPlace };
-        const record = buildPlacementRecord(ready, source, target, miktar);
-        const s = await api.savePlacement({
-          order,
-          itemNo: ready.lineId, // PIITEMNO
-          material: ready.material, // PSMATERIAL
-          targetWarehouse: target.warehouse,
-          targetShelf: target.stockPlace,
-          specialStock: ready.specialStock,
-          lot: ready.lot,
-          qty: miktar,
-          startTime: order.startTime, // PDSTARTTIME
-        });
-        if (!s.ok) return { ok: false, message: s.message || "Yerleştirme kaydedilemedi" };
 
-        const kalanYeni = kalan - miktar;
-        set({ records: [...get().records, record], ready: kalanYeni > 0 ? ready : null });
+        // Girilen miktarı açık satırlara SIRAYLA dağıt; her satır için ayrı SavePlacement.
+        const allocations = distributePlacement(order, ready.material, istenen, ready.lot);
+        const yeniKayitlar: PlacementRecord[] = [];
+        for (const a of allocations) {
+          const record = buildPlacementRecord(
+            { ...ready, lineId: a.lineId, lot: a.lot, specialStock: a.specialStock, qty: a.qty },
+            source,
+            target,
+            a.qty
+          );
+          const s = await api.savePlacement({
+            order,
+            itemNo: a.lineId, // PIITEMNO — o satır
+            material: ready.material, // PSMATERIAL
+            targetWarehouse: target.warehouse,
+            targetShelf: target.stockPlace,
+            specialStock: a.specialStock,
+            lot: a.lot,
+            qty: a.qty,
+            startTime: order.startTime, // PDSTARTTIME
+          });
+          if (!s.ok) {
+            // Kısmi başarı: o ana kadar kaydedilenleri sakla, hatayı dön.
+            if (yeniKayitlar.length) set({ records: [...get().records, ...yeniKayitlar] });
+            return { ok: false, message: s.message || "Yerleştirme kaydedilemedi" };
+          }
+          yeniKayitlar.push(record);
+        }
 
+        set({ records: [...get().records, ...yeniKayitlar], ready: null });
+
+        // Tüm satırlar gönderildikten sonra TEK tazeleme (EnterPlacement).
         try {
           const taze = await api.enterPutaway(order.id, order.orderType ?? "");
           if (taze && get().order?.id === taze.id) {
