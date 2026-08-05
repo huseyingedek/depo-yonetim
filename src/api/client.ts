@@ -19,6 +19,7 @@ import type {
   ProductStock,
   PickSuggestion,
   StockBatch,
+  StockRow,
 } from "../types";
 
 interface MzyResult {
@@ -599,6 +600,52 @@ export const api = {
         if (!(b.batchNum || b.availStock > 0)) return false;
 
         const anahtar = b.batchNum || "*";
+        if (gorulen.has(anahtar)) return false;
+        gorulen.add(anahtar);
+        return true;
+      });
+  },
+
+  // Ürün Sorgulama — Raf ve Ürün BAĞIMSIZ (Bora, 05.08: "ikisi için de getstock").
+  // Okutulan alan dolu gider, diğeri boş; diğer parametreler öndeğer.
+  //   • Ürün okutulur → PSBARCODE dolu, raf boş  → o ürünün tüm stoğu
+  //   • Raf okutulur   → PSWAREHOUSE/PSSTOCKPLACE dolu, ürün boş → raftaki stok
+  //   • İkisi birden   → ikisi de dolu → o rafta o ürün
+  // TBLSTOCK alanları canlı yanıtla teyit edildi (05.08): MATERIAL, WAREHOUSE,
+  // STOCKPLACE, SPECIALSTOCK, BATCHNUM, AVAILSTOCK, QUNIT (malzeme ADI dönmez).
+  async queryStock(opts: {
+    barcode?: string;
+    material?: string;
+    warehouse?: string;
+    stockPlace?: string;
+  }): Promise<StockRow[]> {
+    const c = ctx();
+    const r = await call(SERVICES.getStock, {
+      PSCOMPANY: c.company,
+      PSPLANT: c.plant,
+      PSMATERIAL: opts.material ?? "",
+      PSWAREHOUSE: opts.warehouse ?? "",
+      PSSTOCKPLACE: opts.stockPlace ?? "",
+      PSBATCHNUM: "",
+      PSSPECIALSTOCK: "",
+      PSVOPTIONS: "",
+      PSBARCODE: opts.barcode ?? "",
+    });
+    const gorulen = new Set<string>();
+    return rowsOf(r, ["TBLSTOCK"])
+      .map((row) => ({
+        material: pick(row, ["MATERIAL"]),
+        warehouse: pick(row, ["WAREHOUSE"]),
+        stockPlace: pick(row, ["STOCKPLACE"]),
+        batchNum: pick(row, ["BATCHNUM"]),
+        specialStock: pick(row, ["SPECIALSTOCK"]),
+        availStock: num(row, ["AVAILSTOCK"], 0),
+        unit: pick(row, ["QUNIT"]),
+      }))
+      .filter((b) => b.material || b.batchNum || b.availStock > 0)
+      .filter((b) => {
+        // Aynı malzeme+raf+parti tekrarını at (çok malzemeli rafı bozmadan).
+        const anahtar = `${b.material}|${b.warehouse}|${b.stockPlace}|${b.batchNum || "*"}`;
         if (gorulen.has(anahtar)) return false;
         gorulen.add(anahtar);
         return true;

@@ -210,6 +210,20 @@ export interface StockBatch {
   unit: string;
 }
 
+// Ürün sorgulama — MZYGetStock / TBLSTOCK satırı (raf ve/veya ürün bağımsız).
+// Not: TBLSTOCK malzeme ADI dönmez (yalnızca MATERIAL kodu). Alanlar canlı
+// yanıtla teyit edildi (05.08): COMPANY, PLANT, MATERIAL, WAREHOUSE,
+// STOCKPLACE, SPECIALSTOCK, BATCHNUM, VOPTIONS, AVAILSTOCK, QUNIT.
+export interface StockRow {
+  material: string; // MATERIAL — malzeme kodu
+  warehouse: string; // WAREHOUSE — depo
+  stockPlace: string; // STOCKPLACE — stok yeri / HU
+  batchNum: string; // BATCHNUM — parti
+  specialStock: string; // SPECIALSTOCK — 1: parti/SKT takipli
+  availStock: number; // AVAILSTOCK
+  unit: string; // QUNIT
+}
+
 export interface PickSuggestion {
   itemNo: number;
   location: string; // STOCKPLACE — stok yeri
