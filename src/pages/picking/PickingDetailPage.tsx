@@ -581,8 +581,8 @@ export default function PickingDetailPage() {
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-fg">{line.product.name}</p>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-subtle">
+                      <p className="text-[15px] font-semibold text-fg">{line.product.name}</p>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-subtle">
                         {line.product.code && (
                           <span className="font-mono font-semibold">{line.product.code}</span>
                         )}
@@ -634,7 +634,7 @@ export default function PickingDetailPage() {
                                 setSecilenRaf((s) => ({ ...s, [line.id]: e.target.value }));
                                 setRafPrefill(e.target.value); // barkod alanına taşı
                               }}
-                              className="rounded-lg border border-line bg-surface px-2 py-1 font-mono text-[11px] font-semibold text-fg outline-none focus:border-brand-500"
+                              className="rounded-lg border border-line bg-surface px-2 py-1 font-mono text-sm font-semibold text-fg outline-none focus:border-brand-500"
                             >
                               {line.suggestions.map((s) => {
 
@@ -649,9 +649,9 @@ export default function PickingDetailPage() {
                             </select>
                           </label>
                         ) : locationsLoading ? (
-                          <span className="text-[11px] text-subtle">raf aranıyor…</span>
+                          <span className="text-xs text-subtle">raf aranıyor…</span>
                         ) : (
-                          <span className="text-[11px] text-subtle">raf bilgisi yok</span>
+                          <span className="text-xs text-subtle">raf bilgisi yok</span>
                         )}
 
                         {}
@@ -659,7 +659,7 @@ export default function PickingDetailPage() {
                           <span
                             onDoubleClick={() => handleDetected(line.product.barcode)}
                             title="Çift tıkla → okut"
-                            className="cursor-pointer select-none rounded-lg bg-elevated px-2 py-1 font-mono text-[11px] font-semibold text-muted transition hover:bg-brand-100 hover:text-brand-700"
+                            className="cursor-pointer select-none rounded-lg bg-elevated px-2 py-1 font-mono text-[13px] font-semibold text-muted transition hover:bg-brand-100 hover:text-brand-700"
                           >
                             {line.product.barcode} · 1 {line.product.unit}
                           </span>
@@ -668,13 +668,13 @@ export default function PickingDetailPage() {
                           <span
                             onDoubleClick={() => handleDetected(line.product.barcode2 ?? "")}
                             title="Çift tıkla → okut (koli)"
-                            className="cursor-pointer select-none rounded-lg bg-violet-50 px-2 py-1 font-mono text-[11px] font-semibold text-violet-600 transition hover:bg-violet-200"
+                            className="cursor-pointer select-none rounded-lg bg-violet-50 px-2 py-1 font-mono text-[13px] font-semibold text-violet-600 transition hover:bg-violet-200"
                           >
                             koli: {line.product.barcode2} · {qtyRound(line.cfactor && line.cfactor > 1 ? line.cfactor : 1)} {line.product.unit}
                           </span>
                         )}
                         {cevrimVar && (
-                          <span className="rounded-lg bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-700">
+                          <span className="rounded-lg bg-amber-100 px-2 py-1 text-[13px] font-bold text-amber-700">
                             1 {siparisBirim} = {qtyRound(line.cfactor ?? 0)} {line.product.unit}
                           </span>
                         )}
@@ -684,13 +684,13 @@ export default function PickingDetailPage() {
 
                     {}
                     <div className="flex shrink-0 flex-col items-end">
-                      <div className="flex items-center gap-1">
-                        <span className="font-mono text-sm font-bold text-fg">{qtyRound(toplananSiparis)}</span>
-                        <span className="font-mono text-sm text-subtle">/ {qtyRound(istenenSiparis)}</span>
-                        {siparisBirim && <span className="font-mono text-[11px] text-subtle">{siparisBirim}</span>}
+                      <div className="flex items-baseline gap-1">
+                        <span className="font-mono text-xl font-bold text-fg">{qtyRound(toplananSiparis)}</span>
+                        <span className="font-mono text-lg text-subtle">/ {qtyRound(istenenSiparis)}</span>
+                        {siparisBirim && <span className="font-mono text-sm text-subtle">{siparisBirim}</span>}
                       </div>
                       {cevrimVar && (
-                        <div className="mt-0.5 font-mono text-[11px] text-subtle">
+                        <div className="mt-0.5 font-mono text-[13px] text-subtle">
                           {toplanan} / {qtyRound(line.requestedQty)} {line.product.unit}
                         </div>
                       )}

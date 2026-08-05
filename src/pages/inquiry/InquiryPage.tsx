@@ -21,6 +21,11 @@ import type { StockRow } from "../../types";
 
 type Shelf = { warehouse: string; stockPlace: string };
 
+// Ürün sorgulamada YALNIZCA bu depolar gösterilir (Ali, 05.08).
+// Diğerleri (ör. 20 = irsaliye/mal kabul konteynerleri) gizlenir.
+const GORUNUR_DEPOLAR = new Set(["00", "10", "40", "50", "60", "D1", "D2", "D3"]);
+const depoGorunur = (r: StockRow) => GORUNUR_DEPOLAR.has(r.warehouse.trim().toUpperCase());
+
 export default function InquiryPage() {
   const { t } = useTranslation();
   const [shelf, setShelf] = useState<Shelf | null>(null);
@@ -49,7 +54,8 @@ export default function InquiryPage() {
         warehouse: sh?.warehouse ?? "",
         stockPlace: sh?.stockPlace ?? "",
       });
-      setRows(r);
+      // Yalnızca görünür depolar (00/10/40/50/60/D1/D2/D3); 20 vb. gizli.
+      setRows(r.filter(depoGorunur));
       setQueried(true);
     } catch (e) {
       setQueryError(e instanceof Error ? e.message : String(e));
