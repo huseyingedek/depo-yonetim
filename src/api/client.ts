@@ -1077,4 +1077,37 @@ export const api = {
     }
     return { ok: true, message: "" };
   },
+
+  async printContainer(payload: {
+    company?: string;
+    plant?: string;
+    container: string;
+    repeat: number;
+    user?: string;
+  }): Promise<{ ok: boolean; message: string }> {
+    const c = ctx();
+    const containerStr = (payload.container || "").trim();
+    if (!containerStr) {
+      throw new WmsError("Konteyner / Palet numarası girilmelidir");
+    }
+    const repeatNum = Number(payload.repeat) || 1;
+    if (repeatNum < 1) {
+      throw new WmsError("Kopya sayısı en az 1 olmalıdır");
+    }
+
+    const r = await call(SERVICES.printContainer, {
+      PSCOMPANY: payload.company || c.company,
+      PSPLANT: payload.plant || c.plant,
+      PSCONTAINER: containerStr,
+      PIREPEAT: repeatNum,
+      PSUSER: payload.user || c.worker,
+    });
+
+    const mesaj = serviceMessage(r);
+    if (mesaj && /error|fail|hata/i.test(mesaj)) {
+      return { ok: false, message: mesaj };
+    }
+
+    return { ok: true, message: mesaj || "Etiket yazdırma isteği CANIAS sunucusuna iletildi." };
+  },
 };

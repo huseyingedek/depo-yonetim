@@ -68,6 +68,7 @@ const ALLOWED = new Set([
   "GetCompany",
   "GetPlant",
   "GetWarehouse",
+  "MZYPrintContainer",
 ]);
 
 const app = express();
@@ -245,7 +246,10 @@ async function callServiceInner(serviceId, params, retry = true) {
     sysError = r.SYSStatusError || "";
   }
 
-  const yazanServis = serviceId === "MZYSavePick" || serviceId === "MZYCreateContainer";
+  const yazanServis =
+    serviceId === "MZYSavePick" ||
+    serviceId === "MZYCreateContainer" ||
+    serviceId === "MZYPrintContainer";
   const bosYanit = !String(rawResponse ?? "").trim();
   const oturumHatasi = /session/i.test(String(sysError) + String(rawResponse));
   const oturumEski = session ? Date.now() - session.at > 3000 : true;
