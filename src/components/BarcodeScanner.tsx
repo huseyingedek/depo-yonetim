@@ -75,7 +75,7 @@ export default function BarcodeScanner({ onDetected, prompt, prefill }: Props) {
       <div className="rounded-2xl bg-surface p-4 shadow-card">
         <label className="field-label">{prompt ?? t("picking.scanProduct")}</label>
         <div className="flex gap-2">
-          <div className="relative flex-1">
+          <div className="relative min-w-0 flex-1">
             <input
               autoFocus
               value={value}

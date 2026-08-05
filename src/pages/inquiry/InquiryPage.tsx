@@ -109,15 +109,16 @@ export default function InquiryPage() {
 
       <div className="grid gap-6 lg:grid-cols-[400px_1fr]">
         {/* Sol: alt alta iki BAĞIMSIZ barkod alanı */}
-        <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+        <div className="min-w-0 space-y-4 lg:sticky lg:top-24 lg:self-start">
           {/* ── RAF ── */}
-          <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-muted">Raf <span className="font-normal text-subtle">(opsiyonel)</span></span>
+          <div className="min-w-0">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <span className="shrink-0 text-[13px] font-semibold text-muted">Raf <span className="font-normal text-subtle">(opsiyonel)</span></span>
               {shelf && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
-                  <Warehouse className="h-3.5 w-3.5" /> {shelf.warehouse}/{shelf.stockPlace}
-                  <button onClick={clearShelf} aria-label="Rafı temizle" className="ml-0.5 hover:text-emerald-900">
+                <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+                  <Warehouse className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{shelf.warehouse}/{shelf.stockPlace}</span>
+                  <button onClick={clearShelf} aria-label="Rafı temizle" className="ml-0.5 shrink-0 hover:text-emerald-900">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </span>
@@ -133,13 +134,14 @@ export default function InquiryPage() {
           </div>
 
           {/* ── ÜRÜN ── */}
-          <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-muted">Ürün <span className="font-normal text-subtle">(opsiyonel)</span></span>
+          <div className="min-w-0">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <span className="shrink-0 text-[13px] font-semibold text-muted">Ürün <span className="font-normal text-subtle">(opsiyonel)</span></span>
               {productCode && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-50 px-2.5 py-0.5 font-mono text-xs font-semibold text-cyan-700">
-                  <Package className="h-3.5 w-3.5" /> {productCode}
-                  <button onClick={clearProduct} aria-label="Ürünü temizle" className="ml-0.5 hover:text-cyan-900">
+                <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-cyan-50 px-2.5 py-0.5 font-mono text-xs font-semibold text-cyan-700">
+                  <Package className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{productCode}</span>
+                  <button onClick={clearProduct} aria-label="Ürünü temizle" className="ml-0.5 shrink-0 hover:text-cyan-900">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </span>
@@ -156,7 +158,7 @@ export default function InquiryPage() {
         </div>
 
         {/* Sağ: sonuçlar */}
-        <div>
+        <div className="min-w-0">
           {!queried ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-surface py-16 text-center">
               <ScanSearch className="mb-2 h-10 w-10 text-subtle" />
@@ -208,12 +210,13 @@ export default function InquiryPage() {
                     <div key={`${b.material}|${b.warehouse}|${b.stockPlace}|${b.batchNum || i}`} className="flex items-start justify-between gap-3 rounded-xl bg-elevated px-4 py-2.5">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="truncate font-mono text-sm font-bold text-fg">{b.material || "—"}</p>
+                          <p className="truncate text-sm font-semibold text-fg">{b.name || b.material || "—"}</p>
                           {b.specialStock === "1" && (
                             <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">SKT</span>
                           )}
                         </div>
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[11px] text-subtle">
+                          {b.name && b.material && <span className="font-semibold text-muted">{b.material}</span>}
                           {(b.warehouse || b.stockPlace) && (
                             <span className="inline-flex items-center gap-1 break-all text-cyan-600">
                               <MapPin className="h-3 w-3 shrink-0" /> {b.warehouse}{b.stockPlace ? "/" + b.stockPlace : ""}

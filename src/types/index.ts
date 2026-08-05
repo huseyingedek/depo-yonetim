@@ -211,11 +211,12 @@ export interface StockBatch {
 }
 
 // Ürün sorgulama — MZYGetStock / TBLSTOCK satırı (raf ve/veya ürün bağımsız).
-// Not: TBLSTOCK malzeme ADI dönmez (yalnızca MATERIAL kodu). Alanlar canlı
-// yanıtla teyit edildi (05.08): COMPANY, PLANT, MATERIAL, WAREHOUSE,
-// STOCKPLACE, SPECIALSTOCK, BATCHNUM, VOPTIONS, AVAILSTOCK, QUNIT.
+// Alanlar canlı yanıtla teyit edildi (05.08): COMPANY, PLANT, MATERIAL,
+// WAREHOUSE, STOCKPLACE, SPECIALSTOCK, BATCHNUM, VOPTIONS, AVAILSTOCK, QUNIT.
+// Malzeme açıklaması Bora tarafından MTEXT alanı olarak eklendi (05.08).
 export interface StockRow {
   material: string; // MATERIAL — malzeme kodu
+  name: string; // MTEXT — malzeme açıklaması
   warehouse: string; // WAREHOUSE — depo
   stockPlace: string; // STOCKPLACE — stok yeri / HU
   batchNum: string; // BATCHNUM — parti

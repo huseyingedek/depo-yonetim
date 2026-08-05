@@ -611,8 +611,8 @@ export const api = {
   //   • Ürün okutulur → PSBARCODE dolu, raf boş  → o ürünün tüm stoğu
   //   • Raf okutulur   → PSWAREHOUSE/PSSTOCKPLACE dolu, ürün boş → raftaki stok
   //   • İkisi birden   → ikisi de dolu → o rafta o ürün
-  // TBLSTOCK alanları canlı yanıtla teyit edildi (05.08): MATERIAL, WAREHOUSE,
-  // STOCKPLACE, SPECIALSTOCK, BATCHNUM, AVAILSTOCK, QUNIT (malzeme ADI dönmez).
+  // TBLSTOCK alanları canlı yanıtla teyit edildi (05.08): MATERIAL, MTEXT,
+  // WAREHOUSE, STOCKPLACE, SPECIALSTOCK, BATCHNUM, AVAILSTOCK, QUNIT.
   async queryStock(opts: {
     barcode?: string;
     material?: string;
@@ -635,6 +635,7 @@ export const api = {
     return rowsOf(r, ["TBLSTOCK"])
       .map((row) => ({
         material: pick(row, ["MATERIAL"]),
+        name: pick(row, ["MTEXT"]).trim(),
         warehouse: pick(row, ["WAREHOUSE"]),
         stockPlace: pick(row, ["STOCKPLACE"]),
         batchNum: pick(row, ["BATCHNUM"]),
