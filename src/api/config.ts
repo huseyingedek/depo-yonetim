@@ -27,4 +27,5 @@ export const SERVICES = {
   getWarehouse: "GetWarehouse", // PSCOMPANY, PSPLANT
 
   printContainer: "MZYPrintContainer", // Konteyner/paket etiket yazdırma
+  printWHSP: "MZYPrintWHSP", // Raf / Konteyner / Parti etiket yazdırma
 } as const;

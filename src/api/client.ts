@@ -1085,9 +1085,52 @@ export const api = {
     return { ok: true, message: "" };
   },
 
+  // Bora, 05.08: Raf / Konteyner / Parti Etiketi Yazdırma (MZYPrintWHSP)
+  // PARAMETRELER:
+  //   PSCOMPANY: "01", PSPLANT: "100", PSWAREHOUSE: depo, PSSTOCKPLACE: raf
+  //   PSCONTAINER: parti/batchnum veya konteyner kodu
+  //   PIISCONTAINER: 1 (konteyner ise) veya 0
+  //   PIREPEAT: tekrar sayısı
+  //   PSUSER: kullanıcı
+  async printWHSP(payload: {
+    company?: string;
+    plant?: string;
+    warehouse?: string;
+    stockPlace?: string;
+    container?: string;
+    isContainer?: boolean | number;
+    repeat?: number;
+    user?: string;
+  }): Promise<{ ok: boolean; message: string }> {
+    const c = ctx();
+    const repeatNum = Number(payload.repeat) || 1;
+    if (repeatNum < 1) {
+      throw new WmsError("Kopya sayısı en az 1 olmalıdır");
+    }
+
+    const r = await call(SERVICES.printWHSP, {
+      PSCOMPANY: payload.company || c.company || "01",
+      PSPLANT: payload.plant || c.plant || "100",
+      PSWAREHOUSE: payload.warehouse || "",
+      PSSTOCKPLACE: payload.stockPlace || "",
+      PSCONTAINER: payload.container || "",
+      PIISCONTAINER: payload.isContainer ? 1 : 0,
+      PIREPEAT: repeatNum,
+      PSUSER: payload.user || c.worker,
+    });
+
+    const mesaj = serviceMessage(r);
+    if (mesaj && /error|fail|hata/i.test(mesaj)) {
+      return { ok: false, message: mesaj };
+    }
+
+    return { ok: true, message: mesaj || "Etiket yazdırma isteği CANIAS sunucusuna iletildi." };
+  },
+
   async printContainer(payload: {
     company?: string;
     plant?: string;
+    warehouse?: string;
     container: string;
     repeat: number;
     user?: string;
@@ -1102,10 +1145,15 @@ export const api = {
       throw new WmsError("Kopya sayısı en az 1 olmalıdır");
     }
 
-    const r = await call(SERVICES.printContainer, {
-      PSCOMPANY: payload.company || c.company,
-      PSPLANT: payload.plant || c.plant,
+    // Bora, 05.08: Konteyner etiketi basma MZYPrintWHSP ile:
+    // pscompany: "01", psplant: "100", pswarehouse: "10", piiscontainer: 1, pscontainer: containerStr
+    const r = await call(SERVICES.printWHSP, {
+      PSCOMPANY: payload.company || c.company || "01",
+      PSPLANT: payload.plant || c.plant || "100",
+      PSWAREHOUSE: payload.warehouse || "10",
+      PSSTOCKPLACE: "",
       PSCONTAINER: containerStr,
+      PIISCONTAINER: 1,
       PIREPEAT: repeatNum,
       PSUSER: payload.user || c.worker,
     });
