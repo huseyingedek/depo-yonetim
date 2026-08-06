@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Warehouse, X, CheckCircle2, AlertCircle, Loader2, RefreshCw, Printer } from "lucide-react";
 import { useAppStore } from "../../../store/appStore";
+import { api } from "../../../api/client";
 
 interface Props {
   isOpen: boolean;
@@ -57,7 +58,18 @@ export default function ShelfLocationModal({ isOpen, onClose }: Props) {
     setLoading(true);
 
     try {
-      setSuccessMsg(`Depo raf etiketi (${warehouseCode}-$${sp} - ${count} kopya) yazdırma isteği alındı.`);
+      const res = await api.printWHSP({
+        warehouse: warehouseCode.trim(),
+        stockPlace: sp,
+        repeat: count,
+        isContainer: 0,
+      });
+
+      if (res.ok) {
+        setSuccessMsg(res.message || `Depo raf etiketi (${warehouseCode}/${sp} - ${count} kopya) yazdırma isteği CANIAS'a iletildi.`);
+      } else {
+        setErrorMsg(res.message || "Raf etiketi yazdırma başarısız oldu.");
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Yazdırma işlemi sırasında hata oluştu.";
       setErrorMsg(msg);
