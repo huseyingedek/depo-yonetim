@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Package, X, CheckCircle2, AlertCircle, Loader2, RefreshCw, Printer } from "lucide-react";
 import BarcodeScanner from "../../../components/BarcodeScanner";
 import { api } from "../../../api/client";
+import { useAppStore } from "../../../store/appStore";
 
 interface Props {
   isOpen: boolean;
@@ -9,6 +10,8 @@ interface Props {
 }
 
 export default function PackagingLabelModal({ isOpen, onClose }: Props) {
+  const settings = useAppStore((s) => s.settings);
+
   const [containerCode, setContainerCode] = useState("");
   const [repeatCount, setRepeatCount] = useState<number>(1);
   const [loading, setLoading] = useState(false);
@@ -55,6 +58,7 @@ export default function PackagingLabelModal({ isOpen, onClose }: Props) {
 
     try {
       const res = await api.printContainer({
+        warehouse: settings.warehouse || "10",
         container: code,
         repeat: count,
       });
