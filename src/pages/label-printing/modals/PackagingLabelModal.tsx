@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
 import { Package, X, CheckCircle2, AlertCircle, Loader2, RefreshCw, Printer, Search, MapPin } from "lucide-react";
-import BarcodeScanner from "../../../components/BarcodeScanner";
 import { api } from "../../../api/client";
 import { useAppStore } from "../../../store/appStore";
 import type { StockRow } from "../../../types";
@@ -90,22 +89,6 @@ export default function PackagingLabelModal({ isOpen, onClose }: Props) {
       }
     }
     setContainerCode(val);
-  };
-
-  const handleBarcodeDetected = (code: string) => {
-    setSearchQuery(code);
-    const found = stockRows.find(
-      (r) =>
-        r.batchNum?.toLowerCase() === code.toLowerCase() ||
-        r.stockPlace?.toLowerCase() === code.toLowerCase() ||
-        r.material?.toLowerCase() === code.toLowerCase()
-    );
-    if (found) {
-      handleSelectRow(found);
-    } else {
-      setSelectedRow(null);
-      setContainerCode(code);
-    }
   };
 
   const handlePrintSubmit = async (e: React.FormEvent) => {
@@ -207,42 +190,20 @@ export default function PackagingLabelModal({ isOpen, onClose }: Props) {
           <form onSubmit={handlePrintSubmit} className="space-y-4">
             {/* Palet Arama & Seçim Listesi */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold text-fg">
-                  Stoktaki Aktif Paletler / Konteynerlar <span className="text-red-500">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={fetchPalletStock}
-                  disabled={loadingStock}
-                  className="flex items-center gap-1 text-[11px] font-semibold text-brand hover:underline"
-                >
-                  <RefreshCw className={`h-3 w-3 ${loadingStock ? "animate-spin" : ""}`} />
-                  Yenile
-                </button>
-              </div>
-
-              {/* Arama & Okuma */}
-              <div className="space-y-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => handleSearchChange(e.target.value)}
-                    placeholder="Palet no, parti (batch), ürün adı veya lokasyon ara..."
-                    className="field-input pl-9 w-full text-xs"
-                  />
-                </div>
-                <BarcodeScanner
-                  prompt="Palet / Konteyner Barkodunu Okutun"
-                  prefill={searchQuery}
-                  onDetected={handleBarcodeDetected}
+              {/* Arama Input'u */}
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  placeholder="Palet no, parti (batch), ürün adı veya lokasyon ara..."
+                  className="field-input pl-9 w-full text-xs"
                 />
               </div>
 
               {/* List Container */}
-              <div className="mt-3 max-h-48 overflow-y-auto rounded-xl border border-line bg-bg p-2 space-y-1.5">
+              <div className="max-h-48 overflow-y-auto rounded-xl border border-line bg-bg p-2 space-y-1.5">
                 {loadingStock ? (
                   <div className="flex items-center justify-center py-8 text-xs text-subtle gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
