@@ -1103,9 +1103,9 @@ export const api = {
     user?: string;
   }): Promise<{ ok: boolean; message: string }> {
     const c = ctx();
-    const repeatNum = Number(payload.repeat) || 1;
-    if (repeatNum < 1) {
-      throw new WmsError("Kopya sayısı en az 1 olmalıdır");
+    const repeatNum = Math.min(99, Math.max(1, Number(payload.repeat) || 1));
+    if (repeatNum < 1 || repeatNum > 99) {
+      throw new WmsError("Kopya sayısı 1 ile 99 arasında olmalıdır");
     }
 
     const r = await call(SERVICES.printWHSP, {
@@ -1140,14 +1140,14 @@ export const api = {
     if (!containerStr) {
       throw new WmsError("Konteyner / Palet numarası girilmelidir");
     }
-    const repeatNum = Number(payload.repeat) || 1;
-    if (repeatNum < 1) {
-      throw new WmsError("Kopya sayısı en az 1 olmalıdır");
+    const repeatNum = Math.min(99, Math.max(1, Number(payload.repeat) || 1));
+    if (repeatNum < 1 || repeatNum > 99) {
+      throw new WmsError("Kopya sayısı 1 ile 99 arasında olmalıdır");
     }
 
-    // Bora, 05.08: Konteyner etiketi basma MZYPrintWHSP ile:
-    // pscompany: "01", psplant: "100", pswarehouse: "10", piiscontainer: 1, pscontainer: containerStr
-    const r = await call(SERVICES.printWHSP, {
+    // Bora, 05.08: Konteyner etiketi basma MZYPrintContainer ile:
+    // PSCOMPANY: "01", PSPLANT: "100", PSWAREHOUSE: "10", PIISCONTAINER: 1, PSCONTAINER: batchnumber
+    const r = await call(SERVICES.printContainer, {
       PSCOMPANY: payload.company || c.company || "01",
       PSPLANT: payload.plant || c.plant || "100",
       PSWAREHOUSE: payload.warehouse || "10",

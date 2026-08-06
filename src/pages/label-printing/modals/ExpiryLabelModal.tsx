@@ -57,8 +57,8 @@ export default function ExpiryLabelModal({ isOpen, onClose }: Props) {
     }
 
     const count = Number(repeatCount);
-    if (!Number.isInteger(count) || count < 1) {
-      setErrorMsg("Kopya (tekrar) sayısı en az 1 olmalıdır.");
+    if (!Number.isInteger(count) || count < 1 || count > 99) {
+      setErrorMsg("Kopya (tekrar) sayısı 1 ile 99 arasında olmalıdır.");
       return;
     }
 
@@ -182,7 +182,10 @@ export default function ExpiryLabelModal({ isOpen, onClose }: Props) {
               max={99}
               required
               value={repeatCount}
-              onChange={(e) => setRepeatCount(Math.max(1, parseInt(e.target.value) || 1))}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+              }}
               className="field-input w-full"
             />
           </div>
