@@ -582,6 +582,8 @@ export const api = {
       PSSPECIALSTOCK: "",
       PSVOPTIONS: "",
       PSBARCODE: "",
+      PICONTAINER: 1,
+      PIISPICKWH: 0,
     });
     const gorulen = new Set<string>();
     return rowsOf(r, ["TBLSTOCK"])
