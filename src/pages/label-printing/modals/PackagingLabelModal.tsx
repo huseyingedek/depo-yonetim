@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { Package, X, CheckCircle2, AlertCircle, Loader2, RefreshCw, Printer, Search, MapPin } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Package, X, CheckCircle2, AlertCircle, Loader2, RefreshCw, Printer, MapPin } from "lucide-react";
 import { api } from "../../../api/client";
 import { useAppStore } from "../../../store/appStore";
 import type { StockRow } from "../../../types";
@@ -20,7 +20,6 @@ export default function PackagingLabelModal({ isOpen, onClose }: Props) {
 
   const [stockRows, setStockRows] = useState<StockRow[]>([]);
   const [loadingStock, setLoadingStock] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [selectedRow, setSelectedRow] = useState<StockRow | null>(null);
 
   useEffect(() => {
@@ -30,7 +29,6 @@ export default function PackagingLabelModal({ isOpen, onClose }: Props) {
       setErrorMsg("");
       setSuccessMsg("");
       setLoading(false);
-      setSearchQuery("");
       setSelectedRow(null);
       fetchPalletStock();
     }
@@ -43,25 +41,11 @@ export default function PackagingLabelModal({ isOpen, onClose }: Props) {
       const rows = await api.queryStock({ container: true });
       setStockRows(rows || []);
     } catch {
-      // Liste çekilemese de kullanıcı el ile yazarak devam edebilir
       setStockRows([]);
     } finally {
       setLoadingStock(false);
     }
   };
-
-  const filteredStock = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return stockRows;
-    return stockRows.filter((r) => {
-      const mat = (r.material || "").toLowerCase();
-      const name = (r.name || "").toLowerCase();
-      const batch = (r.batchNum || "").toLowerCase();
-      const place = (r.stockPlace || "").toLowerCase();
-      const wh = (r.warehouse || "").toLowerCase();
-      return mat.includes(q) || name.includes(q) || batch.includes(q) || place.includes(q) || wh.includes(q);
-    });
-  }, [stockRows, searchQuery]);
 
   if (!isOpen) return null;
 
@@ -77,18 +61,6 @@ export default function PackagingLabelModal({ isOpen, onClose }: Props) {
     setSelectedRow(r);
     const code = r.batchNum && r.batchNum !== "*" ? r.batchNum : r.stockPlace || r.material;
     setContainerCode(code);
-    setSearchQuery(code);
-  };
-
-  const handleSearchChange = (val: string) => {
-    setSearchQuery(val);
-    if (selectedRow) {
-      const palletCode = selectedRow.batchNum && selectedRow.batchNum !== "*" ? selectedRow.batchNum : selectedRow.stockPlace;
-      if (val.trim().toLowerCase() !== palletCode.toLowerCase()) {
-        setSelectedRow(null);
-      }
-    }
-    setContainerCode(val);
   };
 
   const handlePrintSubmit = async (e: React.FormEvent) => {
@@ -100,10 +72,10 @@ export default function PackagingLabelModal({ isOpen, onClose }: Props) {
       selectedRow?.batchNum && selectedRow.batchNum !== "*"
         ? selectedRow.batchNum
         : selectedRow?.stockPlace
-    ) || containerCode.trim() || searchQuery.trim();
+    ) || containerCode.trim();
 
     if (!code) {
-      setErrorMsg("Lütfen listeden bir palet seçin veya palet/parti numarasını girin.");
+      setErrorMsg("Lütfen listeden bir palet seçin.");
       return;
     }
 
@@ -116,7 +88,7 @@ export default function PackagingLabelModal({ isOpen, onClose }: Props) {
     setLoading(true);
 
     try {
-      // Bora, 05.08: MZYPrintContainer / MZYPrintWHSP ile batchnumber PSCONTAINER parametresine gönderilir.
+      // Bora, 05.08: MZYPrintContainer ile batchnumber PSCONTAINER parametresine gönderilir.
       const res = await api.printContainer({
         warehouse: selectedRow?.warehouse || settings.warehouse || "10",
         container: code,
@@ -147,7 +119,7 @@ export default function PackagingLabelModal({ isOpen, onClose }: Props) {
             </div>
             <div>
               <h3 className="text-lg font-bold text-fg">Paketleme Etiketi Yazdırma</h3>
-              <p className="text-xs text-subtle">Stoktaki paletleri listeleyin ve etiket yazdırın (MZYGetStock / MZYPrintContainer)</p>
+              <p className="text-xs text-subtle">Stoktaki paletleri listeden seçin ve etiket yazdırın (MZYPrintContainer)</p>
             </div>
           </div>
           <button
@@ -188,33 +160,36 @@ export default function PackagingLabelModal({ isOpen, onClose }: Props) {
 
           {/* Form & Selection */}
           <form onSubmit={handlePrintSubmit} className="space-y-4">
-            {/* Palet Arama & Seçim Listesi */}
+            {/* Palet Seçim Listesi */}
             <div>
-              {/* Arama Input'u */}
-              <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  placeholder="Palet no, parti (batch), ürün adı veya lokasyon ara..."
-                  className="field-input pl-9 w-full text-xs"
-                />
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-fg">
+                  Stoktaki Paletler
+                </span>
+                <button
+                  type="button"
+                  onClick={fetchPalletStock}
+                  disabled={loadingStock}
+                  className="flex items-center gap-1 text-[11px] font-semibold text-brand hover:underline"
+                >
+                  <RefreshCw className={`h-3 w-3 ${loadingStock ? "animate-spin" : ""}`} />
+                  Yenile
+                </button>
               </div>
 
               {/* List Container */}
-              <div className="max-h-48 overflow-y-auto rounded-xl border border-line bg-bg p-2 space-y-1.5">
+              <div className="max-h-56 overflow-y-auto rounded-xl border border-line bg-bg p-2 space-y-1.5">
                 {loadingStock ? (
                   <div className="flex items-center justify-center py-8 text-xs text-subtle gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span>CANIAS stoktaki paletler yükleniyor...</span>
                   </div>
-                ) : filteredStock.length === 0 ? (
+                ) : stockRows.length === 0 ? (
                   <div className="py-6 text-center text-xs text-subtle">
-                    {searchQuery ? "Aramanıza uygun palet bulunamadı." : "Stokta aktif palet kaydı bulunamadı."}
+                    Stokta aktif palet kaydı bulunamadı.
                   </div>
                 ) : (
-                  filteredStock.map((r, idx) => {
+                  stockRows.map((r, idx) => {
                     const isSelected =
                       selectedRow === r ||
                       (selectedRow?.batchNum && selectedRow.batchNum === r.batchNum && selectedRow.stockPlace === r.stockPlace);
@@ -254,7 +229,7 @@ export default function PackagingLabelModal({ isOpen, onClose }: Props) {
             {/* Seçilen Palet Bilgisi Gösterimi */}
             {selectedRow && (
               <div className="rounded-xl border border-brand/30 bg-brand/5 p-3 text-xs">
-                <span className="block text-[11px] font-semibold text-brand">Seçilen Palet (PSCONTAINER):</span>
+                <span className="block text-[11px] font-semibold text-brand">Seçilen Palet:</span>
                 <div className="mt-1 flex items-center justify-between font-mono font-bold text-fg">
                   <span>Parti No: {selectedRow.batchNum || selectedRow.stockPlace}</span>
                   <span>{selectedRow.warehouse}/{selectedRow.stockPlace}</span>
@@ -265,7 +240,7 @@ export default function PackagingLabelModal({ isOpen, onClose }: Props) {
             {/* Kopya Sayısı */}
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-fg">
-                Kopya / Tekrar Sayısı (PIREPEAT) <span className="text-red-500">*</span>
+                Kopya / Tekrar Sayısı <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -286,7 +261,7 @@ export default function PackagingLabelModal({ isOpen, onClose }: Props) {
               <button type="button" onClick={onClose} disabled={loading} className="btn-ghost">
                 İptal
               </button>
-              <button type="submit" disabled={loading || !(containerCode.trim() || searchQuery.trim())} className="btn-primary flex items-center gap-2">
+              <button type="submit" disabled={loading || !selectedRow} className="btn-primary flex items-center gap-2">
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
