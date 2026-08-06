@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { CalendarDays, X, CheckCircle2, AlertCircle, Loader2, RefreshCw, Printer } from "lucide-react";
+import { api } from "../../../api/client";
 
 interface Props {
   isOpen: boolean;
@@ -64,7 +65,19 @@ export default function ExpiryLabelModal({ isOpen, onClose }: Props) {
     setLoading(true);
 
     try {
-      setSuccessMsg(`SKT etiketi (${mat} - Lot: ${lot} - ${count} kopya) yazdırma isteği alındı.`);
+      // Bora, 05.08: Parti / Batch etiketi basımı için PSCONTAINER = lot
+      const res = await api.printWHSP({
+        company: "01",
+        plant: "100",
+        container: lot,
+        repeat: count,
+      });
+
+      if (res.ok) {
+        setSuccessMsg(res.message || `SKT/Parti etiketi (${mat} - Lot: ${lot} - ${count} kopya) yazdırma isteği CANIAS'a iletildi.`);
+      } else {
+        setErrorMsg(res.message || "SKT etiketi yazdırma başarısız oldu.");
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Yazdırma işlemi sırasında hata oluştu.";
       setErrorMsg(msg);
