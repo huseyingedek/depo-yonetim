@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileText, Search, Plus } from "lucide-react";
+import { FileText, Search, Plus, Check } from "lucide-react";
 import { api } from "../../api/client";
 import type { PickOrder } from "../../types";
 import Pagination, { usePagination } from "../../components/Pagination";
@@ -11,7 +11,6 @@ export default function WaybillLabelPage() {
   const [q, setQ] = useState("");
 
   const [selectedWaybill, setSelectedWaybill] = useState<PickOrder | null>(null);
-  const [customDocNum, setCustomDocNum] = useState("");
   const [repeatCount, setRepeatCount] = useState<number>(1);
 
   // Queue state local to this page
@@ -47,12 +46,12 @@ export default function WaybillLabelPage() {
     setErrorMsg("");
     setSuccessMsg("");
 
-    const docNum = (selectedWaybill ? selectedWaybill.id : customDocNum.trim()).toUpperCase();
-    if (!docNum) {
-      setErrorMsg("Lütfen ızgaradan bir irsaliye seçin veya belge numarası girin.");
+    if (!selectedWaybill) {
+      setErrorMsg("Lütfen ızgaradan bir irsaliye seçin.");
       return;
     }
 
+    const docNum = selectedWaybill.id.toUpperCase();
     const count = Number(repeatCount);
     if (!Number.isInteger(count) || count < 1 || count > 99) {
       setErrorMsg("Kopya sayısı 1 ile 99 arasında olmalıdır.");
@@ -62,7 +61,7 @@ export default function WaybillLabelPage() {
     const newOrder: QueuedLabelOrder = {
       id: "way-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
       title: `İrsaliye: ${docNum}`,
-      subtitle: selectedWaybill?.customer ? `Müşteri: ${selectedWaybill.customer}` : "İrsaliye Belge Etiketi",
+      subtitle: selectedWaybill.customer ? `Müşteri: ${selectedWaybill.customer}` : "İrsaliye Belge Etiketi",
       copies: count,
       payload: {
         docNum,
@@ -72,7 +71,6 @@ export default function WaybillLabelPage() {
 
     setQueuedOrders((prev) => [...prev, newOrder]);
     setSelectedWaybill(null);
-    setCustomDocNum("");
     setRepeatCount(1);
     setSuccessMsg(`İrsaliye etiket siparişi eklendi (${docNum} - ${count} kopya).`);
   };
@@ -111,7 +109,7 @@ export default function WaybillLabelPage() {
         successMsg={successMsg}
       />
 
-      {/* Search Bar */}
+      {/* Top Search Bar */}
       <div className="relative mb-5">
         <Search className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
         <input
@@ -142,10 +140,7 @@ export default function WaybillLabelPage() {
               return (
                 <div
                   key={o.id}
-                  onClick={() => {
-                    setSelectedWaybill(o);
-                    setCustomDocNum("");
-                  }}
+                  onClick={() => setSelectedWaybill(o)}
                   className={`relative flex cursor-pointer flex-col justify-between rounded-2xl border p-5 text-left shadow-card transition-all hover:shadow-soft ${
                     isSelected
                       ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
@@ -172,6 +167,7 @@ export default function WaybillLabelPage() {
                         isSelected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
                       }`}
                     >
+                      {isSelected ? <Check className="h-3.5 w-3.5 inline mr-1" /> : null}
                       {isSelected ? "Seçildi" : "Seç"}
                     </span>
                   </div>
@@ -194,28 +190,27 @@ export default function WaybillLabelPage() {
         </>
       )}
 
-      {/* Selected Item & Order Add Form */}
-      <form onSubmit={handleAddOrder} className="mt-6 rounded-2xl border border-line bg-surface p-5 shadow-card space-y-4">
-        <h3 className="text-sm font-bold text-fg">Siparişe Eklenecek İrsaliye Etiketi Detayı</h3>
+      {/* Selected Item & Order Add Form (No search bar here) */}
+      <form onSubmit={handleAddOrder} className="mt-6 rounded-2xl border border-line bg-surface p-5 shadow-card">
+        <h3 className="text-sm font-bold text-fg mb-3">Siparişe Eklenecek İrsaliye Etiketi Detayı</h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-fg">
-              İrsaliye / Belge No (DOCNUM)
-            </label>
-            <input
-              type="text"
-              value={selectedWaybill ? selectedWaybill.id : customDocNum}
-              onChange={(e) => {
-                setSelectedWaybill(null);
-                setCustomDocNum(e.target.value);
-              }}
-              placeholder="Örn: IRS2026000123"
-              className="field-input w-full uppercase"
-            />
+        {selectedWaybill ? (
+          <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs">
+            <span className="block font-semibold text-emerald-600 dark:text-emerald-400">Seçilen İrsaliye:</span>
+            <div className="mt-1 flex flex-wrap items-center justify-between font-mono font-bold text-fg gap-2">
+              <span>İrsaliye No: {selectedWaybill.id}</span>
+              {selectedWaybill.customer && <span>Müşteri: {selectedWaybill.customer}</span>}
+              {selectedWaybill.orderType && <span>Tip: {selectedWaybill.orderType}</span>}
+            </div>
           </div>
+        ) : (
+          <div className="mb-4 rounded-xl border border-line bg-bg p-3 text-xs text-subtle">
+            Yukarıdaki 3x3 ızgaradan etiket yazdırmak istediğiniz irsaliyeyi tıklayarak seçin.
+          </div>
+        )}
 
-          <div>
+        <div className="flex flex-col sm:flex-row items-end gap-4">
+          <div className="w-full sm:w-48">
             <label className="mb-1.5 block text-xs font-semibold text-fg">
               Kopya Sayısı <span className="text-red-500">*</span>
             </label>
@@ -232,12 +227,10 @@ export default function WaybillLabelPage() {
               className="field-input w-full"
             />
           </div>
-        </div>
 
-        <div className="flex justify-end">
           <button
             type="submit"
-            disabled={!selectedWaybill && !customDocNum.trim()}
+            disabled={!selectedWaybill}
             className="btn-primary w-full sm:w-auto flex items-center justify-center gap-2 py-2.5 px-6 shadow-sm"
           >
             <Plus className="h-4 w-4" />
