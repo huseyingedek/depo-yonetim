@@ -18,7 +18,6 @@ export default function ExpiryLabelPage() {
 
   // Section 2 State (Direct SKT Date Form)
   const [directExpiryDate, setDirectExpiryDate] = useState("");
-  const [directMaterialNote, setDirectMaterialNote] = useState("");
   const [repeatCountDirect, setRepeatCountDirect] = useState<number>(1);
 
   // Pagination for Section 1 3x3 Grid
@@ -56,36 +55,10 @@ export default function ExpiryLabelPage() {
 
       setSearchResults(rows || []);
       setSearchDone(true);
-
-      if (rows.length === 0) {
-        // Mock fallback row if CANIAS returns empty
-        setSearchResults([
-          {
-            material: term,
-            name: `${term} Ürün/Parti Malzemesi`,
-            warehouse: "10",
-            stockPlace: "D1$A1",
-            batchNum: term,
-            specialStock: "1",
-            availStock: 50,
-            unit: "AD",
-          },
-        ]);
-      }
-    } catch {
-      setSearchResults([
-        {
-          material: term,
-          name: `${term} Ürün/Parti Malzemesi`,
-          warehouse: "10",
-          stockPlace: "D1$A1",
-          batchNum: term,
-          specialStock: "1",
-          availStock: 50,
-          unit: "AD",
-        },
-      ]);
+    } catch (err: unknown) {
+      setSearchResults([]);
       setSearchDone(true);
+      setErrorMsg(err instanceof Error ? err.message : "CANIAS servisi ile iletişim kurulurken hata oluştu.");
     } finally {
       setSearching(false);
     }
@@ -118,6 +91,8 @@ export default function ExpiryLabelPage() {
       payload: {
         container: batch,
         material: selectedMaterial.material,
+        warehouse: selectedMaterial.warehouse || "",
+        stockPlace: selectedMaterial.stockPlace || "",
         repeat: count,
       },
     };
@@ -139,31 +114,38 @@ export default function ExpiryLabelPage() {
       return;
     }
 
+    const todayStr = new Date().toISOString().split("T")[0];
+    if (directExpiryDate < todayStr) {
+      setErrorMsg("Son Kullanma Tarihi (SKT) geçmiş bir tarih olamaz. Lütfen bugün veya gelecek bir tarih seçin.");
+      return;
+    }
+
+    const yearNum = parseInt(directExpiryDate.split("-")[0], 10);
+    if (isNaN(yearNum) || yearNum > 2099) {
+      setErrorMsg("Geçerli bir Son Kullanma Tarihi girin (Yıl en fazla 2099 olabilir).");
+      return;
+    }
+
     const count = Number(repeatCountDirect);
     if (!Number.isInteger(count) || count < 1 || count > 99) {
       setErrorMsg("Kopya sayısı 1 ile 99 arasında olmalıdır.");
       return;
     }
 
-    const labelTitle = directMaterialNote.trim()
-      ? `SKT Etiketi (${directMaterialNote.trim()}): ${directExpiryDate}`
-      : `SKT Etiketi: ${directExpiryDate}`;
-
     const newOrder: QueuedLabelOrder = {
       id: "exp-dir-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
-      title: labelTitle,
+      title: `SKT Etiketi: ${directExpiryDate}`,
       subtitle: `Doğrudan SKT Tarihi: ${directExpiryDate}`,
       copies: count,
       payload: {
         expiryDate: directExpiryDate,
-        container: directMaterialNote.trim() || directExpiryDate,
+        container: directExpiryDate,
         repeat: count,
       },
     };
 
     setQueuedOrders((prev) => [...prev, newOrder]);
     setDirectExpiryDate("");
-    setDirectMaterialNote("");
     setRepeatCountDirect(1);
     setSuccessMsg(`Doğrudan SKT etiket siparişi eklendi (${directExpiryDate} - ${count} kopya).`);
   };
@@ -183,10 +165,17 @@ export default function ExpiryLabelPage() {
 
     for (const ord of queuedOrders) {
       try {
-        const payload = ord.payload as { container: string; repeat: number };
+        const payload = ord.payload as {
+          container: string;
+          repeat: number;
+          warehouse?: string;
+          stockPlace?: string;
+        };
         const res = await api.printWHSP({
           company: "01",
           plant: "100",
+          warehouse: payload.warehouse || "",
+          stockPlace: payload.stockPlace || "",
           container: payload.container,
           repeat: payload.repeat,
         });
@@ -230,7 +219,7 @@ export default function ExpiryLabelPage() {
             <span>1. Yöntem: Ürün Barkodu / Kodu ile Arama ve Seçim</span>
           </h3>
           <p className="text-xs text-subtle mt-0.5">
-            Arama yapın, çıkan 3x3 ızgaradan ürünü seçip kopya sayısı ile siparişe ekleyin.
+            Arama yapın, ürünü seçip kopya sayısı ile siparişe ekleyin.
           </p>
         </div>
 
@@ -288,11 +277,10 @@ export default function ExpiryLabelPage() {
                   <div
                     key={`${r.material}-${idx}`}
                     onClick={() => setSelectedMaterial(r)}
-                    className={`relative flex cursor-pointer flex-col justify-between rounded-2xl border p-4 text-left shadow-card transition-all hover:shadow-soft ${
-                      isSelected
+                    className={`relative flex cursor-pointer flex-col justify-between rounded-2xl border p-4 text-left shadow-card transition-all hover:shadow-soft ${isSelected
                         ? "border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/30"
                         : "border-line bg-bg hover:border-amber-300"
-                    }`}
+                      }`}
                   >
                     <div>
                       <div className="flex items-start justify-between">
@@ -311,9 +299,8 @@ export default function ExpiryLabelPage() {
                         Stok: {r.availStock} {r.unit}
                       </span>
                       <span
-                        className={`chip text-[11px] ${
-                          isSelected ? "bg-amber-600 text-white" : "bg-elevated text-subtle"
-                        }`}
+                        className={`chip text-[11px] ${isSelected ? "bg-amber-600 text-white" : "bg-elevated text-subtle"
+                          }`}
                       >
                         {isSelected ? <Check className="h-3.5 w-3.5 inline mr-1" /> : null}
                         {isSelected ? "Seçildi" : "Seç"}
@@ -393,35 +380,22 @@ export default function ExpiryLabelPage() {
         </div>
 
         <form onSubmit={handleAddDirectOrder} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
+          <div className="flex flex-col sm:flex-row items-end justify-between gap-4">
+            <div className="w-full sm:flex-1">
               <label className="mb-1.5 block text-xs font-semibold text-fg">
                 Son Kullanma Tarihi (SKT) <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
                 required
+                min={new Date().toISOString().split("T")[0]}
+                max="2099-12-31"
                 value={directExpiryDate}
                 onChange={(e) => setDirectExpiryDate(e.target.value)}
                 className="field-input w-full"
               />
             </div>
 
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-fg">
-                Malzeme / Not (İsteğe Bağlı)
-              </label>
-              <input
-                type="text"
-                value={directMaterialNote}
-                onChange={(e) => setDirectMaterialNote(e.target.value)}
-                placeholder="Örn: UD009 veya Parti No"
-                className="field-input w-full"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-end justify-between gap-4 border-t border-line pt-4">
             <div className="w-full sm:w-48">
               <label className="mb-1.5 block text-xs font-semibold text-fg">
                 Kopya Sayısı <span className="text-red-500">*</span>
@@ -443,7 +417,7 @@ export default function ExpiryLabelPage() {
             <button
               type="submit"
               disabled={!directExpiryDate}
-              className="btn-primary w-full sm:w-auto flex items-center justify-center gap-2 py-2.5 px-6 shadow-sm"
+              className="btn-primary w-full sm:w-auto flex items-center justify-center gap-2 py-2.5 px-6 shadow-sm shrink-0"
             >
               <Plus className="h-4 w-4" />
               <span>2. Yöntem ile Sipariş Ekle</span>

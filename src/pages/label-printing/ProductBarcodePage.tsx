@@ -49,34 +49,9 @@ export default function ProductBarcodePage() {
       }
 
       setSearchResults(rows || []);
-      if (rows.length === 0) {
-        // Fallback: create mock result if CANIAS returns no items for testing
-        setSearchResults([
-          {
-            material: term,
-            name: `${term} Ürün Malzemesi`,
-            warehouse: "10",
-            stockPlace: "D1$A1",
-            batchNum: "*",
-            specialStock: "*",
-            availStock: 100,
-            unit: "AD",
-          },
-        ]);
-      }
-    } catch {
-      setSearchResults([
-        {
-          material: term,
-          name: `${term} Ürün Malzemesi`,
-          warehouse: "10",
-          stockPlace: "D1$A1",
-          batchNum: "*",
-          specialStock: "*",
-          availStock: 100,
-          unit: "AD",
-        },
-      ]);
+    } catch (err: unknown) {
+      setSearchResults([]);
+      setErrorMsg(err instanceof Error ? err.message : "CANIAS servisi ile iletişim kurulurken hata oluştu.");
     } finally {
       setSearching(false);
     }
