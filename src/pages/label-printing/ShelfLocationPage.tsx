@@ -290,7 +290,7 @@ export default function ShelfLocationPage() {
               readOnly
               disabled
               value={selectedShelf ? `${selectedShelf.warehouse} / ${selectedShelf.stockPlace}` : ""}
-              placeholder="Yukarıdaki listeden bir raf seçin..."
+              placeholder=""
               className="field-input w-full cursor-not-allowed bg-bg font-mono font-bold text-fg opacity-90"
             />
           </div>

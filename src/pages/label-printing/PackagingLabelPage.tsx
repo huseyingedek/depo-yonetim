@@ -225,11 +225,7 @@ export default function PackagingLabelPage() {
               <span>Konum: {selectedRow.warehouse}/{selectedRow.stockPlace}</span>
             </div>
           </div>
-        ) : (
-          <div className="mb-4 rounded-xl border border-line bg-bg p-3 text-xs text-subtle">
-            Yukarıdaki 3x3 ızgaradan yazdırmak istediğiniz paleti tıklayarak seçin.
-          </div>
-        )}
+        ) : null}
 
         <div className="flex flex-col sm:flex-row items-end gap-4">
           <div className="w-full sm:w-48">
