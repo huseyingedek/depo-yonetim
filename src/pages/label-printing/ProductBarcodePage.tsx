@@ -74,10 +74,8 @@ export default function ProductBarcodePage() {
   const toggleSelectMaterial = (item: StockRow) => {
     setSelectedMaterials((prev) => {
       const exists = prev.some((m) => m.material === item.material && m.batchNum === item.batchNum);
-      if (exists) {
-        return prev.filter((m) => !(m.material === item.material && m.batchNum === item.batchNum));
-      }
-      return [...prev, item];
+      if (exists) return [];
+      return [item];
     });
   };
 

@@ -71,13 +71,43 @@ export default function WaybillLabelPage() {
     }
 
     setPrinting(true);
-    // Simulate batch print for selected waybills
-    await new Promise((res) => setTimeout(res, 800));
+    let successCount = 0;
+    let failedCount = 0;
+    let lastError = "";
+
+    for (const waybill of selectedWaybills) {
+      try {
+        const res = await api.printContainer({
+          company: "01",
+          plant: "100",
+          warehouse: "10",
+          container: waybill.id,
+          repeat: count,
+        });
+        if (res.ok) {
+          successCount++;
+        } else {
+          failedCount++;
+          if (res.message) lastError = res.message;
+        }
+      } catch (err: unknown) {
+        failedCount++;
+        if (err instanceof Error) lastError = err.message;
+      }
+    }
 
     setPrinting(false);
     setRepeatCount(1);
-    setSuccessMsg(`Seçilen ${selectedWaybills.length} adet irsaliye etiketinden ${count}'er kopya yazdırıldı.`);
-    setSelectedWaybills([]);
+    if (failedCount === 0) {
+      setSuccessMsg(`Seçilen ${successCount} adet irsaliye etiketinden ${count}'er kopya yazdırıldı.`);
+      setSelectedWaybills([]);
+    } else {
+      setErrorMsg(
+        `${successCount} irsaliye etiketi yazdırıldı, ${failedCount} adet etikette hata oluştu.${
+          lastError ? ` (Detay: ${lastError})` : ""
+        }`
+      );
+    }
   };
 
   return (
