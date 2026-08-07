@@ -1108,23 +1108,38 @@ export const api = {
       throw new WmsError("Kopya sayısı 1 ile 99 arasında olmalıdır");
     }
 
-    const r = await call(SERVICES.printWHSP, {
-      PSCOMPANY: payload.company || c.company || "01",
-      PSPLANT: payload.plant || c.plant || "100",
-      PSWAREHOUSE: payload.warehouse || "",
-      PSSTOCKPLACE: payload.stockPlace || "",
-      PSCONTAINER: payload.container || "",
-      PIISCONTAINER: payload.isContainer ? 1 : 0,
-      PIREPEAT: repeatNum,
-      PSUSER: payload.user || c.worker,
-    });
+    try {
+      const r = await call(SERVICES.printWHSP, {
+        PSCOMPANY: payload.company || c.company || "01",
+        PSPLANT: payload.plant || c.plant || "100",
+        PSWAREHOUSE: payload.warehouse || "",
+        PSSTOCKPLACE: payload.stockPlace || "",
+        PSCONTAINER: payload.container || "",
+        PIISCONTAINER: payload.isContainer ? 1 : 0,
+        PIREPEAT: repeatNum,
+        PSUSER: payload.user || c.worker,
+      });
 
-    const mesaj = serviceMessage(r);
-    if (mesaj && /error|fail|hata/i.test(mesaj)) {
-      return { ok: false, message: mesaj };
+      const mesaj = serviceMessage(r);
+      if (mesaj && /error|fail|hata/i.test(mesaj)) {
+        return { ok: false, message: mesaj };
+      }
+
+      return { ok: true, message: mesaj || "Etiket yazdırma isteği CANIAS sunucusuna iletildi." };
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "";
+      if (/bilinmeyen servis/i.test(errMsg) || /not found/i.test(errMsg)) {
+        return this.printContainer({
+          company: payload.company,
+          plant: payload.plant,
+          warehouse: payload.warehouse || "10",
+          container: payload.container || "",
+          repeat: repeatNum,
+          user: payload.user,
+        });
+      }
+      throw err;
     }
-
-    return { ok: true, message: mesaj || "Etiket yazdırma isteği CANIAS sunucusuna iletildi." };
   },
 
   async printContainer(payload: {

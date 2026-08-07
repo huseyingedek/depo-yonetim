@@ -69,6 +69,7 @@ const ALLOWED = new Set([
   "GetPlant",
   "GetWarehouse",
   "MZYPrintContainer",
+  "MZYPrintWHSP",
 ]);
 
 const app = express();
