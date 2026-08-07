@@ -1,35 +1,44 @@
 import { useState } from "react";
-import { CalendarDays, Search, Plus, Loader2, Package, Check, Calendar } from "lucide-react";
+import { Calendar, Search, Printer, Check, Loader2, Package } from "lucide-react";
 import { api } from "../../api/client";
 import type { StockRow } from "../../types";
-import Pagination, { usePagination } from "../../components/Pagination";
-import LabelOrderQueueHeader, { type QueuedLabelOrder } from "./components/LabelOrderQueueHeader";
+import PageHeader from "../../components/PageHeader";
 
-type SearchType = "barcode" | "material";
+type TabType = "directDate" | "searchGrid";
 
 export default function ExpiryLabelPage() {
-  // Section 1 State (Search & 3x3 Grid)
-  const [searchTerm, setSearchTerm] = useState("");
-  const [searchType, setSearchType] = useState<SearchType>("barcode");
-  const [searching, setSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<StockRow[]>([]);
-  const [selectedMaterial, setSelectedMaterial] = useState<StockRow | null>(null);
-  const [repeatCountGrid, setRepeatCountGrid] = useState<number>(1);
+  const [activeTab, setActiveTab] = useState<TabType>("directDate");
 
-  // Section 2 State (Direct SKT Date Form)
+  // Form & Selection State
   const [directExpiryDate, setDirectExpiryDate] = useState("");
-  const [repeatCountDirect, setRepeatCountDirect] = useState<number>(1);
+  const [repeatCount, setRepeatCount] = useState<number>(1);
 
-  // Pagination for Section 1 3x3 Grid
-  const pg = usePagination(searchResults, 9);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searching, setSearching] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
+  const [searchResults, setSearchResults] = useState<StockRow[]>([]);
+  const [selectedMaterials, setSelectedMaterials] = useState<StockRow[]>([]);
 
-  // Queue state local to this page
-  const [queuedOrders, setQueuedOrders] = useState<QueuedLabelOrder[]>([]);
+  // Status & Printing State
   const [printing, setPrinting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    setDirectExpiryDate("");
+    setSearchTerm("");
+    setSearchDone(false);
+    setSearchResults([]);
+    setSelectedMaterials([]);
+    setRepeatCount(1);
+    setErrorMsg("");
+    setSuccessMsg("");
+  };
+
+  // Search Handler for Tab 2 (Auto search barcode & material code)
   const handleSearchMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
@@ -37,22 +46,19 @@ export default function ExpiryLabelPage() {
 
     const term = searchTerm.trim();
     if (!term) {
-      setErrorMsg("Lütfen barkod numarası veya ürün kodu girin.");
+      setErrorMsg("Lütfen arama terimi girin.");
       return;
     }
 
     setSearching(true);
-    setSelectedMaterial(null);
     setSearchDone(false);
+    setSelectedMaterials([]);
 
     try {
-      let rows: StockRow[] = [];
-      if (searchType === "barcode") {
-        rows = await api.queryStock({ barcode: term });
-      } else {
+      let rows = await api.queryStock({ barcode: term });
+      if (!rows || rows.length === 0) {
         rows = await api.queryStock({ material: term });
       }
-
       setSearchResults(rows || []);
       setSearchDone(true);
     } catch (err: unknown) {
@@ -64,367 +70,344 @@ export default function ExpiryLabelPage() {
     }
   };
 
-  // Add order from Section 1 (Grid selection)
-  const handleAddGridOrder = (e: React.FormEvent) => {
-    e.preventDefault();
+  const toggleSelectMaterial = (item: StockRow) => {
+    setSelectedMaterials((prev) => {
+      const exists = prev.some((m) => m.material === item.material && m.batchNum === item.batchNum);
+      if (exists) {
+        return prev.filter((m) => !(m.material === item.material && m.batchNum === item.batchNum));
+      }
+      return [...prev, item];
+    });
+  };
+
+  const isMaterialSelected = (item: StockRow) => {
+    return selectedMaterials.some((m) => m.material === item.material && m.batchNum === item.batchNum);
+  };
+
+  // Main Print Action (Called from top header print button)
+  const handlePrint = async () => {
     setErrorMsg("");
     setSuccessMsg("");
 
-    if (!selectedMaterial) {
-      setErrorMsg("Lütfen ızgaradan bir ürün/parti seçin.");
-      return;
-    }
-
-    const count = Number(repeatCountGrid);
+    const count = Number(repeatCount);
     if (!Number.isInteger(count) || count < 1 || count > 99) {
       setErrorMsg("Kopya sayısı 1 ile 99 arasında olmalıdır.");
       return;
     }
 
-    const batch = selectedMaterial.batchNum && selectedMaterial.batchNum !== "*" ? selectedMaterial.batchNum : selectedMaterial.material;
+    if (activeTab === "directDate") {
+      if (!directExpiryDate) {
+        setErrorMsg("Lütfen Son Kullanma Tarihi (SKT) seçin.");
+        return;
+      }
 
-    const newOrder: QueuedLabelOrder = {
-      id: "exp-grid-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
-      title: `SKT Etiketi: ${selectedMaterial.material}`,
-      subtitle: `Parti/Batch: ${batch} · ${selectedMaterial.name}`,
-      copies: count,
-      payload: {
-        container: batch,
-        material: selectedMaterial.material,
-        warehouse: selectedMaterial.warehouse || "",
-        stockPlace: selectedMaterial.stockPlace || "",
-        repeat: count,
-      },
-    };
+      if (directExpiryDate < todayStr) {
+        setErrorMsg("Son Kullanma Tarihi (SKT) geçmiş bir tarih olamaz. Lütfen bugün veya gelecek bir tarih seçin.");
+        return;
+      }
 
-    setQueuedOrders((prev) => [...prev, newOrder]);
-    setSelectedMaterial(null);
-    setRepeatCountGrid(1);
-    setSuccessMsg(`Ürün seçimli SKT etiket siparişi eklendi (${selectedMaterial.material} - ${count} kopya).`);
-  };
+      const yearNum = parseInt(directExpiryDate.split("-")[0], 10);
+      if (isNaN(yearNum) || yearNum > 2099) {
+        setErrorMsg("Geçerli bir Son Kullanma Tarihi girin (Yıl en fazla 2099 olabilir).");
+        return;
+      }
 
-  // Add order from Section 2 (Direct SKT date)
-  const handleAddDirectOrder = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg("");
-    setSuccessMsg("");
-
-    if (!directExpiryDate) {
-      setErrorMsg("Lütfen Son Kullanma Tarihi (SKT) seçin.");
-      return;
-    }
-
-    const todayStr = new Date().toISOString().split("T")[0];
-    if (directExpiryDate < todayStr) {
-      setErrorMsg("Son Kullanma Tarihi (SKT) geçmiş bir tarih olamaz. Lütfen bugün veya gelecek bir tarih seçin.");
-      return;
-    }
-
-    const yearNum = parseInt(directExpiryDate.split("-")[0], 10);
-    if (isNaN(yearNum) || yearNum > 2099) {
-      setErrorMsg("Geçerli bir Son Kullanma Tarihi girin (Yıl en fazla 2099 olabilir).");
-      return;
-    }
-
-    const count = Number(repeatCountDirect);
-    if (!Number.isInteger(count) || count < 1 || count > 99) {
-      setErrorMsg("Kopya sayısı 1 ile 99 arasında olmalıdır.");
-      return;
-    }
-
-    const newOrder: QueuedLabelOrder = {
-      id: "exp-dir-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
-      title: `SKT Etiketi: ${directExpiryDate}`,
-      subtitle: `Doğrudan SKT Tarihi: ${directExpiryDate}`,
-      copies: count,
-      payload: {
-        expiryDate: directExpiryDate,
-        container: directExpiryDate,
-        repeat: count,
-      },
-    };
-
-    setQueuedOrders((prev) => [...prev, newOrder]);
-    setDirectExpiryDate("");
-    setRepeatCountDirect(1);
-    setSuccessMsg(`Doğrudan SKT etiket siparişi eklendi (${directExpiryDate} - ${count} kopya).`);
-  };
-
-  const handleRemoveOrder = (id: string) => {
-    setQueuedOrders((prev) => prev.filter((o) => o.id !== id));
-  };
-
-  const handlePrintAll = async () => {
-    if (queuedOrders.length === 0) return;
-    setPrinting(true);
-    setErrorMsg("");
-    setSuccessMsg("");
-
-    let successCount = 0;
-    let failedCount = 0;
-
-    for (const ord of queuedOrders) {
+      setPrinting(true);
       try {
-        const payload = ord.payload as {
-          container: string;
-          repeat: number;
-          warehouse?: string;
-          stockPlace?: string;
-        };
         const res = await api.printWHSP({
           company: "01",
           plant: "100",
-          warehouse: payload.warehouse || "",
-          stockPlace: payload.stockPlace || "",
-          container: payload.container,
-          repeat: payload.repeat,
+          container: directExpiryDate,
+          repeat: count,
         });
-        if (res.ok) successCount++;
-        else failedCount++;
-      } catch {
-        failedCount++;
-      }
-    }
 
-    setPrinting(false);
-    if (failedCount === 0) {
-      setSuccessMsg(`Toplam ${successCount} adet SKT etiket siparişi başarıyla CANIAS'a iletildi.`);
-      setQueuedOrders([]);
+        if (res.ok) {
+          setSuccessMsg(`Doğrudan SKT etiket siparişi (${directExpiryDate} - ${count} kopya) başarıyla CANIAS'a iletildi.`);
+          setDirectExpiryDate("");
+          setRepeatCount(1);
+        } else {
+          setErrorMsg("SKT etiketi yazdırılırken CANIAS servisinde hata oluştu.");
+        }
+      } catch {
+        setErrorMsg("CANIAS servisi ile iletişim kurulurken hata oluştu.");
+      } finally {
+        setPrinting(false);
+      }
     } else {
-      setErrorMsg(`${successCount} etiket yazdırıldı, ${failedCount} adet siparişte hata oluştu.`);
+      // searchGrid tab
+      if (selectedMaterials.length === 0) {
+        setErrorMsg("Lütfen listeden en az bir ürün seçin.");
+        return;
+      }
+
+      setPrinting(true);
+      let successCount = 0;
+      let failedCount = 0;
+
+      for (const mat of selectedMaterials) {
+        const batch = mat.batchNum && mat.batchNum !== "*" ? mat.batchNum : mat.material;
+        try {
+          const res = await api.printWHSP({
+            company: "01",
+            plant: "100",
+            warehouse: mat.warehouse || "",
+            stockPlace: mat.stockPlace || "",
+            container: batch,
+            repeat: count,
+          });
+          if (res.ok) successCount++;
+          else failedCount++;
+        } catch {
+          failedCount++;
+        }
+      }
+
+      setPrinting(false);
+      setRepeatCount(1);
+      if (failedCount === 0) {
+        setSuccessMsg(`Seçilen ${successCount} adet üründen ${count}'er kopya SKT etiketi yazdırıldı.`);
+        setSelectedMaterials([]);
+      } else {
+        setErrorMsg(`${successCount} etiket yazdırıldı, ${failedCount} adet siparişte hata oluştu.`);
+      }
     }
   };
 
+  const isPrintDisabled =
+    printing ||
+    (activeTab === "directDate" ? !directExpiryDate : selectedMaterials.length === 0);
+
   return (
-    <div className="mx-auto max-w-6xl p-4 lg:p-8 space-y-8">
-      <LabelOrderQueueHeader
+    <div className="mx-auto max-w-6xl p-4 lg:p-8 space-y-6">
+      {/* Top Header with Kopya Input & Green Print Button aligned right */}
+      <PageHeader
         title="SKT (Son Kullanma Tarihi) Etiketi Yazdırma"
-        subtitle="Ürün barkodu / kodu ile aratarak veya doğrudan SKT tarihi girerek etiket siparişi oluşturun"
-        icon={CalendarDays}
-        iconBg="bg-amber-100 dark:bg-amber-900/30"
-        iconFg="text-amber-600 dark:text-amber-400"
-        queuedOrders={queuedOrders}
-        onRemoveOrder={handleRemoveOrder}
-        onPrintAll={handlePrintAll}
-        printing={printing}
-        errorMsg={errorMsg}
-        successMsg={successMsg}
+        subtitle="Doğrudan SKT tarihi seçerek veya ürün aratarak etiket yazdırın"
+        backTo="/label-printing"
+        right={
+          <div className="hidden sm:flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
+              <input
+                type="number"
+                min={1}
+                max={99}
+                value={repeatCount}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+                }}
+                className="field-input w-16 py-1.5 px-2 text-center text-xs font-bold"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handlePrint}
+              disabled={isPrintDisabled}
+              className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            >
+              {printing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Yazdırılıyor...</span>
+                </>
+              ) : (
+                <>
+                  <Printer className="h-4 w-4" />
+                  <span>
+                    Yazdır {activeTab === "searchGrid" && selectedMaterials.length > 0 ? `(${selectedMaterials.length})` : ""}
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
+        }
       />
 
-      {/* BÖLÜM 1: Ürün Barkodu / Kodu ile Arama ve 3x3 Grid Seçimi */}
-      <div className="rounded-2xl border border-line bg-surface p-6 shadow-card space-y-5">
-        <div>
-          <h3 className="text-base font-extrabold text-fg flex items-center gap-2">
-            <Package className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-            <span>1. Yöntem: Ürün Barkodu / Kodu ile Arama ve Seçim</span>
-          </h3>
-          <p className="text-xs text-subtle mt-0.5">
-            Arama yapın, ürünü seçip kopya sayısı ile siparişe ekleyin.
-          </p>
+      {/* Mobile Action Bar */}
+      <div className="flex items-center justify-between gap-3 sm:hidden mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-fg">Kopya:</span>
+          <input
+            type="number"
+            min={1}
+            max={99}
+            value={repeatCount}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+            }}
+            className="field-input w-20 py-1.5 px-2 text-center text-xs font-bold"
+          />
         </div>
 
-        {/* Search Bar + Select Type */}
-        <form onSubmit={handleSearchMaterial} className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
+        <button
+          type="button"
+          onClick={handlePrint}
+          disabled={isPrintDisabled}
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+        >
+          {printing ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Printer className="h-4 w-4" />
+          )}
+          <span>
+            Yazdır {activeTab === "searchGrid" && selectedMaterials.length > 0 ? `(${selectedMaterials.length})` : ""}
+          </span>
+        </button>
+      </div>
+
+      {/* Segmented Tab Bar */}
+      <div className="flex rounded-2xl border border-line bg-surface p-1.5 shadow-sm">
+        <button
+          type="button"
+          onClick={() => handleTabChange("directDate")}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition-all ${activeTab === "directDate"
+              ? "bg-blue-600 text-white shadow-md"
+              : "text-subtle hover:text-fg hover:bg-elevated"
+            }`}
+        >
+          <Calendar className="h-4 w-4" />
+          <span>1. Yöntem: Doğrudan SKT Tarihi Girerek Yazdırma</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabChange("searchGrid")}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition-all ${activeTab === "searchGrid"
+              ? "bg-blue-600 text-white shadow-md"
+              : "text-subtle hover:text-fg hover:bg-elevated"
+            }`}
+        >
+          <Package className="h-4 w-4" />
+          <span>2. Yöntem: Ürün Barkodu / Kodu ile Arama (3x1 Grid)</span>
+        </button>
+      </div>
+
+      {/* Global Alerts */}
+      {errorMsg && (
+        <div className="flex items-center gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-600 dark:text-red-400">
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 text-xs text-emerald-600 dark:text-emerald-400">
+          <span>{successMsg}</span>
+        </div>
+      )}
+
+      {/* TAB 1: Doğrudan SKT Tarihi Girerek Yazdırma */}
+      {activeTab === "directDate" && (
+        <div className="rounded-2xl border border-line bg-surface p-6 shadow-card space-y-4">
+          <div>
+            <h3 className="text-base font-extrabold text-fg flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <span>Doğrudan SKT Tarihi Seçimi</span>
+            </h3>
+            <p className="text-xs text-subtle mt-0.5">
+              Tarihi seçip sayfa başındaki Kopya ve Yazdır butonlarını kullanarak etiketi basabilirsiniz.
+            </p>
+          </div>
+
+          <div className="max-w-md">
+            <label className="mb-1.5 block text-xs font-semibold text-fg">
+              Son Kullanma Tarihi (SKT) <span className="text-red-500">*</span>
+            </label>
             <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Barkod No veya Ürün Kodu Girin..."
-              className="field-input pl-11"
+              type="date"
+              required
+              min={todayStr}
+              max="2099-12-31"
+              value={directExpiryDate}
+              onChange={(e) => setDirectExpiryDate(e.target.value)}
+              className="field-input w-full"
             />
           </div>
+        </div>
+      )}
 
-          <div className="w-full sm:w-52">
-            <select
-              value={searchType}
-              onChange={(e) => setSearchType(e.target.value as SearchType)}
-              className="field-input w-full cursor-pointer font-medium"
+      {/* TAB 2: Ürün Barkodu / Kodu ile Arama (3x1 Grid) */}
+      {activeTab === "searchGrid" && (
+        <div className="rounded-2xl border border-line bg-surface p-6 shadow-card space-y-5">
+          <div>
+            <h3 className="text-base font-extrabold text-fg flex items-center gap-2">
+              <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <span>Ürün Barkodu / Kodu ile Arama ve Seçim</span>
+            </h3>
+            <p className="text-xs text-subtle mt-0.5">
+              Arama yapın, çıkan kartlardan seçim yapıp sayfa başındaki Yazdır butonunu kullanın.
+            </p>
+          </div>
+
+          {/* Unified Search Form */}
+          <form onSubmit={handleSearchMaterial} className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Barkod No veya Ürün Kodu Girin..."
+                className="field-input pl-11"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={searching || !searchTerm.trim()}
+              className="btn-primary flex items-center justify-center gap-2 py-2.5 px-6 shadow-sm shrink-0"
             >
-              <option value="barcode">Malzeme Barkodu</option>
-              <option value="material">Ürün Kodu (Malzeme Kodu)</option>
-            </select>
-          </div>
+              {searching ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Search className="h-4 w-4" />
+              )}
+              <span>Ara</span>
+            </button>
+          </form>
 
-          <button
-            type="submit"
-            disabled={searching || !searchTerm.trim()}
-            className="btn-primary flex items-center justify-center gap-2 py-2.5 px-5 shadow-sm shrink-0"
-          >
-            {searching ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Search className="h-4 w-4" />
-            )}
-            <span>Ara</span>
-          </button>
-        </form>
-
-        {/* 3x3 Grid Results */}
-        {searching ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 pt-2">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-28 animate-pulse rounded-2xl bg-elevated" />
-            ))}
-          </div>
-        ) : searchResults.length > 0 ? (
-          <div className="space-y-4 pt-2 border-t border-line">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {pg.pageItems.map((r, idx) => {
-                const isSelected = selectedMaterial === r;
+          {/* Single Result Card (Only product code & name, no quantity, no 3x1 grid) */}
+          {searching ? (
+            <div className="h-24 animate-pulse rounded-2xl bg-elevated mt-2" />
+          ) : searchResults.length > 0 ? (
+            <div className="pt-2 border-t border-line">
+              {(() => {
+                const r = searchResults[0];
+                const selected = isMaterialSelected(r);
                 return (
                   <div
-                    key={`${r.material}-${idx}`}
-                    onClick={() => setSelectedMaterial(r)}
-                    className={`relative flex cursor-pointer flex-col justify-between rounded-2xl border p-4 text-left shadow-card transition-all hover:shadow-soft ${isSelected
-                        ? "border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/30"
-                        : "border-line bg-bg hover:border-amber-300"
-                      }`}
+                    onClick={() => toggleSelectMaterial(r)}
+                    className={`relative flex cursor-pointer items-center justify-between rounded-2xl border p-5 text-left shadow-card transition-all ${
+                      selected
+                        ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
+                        : "border-line bg-bg hover:border-emerald-300"
+                    }`}
                   >
                     <div>
-                      <div className="flex items-start justify-between">
-                        <span className="font-mono text-base font-extrabold text-fg">{r.material}</span>
-                        {r.batchNum && (
-                          <span className="chip bg-amber-100 text-amber-800 font-mono text-[10px] dark:bg-amber-900/40 dark:text-amber-300">
-                            Batch: {r.batchNum}
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-xs text-subtle">{r.name}</p>
+                      <span className="font-mono text-lg font-extrabold text-fg">{r.material}</span>
+                      <p className="mt-1 text-sm text-subtle font-medium">{r.name}</p>
                     </div>
 
-                    <div className="mt-3 flex items-center justify-between border-t border-line/60 pt-2 text-xs">
-                      <span className="font-mono text-subtle font-semibold">
-                        Stok: {r.availStock} {r.unit}
-                      </span>
-                      <span
-                        className={`chip text-[11px] ${isSelected ? "bg-amber-600 text-white" : "bg-elevated text-subtle"
-                          }`}
-                      >
-                        {isSelected ? <Check className="h-3.5 w-3.5 inline mr-1" /> : null}
-                        {isSelected ? "Seçildi" : "Seç"}
-                      </span>
-                    </div>
+                    <span
+                      className={`chip text-xs font-bold ${
+                        selected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
+                      }`}
+                    >
+                      {selected ? <Check className="h-4 w-4 inline mr-1" /> : null}
+                      {selected ? "Seçildi" : "Seç"}
+                    </span>
                   </div>
                 );
-              })}
+              })()}
             </div>
-
-            <Pagination
-              page={pg.page}
-              pageCount={pg.pageCount}
-              onChange={pg.setPage}
-              rangeStart={pg.rangeStart}
-              rangeEnd={pg.rangeEnd}
-              total={pg.total}
-              label="Ürün"
-            />
-          </div>
-        ) : searchDone ? (
-          <p className="text-xs text-subtle py-4 text-center">Aranan kriterde ürün kaydı bulunamadı.</p>
-        ) : null}
-
-        {/* Section 1 Add Order Form */}
-        <form onSubmit={handleAddGridOrder} className="border-t border-line pt-4 space-y-3">
-          {selectedMaterial && (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
-              <span className="block font-semibold text-amber-600 dark:text-amber-400">Seçilen Malzeme:</span>
-              <div className="mt-1 font-mono font-bold text-fg">
-                {selectedMaterial.material} — {selectedMaterial.name} (Parti: {selectedMaterial.batchNum || "-"})
-              </div>
-            </div>
-          )}
-
-          <div className="flex flex-col sm:flex-row items-end gap-4">
-            <div className="w-full sm:w-48">
-              <label className="mb-1.5 block text-xs font-semibold text-fg">
-                Kopya Sayısı <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={99}
-                required
-                value={repeatCountGrid}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  setRepeatCountGrid(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
-                }}
-                className="field-input w-full"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={!selectedMaterial}
-              className="btn-primary w-full sm:w-auto flex items-center justify-center gap-2 py-2.5 px-6 shadow-sm"
-            >
-              <Plus className="h-4 w-4" />
-              <span>1. Yöntem ile Sipariş Ekle</span>
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* BÖLÜM 2: Doğrudan SKT Tarihi Girebileceği Bağımsız Alan */}
-      <div className="rounded-2xl border border-line bg-surface p-6 shadow-card space-y-5">
-        <div>
-          <h3 className="text-base font-extrabold text-fg flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-            <span>2. Yöntem: Doğrudan SKT Tarihi Girerek Etiket Siparişi</span>
-          </h3>
-          <p className="text-xs text-subtle mt-0.5">
-            Arama yapmadan doğrudan Son Kullanma Tarihi (SKT) seçip etiket siparişi oluşturabilirsiniz.
-          </p>
+          ) : searchDone ? (
+            <p className="text-xs text-subtle py-4 text-center">Aranan kriterde ürün kaydı bulunamadı.</p>
+          ) : null}
         </div>
-
-        <form onSubmit={handleAddDirectOrder} className="space-y-4">
-          <div className="flex flex-col sm:flex-row items-end justify-between gap-4">
-            <div className="w-full sm:flex-1">
-              <label className="mb-1.5 block text-xs font-semibold text-fg">
-                Son Kullanma Tarihi (SKT) <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                required
-                min={new Date().toISOString().split("T")[0]}
-                max="2099-12-31"
-                value={directExpiryDate}
-                onChange={(e) => setDirectExpiryDate(e.target.value)}
-                className="field-input w-full"
-              />
-            </div>
-
-            <div className="w-full sm:w-48">
-              <label className="mb-1.5 block text-xs font-semibold text-fg">
-                Kopya Sayısı <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={99}
-                required
-                value={repeatCountDirect}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  setRepeatCountDirect(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
-                }}
-                className="field-input w-full"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={!directExpiryDate}
-              className="btn-primary w-full sm:w-auto flex items-center justify-center gap-2 py-2.5 px-6 shadow-sm shrink-0"
-            >
-              <Plus className="h-4 w-4" />
-              <span>2. Yöntem ile Sipariş Ekle</span>
-            </button>
-          </div>
-        </form>
-      </div>
+      )}
     </div>
   );
 }

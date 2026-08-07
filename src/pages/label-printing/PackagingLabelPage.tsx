@@ -1,26 +1,25 @@
-import { useEffect, useState } from "react";
-import { Package, RefreshCw, MapPin, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Package, Search, Printer, RefreshCw, MapPin, Check, Loader2 } from "lucide-react";
 import { api } from "../../api/client";
 import { useAppStore } from "../../store/appStore";
 import type { StockRow } from "../../types";
+import PageHeader from "../../components/PageHeader";
 import Pagination, { usePagination } from "../../components/Pagination";
-import LabelOrderQueueHeader, { type QueuedLabelOrder } from "./components/LabelOrderQueueHeader";
 
 export default function PackagingLabelPage() {
   const settings = useAppStore((s) => s.settings);
 
   const [stockRows, setStockRows] = useState<StockRow[]>([]);
   const [loadingStock, setLoadingStock] = useState(false);
-  const [selectedRow, setSelectedRow] = useState<StockRow | null>(null);
-  const [repeatCount, setRepeatCount] = useState<number>(1);
+  const [q, setQ] = useState("");
 
-  // Queue state local to this page
-  const [queuedOrders, setQueuedOrders] = useState<QueuedLabelOrder[]>([]);
+  // Multi-selection state
+  const [selectedPallets, setSelectedPallets] = useState<StockRow[]>([]);
+  const [repeatCount, setRepeatCount] = useState<number>(1);
   const [printing, setPrinting] = useState(false);
+
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
-
-  const pg = usePagination(stockRows, 9);
 
   useEffect(() => {
     fetchPalletStock();
@@ -38,20 +37,44 @@ export default function PackagingLabelPage() {
     }
   };
 
-  const handleAddOrder = (e: React.FormEvent) => {
-    e.preventDefault();
+  const filteredStockRows = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return stockRows;
+    return stockRows.filter((r) => {
+      const palletCode = (r.batchNum && r.batchNum !== "*" ? r.batchNum : r.stockPlace || r.material).toLowerCase();
+      const name = (r.name || "").toLowerCase();
+      const mat = (r.material || "").toLowerCase();
+      return palletCode.includes(s) || name.includes(s) || mat.includes(s);
+    });
+  }, [stockRows, q]);
+
+  const pg = usePagination(filteredStockRows, 9);
+  useEffect(() => pg.reset(), [q]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleSelectPallet = (pallet: StockRow) => {
+    setSelectedPallets((prev) => {
+      const exists = prev.some(
+        (p) => p.material === pallet.material && p.warehouse === pallet.warehouse && p.stockPlace === pallet.stockPlace && p.batchNum === pallet.batchNum
+      );
+      if (exists) {
+        return prev.filter(
+          (p) => !(p.material === pallet.material && p.warehouse === pallet.warehouse && p.stockPlace === pallet.stockPlace && p.batchNum === pallet.batchNum)
+        );
+      }
+      return [...prev, pallet];
+    });
+  };
+
+  const isPalletSelected = (pallet: StockRow) => {
+    return selectedPallets.some(
+      (p) => p.material === pallet.material && p.warehouse === pallet.warehouse && p.stockPlace === pallet.stockPlace && p.batchNum === pallet.batchNum
+    );
+  };
+
+  const handlePrintSelected = async () => {
+    if (selectedPallets.length === 0) return;
     setErrorMsg("");
     setSuccessMsg("");
-
-    if (!selectedRow) {
-      setErrorMsg("Lütfen listeden bir palet/paket seçin.");
-      return;
-    }
-
-    const code =
-      (selectedRow.batchNum && selectedRow.batchNum !== "*"
-        ? selectedRow.batchNum
-        : selectedRow.stockPlace) || selectedRow.material;
 
     const count = Number(repeatCount);
     if (!Number.isInteger(count) || count < 1 || count > 99) {
@@ -59,75 +82,171 @@ export default function PackagingLabelPage() {
       return;
     }
 
-    const newOrder: QueuedLabelOrder = {
-      id: "pkg-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
-      title: `Palet: ${code}`,
-      subtitle: `${selectedRow.name || selectedRow.material} (${selectedRow.warehouse}/${selectedRow.stockPlace || "-"})`,
-      copies: count,
-      payload: {
-        warehouse: selectedRow.warehouse || settings.warehouse || "10",
-        container: code,
-        repeat: count,
-      },
-    };
-
-    setQueuedOrders((prev) => [...prev, newOrder]);
-    setSelectedRow(null);
-    setRepeatCount(1);
-    setSuccessMsg(`Etiket siparişi eklendi (${code} - ${count} kopya). Sipariş sayacından inceleyebilirsiniz.`);
-  };
-
-  const handleRemoveOrder = (id: string) => {
-    setQueuedOrders((prev) => prev.filter((o) => o.id !== id));
-  };
-
-  const handlePrintAll = async () => {
-    if (queuedOrders.length === 0) return;
     setPrinting(true);
-    setErrorMsg("");
-    setSuccessMsg("");
-
     let successCount = 0;
     let failedCount = 0;
+    let lastError = "";
 
-    for (const ord of queuedOrders) {
+    for (const pallet of selectedPallets) {
+      const code = (pallet.batchNum && pallet.batchNum !== "*" ? pallet.batchNum : pallet.stockPlace) || pallet.material;
       try {
-        const payload = ord.payload as { warehouse: string; container: string; repeat: number };
-        const res = await api.printContainer(payload);
-        if (res.ok) successCount++;
-        else failedCount++;
-      } catch {
+        const res = await api.printContainer({
+          company: "01",
+          plant: "100",
+          warehouse: pallet.warehouse || settings.warehouse || "10",
+          container: code,
+          repeat: count,
+        });
+        if (res.ok) {
+          successCount++;
+        } else {
+          failedCount++;
+          if (res.message) lastError = res.message;
+        }
+      } catch (err: unknown) {
         failedCount++;
+        if (err instanceof Error) lastError = err.message;
       }
     }
 
     setPrinting(false);
+    setRepeatCount(1);
     if (failedCount === 0) {
-      setSuccessMsg(`Toplam ${successCount} adet etiket siparişi başarıyla CANIAS'a iletildi ve yazdırıldı.`);
-      setQueuedOrders([]);
+      setSuccessMsg(`Seçilen ${successCount} adet palet etiketinden ${count}'er kopya yazdırıldı.`);
+      setSelectedPallets([]);
     } else {
-      setErrorMsg(`${successCount} etiket yazdırıldı, ${failedCount} adet siparişte hata oluştu.`);
+      setErrorMsg(
+        `${successCount} palet etiketi yazdırıldı, ${failedCount} adet etikette hata oluştu.${
+          lastError ? ` (Detay: ${lastError})` : ""
+        }`
+      );
     }
   };
 
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8">
-      <LabelOrderQueueHeader
+      {/* Top Header with Short Search, Kopya Input, & Print Button */}
+      <PageHeader
         title="Paketleme Etiketi Yazdırma"
-        subtitle="Stoktaki palet ve paket etiketlerini siparişe ekleyip yazdırın"
-        icon={Package}
-        iconBg="bg-blue-100 dark:bg-blue-900/30"
-        iconFg="text-blue-600 dark:text-blue-400"
-        queuedOrders={queuedOrders}
-        onRemoveOrder={handleRemoveOrder}
-        onPrintAll={handlePrintAll}
-        printing={printing}
-        errorMsg={errorMsg}
-        successMsg={successMsg}
+        subtitle="Stoktaki paletleri seçip yazdırın"
+        backTo="/label-printing"
+        right={
+          <div className="hidden sm:flex items-center gap-3">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Palet veya Malzeme Ara..."
+                className="field-input w-52 py-1.5 pl-9 text-xs"
+              />
+            </div>
+
+            {/* Kopya Sayısı Input */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
+              <input
+                type="number"
+                min={1}
+                max={99}
+                value={repeatCount}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+                }}
+                className="field-input w-16 py-1.5 px-2 text-center text-xs font-bold"
+              />
+            </div>
+
+            {/* Yazdır Button */}
+            <button
+              type="button"
+              onClick={handlePrintSelected}
+              disabled={selectedPallets.length === 0 || printing}
+              className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            >
+              {printing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Yazdırılıyor...</span>
+                </>
+              ) : (
+                <>
+                  <Printer className="h-4 w-4" />
+                  <span>Yazdır ({selectedPallets.length})</span>
+                </>
+              )}
+            </button>
+          </div>
+        }
       />
 
+      {/* Mobile Search & Action Bar */}
+      <div className="mb-5 flex flex-col gap-3 sm:hidden">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Palet veya Malzeme Ara..."
+            className="field-input pl-9 text-xs"
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-fg">Kopya Sayısı:</span>
+            <input
+              type="number"
+              min={1}
+              max={99}
+              value={repeatCount}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+              }}
+              className="field-input w-20 py-1.5 px-2 text-center text-xs font-bold"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={handlePrintSelected}
+            disabled={selectedPallets.length === 0 || printing}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {printing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Printer className="h-4 w-4" />
+            )}
+            <span>Yazdır ({selectedPallets.length})</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Alerts */}
+      {errorMsg && (
+        <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-600 dark:text-red-400">
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 text-xs text-emerald-600 dark:text-emerald-400">
+          <span>{successMsg}</span>
+        </div>
+      )}
+
+      {/* List Header */}
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-base font-bold text-fg">Stoktaki Paletler ({stockRows.length})</h2>
+        <h2 className="text-sm font-bold text-fg">
+          Stoktaki Paletler ({stockRows.length})
+          {selectedPallets.length > 0 && (
+            <span className="ml-2 text-xs font-semibold text-brand">({selectedPallets.length} Palet Seçili)</span>
+          )}
+        </h2>
         <button
           type="button"
           onClick={fetchPalletStock}
@@ -135,18 +254,18 @@ export default function PackagingLabelPage() {
           className="flex items-center gap-1.5 text-xs font-semibold text-brand hover:underline"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loadingStock ? "animate-spin" : ""}`} />
-          Stok Yenile
+          Yenile
         </button>
       </div>
 
-      {/* 3x3 Grid Items */}
+      {/* 3x3 Grid Layout */}
       {loadingStock ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="h-32 animate-pulse rounded-2xl bg-elevated" />
           ))}
         </div>
-      ) : stockRows.length === 0 ? (
+      ) : filteredStockRows.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-line bg-surface text-subtle">
           <Package className="mb-2 h-10 w-10" />
           <p className="text-sm">Stokta aktif palet kaydı bulunamadı.</p>
@@ -155,17 +274,17 @@ export default function PackagingLabelPage() {
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {pg.pageItems.map((r, idx) => {
-              const isSelected = selectedRow === r;
+              const selected = isPalletSelected(r);
               const palletCode = r.batchNum && r.batchNum !== "*" ? r.batchNum : r.stockPlace || r.material;
 
               return (
                 <div
                   key={`${r.material}|${r.warehouse}|${r.stockPlace}|${r.batchNum || idx}`}
-                  onClick={() => setSelectedRow(r)}
+                  onClick={() => toggleSelectPallet(r)}
                   className={`relative flex cursor-pointer flex-col justify-between rounded-2xl border p-5 text-left shadow-card transition-all hover:shadow-soft ${
-                    isSelected
-                      ? "border-brand bg-brand/10 ring-2 ring-brand/30"
-                      : "border-line bg-surface hover:border-brand-300"
+                    selected
+                      ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
+                      : "border-line bg-surface hover:border-emerald-300"
                   }`}
                 >
                   <div>
@@ -187,10 +306,11 @@ export default function PackagingLabelPage() {
                     </span>
                     <span
                       className={`chip text-[11px] ${
-                        isSelected ? "bg-brand text-white" : "bg-elevated text-subtle"
+                        selected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
                       }`}
                     >
-                      {isSelected ? "Seçildi" : "Seç"}
+                      {selected ? <Check className="h-3.5 w-3.5 inline mr-1" /> : null}
+                      {selected ? "Seçildi" : "Seç"}
                     </span>
                   </div>
                 </div>
@@ -211,51 +331,6 @@ export default function PackagingLabelPage() {
           </div>
         </>
       )}
-
-      {/* Selected Item & Order Add Form */}
-      <form onSubmit={handleAddOrder} className="mt-6 rounded-2xl border border-line bg-surface p-5 shadow-card">
-        <h3 className="text-sm font-bold text-fg mb-3">Siparişe Eklenecek Etiket Detayı</h3>
-        
-        {selectedRow ? (
-          <div className="mb-4 rounded-xl border border-brand/30 bg-brand/5 p-3 text-xs">
-            <span className="block font-semibold text-brand">Seçilen Palet:</span>
-            <div className="mt-1 flex flex-wrap items-center justify-between font-mono font-bold text-fg gap-2">
-              <span>Palet/Parti: {selectedRow.batchNum || selectedRow.stockPlace}</span>
-              <span>Malzeme: {selectedRow.material}</span>
-              <span>Konum: {selectedRow.warehouse}/{selectedRow.stockPlace}</span>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="flex flex-col sm:flex-row items-end gap-4">
-          <div className="w-full sm:w-48">
-            <label className="mb-1.5 block text-xs font-semibold text-fg">
-              Kopya Sayısı <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={99}
-              required
-              value={repeatCount}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
-              }}
-              className="field-input w-full"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={!selectedRow}
-            className="btn-primary w-full sm:w-auto flex items-center justify-center gap-2 py-2.5 px-6 shadow-sm"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Etiket Siparişi Ekle</span>
-          </button>
-        </div>
-      </form>
     </div>
   );
 }

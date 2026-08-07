@@ -1,31 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileText, Search, Plus, Check } from "lucide-react";
+import { FileText, Search, Printer, Check, Loader2, RefreshCw } from "lucide-react";
 import { api } from "../../api/client";
 import type { PickOrder } from "../../types";
+import PageHeader from "../../components/PageHeader";
 import Pagination, { usePagination } from "../../components/Pagination";
-import LabelOrderQueueHeader, { type QueuedLabelOrder } from "./components/LabelOrderQueueHeader";
 
 export default function WaybillLabelPage() {
   const [pickOrders, setPickOrders] = useState<PickOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
 
-  const [selectedWaybill, setSelectedWaybill] = useState<PickOrder | null>(null);
+  // Multi-selection state
+  const [selectedWaybills, setSelectedWaybills] = useState<PickOrder[]>([]);
   const [repeatCount, setRepeatCount] = useState<number>(1);
-
-  // Queue state local to this page
-  const [queuedOrders, setQueuedOrders] = useState<QueuedLabelOrder[]>([]);
   const [printing, setPrinting] = useState(false);
+
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
   useEffect(() => {
+    fetchWaybills();
+  }, []);
+
+  const fetchWaybills = () => {
+    setLoading(true);
     api
       .getPickOrders()
       .then(setPickOrders)
       .catch(() => setPickOrders([]))
       .finally(() => setLoading(false));
-  }, []);
+  };
 
   const filteredWaybills = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -41,83 +45,174 @@ export default function WaybillLabelPage() {
   const pg = usePagination(filteredWaybills, 9);
   useEffect(() => pg.reset(), [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleAddOrder = (e: React.FormEvent) => {
-    e.preventDefault();
+  const toggleSelectWaybill = (waybill: PickOrder) => {
+    setSelectedWaybills((prev) => {
+      const exists = prev.some((w) => w.id === waybill.id);
+      if (exists) {
+        return prev.filter((w) => w.id !== waybill.id);
+      }
+      return [...prev, waybill];
+    });
+  };
+
+  const isWaybillSelected = (waybill: PickOrder) => {
+    return selectedWaybills.some((w) => w.id === waybill.id);
+  };
+
+  const handlePrintSelected = async () => {
+    if (selectedWaybills.length === 0) return;
     setErrorMsg("");
     setSuccessMsg("");
 
-    if (!selectedWaybill) {
-      setErrorMsg("Lütfen ızgaradan bir irsaliye seçin.");
-      return;
-    }
-
-    const docNum = selectedWaybill.id.toUpperCase();
     const count = Number(repeatCount);
     if (!Number.isInteger(count) || count < 1 || count > 99) {
       setErrorMsg("Kopya sayısı 1 ile 99 arasında olmalıdır.");
       return;
     }
 
-    const newOrder: QueuedLabelOrder = {
-      id: "way-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
-      title: `İrsaliye: ${docNum}`,
-      subtitle: selectedWaybill.customer ? `Müşteri: ${selectedWaybill.customer}` : "İrsaliye Belge Etiketi",
-      copies: count,
-      payload: {
-        docNum,
-        repeat: count,
-      },
-    };
-
-    setQueuedOrders((prev) => [...prev, newOrder]);
-    setSelectedWaybill(null);
-    setRepeatCount(1);
-    setSuccessMsg(`İrsaliye etiket siparişi eklendi (${docNum} - ${count} kopya).`);
-  };
-
-  const handleRemoveOrder = (id: string) => {
-    setQueuedOrders((prev) => prev.filter((o) => o.id !== id));
-  };
-
-  const handlePrintAll = async () => {
-    if (queuedOrders.length === 0) return;
     setPrinting(true);
-    setErrorMsg("");
-    setSuccessMsg("");
-
-    // Simulate batch print for waybills
+    // Simulate batch print for selected waybills
     await new Promise((res) => setTimeout(res, 800));
 
     setPrinting(false);
-    setSuccessMsg(`Toplam ${queuedOrders.length} adet irsaliye etiket siparişi başarıyla CANIAS'a iletildi.`);
-    setQueuedOrders([]);
+    setRepeatCount(1);
+    setSuccessMsg(`Seçilen ${selectedWaybills.length} adet irsaliye etiketinden ${count}'er kopya yazdırıldı.`);
+    setSelectedWaybills([]);
   };
 
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8">
-      <LabelOrderQueueHeader
+      {/* Top Header with Short Search, Kopya Input, & Print Button */}
+      <PageHeader
         title="İrsaliye Etiketi Yazdırma"
-        subtitle="Sevkiyat evrakları ve irsaliye etiketlerini siparişe ekleyip yazdırın"
-        icon={FileText}
-        iconBg="bg-emerald-100 dark:bg-emerald-900/30"
-        iconFg="text-emerald-600 dark:text-emerald-400"
-        queuedOrders={queuedOrders}
-        onRemoveOrder={handleRemoveOrder}
-        onPrintAll={handlePrintAll}
-        printing={printing}
-        errorMsg={errorMsg}
-        successMsg={successMsg}
+        subtitle="Sevkiyat evrakları ve irsaliyeleri seçip yazdırın"
+        backTo="/label-printing"
+        right={
+          <div className="hidden sm:flex items-center gap-3">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="İrsaliye veya Müşteri Ara..."
+                className="field-input w-52 py-1.5 pl-9 text-xs"
+              />
+            </div>
+
+            {/* Kopya Sayısı Input */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
+              <input
+                type="number"
+                min={1}
+                max={99}
+                value={repeatCount}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+                }}
+                className="field-input w-16 py-1.5 px-2 text-center text-xs font-bold"
+              />
+            </div>
+
+            {/* Yazdır Button */}
+            <button
+              type="button"
+              onClick={handlePrintSelected}
+              disabled={selectedWaybills.length === 0 || printing}
+              className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            >
+              {printing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Yazdırılıyor...</span>
+                </>
+              ) : (
+                <>
+                  <Printer className="h-4 w-4" />
+                  <span>Yazdır ({selectedWaybills.length})</span>
+                </>
+              )}
+            </button>
+          </div>
+        }
       />
 
-      {/* Top Search Bar */}
-      <div className="relative mb-5">
-        <Search className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="İrsaliye / Belge No veya Müşteri Ara..."
-          className="field-input pl-11"
-        />
+      {/* Mobile Search & Action Bar */}
+      <div className="mb-5 flex flex-col gap-3 sm:hidden">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="İrsaliye veya Müşteri Ara..."
+            className="field-input pl-9 text-xs"
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-fg">Kopya Sayısı:</span>
+            <input
+              type="number"
+              min={1}
+              max={99}
+              value={repeatCount}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+              }}
+              className="field-input w-20 py-1.5 px-2 text-center text-xs font-bold"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={handlePrintSelected}
+            disabled={selectedWaybills.length === 0 || printing}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {printing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Printer className="h-4 w-4" />
+            )}
+            <span>Yazdır ({selectedWaybills.length})</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Alerts */}
+      {errorMsg && (
+        <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-600 dark:text-red-400">
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 text-xs text-emerald-600 dark:text-emerald-400">
+          <span>{successMsg}</span>
+        </div>
+      )}
+
+      {/* List Header */}
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-sm font-bold text-fg">
+          İrsaliyeler ({pickOrders.length})
+          {selectedWaybills.length > 0 && (
+            <span className="ml-2 text-xs font-semibold text-brand">({selectedWaybills.length} İrsaliye Seçili)</span>
+          )}
+        </h2>
+        <button
+          type="button"
+          onClick={fetchWaybills}
+          disabled={loading}
+          className="flex items-center gap-1.5 text-xs font-semibold text-brand hover:underline"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+          Yenile
+        </button>
       </div>
 
       {/* 3x3 Grid Layout */}
@@ -136,13 +231,13 @@ export default function WaybillLabelPage() {
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {pg.pageItems.map((o) => {
-              const isSelected = selectedWaybill?.id === o.id;
+              const selected = isWaybillSelected(o);
               return (
                 <div
                   key={o.id}
-                  onClick={() => setSelectedWaybill(o)}
+                  onClick={() => toggleSelectWaybill(o)}
                   className={`relative flex cursor-pointer flex-col justify-between rounded-2xl border p-5 text-left shadow-card transition-all hover:shadow-soft ${
-                    isSelected
+                    selected
                       ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
                       : "border-line bg-surface hover:border-emerald-300"
                   }`}
@@ -164,11 +259,11 @@ export default function WaybillLabelPage() {
                     <span className="text-subtle font-mono">{o.createdAt || "CANIAS"}</span>
                     <span
                       className={`chip text-[11px] ${
-                        isSelected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
+                        selected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
                       }`}
                     >
-                      {isSelected ? <Check className="h-3.5 w-3.5 inline mr-1" /> : null}
-                      {isSelected ? "Seçildi" : "Seç"}
+                      {selected ? <Check className="h-3.5 w-3.5 inline mr-1" /> : null}
+                      {selected ? "Seçildi" : "Seç"}
                     </span>
                   </div>
                 </div>
@@ -189,51 +284,6 @@ export default function WaybillLabelPage() {
           </div>
         </>
       )}
-
-      {/* Selected Item & Order Add Form (No search bar here) */}
-      <form onSubmit={handleAddOrder} className="mt-6 rounded-2xl border border-line bg-surface p-5 shadow-card">
-        <h3 className="text-sm font-bold text-fg mb-3">Siparişe Eklenecek İrsaliye Etiketi Detayı</h3>
-
-        {selectedWaybill ? (
-          <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs">
-            <span className="block font-semibold text-emerald-600 dark:text-emerald-400">Seçilen İrsaliye:</span>
-            <div className="mt-1 flex flex-wrap items-center justify-between font-mono font-bold text-fg gap-2">
-              <span>İrsaliye No: {selectedWaybill.id}</span>
-              {selectedWaybill.customer && <span>Müşteri: {selectedWaybill.customer}</span>}
-              {selectedWaybill.orderType && <span>Tip: {selectedWaybill.orderType}</span>}
-            </div>
-          </div>
-        ) : null}
-
-        <div className="flex flex-col sm:flex-row items-end gap-4">
-          <div className="w-full sm:w-48">
-            <label className="mb-1.5 block text-xs font-semibold text-fg">
-              Kopya Sayısı <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={99}
-              required
-              value={repeatCount}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
-              }}
-              className="field-input w-full"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={!selectedWaybill}
-            className="btn-primary w-full sm:w-auto flex items-center justify-center gap-2 py-2.5 px-6 shadow-sm"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Etiket Siparişi Ekle</span>
-          </button>
-        </div>
-      </form>
     </div>
   );
 }
