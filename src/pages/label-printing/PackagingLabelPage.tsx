@@ -114,7 +114,7 @@ export default function PackagingLabelPage() {
     <div className="mx-auto max-w-6xl p-4 lg:p-8">
       <LabelOrderQueueHeader
         title="Paketleme Etiketi Yazdırma"
-        subtitle="Stoktaki palet ve paket etiketlerini siparişe ekleyip yazdırın (MZYPrintContainer)"
+        subtitle="Stoktaki palet ve paket etiketlerini siparişe ekleyip yazdırın"
         icon={Package}
         iconBg="bg-blue-100 dark:bg-blue-900/30"
         iconFg="text-blue-600 dark:text-blue-400"

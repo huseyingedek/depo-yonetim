@@ -30,7 +30,7 @@ const LABEL_CARDS: LabelCardItem[] = [
     route: "/label-printing/packaging",
     titleKey: "labelPrinting.cards.packaging.title",
     defaultTitle: "Paketleme Etiketi Yazdırma",
-    description: "Koli, palet ve paket etiketlerini yazdırın (Servis: MZYPrintContainer)",
+    description: "Koli, palet ve paket etiketlerini yazdırın",
     icon: Package,
     iconBg: "bg-blue-100 dark:bg-blue-900/30",
     iconFg: "text-blue-600 dark:text-blue-400",

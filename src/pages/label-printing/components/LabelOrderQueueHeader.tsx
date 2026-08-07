@@ -86,10 +86,10 @@ export default function LabelOrderQueueHeader({
             <ListOrdered className="h-4 w-4" />
             <span>Etiket Siparişleri</span>
             <span
-              className={`ml-1 flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11px] font-extrabold ${
+              className={`ml-1 inline-flex h-6 min-w-[24px] shrink-0 aspect-square items-center justify-center rounded-full px-1.5 text-xs font-black shadow-xs ${
                 queuedOrders.length > 0
-                  ? "bg-brand text-white"
-                  : "bg-elevated text-subtle"
+                  ? "bg-blue-600 text-white dark:bg-blue-500"
+                  : "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
               }`}
             >
               {queuedOrders.length}
@@ -101,7 +101,7 @@ export default function LabelOrderQueueHeader({
             type="button"
             onClick={onPrintAll}
             disabled={printing || queuedOrders.length === 0}
-            className="btn-primary flex items-center gap-2 text-xs py-2 px-4 shadow-sm"
+            className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {printing ? (
               <>
@@ -184,7 +184,7 @@ export default function LabelOrderQueueHeader({
                       onPrintAll();
                     }}
                     disabled={printing}
-                    className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
+                    className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Printer className="h-3.5 w-3.5" />
                     <span>Tümünü Yazdır</span>
