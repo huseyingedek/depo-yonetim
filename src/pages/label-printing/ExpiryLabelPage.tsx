@@ -112,7 +112,7 @@ export default function ExpiryLabelPage() {
 
       setPrinting(true);
       try {
-        const res = await api.printWHSP({
+        const res = await api.printBarcode({
           company: "01",
           plant: "100",
           container: directExpiryDate,
@@ -145,7 +145,7 @@ export default function ExpiryLabelPage() {
       for (const mat of selectedMaterials) {
         const batch = mat.batchNum && mat.batchNum !== "*" ? mat.batchNum : mat.material;
         try {
-          const res = await api.printWHSP({
+          const res = await api.printBarcode({
             company: "01",
             plant: "100",
             warehouse: mat.warehouse || "",

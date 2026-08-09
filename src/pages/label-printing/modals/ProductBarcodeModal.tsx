@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Barcode, X, CheckCircle2, AlertCircle, Loader2, RefreshCw, Printer } from "lucide-react";
 import BarcodeScanner from "../../../components/BarcodeScanner";
+import { api } from "../../../api/client";
 
 interface Props {
   isOpen: boolean;
@@ -53,7 +54,15 @@ export default function ProductBarcodeModal({ isOpen, onClose }: Props) {
     setLoading(true);
 
     try {
-      setSuccessMsg(`Ürün barkod etiketi (${mat} - ${count} kopya) yazdırma isteği alındı.`);
+      const res = await api.printMaterial({
+        container: mat,
+        repeat: count,
+      });
+      if (res.ok) {
+        setSuccessMsg(res.message || `Ürün barkod etiketi (${mat} - ${count} kopya) yazdırma isteği CANIAS'a iletildi.`);
+      } else {
+        setErrorMsg(res.message || "Ürün barkod etiketi yazdırma başarısız oldu.");
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Yazdırma işlemi sırasında hata oluştu.";
       setErrorMsg(msg);

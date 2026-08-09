@@ -65,8 +65,8 @@ export default function ExpiryLabelModal({ isOpen, onClose }: Props) {
     setLoading(true);
 
     try {
-      // Bora, 05.08: Parti / Batch etiketi basımı için PSCONTAINER = lot
-      const res = await api.printWHSP({
+      // Bora: SKT / Parti / Batch etiketi basımı MZYPrintBarcode ile
+      const res = await api.printBarcode({
         company: "01",
         plant: "100",
         container: lot,

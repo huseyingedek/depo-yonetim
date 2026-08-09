@@ -105,7 +105,7 @@ export default function ProductBarcodePage() {
 
     for (const mat of selectedMaterials) {
       try {
-        const res = await api.printWHSP({
+        const res = await api.printMaterial({
           company: "01",
           plant: "100",
           warehouse: mat.warehouse || "",
