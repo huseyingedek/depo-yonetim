@@ -1,0 +1,319 @@
+import { useEffect, useMemo, useState } from "react";
+import { FileText, Search, Printer, Check, Loader2, RefreshCw } from "lucide-react";
+import { api } from "../../api/client";
+import type { PickOrder } from "../../types";
+import PageHeader from "../../components/PageHeader";
+import Pagination, { usePagination } from "../../components/Pagination";
+
+export default function WaybillLabelPage() {
+  const [pickOrders, setPickOrders] = useState<PickOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
+
+  // Multi-selection state
+  const [selectedWaybills, setSelectedWaybills] = useState<PickOrder[]>([]);
+  const [repeatCount, setRepeatCount] = useState<number>(1);
+  const [printing, setPrinting] = useState(false);
+
+  const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
+
+  useEffect(() => {
+    fetchWaybills();
+  }, []);
+
+  const fetchWaybills = () => {
+    setLoading(true);
+    api
+      .getPickOrders()
+      .then(setPickOrders)
+      .catch(() => setPickOrders([]))
+      .finally(() => setLoading(false));
+  };
+
+  const filteredWaybills = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return pickOrders;
+    return pickOrders.filter(
+      (o) =>
+        o.id.toLowerCase().includes(s) ||
+        (o.customer && o.customer.toLowerCase().includes(s)) ||
+        (o.orderType && o.orderType.toLowerCase().includes(s))
+    );
+  }, [pickOrders, q]);
+
+  const pg = usePagination(filteredWaybills, 9);
+  useEffect(() => pg.reset(), [q]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleSelectWaybill = (waybill: PickOrder) => {
+    setSelectedWaybills((prev) => {
+      const exists = prev.some((w) => w.id === waybill.id);
+      if (exists) {
+        return prev.filter((w) => w.id !== waybill.id);
+      }
+      return [...prev, waybill];
+    });
+  };
+
+  const isWaybillSelected = (waybill: PickOrder) => {
+    return selectedWaybills.some((w) => w.id === waybill.id);
+  };
+
+  const handlePrintSelected = async () => {
+    if (selectedWaybills.length === 0) return;
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    const count = Number(repeatCount);
+    if (!Number.isInteger(count) || count < 1 || count > 99) {
+      setErrorMsg("Kopya sayısı 1 ile 99 arasında olmalıdır.");
+      return;
+    }
+
+    setPrinting(true);
+    let successCount = 0;
+    let failedCount = 0;
+    let lastError = "";
+
+    for (const waybill of selectedWaybills) {
+      try {
+        const res = await api.printContainer({
+          company: "01",
+          plant: "100",
+          warehouse: "10",
+          container: waybill.id,
+          repeat: count,
+        });
+        if (res.ok) {
+          successCount++;
+        } else {
+          failedCount++;
+          if (res.message) lastError = res.message;
+        }
+      } catch (err: unknown) {
+        failedCount++;
+        if (err instanceof Error) lastError = err.message;
+      }
+    }
+
+    setPrinting(false);
+    setRepeatCount(1);
+    if (failedCount === 0) {
+      setSuccessMsg(`Seçilen ${successCount} adet irsaliye etiketinden ${count}'er kopya yazdırıldı.`);
+      setSelectedWaybills([]);
+    } else {
+      setErrorMsg(
+        `${successCount} irsaliye etiketi yazdırıldı, ${failedCount} adet etikette hata oluştu.${
+          lastError ? ` (Detay: ${lastError})` : ""
+        }`
+      );
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-6xl p-4 lg:p-8">
+      {/* Top Header with Short Search, Kopya Input, & Print Button */}
+      <PageHeader
+        title="İrsaliye Etiketi Yazdırma"
+        subtitle="Sevkiyat evrakları ve irsaliyeleri seçip yazdırın"
+        backTo="/label-printing"
+        right={
+          <div className="hidden sm:flex items-center gap-3">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="İrsaliye veya Müşteri Ara..."
+                className="field-input w-52 py-1.5 pl-9 text-xs"
+              />
+            </div>
+
+            {/* Kopya Sayısı Input */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
+              <input
+                type="number"
+                min={1}
+                max={99}
+                value={repeatCount}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+                }}
+                className="field-input w-16 py-1.5 px-2 text-center text-xs font-bold"
+              />
+            </div>
+
+            {/* Yazdır Button */}
+            <button
+              type="button"
+              onClick={handlePrintSelected}
+              disabled={selectedWaybills.length === 0 || printing}
+              className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            >
+              {printing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Yazdırılıyor...</span>
+                </>
+              ) : (
+                <>
+                  <Printer className="h-4 w-4" />
+                  <span>Yazdır ({selectedWaybills.length})</span>
+                </>
+              )}
+            </button>
+          </div>
+        }
+      />
+
+      {/* Mobile Search & Action Bar */}
+      <div className="mb-5 flex flex-col gap-3 sm:hidden">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="İrsaliye veya Müşteri Ara..."
+            className="field-input pl-9 text-xs"
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-fg">Kopya Sayısı:</span>
+            <input
+              type="number"
+              min={1}
+              max={99}
+              value={repeatCount}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+              }}
+              className="field-input w-20 py-1.5 px-2 text-center text-xs font-bold"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={handlePrintSelected}
+            disabled={selectedWaybills.length === 0 || printing}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {printing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Printer className="h-4 w-4" />
+            )}
+            <span>Yazdır ({selectedWaybills.length})</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Alerts */}
+      {errorMsg && (
+        <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-600 dark:text-red-400">
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 text-xs text-emerald-600 dark:text-emerald-400">
+          <span>{successMsg}</span>
+        </div>
+      )}
+
+      {/* List Header */}
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-sm font-bold text-fg">
+          İrsaliyeler ({pickOrders.length})
+          {selectedWaybills.length > 0 && (
+            <span className="ml-2 text-xs font-semibold text-brand">({selectedWaybills.length} İrsaliye Seçili)</span>
+          )}
+        </h2>
+        <button
+          type="button"
+          onClick={fetchWaybills}
+          disabled={loading}
+          className="flex items-center gap-1.5 text-xs font-semibold text-brand hover:underline"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+          Yenile
+        </button>
+      </div>
+
+      {/* 3x3 Grid Layout */}
+      {loading ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-32 animate-pulse rounded-2xl bg-elevated" />
+          ))}
+        </div>
+      ) : filteredWaybills.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-line bg-surface text-subtle">
+          <FileText className="mb-2 h-10 w-10" />
+          <p className="text-sm">Aranan kriterde irsaliye kaydı bulunamadı.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {pg.pageItems.map((o) => {
+              const selected = isWaybillSelected(o);
+              return (
+                <div
+                  key={o.id}
+                  onClick={() => toggleSelectWaybill(o)}
+                  className={`relative flex cursor-pointer flex-col justify-between rounded-2xl border p-5 text-left shadow-card transition-all hover:shadow-soft ${
+                    selected
+                      ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
+                      : "border-line bg-surface hover:border-emerald-300"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between">
+                      <span className="font-mono text-base font-extrabold text-fg">{o.id}</span>
+                      {o.orderType && (
+                        <span className="chip bg-violet-100 font-mono text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                          {o.orderType}
+                        </span>
+                      )}
+                    </div>
+                    {o.customer && <p className="mt-2 truncate text-xs font-medium text-subtle">{o.customer}</p>}
+                    {o.reference && <p className="mt-1 line-clamp-1 text-[11px] text-muted">{o.reference}</p>}
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between border-t border-line/60 pt-3 text-xs">
+                    <span className="text-subtle font-mono">{o.createdAt || "CANIAS"}</span>
+                    <span
+                      className={`chip text-[11px] ${
+                        selected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
+                      }`}
+                    >
+                      {selected ? <Check className="h-3.5 w-3.5 inline mr-1" /> : null}
+                      {selected ? "Seçildi" : "Seç"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-4">
+            <Pagination
+              page={pg.page}
+              pageCount={pg.pageCount}
+              onChange={pg.setPage}
+              rangeStart={pg.rangeStart}
+              rangeEnd={pg.rangeEnd}
+              total={pg.total}
+              label="İrsaliye"
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

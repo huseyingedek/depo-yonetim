@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Barcode, X, CheckCircle2, AlertCircle, Loader2, RefreshCw, Printer } from "lucide-react";
 import BarcodeScanner from "../../../components/BarcodeScanner";
+import { api } from "../../../api/client";
 
 interface Props {
   isOpen: boolean;
@@ -45,15 +46,23 @@ export default function ProductBarcodeModal({ isOpen, onClose }: Props) {
     }
 
     const count = Number(repeatCount);
-    if (!Number.isInteger(count) || count < 1) {
-      setErrorMsg("Kopya (tekrar) sayısı en az 1 olmalıdır.");
+    if (!Number.isInteger(count) || count < 1 || count > 99) {
+      setErrorMsg("Kopya (tekrar) sayısı 1 ile 99 arasında olmalıdır.");
       return;
     }
 
     setLoading(true);
 
     try {
-      setSuccessMsg(`Ürün barkod etiketi (${mat} - ${count} kopya) yazdırma isteği alındı.`);
+      const res = await api.printMaterial({
+        container: mat,
+        repeat: count,
+      });
+      if (res.ok) {
+        setSuccessMsg(res.message || `Ürün barkod etiketi (${mat} - ${count} kopya) yazdırma isteği CANIAS'a iletildi.`);
+      } else {
+        setErrorMsg(res.message || "Ürün barkod etiketi yazdırma başarısız oldu.");
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Yazdırma işlemi sırasında hata oluştu.";
       setErrorMsg(msg);
@@ -139,7 +148,10 @@ export default function ProductBarcodeModal({ isOpen, onClose }: Props) {
               max={99}
               required
               value={repeatCount}
-              onChange={(e) => setRepeatCount(Math.max(1, parseInt(e.target.value) || 1))}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+              }}
               className="field-input w-full"
             />
           </div>

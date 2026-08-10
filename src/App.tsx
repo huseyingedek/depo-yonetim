@@ -20,6 +20,11 @@ import CountListPage from "./pages/count/CountListPage";
 import CountDetailPage from "./pages/count/CountDetailPage";
 import InquiryPage from "./pages/inquiry/InquiryPage";
 import LabelPrintingPage from "./pages/label-printing/LabelPrintingPage";
+import PackagingLabelPage from "./pages/label-printing/PackagingLabelPage";
+import WaybillLabelPage from "./pages/label-printing/WaybillLabelPage";
+import ExpiryLabelPage from "./pages/label-printing/ExpiryLabelPage";
+import ProductBarcodePage from "./pages/label-printing/ProductBarcodePage";
+import ShelfLocationPage from "./pages/label-printing/ShelfLocationPage";
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const user = useAppStore((s) => s.user);
@@ -71,9 +76,15 @@ export default function App() {
 
         {}
         <Route path="/label-printing" element={<LabelPrintingPage />} />
+        <Route path="/label-printing/packaging" element={<PackagingLabelPage />} />
+        <Route path="/label-printing/waybill" element={<WaybillLabelPage />} />
+        <Route path="/label-printing/expiry" element={<ExpiryLabelPage />} />
+        <Route path="/label-printing/product-barcode" element={<ProductBarcodePage />} />
+        <Route path="/label-printing/shelf-location" element={<ShelfLocationPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
   );
 }
+

@@ -1071,9 +1071,67 @@ export const api = {
     return { ok: true, message: "" };
   },
 
+  // Bora, 05.08: Raf / Konteyner / Parti Etiketi Yazdırma (MZYPrintWHSP)
+  // PARAMETRELER:
+  //   PSCOMPANY: "01", PSPLANT: "100", PSWAREHOUSE: depo, PSSTOCKPLACE: raf
+  //   PSCONTAINER: parti/batchnum veya konteyner kodu
+  //   PIISCONTAINER: 1 (konteyner ise) veya 0
+  //   PIREPEAT: tekrar sayısı
+  //   PSUSER: kullanıcı
+  async printWHSP(payload: {
+    company?: string;
+    plant?: string;
+    warehouse?: string;
+    stockPlace?: string;
+    container?: string;
+    isContainer?: boolean | number;
+    repeat?: number;
+    user?: string;
+  }): Promise<{ ok: boolean; message: string }> {
+    const c = ctx();
+    const repeatNum = Math.min(99, Math.max(1, Number(payload.repeat) || 1));
+    if (repeatNum < 1 || repeatNum > 99) {
+      throw new WmsError("Kopya sayısı 1 ile 99 arasında olmalıdır");
+    }
+
+    try {
+      const r = await call(SERVICES.printWHSP, {
+        PSCOMPANY: payload.company || c.company || "01",
+        PSPLANT: payload.plant || c.plant || "100",
+        PSWAREHOUSE: payload.warehouse || "",
+        PSSTOCKPLACE: payload.stockPlace || "",
+        PSCONTAINER: payload.container || "",
+        PIISCONTAINER: payload.isContainer ? 1 : 0,
+        PIREPEAT: repeatNum,
+        PSUSER: payload.user || c.worker,
+      });
+
+      const mesaj = serviceMessage(r);
+      if (mesaj && /error|fail|hata/i.test(mesaj)) {
+        return { ok: false, message: mesaj };
+      }
+
+      return { ok: true, message: mesaj || "Etiket yazdırma isteği CANIAS sunucusuna iletildi." };
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "";
+      if (/bilinmeyen servis/i.test(errMsg) || /not found/i.test(errMsg)) {
+        return this.printContainer({
+          company: payload.company,
+          plant: payload.plant,
+          warehouse: payload.warehouse || "10",
+          container: payload.container || "",
+          repeat: repeatNum,
+          user: payload.user,
+        });
+      }
+      throw err;
+    }
+  },
+
   async printContainer(payload: {
     company?: string;
     plant?: string;
+    warehouse?: string;
     container: string;
     repeat: number;
     user?: string;
@@ -1083,15 +1141,20 @@ export const api = {
     if (!containerStr) {
       throw new WmsError("Konteyner / Palet numarası girilmelidir");
     }
-    const repeatNum = Number(payload.repeat) || 1;
-    if (repeatNum < 1) {
-      throw new WmsError("Kopya sayısı en az 1 olmalıdır");
+    const repeatNum = Math.min(99, Math.max(1, Number(payload.repeat) || 1));
+    if (repeatNum < 1 || repeatNum > 99) {
+      throw new WmsError("Kopya sayısı 1 ile 99 arasında olmalıdır");
     }
 
+    // Bora, 05.08: Konteyner etiketi basma MZYPrintContainer ile:
+    // PSCOMPANY: "01", PSPLANT: "100", PSWAREHOUSE: "10", PIISCONTAINER: 1, PSCONTAINER: batchnumber
     const r = await call(SERVICES.printContainer, {
-      PSCOMPANY: payload.company || c.company,
-      PSPLANT: payload.plant || c.plant,
+      PSCOMPANY: payload.company || c.company || "01",
+      PSPLANT: payload.plant || c.plant || "100",
+      PSWAREHOUSE: payload.warehouse || "10",
+      PSSTOCKPLACE: "",
       PSCONTAINER: containerStr,
+      PIISCONTAINER: 1,
       PIREPEAT: repeatNum,
       PSUSER: payload.user || c.worker,
     });
@@ -1102,5 +1165,93 @@ export const api = {
     }
 
     return { ok: true, message: mesaj || "Etiket yazdırma isteği CANIAS sunucusuna iletildi." };
+  },
+
+  // Ürün Barkodu Etiketi Yazdırma (MZYPrintMaterial, yoksa printWHSP'e düşer)
+  async printMaterial(payload: {
+    company?: string;
+    plant?: string;
+    warehouse?: string;
+    stockPlace?: string;
+    container?: string;
+    isContainer?: boolean | number;
+    repeat?: number;
+    user?: string;
+  }): Promise<{ ok: boolean; message: string }> {
+    const c = ctx();
+    const repeatNum = Math.min(99, Math.max(1, Number(payload.repeat) || 1));
+    if (repeatNum < 1 || repeatNum > 99) {
+      throw new WmsError("Kopya sayısı 1 ile 99 arasında olmalıdır");
+    }
+
+    try {
+      const r = await call(SERVICES.printMaterial, {
+        PSCOMPANY: payload.company || c.company || "01",
+        PSPLANT: payload.plant || c.plant || "100",
+        PSWAREHOUSE: payload.warehouse || "",
+        PSSTOCKPLACE: payload.stockPlace || "",
+        PSCONTAINER: payload.container || "",
+        PIISCONTAINER: payload.isContainer ? 1 : 0,
+        PIREPEAT: repeatNum,
+        PSUSER: payload.user || c.worker,
+      });
+
+      const mesaj = serviceMessage(r);
+      if (mesaj && /error|fail|hata/i.test(mesaj)) {
+        return { ok: false, message: mesaj };
+      }
+
+      return { ok: true, message: mesaj || "Ürün etiket yazdırma isteği CANIAS sunucusuna iletildi." };
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "";
+      if (/bilinmeyen servis/i.test(errMsg) || /not found/i.test(errMsg)) {
+        return this.printWHSP(payload);
+      }
+      throw err;
+    }
+  },
+
+  // SKT / Parti Etiketi Yazdırma (MZYPrintBarcode, yoksa printWHSP'e düşer)
+  async printBarcode(payload: {
+    company?: string;
+    plant?: string;
+    warehouse?: string;
+    stockPlace?: string;
+    container?: string;
+    isContainer?: boolean | number;
+    repeat?: number;
+    user?: string;
+  }): Promise<{ ok: boolean; message: string }> {
+    const c = ctx();
+    const repeatNum = Math.min(99, Math.max(1, Number(payload.repeat) || 1));
+    if (repeatNum < 1 || repeatNum > 99) {
+      throw new WmsError("Kopya sayısı 1 ile 99 arasında olmalıdır");
+    }
+
+    try {
+      const r = await call(SERVICES.printBarcode, {
+        PSCOMPANY: payload.company || c.company || "01",
+        PSPLANT: payload.plant || c.plant || "100",
+        PSWAREHOUSE: payload.warehouse || "",
+        PSSTOCKPLACE: payload.stockPlace || "",
+        PSCONTAINER: payload.container || "",
+        PIISCONTAINER: payload.isContainer ? 1 : 0,
+        PIREPEAT: repeatNum,
+        PSUSER: payload.user || c.worker,
+      });
+
+      const mesaj = serviceMessage(r);
+      if (mesaj && /error|fail|hata/i.test(mesaj)) {
+        return { ok: false, message: mesaj };
+      }
+
+      return { ok: true, message: mesaj || "SKT/Barkod etiket yazdırma isteği CANIAS sunucusuna iletildi." };
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "";
+      if (/bilinmeyen servis/i.test(errMsg) || /not found/i.test(errMsg)) {
+        return this.printWHSP(payload);
+      }
+      throw err;
+    }
   },
 };
