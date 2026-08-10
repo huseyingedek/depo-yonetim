@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Search, ChevronRight, Warehouse, MapPin } from "lucide-react";
+import { Search, ChevronRight, Warehouse, MapPin, Building2 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import Pagination, { usePagination } from "../../components/Pagination";
 import { api } from "../../api/client";
@@ -102,7 +102,12 @@ export default function PutawayListPage() {
                         )}
                         <span className={`chip ${durumStil}`}>{durumEtiket}</span>
                       </div>
-                      {o.customer && <p className="mt-0.5 truncate text-sm text-muted">{o.customer}</p>}
+                      {o.customer && (
+                        <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-fg" title="Tedarikçi / müşteri">
+                          <Building2 className="h-4 w-4 shrink-0 text-subtle" />
+                          <span className="truncate">{o.customer}</span>
+                        </p>
+                      )}
                     </div>
                     <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-subtle" />
                   </div>

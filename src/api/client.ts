@@ -145,23 +145,10 @@ function call(service: string, params: Record<string, unknown>): Promise<MzyResu
   return p;
 }
 
-let ardArdaBaglantiHatasi = 0;
-const BAGLANTI_ESIK = 3;
+
 function baglantiHatasi(detay = ""): WmsError {
-
-  // debug için console'a yazılır.
   if (detay) console.warn("[bağlantı] istek cevapsız:", detay);
-  ardArdaBaglantiHatasi++;
-  if (ardArdaBaglantiHatasi >= BAGLANTI_ESIK) {
-    ardArdaBaglantiHatasi = 0;
-
-    try {
-      useAppStore.getState().logout();
-    } catch {
-
-    }
-  }
-  return new WmsError("İstek cevaplanmadı");
+  return new WmsError("Sunucuya ulaşılamadı / servis yanıt vermedi — lütfen tekrar deneyin");
 }
 
 const ISTEK_TIMEOUT_MS = 30000;
@@ -192,7 +179,6 @@ async function doCall(service: string, params: Record<string, unknown>): Promise
   const msg = serviceMessage(body);
 
   if (res.status >= 500) throw baglantiHatasi(body.error || msg || `HTTP ${res.status}`);
-  ardArdaBaglantiHatasi = 0;
 
   if (!res.ok) throw new WmsError(body.error || msg || `${service} → HTTP ${res.status}`);
 
@@ -348,7 +334,7 @@ function toPickOrder(row: Row): PickOrder {
     id: pick(row, ["ORDERNUM"]),
     orderType: pick(row, ["ORDERTYPE"]),
 
-    customer: pick(row, ["CUSNAME1", "NAME1", "CUSTOMER"]),
+    customer: pick(row, ["CUSNAME1", "CUSTNAME1", "CUSTNAME", "CUSNAME", "CUSTOMERNAME", "NAME1", "CUSTOMER"]),
     reference: pick(row, ["STEXT", "DOCNUM"]), // Emir açıklaması
     createdAt: pick(row, ["CREATEDAT"]),
     worker: worker && worker !== "*" ? worker : undefined, // "*" = atanmamış

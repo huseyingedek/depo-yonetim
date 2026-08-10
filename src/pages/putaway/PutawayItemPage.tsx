@@ -113,6 +113,11 @@ export default function PutawayItemPage() {
           setRedMesaji(`${out.message} (en fazla ${out.enFazla})`);
           if (out.enFazla > 0) setOkutmaAdedi(String(out.enFazla));
         } else showToast({ kind: "error", text: "message" in out ? out.message : "Okutulamadı" });
+      } catch (e) {
+        // Timeout/bağlantı hatası: kullanıcıya göster, login'e ATMA (logout kaldırıldı).
+        const m = e instanceof Error ? e.message : String(e);
+        setRedMesaji(m);
+        showToast({ kind: "error", text: m });
       } finally {
         setBusy(false);
       }
