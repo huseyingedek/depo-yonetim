@@ -62,7 +62,6 @@ export default function ShelfLocationModal({ isOpen, onClose }: Props) {
         warehouse: warehouseCode.trim(),
         stockPlace: sp,
         repeat: count,
-        isContainer: 0,
       });
 
       if (res.ok) {

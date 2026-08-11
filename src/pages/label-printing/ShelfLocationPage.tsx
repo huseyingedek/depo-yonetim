@@ -121,9 +121,7 @@ export default function ShelfLocationPage() {
           plant: "100",
           warehouse: shelf.warehouse || "10",
           stockPlace: shelf.stockPlace || "",
-          container: shelf.stockPlace || "",
           repeat: count,
-          isContainer: 0,
         });
         if (res.ok) {
           successCount++;

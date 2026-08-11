@@ -36,9 +36,7 @@ describe("CANIAS Label Printing Dynamic Parameter & Product Tests", () => {
       const params = {
         PSCOMPANY: payload.company || "01",
         PSPLANT: payload.plant || "100",
-        PSWAREHOUSE: payload.warehouse || "10",
         PSCONTAINER: payload.container || "",
-        PIISCONTAINER: 1,
         PIREPEAT: repeatNum,
         PSUSER: payload.user || "AHMET_YILMAZ",
       };
@@ -53,71 +51,128 @@ describe("CANIAS Label Printing Dynamic Parameter & Product Tests", () => {
         PSPLANT: payload.plant || "100",
         PSWAREHOUSE: payload.warehouse || "",
         PSSTOCKPLACE: payload.stockPlace || "",
-        PSCONTAINER: payload.container || "",
-        PIISCONTAINER: payload.isContainer ? 1 : 0,
         PIREPEAT: repeatNum,
         PSUSER: payload.user || "AHMET_YILMAZ",
       };
       capturedCalls.push({ service: SERVICES.printWHSP, params });
       return { ok: true, message: "OK" };
     });
+
+    vi.spyOn(api, "printMaterial").mockImplementation(async (payload) => {
+      const repeatNum = Math.min(99, Math.max(1, Number(payload.repeat) || 1));
+      const params = {
+        PSCOMPANY: payload.company || "01",
+        PSPLANT: payload.plant || "100",
+        PSBARCODE: payload.barcode || payload.container || "",
+        PSUNIT: payload.unit || "",
+        PIREPEAT: repeatNum,
+        PSUSER: payload.user || "AHMET_YILMAZ",
+      };
+      capturedCalls.push({ service: SERVICES.printMaterial, params });
+      return { ok: true, message: "OK" };
+    });
+
+    vi.spyOn(api, "printBarcode").mockImplementation(async (payload) => {
+      const repeatNum = Math.min(99, Math.max(1, Number(payload.repeat) || 1));
+      const params = {
+        PSCOMPANY: payload.company || "01",
+        PSPLANT: payload.plant || "100",
+        PSBARCODE: payload.barcode || payload.container || "",
+        PIREPEAT: repeatNum,
+        PSUSER: payload.user || "AHMET_YILMAZ",
+      };
+      capturedCalls.push({ service: SERVICES.printBarcode, params });
+      return { ok: true, message: "OK" };
+    });
   });
 
-  // Test 1: Testing multiple different products dynamically
-  it.each([
-    { mat: "MAL001", warehouse: "10", shelf: "A-01-01", count: 1 },
-    { mat: "MAL-SOAP-200ML", warehouse: "20", shelf: "B-12-04", count: 5 },
-    { mat: "DETERJAN-PRO-5KG", warehouse: "30", shelf: "C-99-99", count: 12 },
-  ])("Farklı Ürün Parametreleri Testi ($mat, Depo: $warehouse, Raf: $shelf, Kopya: $count)", async ({ mat, warehouse, shelf, count }) => {
+  // Test 1: MZYPrintWHSP
+  it("MZYPrintWHSP - Raf Etiketi Parametre Testi", async () => {
     capturedCalls = [];
     await api.printWHSP({
       company: "01",
       plant: "100",
-      warehouse,
-      stockPlace: shelf,
-      container: mat,
-      repeat: count,
+      warehouse: "10",
+      stockPlace: "A-01-01",
+      repeat: 3,
     });
 
     expect(capturedCalls[0].params).toEqual({
       PSCOMPANY: "01",
       PSPLANT: "100",
-      PSWAREHOUSE: warehouse,
-      PSSTOCKPLACE: shelf,
-      PSCONTAINER: mat,
-      PIISCONTAINER: 0,
-      PIREPEAT: count,
+      PSWAREHOUSE: "10",
+      PSSTOCKPLACE: "A-01-01",
+      PIREPEAT: 3,
       PSUSER: "AHMET_YILMAZ",
     });
   });
 
-  // Test 2: Testing different expiry dates dynamically
-  it.each([
-    { date: "2026-08-30", count: 2 },
-    { date: "2027-12-31", count: 10 },
-    { date: "2029-01-01", count: 99 },
-  ])("Farklı SKT Tarih Parametreleri Testi (Tarih: $date, Kopya: $count)", async ({ date, count }) => {
+  // Test 2: MZYPrintContainer
+  it("MZYPrintContainer - Konteyner Etiketi Parametre Testi", async () => {
     capturedCalls = [];
-    await api.printWHSP({
+    await api.printContainer({
       company: "01",
       plant: "100",
-      container: date,
-      repeat: count,
+      container: "PALET-9988",
+      repeat: 2,
     });
 
-    expect(capturedCalls[0].params.PSCONTAINER).toBe(date);
-    expect(capturedCalls[0].params.PIREPEAT).toBe(count);
+    expect(capturedCalls[0].params).toEqual({
+      PSCOMPANY: "01",
+      PSPLANT: "100",
+      PSCONTAINER: "PALET-9988",
+      PIREPEAT: 2,
+      PSUSER: "AHMET_YILMAZ",
+    });
   });
 
-  // Test 3: Testing repeat count clamping (e.g. values clamped between 1 and 99)
+  // Test 3: MZYPrintMaterial
+  it("MZYPrintMaterial - Malzeme Barkodu Parametre Testi", async () => {
+    capturedCalls = [];
+    await api.printMaterial({
+      company: "01",
+      plant: "100",
+      barcode: "MAL-SOAP-200ML",
+      unit: "AD",
+      repeat: 5,
+    });
+
+    expect(capturedCalls[0].params).toEqual({
+      PSCOMPANY: "01",
+      PSPLANT: "100",
+      PSBARCODE: "MAL-SOAP-200ML",
+      PSUNIT: "AD",
+      PIREPEAT: 5,
+      PSUSER: "AHMET_YILMAZ",
+    });
+  });
+
+  // Test 4: MZYPrintBarcode
+  it("MZYPrintBarcode - SKT / Barkod Parametre Testi", async () => {
+    capturedCalls = [];
+    await api.printBarcode({
+      company: "01",
+      plant: "100",
+      barcode: "2028-12-31",
+      repeat: 4,
+    });
+
+    expect(capturedCalls[0].params).toEqual({
+      PSCOMPANY: "01",
+      PSPLANT: "100",
+      PSBARCODE: "2028-12-31",
+      PIREPEAT: 4,
+      PSUSER: "AHMET_YILMAZ",
+    });
+  });
+
+  // Test 5: Kopya sayısı sınırları (Clamping)
   it("Kopya sayısı sınırları (Clamping) doğru çalışmalı", async () => {
-    // Zero or negative should clamp to 1
-    await api.printWHSP({ container: "MAL001", repeat: -5 });
+    await api.printBarcode({ barcode: "2028-12-31", repeat: -5 });
     expect(capturedCalls[0].params.PIREPEAT).toBe(1);
 
-    // Over 99 should clamp to 99
     capturedCalls = [];
-    await api.printWHSP({ container: "MAL001", repeat: 500 });
+    await api.printBarcode({ barcode: "2028-12-31", repeat: 500 });
     expect(capturedCalls[0].params.PIREPEAT).toBe(99);
   });
 });

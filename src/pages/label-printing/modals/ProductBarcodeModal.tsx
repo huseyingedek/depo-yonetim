@@ -55,7 +55,8 @@ export default function ProductBarcodeModal({ isOpen, onClose }: Props) {
 
     try {
       const res = await api.printMaterial({
-        container: mat,
+        barcode: mat,
+        unit: unitCode.trim(),
         repeat: count,
       });
       if (res.ok) {

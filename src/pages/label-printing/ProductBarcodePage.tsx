@@ -108,9 +108,8 @@ export default function ProductBarcodePage() {
         const res = await api.printMaterial({
           company: "01",
           plant: "100",
-          warehouse: mat.warehouse || "",
-          stockPlace: mat.stockPlace || "",
-          container: mat.material || mat.batchNum || "",
+          barcode: mat.material || mat.batchNum || "",
+          unit: mat.unit || "",
           repeat: count,
         });
         if (res.ok) {

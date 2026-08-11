@@ -115,7 +115,7 @@ export default function ExpiryLabelPage() {
         const res = await api.printBarcode({
           company: "01",
           plant: "100",
-          container: directExpiryDate,
+          barcode: directExpiryDate,
           repeat: count,
         });
 
@@ -148,9 +148,7 @@ export default function ExpiryLabelPage() {
           const res = await api.printBarcode({
             company: "01",
             plant: "100",
-            warehouse: mat.warehouse || "",
-            stockPlace: mat.stockPlace || "",
-            container: batch,
+            barcode: batch,
             repeat: count,
           });
           if (res.ok) successCount++;

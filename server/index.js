@@ -70,6 +70,8 @@ const ALLOWED = new Set([
   "GetWarehouse",
   "MZYPrintContainer",
   "MZYPrintWHSP",
+  "MZYPrintMaterial",
+  "MZYPrintBarcode",
 ]);
 
 const app = express();
