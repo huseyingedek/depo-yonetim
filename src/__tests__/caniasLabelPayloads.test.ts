@@ -175,4 +175,13 @@ describe("CANIAS Label Printing Dynamic Parameter & Product Tests", () => {
     await api.printBarcode({ barcode: "2028-12-31", repeat: 500 });
     expect(capturedCalls[0].params.PIREPEAT).toBe(99);
   });
+
+  // Test 6: GetStockPlace
+  it("GetStockPlace - Stok Yeri Listesi Servis Testi", async () => {
+    vi.spyOn(api, "getStockPlaces").mockImplementation(async (warehouse) => {
+      return [{ code: "RAF-01", name: "Raf 01" }];
+    });
+    const result = await api.getStockPlaces("10");
+    expect(result).toEqual([{ code: "RAF-01", name: "Raf 01" }]);
+  });
 });
