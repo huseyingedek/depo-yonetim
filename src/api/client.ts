@@ -869,6 +869,19 @@ export const api = {
     }));
   },
 
+  async getStockPlaces(warehouse = ""): Promise<{ code: string; name: string }[]> {
+    const c = ctx();
+    const r = await call(SERVICES.getStockPlace, {
+      PSCOMPANY: c.company,
+      PSPLANT: c.plant,
+      PSWAREHOUSE: warehouse,
+    });
+    return rowsOf(r, ["TBLSTOCKPLACE", "TBLSP"]).map((x) => ({
+      code: pick(x, ["STOCKPLACE", "SP"]),
+      name: pick(x, ["NAME", "STEXT", "DESCRIPTION"]) || pick(x, ["STOCKPLACE", "SP"]),
+    }));
+  },
+
   async getReceipts(): Promise<Receipt[]> {
     return [];
   },
@@ -1076,6 +1089,7 @@ export const api = {
   async printContainer(payload: {
     company?: string;
     plant?: string;
+    warehouse?: string;
     container: string;
     repeat: number;
     user?: string;

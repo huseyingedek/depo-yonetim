@@ -70,8 +70,15 @@ export default function WaybillLabelModal({ isOpen, onClose }: Props) {
     setLoading(true);
 
     try {
-      // Waybill print service integration when ready from Bora Bey
-      setSuccessMsg(`İrsaliye etiketi (${doc} - ${count} kopya) yazdırma isteği alındı.`);
+      const res = await api.printContainer({
+        container: doc,
+        repeat: count,
+      });
+      if (res.ok) {
+        setSuccessMsg(res.message || `İrsaliye etiketi (${doc} - ${count} kopya) yazdırma isteği CANIAS'a iletildi.`);
+      } else {
+        setErrorMsg(res.message || "İrsaliye etiketi yazdırma başarısız oldu.");
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Yazdırma işlemi sırasında hata oluştu.";
       setErrorMsg(msg);

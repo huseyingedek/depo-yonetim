@@ -25,6 +25,7 @@ export const SERVICES = {
   getCompany: "GetCompany", // parametresiz
   getPlant: "GetPlant", // PSCOMPANY
   getWarehouse: "GetWarehouse", // PSCOMPANY, PSPLANT
+  getStockPlace: "GetStockPlace", // PSCOMPANY, PSPLANT, PSWAREHOUSE
 
   printContainer: "MZYPrintContainer", // Konteyner/paket etiket yazdırma
   printWHSP: "MZYPrintWHSP", // Raf / Konteyner / Parti etiket yazdırma
