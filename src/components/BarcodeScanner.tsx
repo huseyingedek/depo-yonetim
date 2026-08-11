@@ -5,15 +5,21 @@ import { useTranslation } from "react-i18next";
 
 interface Props {
   onDetected: (barcode: string) => void;
-
   prompt?: string;
-
   prefill?: string;
+  placeholder?: string;
+  hideCardWrapper?: boolean;
 }
 
 const SCAN_COOLDOWN = 1200;
 
-export default function BarcodeScanner({ onDetected, prompt, prefill }: Props) {
+export default function BarcodeScanner({
+  onDetected,
+  prompt,
+  prefill,
+  placeholder,
+  hideCardWrapper,
+}: Props) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
@@ -62,57 +68,62 @@ export default function BarcodeScanner({ onDetected, prompt, prefill }: Props) {
   }, [cameraOpen]);
 
   const submit = () => {
-
     const code = value.trim().toUpperCase();
     if (!code) return;
     onDetected(code);
     setValue("");
   };
 
-  return (
-    <div className="flex flex-col gap-3">
-      {}
-      <div className="rounded-2xl bg-surface p-4 shadow-card">
-        <label className="field-label">{prompt ?? t("picking.scanProduct")}</label>
-        <div className="flex gap-2">
-          <div className="relative min-w-0 flex-1">
-            <input
-              autoFocus
-              value={value}
-              onChange={(e) => setValue(e.target.value.toUpperCase())}
-              onKeyDown={(e) => e.key === "Enter" && submit()}
-              placeholder={t("picking.enterBarcode")}
-              autoComplete="off"
-              autoCapitalize="none"
-              spellCheck={false}
-              className="field-input pr-11 font-mono tracking-wider"
-            />
-            <button
-              type="button"
-              onClick={submit}
-              disabled={!value.trim()}
-              aria-label={t("picking.confirm")}
-              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-30"
-            >
-              <CornerDownLeft className="h-5 w-5" />
-            </button>
-          </div>
-
-          {}
+  const inputContent = (
+    <>
+      {prompt !== "" && <label className="field-label">{prompt ?? t("picking.scanProduct")}</label>}
+      <div className="flex gap-2">
+        <div className="relative min-w-0 flex-1">
+          <input
+            autoFocus
+            value={value}
+            onChange={(e) => setValue(e.target.value.toUpperCase())}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+            placeholder={placeholder ?? t("picking.enterBarcode")}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            className="field-input pr-11 font-mono tracking-wider"
+          />
           <button
             type="button"
-            onClick={() => setCameraOpen((v) => !v)}
-            aria-label={t("picking.camera")}
-            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition ${
-              cameraOpen
-                ? "border-brand-500 bg-brand-500 text-white"
-                : "border-line bg-surface text-muted hover:bg-elevated"
-            }`}
+            onClick={submit}
+            disabled={!value.trim()}
+            aria-label={t("picking.confirm")}
+            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-30"
           >
-            {cameraOpen ? <X className="h-5 w-5" /> : <Camera className="h-5 w-5" />}
+            <CornerDownLeft className="h-5 w-5" />
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setCameraOpen((v) => !v)}
+          aria-label={t("picking.camera")}
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition ${
+            cameraOpen
+              ? "border-brand-500 bg-brand-500 text-white"
+              : "border-line bg-surface text-muted hover:bg-elevated"
+          }`}
+        >
+          {cameraOpen ? <X className="h-5 w-5" /> : <Camera className="h-5 w-5" />}
+        </button>
       </div>
+    </>
+  );
+
+  return (
+    <div className="flex flex-col gap-3">
+      {hideCardWrapper ? (
+        inputContent
+      ) : (
+        <div className="rounded-2xl bg-surface p-4 shadow-card">{inputContent}</div>
+      )}
 
       {}
       {cameraOpen && (
