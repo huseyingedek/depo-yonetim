@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Barcode,
@@ -6,148 +6,24 @@ import {
   ArrowRight,
   CheckCircle2,
   Building2,
-  FileText,
   AlertCircle,
   X,
   CornerDownLeft,
+  Loader2,
+  Search,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import BarcodeScanner from "../../components/BarcodeScanner";
 import Pagination, { usePagination } from "../../components/Pagination";
+import { api } from "../../api/client";
 
-export interface MockSupplierOrder {
-  id: string; // Tedarikçi Kodu (Örn: TED-00102)
-  name: string; // Tedarikçi Adı (Örn: Eczacıbaşı Tüketim Ürünleri A.Ş.)
-  poNumber: string; // Satın Alma Sipariş No (Örn: PO-2026-0812)
+export interface SupplierOrder {
+  id: string; // Tedarikçi Kodu (VENDOR)
+  name: string; // Tedarikçi Adı (NAME1)
+  poNumber: string; // Satın Alma Sipariş No (PURORDER)
   orderCount: number; // Açık Sipariş Kalem Sayısı
-  barcode: string; // Örnek Malzeme Barkodu
-  materialName: string; // Malzeme Adı
-  deliveryDate: string; // Beklenen Teslim Tarihi
-  warehouse: string; // Mal Kabul Deposu
+  barcode: string; // Malzeme Barkodu
 }
-
-const MOCK_SUPPLIERS: MockSupplierOrder[] = [
-  {
-    id: "TED-1001",
-    name: "Eczacıbaşı Tüketim Ürünleri A.Ş.",
-    poNumber: "PO-2026-0812",
-    orderCount: 4,
-    barcode: "8690723511208",
-    materialName: "Selpak Tuvalet Kağıdı 32'li Ekstra Yumuşak",
-    deliveryDate: "11.08.2026",
-    warehouse: "10-Merkez Depo",
-  },
-  {
-    id: "TED-1002",
-    name: "Ülker Bisküvi Sanayi ve Ticaret A.Ş.",
-    poNumber: "PO-2026-0815",
-    orderCount: 12,
-    barcode: "8690504011002",
-    materialName: "Ülker Çikolatalı Gofret 36'lı Koli",
-    deliveryDate: "11.08.2026",
-    warehouse: "10-Merkez Depo",
-  },
-  {
-    id: "TED-1003",
-    name: "Hayat Kimya Sanayi A.Ş.",
-    poNumber: "PO-2026-0819",
-    orderCount: 8,
-    barcode: "8690536021105",
-    materialName: "Bingo Matik Deterjan 10kg Sık Yıkananlar",
-    deliveryDate: "12.08.2026",
-    warehouse: "20-Hızlı Tüketim Deposu",
-  },
-  {
-    id: "TED-1004",
-    name: "P&G Tüketim Maddeleri Sanayi A.Ş.",
-    poNumber: "PO-2026-0824",
-    orderCount: 6,
-    barcode: "4015600812001",
-    materialName: "Ariel Sıvı Deterjan 40 Yıkama Dağ Tazeliği",
-    deliveryDate: "11.08.2026",
-    warehouse: "10-Merkez Depo",
-  },
-  {
-    id: "TED-1005",
-    name: "Unilever Sanayi ve Ticaret Türk A.Ş.",
-    poNumber: "PO-2026-0830",
-    orderCount: 15,
-    barcode: "8710447289100",
-    materialName: "Dove Sıvı Sabun 500ml Nemlendirici Bakım",
-    deliveryDate: "13.08.2026",
-    warehouse: "10-Merkez Depo",
-  },
-  {
-    id: "TED-1006",
-    name: "Sütaş Süt Ürünleri A.Ş.",
-    poNumber: "PO-2026-0835",
-    orderCount: 9,
-    barcode: "8690623010111",
-    materialName: "Sütaş Tam Yağlı Süt 1L 12'li Koli",
-    deliveryDate: "11.08.2026",
-    warehouse: "30-Soğuk Hava Deposu",
-  },
-  {
-    id: "TED-1007",
-    name: "Eti Gıda Sanayi ve Ticaret A.Ş.",
-    poNumber: "PO-2026-0840",
-    orderCount: 11,
-    barcode: "8690526010022",
-    materialName: "Eti Burçak Bisküvi 18'li Paket",
-    deliveryDate: "12.08.2026",
-    warehouse: "10-Merkez Depo",
-  },
-  {
-    id: "TED-1008",
-    name: "Şölen Çikolata Gıda Sanayi A.Ş.",
-    poNumber: "PO-2026-0845",
-    orderCount: 7,
-    barcode: "8690558001005",
-    materialName: "Şölen Milango Çikolata Kutusu 250g",
-    deliveryDate: "14.08.2026",
-    warehouse: "10-Merkez Depo",
-  },
-  {
-    id: "TED-1009",
-    name: "Nestle Türkiye Gıda Sanayi A.Ş.",
-    poNumber: "PO-2026-0850",
-    orderCount: 14,
-    barcode: "7613035123456",
-    materialName: "Nescafe 3'ü 1 Arada Arada 56'lı Paket",
-    deliveryDate: "11.08.2026",
-    warehouse: "10-Merkez Depo",
-  },
-  {
-    id: "TED-1010",
-    name: "PepsiCo Yiyecek İçecek A.Ş.",
-    poNumber: "PO-2026-0855",
-    orderCount: 10,
-    barcode: "8690637001234",
-    materialName: "Lays Klasik Patates Cipsi Parti Boy",
-    deliveryDate: "13.08.2026",
-    warehouse: "20-Hızlı Tüketim Deposu",
-  },
-  {
-    id: "TED-1011",
-    name: "Coca-Cola İçecek A.Ş.",
-    poNumber: "PO-2026-0860",
-    orderCount: 18,
-    barcode: "5449000000996",
-    materialName: "Coca-Cola Orijinal Tat 1L 12'li Koli",
-    deliveryDate: "11.08.2026",
-    warehouse: "10-Merkez Depo",
-  },
-  {
-    id: "TED-1012",
-    name: "Mey İçki Sanayi ve Ticaret A.Ş.",
-    poNumber: "PO-2026-0865",
-    orderCount: 5,
-    barcode: "8690123456789",
-    materialName: "Meyve Suyu Çeşitleri 1L Koli",
-    deliveryDate: "15.08.2026",
-    warehouse: "10-Merkez Depo",
-  },
-];
 
 type SearchTab = "barcode" | "supplierName";
 
@@ -159,7 +35,13 @@ export default function ReceivingSupplierSelectPage() {
   const [barcodeSearch, setBarcodeSearch] = useState("");
   const [nameSearch, setNameSearch] = useState("");
   const [scannedBarcode, setScannedBarcode] = useState("");
-  const [selectedSupplier, setSelectedSupplier] = useState<MockSupplierOrder | null>(null);
+  const [selectedSupplier, setSelectedSupplier] = useState<SupplierOrder | null>(null);
+
+  // Real CANIAS API Search State
+  const [suppliers, setSuppliers] = useState<SupplierOrder[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
   // Status/Step Feedback State
   const [stepNotice, setStepNotice] = useState<{ open: boolean; message: string }>({
@@ -173,48 +55,118 @@ export default function ReceivingSupplierSelectPage() {
     setNameSearch("");
     setScannedBarcode("");
     setSelectedSupplier(null);
+    setSuppliers([]);
+    setApiError(null);
+    setHasSearched(false);
+  };
+
+  // Fetch Open Orders Live from CANIAS (MZYGetOpenOrder)
+  const fetchCaniasOpenOrders = async (params: { barcode?: string; vendorName?: string }) => {
+    setIsLoading(true);
+    setApiError(null);
+    setHasSearched(true);
+    setSelectedSupplier(null);
+
+    try {
+      const res = await api.getOpenOrders(params);
+      if (res.ok && res.orders && res.orders.length > 0) {
+        // Process PURORDERLIST table returned from CANIAS
+        const map = new Map<string, SupplierOrder>();
+        res.orders.forEach((row, idx) => {
+          const vendorCode = String(row.VENDOR || row.PSVENDOR || row.SUPPLIERID || `TED-${idx + 1}`).trim();
+          const vendorName = String(row.NAME1 || row.SUPPLIERNAME || row.VENDORNAME || "Tedarikçi").trim();
+          const poNum = String(row.PURORDER || row.POORDER || row.PO_NUMBER || "").trim();
+
+          if (!map.has(vendorCode)) {
+            map.set(vendorCode, {
+              id: vendorCode,
+              name: vendorName,
+              poNumber: poNum || "Açık Sipariş",
+              orderCount: 1,
+              barcode: params.barcode || "",
+            });
+          } else {
+            const existing = map.get(vendorCode)!;
+            existing.orderCount += 1;
+          }
+        });
+        setSuppliers(Array.from(map.values()));
+      } else {
+        setSuppliers([]);
+      }
+    } catch (err: any) {
+      console.error("CANIAS MZYGetOpenOrder error:", err);
+      setApiError(
+        err?.message || "CANIAS sunucusuna bağlanılamadı. Lütfen ağ bağlantınızı ve sunucu adresini kontrol edin."
+      );
+      setSuppliers([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleBarcodeScan = (code: string) => {
     const trimmed = code.trim();
+    if (!trimmed) return;
     setBarcodeSearch(trimmed);
     setScannedBarcode(trimmed);
-    setSelectedSupplier(null);
+    fetchCaniasOpenOrders({ barcode: trimmed });
   };
 
-  // Filter logic for Barcode Tab
-  const barcodeResults = useMemo(() => {
-    const query = barcodeSearch.trim().toLowerCase();
-    if (!query) return MOCK_SUPPLIERS;
-    return MOCK_SUPPLIERS.filter(
-      (s) =>
-        s.barcode.toLowerCase().includes(query) ||
-        s.materialName.toLowerCase().includes(query) ||
-        s.poNumber.toLowerCase().includes(query)
-    );
-  }, [barcodeSearch]);
+  const fetchCaniasSuppliersByName = async (nameQuery: string) => {
+    setIsLoading(true);
+    setApiError(null);
+    setHasSearched(true);
+    setSelectedSupplier(null);
 
-  // Filter logic for Supplier Name Tab
-  const nameResults = useMemo(() => {
-    const query = nameSearch.trim().toLowerCase();
-    if (!query) return MOCK_SUPPLIERS;
-    return MOCK_SUPPLIERS.filter(
-      (s) =>
-        s.name.toLowerCase().includes(query) ||
-        s.id.toLowerCase().includes(query) ||
-        s.poNumber.toLowerCase().includes(query)
-    );
-  }, [nameSearch]);
+    try {
+      const res = await api.getCustomers({ name: nameQuery, customerType: 1 });
+      if (res.ok && res.customers && res.customers.length > 0) {
+        // Process returned CUSTOMERLIST table from MzyGetCustomer
+        const map = new Map<string, SupplierOrder>();
+        res.customers.forEach((row, idx) => {
+          const vendorCode = String(row.CUSTOMER || row.VENDOR || row.PSCUSTOMER || row.ID || `TED-${idx + 1}`).trim();
+          const vendorName = String(row.NAME1 || row.CUSNAME1 || row.VENDORNAME || row.NAME || "Tedarikçi").trim();
+          const poNum = String(row.PURORDER || row.POORDER || row.PO_NUMBER || "").trim();
 
-  const activeResults = activeTab === "barcode" ? barcodeResults : nameResults;
+          if (!map.has(vendorCode)) {
+            map.set(vendorCode, {
+              id: vendorCode,
+              name: vendorName,
+              poNumber: poNum || "Aktif Tedarikçi",
+              orderCount: 1,
+              barcode: "",
+            });
+          }
+        });
+        setSuppliers(Array.from(map.values()));
+      } else {
+        setSuppliers([]);
+      }
+    } catch (err: any) {
+      console.error("CANIAS MzyGetCustomer error:", err);
+      setApiError(
+        err?.message || "CANIAS sunucusuna bağlanılamadı. Lütfen ağ bağlantınızı ve sunucu adresini kontrol edin."
+      );
+      setSuppliers([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleNameSearchSubmit = () => {
+    const query = nameSearch.trim();
+    if (!query) return;
+    fetchCaniasSuppliersByName(query);
+  };
 
   // 3x3 Pagination (9 items per page)
-  const pg = usePagination(activeResults, 9);
+  const pg = usePagination(suppliers, 9);
   useEffect(() => {
     pg.reset();
-  }, [activeTab, barcodeSearch, nameSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [suppliers]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSelectSupplier = (supplier: MockSupplierOrder) => {
+  const handleSelectSupplier = (supplier: SupplierOrder) => {
     if (selectedSupplier?.id === supplier.id) {
       setSelectedSupplier(null);
     } else {
@@ -331,7 +283,7 @@ export default function ReceivingSupplierSelectPage() {
               <div className="mt-2 flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-2 text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 <span>
-                  Okutulan Barkod: <strong>{scannedBarcode}</strong>
+                  Sorgulanan Barkod: <strong>{scannedBarcode}</strong>
                 </span>
               </div>
             )}
@@ -346,14 +298,15 @@ export default function ReceivingSupplierSelectPage() {
                 type="text"
                 value={nameSearch}
                 onChange={(e) => setNameSearch(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleNameSearchSubmit()}
                 placeholder="Tedarikçi adı veya kodu yazın"
                 className="field-input w-full pr-11"
                 autoFocus
               />
               <button
                 type="button"
-                onClick={() => {}}
-                disabled={!nameSearch.trim()}
+                onClick={handleNameSearchSubmit}
+                disabled={!nameSearch.trim() || isLoading}
                 className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-30"
               >
                 <CornerDownLeft className="h-5 w-5" />
@@ -363,6 +316,16 @@ export default function ReceivingSupplierSelectPage() {
         )}
       </div>
 
+      {/* API Notice / Error Banner */}
+      {apiError && (
+        <div className="mb-3 flex items-center justify-between rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs font-medium text-red-700 dark:text-red-300">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
+            <span>{apiError}</span>
+          </div>
+        </div>
+      )}
+
       {/* Supplier Results Grid Header (Tightly aligned to Search Card) */}
       <div className="mt-3 mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -370,9 +333,15 @@ export default function ReceivingSupplierSelectPage() {
           <h2 className="text-xs sm:text-sm font-extrabold text-fg">
             {activeTab === "barcode" ? "Barkodla Eşleşen Tedarikçiler" : "Aktif Tedarikçi Listesi"}
           </h2>
-          <span className="chip bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-            {activeResults.length} Sonuç
-          </span>
+          {isLoading ? (
+            <span className="chip bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 flex items-center gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" /> CANIAS Sorgulanıyor...
+            </span>
+          ) : (
+            <span className="chip bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+              {suppliers.length} Sonuç
+            </span>
+          )}
         </div>
         {selectedSupplier && (
           <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
@@ -381,13 +350,31 @@ export default function ReceivingSupplierSelectPage() {
         )}
       </div>
 
-      {/* Supplier Cards 3x3 Grid */}
-      {activeResults.length === 0 ? (
+      {/* Grid States */}
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-line bg-surface p-6 text-center text-subtle shadow-sm">
+          <Loader2 className="mb-3 h-8 w-8 animate-spin text-emerald-600 dark:text-emerald-400" />
+          <p className="text-xs font-bold text-fg">CANIAS Veritabanından Sorgulanıyor...</p>
+          <p className="mt-1 text-[11px] text-subtle">
+            Lütfen bekleyiniz, MZYGetOpenOrder servisi çağrılıyor.
+          </p>
+        </div>
+      ) : !hasSearched ? (
+        <div className="flex flex-col items-center justify-center py-12 rounded-2xl border border-dashed border-line bg-surface p-5 text-center text-subtle">
+          <Search className="mb-2 h-8 w-8 text-muted" />
+          <p className="text-xs font-bold text-fg">CANIAS Üzerinden Sorgulama Yapın</p>
+          <p className="mt-1 text-[11px] text-subtle max-w-sm">
+            {activeTab === "barcode"
+              ? "Ürün barkodunu kamerayla okutarak veya yazarak canlı CANIAS veritabanından tedarikçi sorgulayınız."
+              : "Tedarikçi unvanı veya firma kodu girerek CANIAS veritabanından açık sipariş sorgulayınız."}
+          </p>
+        </div>
+      ) : suppliers.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 rounded-2xl border border-dashed border-line bg-surface p-5 text-center text-subtle">
           <AlertCircle className="mb-2 h-8 w-8 text-muted" />
-          <p className="text-xs font-bold text-fg">Eşleşen Tedarikçi Bulunamadı</p>
+          <p className="text-xs font-bold text-fg">Açık Sipariş Bulunamadı</p>
           <p className="mt-1 text-[11px] text-subtle max-w-sm">
-            Aradığınız kriterlere uygun aktif satın alma siparişi bulunamadı. Lütfen barkodu veya tedarikçi adını kontrol edin.
+            CANIAS veritabanında aradığınız kriterlere uygun aktif satın alma siparişi bulunamadı.
           </p>
         </div>
       ) : (
@@ -399,68 +386,37 @@ export default function ReceivingSupplierSelectPage() {
                 <div
                   key={supplier.id}
                   onClick={() => handleSelectSupplier(supplier)}
-                  className={`relative flex flex-col justify-between rounded-xl border p-3.5 cursor-pointer transition-all duration-200 ${
+                  className={`relative flex items-center justify-between rounded-xl border p-3 cursor-pointer transition-all duration-200 ${
                     isSelected
                       ? "border-2 border-emerald-500 bg-emerald-500/10 dark:bg-emerald-950/20 shadow-sm ring-1 ring-emerald-500/30"
                       : "border-line bg-surface hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-soft"
                   }`}
                 >
-                  {/* Upper Selection Row */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div
-                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
-                          isSelected
-                            ? "bg-emerald-600 text-white"
-                            : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
-                        }`}
-                      >
-                        <Building2 className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono text-[11px] font-bold text-subtle">{supplier.id}</span>
-                          <span className="chip text-[10px] py-0 px-1.5 bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                            {supplier.poNumber}
-                          </span>
-                        </div>
-                        <h4 className="mt-0.5 text-xs font-bold text-fg leading-tight truncate">
-                          {supplier.name}
-                        </h4>
-                      </div>
-                    </div>
-
-                    {/* Checkbox / Radio Circle */}
+                  <div className="flex items-center gap-2.5 min-w-0 pr-2">
                     <div
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
                         isSelected
-                          ? "border-emerald-600 bg-emerald-600 text-white"
-                          : "border-line bg-bg text-transparent"
+                          ? "bg-emerald-600 text-white"
+                          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
                       }`}
                     >
-                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <Building2 className="h-4 w-4" />
                     </div>
+                    <h4 className="text-xs font-bold text-fg leading-tight truncate">
+                      {supplier.name}
+                    </h4>
                   </div>
 
-                  {/* Compact Details Container: Sadece Kalem Bilgisi */}
-                  <div className="mt-2 pt-1.5 border-t border-line text-[11px]">
-                    <div className="flex items-center justify-between text-subtle">
-                      <span className="flex items-center gap-1.5 font-medium">
-                        <FileText className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" /> Sipariş Kalemi:
-                      </span>
-                      <span className="font-bold text-fg">{supplier.orderCount} Kalem</span>
-                    </div>
+                  {/* Checkbox / Radio Circle */}
+                  <div
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
+                      isSelected
+                        ? "border-emerald-600 bg-emerald-600 text-white"
+                        : "border-line bg-bg text-transparent"
+                    }`}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
                   </div>
-
-                  {/* Selected Badge */}
-                  {isSelected && (
-                    <div className="mt-2 flex items-center justify-between rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-xs">
-                      <span className="flex items-center gap-1">
-                        <CheckCircle2 className="h-3 w-3" /> Seçildi
-                      </span>
-                      <span className="underline text-[10px]">Devam Et &rarr;</span>
-                    </div>
-                  )}
                 </div>
               );
             })}

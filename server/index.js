@@ -72,6 +72,12 @@ const ALLOWED = new Set([
   "MZYPrintWHSP",
   "MZYPrintMaterial",
   "MZYPrintBarcode",
+
+  // Mal Kabul Servisleri
+  "MZYGetOpenOrder",
+  "MZYGetMaterial",
+  "MzySetMatSize",
+  "MzyGetCustomer",
 ]);
 
 const app = express();

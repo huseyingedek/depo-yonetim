@@ -184,4 +184,29 @@ describe("CANIAS Label Printing Dynamic Parameter & Product Tests", () => {
     const result = await api.getStockPlaces("10");
     expect(result).toEqual([{ code: "RAF-01", name: "Raf 01" }]);
   });
+
+  // Test 7: MZYGetOpenOrder
+  it("MZYGetOpenOrder - Açık Sipariş Listesi Parametre Testi", async () => {
+    vi.spyOn(api, "getOpenOrders").mockImplementation(async (payload) => {
+      const params = {
+        PSCOMPANY: payload.company || "01",
+        PSPLANT: payload.plant || "100",
+        PSBARCODE: payload.barcode || "",
+        PSVENDOR: payload.vendor || "",
+      };
+      capturedCalls.push({ service: SERVICES.getOpenOrder, params });
+      return { ok: true, message: "OK", orders: [] };
+    });
+
+    capturedCalls = [];
+    await api.getOpenOrders({ barcode: "8699580002539" });
+
+    expect(capturedCalls[0].service).toBe("MZYGetOpenOrder");
+    expect(capturedCalls[0].params).toEqual({
+      PSCOMPANY: "01",
+      PSPLANT: "100",
+      PSBARCODE: "8699580002539",
+      PSVENDOR: "",
+    });
+  });
 });

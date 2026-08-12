@@ -36,4 +36,5 @@ export const SERVICES = {
   getOpenOrder: "MZYGetOpenOrder", // Açık satın alma siparişleri listesi
   getMaterialDetail: "MZYGetMaterial", // Malzeme detay, resim, barkod ve ölçü listesi
   setMatSize: "MzySetMatSize", // Malzeme boyut, ağırlık ve güvenlik nitelikleri kaydı
+  getCustomer: "MzyGetCustomer", // Tedarikçi / Müşteri arama servisi
 } as const;

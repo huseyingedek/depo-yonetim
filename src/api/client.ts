@@ -1344,4 +1344,35 @@ export const api = {
 
     return { ok: true, message: mesaj || "Malzeme ölçü ve nitelik bilgileri başarıyla kaydedildi." };
   },
+
+  // 4. MzyGetCustomer - Tedarikçi / Müşteri Arama Servisi
+  // PARAMETRELER: PSCOMPANY ("01"), PSCUSTOMER (Tedarikçi Kodu), PSCUSNAME1 (Tedarikçi Adı), PICUSTYPE / PSCUSTYPE (1 = Tedarikçi)
+  async getCustomers(payload: {
+    customer?: string;
+    name?: string;
+    customerType?: number;
+    company?: string;
+  }): Promise<{ ok: boolean; message: string; customers: Record<string, unknown>[] }> {
+    const c = ctx();
+    const query = (payload.name || payload.customer || "").trim();
+    const isCode = /^TED-?\d+$/i.test(query) || /^\d+$/.test(query);
+
+    const params: Record<string, unknown> = {
+      PSCOMPANY: payload.company || c.company || "01",
+      PSCUSTOMER: isCode ? query : (payload.customer || "").trim(),
+      PSCUSNAME1: isCode ? "" : (payload.name || query).trim(),
+      PICUSTYPE: payload.customerType ?? 1,
+      PSCUSTYPE: payload.customerType ?? 1,
+    };
+
+    const r = await call(SERVICES.getCustomer, params);
+    const mesaj = serviceMessage(r);
+    const tableRows = rowsOf(r, ["CUSTOMERLIST", "VENDORLIST", "TABLE", "CUSTOMER", "VENDOR"]);
+
+    return {
+      ok: true,
+      message: mesaj,
+      customers: tableRows,
+    };
+  },
 };

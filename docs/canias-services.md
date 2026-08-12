@@ -317,7 +317,14 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
   - `AKLISLIQUID` (*INTEGER*): Sıvı mı? (`0` / `1`).
   - `AKLISTOXIC` (*INTEGER*): Zehirli mi? (`0` / `1`).
   - `AKLPALPOS` (*INTEGER*): Palet pozisyonu / Öncelik sırası.
-- **WMS İstemci Karşılığı**: `api.setMatSize(payload)`
+### 5.4. `MzyGetCustomer` — Tedarikçi / Müşteri Arama Servisi
+- **Açıklama**: Tedarikçi adı veya kodu ile CANIAS veritabanından tedarikçileri listeler.
+- **Parametreler**:
+  - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
+  - `PSCUSTOMER` (*STRING*, Opsiyonel): Tedarikçi/Müşteri numarası/kodu.
+  - `PSCUSNAME1` (*STRING*, Opsiyonel): Tedarikçi/Müşteri adı/unvanı.
+  - `PICUSTYPE` / `PSCUSTYPE` (*INTEGER*): Müşteri/Tedarikçi tipi (`0`: Hepsi, `1`: Tedarikçi, `2`: Müşteri). Mal Kabul için `1` gönderilir.
+- **WMS İstemci Karşılığı**: `api.getCustomers(payload)`
 
 ---
 
@@ -351,3 +358,4 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 | **Açık Sipariş Listesi** | `MZYGetOpenOrder` | `api.getOpenOrders` | `src/api/client.ts` |
 | **Malzeme Detayı & Ölçü** | `MZYGetMaterial` | `api.getMaterialDetail` | `src/api/client.ts` |
 | **Malzeme Ölçü Kaydı** | `MzySetMatSize` | `api.setMatSize` | `src/api/client.ts` |
+| **Tedarikçi Arama** | `MzyGetCustomer` | `api.getCustomers` | `src/api/client.ts` |
