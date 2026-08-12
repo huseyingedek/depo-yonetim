@@ -31,4 +31,9 @@ export const SERVICES = {
   printWHSP: "MZYPrintWHSP", // Raf / Konteyner / Parti etiket yazdırma
   printMaterial: "MZYPrintMaterial", // Ürün barkodu etiket yazdırma
   printBarcode: "MZYPrintBarcode", // SKT / Parti barkod etiket yazdırma
+
+  // Mal Kabul Servisleri
+  getOpenOrder: "MZYGetOpenOrder", // Açık satın alma siparişleri listesi
+  getMaterialDetail: "MZYGetMaterial", // Malzeme detay, resim, barkod ve ölçü listesi
+  setMatSize: "MzySetMatSize", // Malzeme boyut, ağırlık ve güvenlik nitelikleri kaydı
 } as const;

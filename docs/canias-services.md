@@ -273,7 +273,55 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 
 ---
 
-## 5. Özet Tablo: Servis İsimleri ve Kullanım Yerleri
+## 5. Mal Kabul Servisleri (Goods Receipt)
+
+### 5.1. `MZYGetOpenOrder` — Açık Satın Alma Siparişleri Listesi
+- **Açıklama**: Okutulan malzeme barkoduna ve opsiyonel tedarikçi koduna göre açık satın alma siparişlerini listeler.
+- **Parametreler**:
+  - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
+  - `PSPLANT` (*STRING*): Tesis kodu (`"100"`).
+  - `PSBARCODE` (*STRING*): Malzeme barkodu.
+  - `PSVENDOR` (*STRING*, Opsiyonel): Seçilen tedarikçinin numarası/kodu.
+- **Dönen Tablo**: `PURORDERLIST` (İçinde `VENDOR` tedarikçi kodu, `NAME1` tedarikçi adı ve açık sipariş kalemleri döner).
+- **WMS İstemci Karşılığı**: `api.getOpenOrders(barcode, vendor?)`
+
+### 5.2. `MZYGetMaterial` — Malzeme Detayı, Barkod ve Ölçü Listesi
+- **Açıklama**: Malzemenin detay kartını, bağlı barkod listesini, birimlerini ve ölçü/özellik bilgilerini getirir.
+- **Parametreler**:
+  - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
+  - `PSPLANT` (*STRING*): Tesis kodu (`"100"`).
+  - `PSBARCODE` (*STRING*): Malzeme barkodu.
+- **Dönen Tablolar**:
+  - `MATLIST`: Malzeme genel detay listesi
+  - `BARCODELIST`: Barkod listesi
+  - `MATSIZE`: Ölçü, ağırlık ve güvenlik nitelikleri tablosu
+- **WMS İstemci Karşılığı**: `api.getMaterialDetail(barcode)`
+
+### 5.3. `MzySetMatSize` — Malzeme Ölçü, Ağırlık ve Güvenlik Nitelikleri Güncelleme
+- **Açıklama**: Malzemenin eksik veya sıfır olan en, boy, yükseklik, ağırlık, hacim, kırılabilirlik, yanıcılık gibi ölçü niteliklerini kaydeder.
+- **Parametreler**:
+  - `COMPANY` (*STRING*): Firma kodu (`"01"`).
+  - `MATERIAL` (*STRING*): Malzeme kodu.
+  - `VOLUME` (*DECIMAL*): Hacim.
+  - `VUNIT` (*STRING*): Hacim birimi.
+  - `PWIDTH` (*DECIMAL*): En / Genişlik.
+  - `PLENGTH` (*DECIMAL*): Boy / Uzunluk.
+  - `PHEIGHT` (*DECIMAL*): Yükseklik.
+  - `NETWEIGHT` (*DECIMAL*): Net Ağırlık.
+  - `NWUNIT` (*STRING*): Net Ağırlık birimi.
+  - `BRUTWEIGHT` (*DECIMAL*): Brüt Ağırlık.
+  - `BWUNIT` (*STRING*): Brüt Ağırlık birimi.
+  - `ISEXPLOS` (*INTEGER*): Patlayıcı mı? (`0` / `1`).
+  - `ISSPOIL` (*INTEGER*): Bozulabilir mi? (`0` / `1`).
+  - `AKLISBREAKABLE` (*INTEGER*): Kırılabilir mi? (`0` / `1`).
+  - `AKLISLIQUID` (*INTEGER*): Sıvı mı? (`0` / `1`).
+  - `AKLISTOXIC` (*INTEGER*): Zehirli mi? (`0` / `1`).
+  - `AKLPALPOS` (*INTEGER*): Palet pozisyonu / Öncelik sırası.
+- **WMS İstemci Karşılığı**: `api.setMatSize(payload)`
+
+---
+
+## 6. Özet Tablo: Servis İsimleri ve Kullanım Yerleri
 
 | Servis Adı | CANIAS Servisi | İstemci Metodu | Dosya Konumu |
 | :--- | :--- | :--- | :--- |
@@ -300,3 +348,6 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 | **Raf Etiket Bas** | `MZYPrintWHSP` | `api.printWHSP` | `src/api/client.ts` |
 | **Ürün Etiket Bas** | `MZYPrintMaterial` | `api.printMaterial` | `src/api/client.ts` |
 | **SKT Etiket Bas** | `MZYPrintBarcode` | `api.printBarcode` | `src/api/client.ts` |
+| **Açık Sipariş Listesi** | `MZYGetOpenOrder` | `api.getOpenOrders` | `src/api/client.ts` |
+| **Malzeme Detayı & Ölçü** | `MZYGetMaterial` | `api.getMaterialDetail` | `src/api/client.ts` |
+| **Malzeme Ölçü Kaydı** | `MzySetMatSize` | `api.setMatSize` | `src/api/client.ts` |

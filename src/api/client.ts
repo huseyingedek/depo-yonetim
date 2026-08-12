@@ -1226,4 +1226,122 @@ export const api = {
 
     return { ok: true, message: mesaj || "SKT / Barkod etiket yazdırma isteği CANIAS sunucusuna iletildi." };
   },
+
+  // ---------------------------------------------------------------------------
+  // MAL KABUL (GOODS RECEIPT) SERVİSLERİ
+  // ---------------------------------------------------------------------------
+
+  // 1. MZYGetOpenOrder - Açık Satın Alma Siparişleri Listesi
+  async getOpenOrders(payload: {
+    barcode?: string;
+    vendor?: string;
+    vendorName?: string;
+    company?: string;
+    plant?: string;
+  }): Promise<{ ok: boolean; message: string; orders: Record<string, unknown>[] }> {
+    const c = ctx();
+    const r = await call(SERVICES.getOpenOrder, {
+      PSCOMPANY: payload.company || c.company || "01",
+      PSPLANT: payload.plant || c.plant || "100",
+      PSBARCODE: (payload.barcode || "").trim(),
+      PSVENDOR: (payload.vendor || "").trim(),
+      ...(payload.vendorName ? { PSVENDORNAME: payload.vendorName.trim(), PSNAME: payload.vendorName.trim() } : {}),
+    });
+
+    const mesaj = serviceMessage(r);
+    const dataObj = r.data || {};
+    const table = (dataObj.PURORDERLIST as Record<string, unknown>[]) ||
+      (dataObj.TABLE as Record<string, unknown>[]) ||
+      [];
+
+    return {
+      ok: true,
+      message: mesaj,
+      orders: Array.isArray(table) ? table : [],
+    };
+  },
+
+  // 2. MZYGetMaterial - Malzeme Detay Kartı, Barkod ve Ölçü Listesi
+  async getMaterialDetail(
+    barcode: string,
+    company?: string,
+    plant?: string
+  ): Promise<{
+    ok: boolean;
+    message: string;
+    matList: Record<string, unknown>[];
+    barcodeList: Record<string, unknown>[];
+    matSize: Record<string, unknown> | Record<string, unknown>[];
+  }> {
+    const c = ctx();
+    const r = await call(SERVICES.getMaterialDetail, {
+      PSCOMPANY: company || c.company || "01",
+      PSPLANT: plant || c.plant || "100",
+      PSBARCODE: (barcode || "").trim(),
+    });
+
+    const mesaj = serviceMessage(r);
+    const dataObj = r.data || {};
+
+    const matList = (dataObj.MATLIST as Record<string, unknown>[]) || [];
+    const barcodeList = (dataObj.BARCODELIST as Record<string, unknown>[]) || [];
+    const matSize = (dataObj.MATSIZE as Record<string, unknown>[]) || (dataObj.MATSIZELIST as Record<string, unknown>[]) || {};
+
+    return {
+      ok: true,
+      message: mesaj,
+      matList: Array.isArray(matList) ? matList : [],
+      barcodeList: Array.isArray(barcodeList) ? barcodeList : [],
+      matSize,
+    };
+  },
+
+  // 3. MzySetMatSize - Malzeme Ölçü, Ağırlık ve Güvenlik Nitelikleri Güncelleme
+  async setMatSize(payload: {
+    company?: string;
+    material: string;
+    volume?: number;
+    vunit?: string;
+    pwidth?: number;
+    plength?: number;
+    pheight?: number;
+    netweight?: number;
+    nwunit?: string;
+    brutweight?: number;
+    bwunit?: string;
+    isexplos?: number | boolean;
+    isspoil?: number | boolean;
+    aklisbreakable?: number | boolean;
+    aklisliquid?: number | boolean;
+    aklistoxic?: number | boolean;
+    aklpalpos?: number;
+  }): Promise<{ ok: boolean; message: string }> {
+    const c = ctx();
+    const r = await call(SERVICES.setMatSize, {
+      COMPANY: payload.company || c.company || "01",
+      MATERIAL: payload.material,
+      VOLUME: payload.volume ?? 0,
+      VUNIT: payload.vunit || "M3",
+      PWIDTH: payload.pwidth ?? 0,
+      PLENGTH: payload.plength ?? 0,
+      PHEIGHT: payload.pheight ?? 0,
+      NETWEIGHT: payload.netweight ?? 0,
+      NWUNIT: payload.nwunit || "KG",
+      BRUTWEIGHT: payload.brutweight ?? 0,
+      BWUNIT: payload.bwunit || "KG",
+      ISEXPLOS: payload.isexplos ? 1 : 0,
+      ISSPOIL: payload.isspoil ? 1 : 0,
+      AKLISBREAKABLE: payload.aklisbreakable ? 1 : 0,
+      AKLISLIQUID: payload.aklisliquid ? 1 : 0,
+      AKLISTOXIC: payload.aklistoxic ? 1 : 0,
+      AKLPALPOS: payload.aklpalpos ?? 0,
+    });
+
+    const mesaj = serviceMessage(r);
+    if (mesaj && /error|fail|hata/i.test(mesaj)) {
+      return { ok: false, message: mesaj };
+    }
+
+    return { ok: true, message: mesaj || "Malzeme ölçü ve nitelik bilgileri başarıyla kaydedildi." };
+  },
 };
