@@ -66,8 +66,8 @@ describe("Mal Kabul (Goods Receipt) - 1. Seçenek (Barkod) & 2. Seçenek (Tedari
         PSCOMPANY: "01",
         PSPLANT: "100",
         PSBARCODE: "8691234567890",
-        PSVENDOR: "",
       });
+      expect(body.PSVENDOR).toBeUndefined();
 
       expect(result.ok).toBe(true);
       expect(result.orders.length).toBe(1);

@@ -862,10 +862,13 @@ export const api = {
 
   async getWarehouses(): Promise<{ code: string; name: string }[]> {
     const c = ctx();
-    const r = await call(SERVICES.getWarehouse, { PSCOMPANY: c.company, PSPLANT: c.plant });
-    return rowsOf(r, ["TBLWAREHOUSE"]).map((x) => ({
-      code: pick(x, ["WAREHOUSE"]),
-      name: pick(x, ["NAME", "STEXT"]) || pick(x, ["WAREHOUSE"]),
+    const r = await call(SERVICES.getWarehouse, {
+      PSCOMPANY: String(c.company || "01").trim(),
+      PSPLANT: String(c.plant || "100").trim(),
+    });
+    return rowsOf(r, ["TBLWAREHOUSE", "WAREHOUSELIST", "TABLE", "WAREHOUSE"]).map((x) => ({
+      code: pick(x, ["WAREHOUSE", "CODE", "ID"]),
+      name: pick(x, ["NAME", "STEXT", "DESCRIPTION"]) || pick(x, ["WAREHOUSE", "CODE"]),
     }));
   },
 
@@ -1240,13 +1243,23 @@ export const api = {
     plant?: string;
   }): Promise<{ ok: boolean; message: string; orders: Record<string, unknown>[] }> {
     const c = ctx();
-    const r = await call(SERVICES.getOpenOrder, {
+    const params: Record<string, unknown> = {
       PSCOMPANY: payload.company || c.company || "01",
       PSPLANT: payload.plant || c.plant || "100",
-      PSBARCODE: (payload.barcode || "").trim(),
-      PSVENDOR: (payload.vendor || "").trim(),
-      ...(payload.vendorName ? { PSVENDORNAME: payload.vendorName.trim(), PSNAME: payload.vendorName.trim() } : {}),
-    });
+    };
+
+    if (payload.barcode?.trim()) {
+      params.PSBARCODE = payload.barcode.trim();
+    }
+    if (payload.vendor?.trim()) {
+      params.PSVENDOR = payload.vendor.trim();
+    }
+    if (payload.vendorName?.trim()) {
+      params.PSVENDORNAME = payload.vendorName.trim();
+      params.PSNAME = payload.vendorName.trim();
+    }
+
+    const r = await call(SERVICES.getOpenOrder, params);
 
     const mesaj = serviceMessage(r);
     const tableRows = rowsOf(r, ["PURORDERLIST", "TABLE", "ORDERS", "PURORDER"]);

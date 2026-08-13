@@ -11,11 +11,14 @@ import {
   CornerDownLeft,
   Loader2,
   Search,
+  FileText,
+  Warehouse,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import BarcodeScanner from "../../components/BarcodeScanner";
 import Pagination, { usePagination } from "../../components/Pagination";
 import { api } from "../../api/client";
+import { useAppStore } from "../../store/appStore";
 
 export interface SupplierOrder {
   id: string; // Tedarikçi Kodu (VENDOR)
@@ -29,6 +32,7 @@ type SearchTab = "barcode" | "supplierName";
 
 export default function ReceivingSupplierSelectPage() {
   const navigate = useNavigate();
+  const activeWh = useAppStore((s) => s.settings.warehouse) || "";
   const [activeTab, setActiveTab] = useState<SearchTab>("barcode");
 
   // Search & Selection State
@@ -48,6 +52,27 @@ export default function ReceivingSupplierSelectPage() {
     open: false,
     message: "",
   });
+
+  // Waybill & Warehouse Popup Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [waybillNo, setWaybillNo] = useState("");
+  const [sourceWarehouse, setSourceWarehouse] = useState("");
+  const [targetWarehouse, setTargetWarehouse] = useState(activeWh);
+  const [waybillError, setWaybillError] = useState("");
+  const [sourceError, setSourceError] = useState("");
+  const [targetError, setTargetError] = useState("");
+
+  // CANIAS Live Warehouses State
+  const [caniasWarehouses, setCaniasWarehouses] = useState<{ code: string; name: string }[]>([]);
+
+  useEffect(() => {
+    api
+      .getWarehouses()
+      .then((list) => {
+        if (list && list.length > 0) setCaniasWarehouses(list);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleTabChange = (tab: SearchTab) => {
     setActiveTab(tab);
@@ -119,12 +144,58 @@ export default function ReceivingSupplierSelectPage() {
     setHasSearched(true);
     setSelectedSupplier(null);
 
+    const query = nameQuery.trim();
+    if (!query) return;
+
+    const trLower = (s: string) =>
+      s.replace(/İ/g, "i").replace(/I/g, "ı").replace(/Ş/g, "ş").replace(/Ğ/g, "ğ").replace(/Ü/g, "ü").replace(/Ö/g, "ö").replace(/Ç/g, "ç").toLowerCase();
+
+    const isCode = /^TED-?\d+$/i.test(query) || /^\d+$/.test(query);
+
     try {
-      const res = await api.getCustomers({ name: nameQuery, customerType: 1 });
-      if (res.ok && res.customers && res.customers.length > 0) {
-        // Process returned CUSTOMERLIST table from MzyGetCustomer
+      // 1) CANIAS faal açık sipariş servisi MZYGetOpenOrder ile tedarikçi araması
+      const res = await api.getOpenOrders({
+        vendorName: isCode ? undefined : query,
+        vendor: isCode ? query : undefined,
+      });
+
+      if (res.ok && res.orders && res.orders.length > 0) {
         const map = new Map<string, SupplierOrder>();
-        res.customers.forEach((row, idx) => {
+        res.orders.forEach((row, idx) => {
+          const vendorCode = String(row.VENDOR || row.PSVENDOR || row.SUPPLIERID || `TED-${idx + 1}`).trim();
+          const vendorName = String(row.NAME1 || row.SUPPLIERNAME || row.VENDORNAME || "Tedarikçi").trim();
+          const poNum = String(row.PURORDER || row.POORDER || row.PO_NUMBER || "").trim();
+
+          if (!map.has(vendorCode)) {
+            map.set(vendorCode, {
+              id: vendorCode,
+              name: vendorName,
+              poNumber: poNum || "Açık Sipariş",
+              orderCount: 1,
+              barcode: "",
+            });
+          } else {
+            const existing = map.get(vendorCode)!;
+            existing.orderCount += 1;
+          }
+        });
+
+        const normQuery = trLower(query);
+        const filtered = Array.from(map.values()).filter((s) => {
+          const normName = trLower(s.name);
+          const normId = trLower(s.id);
+          return normName.includes(normQuery) || normId.includes(normQuery);
+        });
+
+        setSuppliers(filtered);
+        return;
+      }
+
+      // 2) Eğer MZYGetOpenOrder sonuç vermezse yedek olarak MzyGetCustomer denenir
+      const custRes = await api.getCustomers({ name: query, customerType: 1 }).catch(() => null);
+      if (custRes && custRes.ok && custRes.customers && custRes.customers.length > 0) {
+        const map = new Map<string, SupplierOrder>();
+        custRes.customers.forEach((row, idx) => {
           const vendorCode = String(row.CUSTOMER || row.VENDOR || row.PSCUSTOMER || row.ID || `TED-${idx + 1}`).trim();
           const vendorName = String(row.NAME1 || row.CUSNAME1 || row.VENDORNAME || row.NAME || "Tedarikçi").trim();
           const poNum = String(row.PURORDER || row.POORDER || row.PO_NUMBER || "").trim();
@@ -139,12 +210,20 @@ export default function ReceivingSupplierSelectPage() {
             });
           }
         });
-        setSuppliers(Array.from(map.values()));
+
+        const normQuery = trLower(query);
+        const filtered = Array.from(map.values()).filter((s) => {
+          const normName = trLower(s.name);
+          const normId = trLower(s.id);
+          return normName.includes(normQuery) || normId.includes(normQuery);
+        });
+
+        setSuppliers(filtered);
       } else {
         setSuppliers([]);
       }
     } catch (err: any) {
-      console.error("CANIAS MzyGetCustomer error:", err);
+      console.error("CANIAS tedarikçi arama hatası:", err);
       setApiError(
         err?.message || "CANIAS sunucusuna bağlanılamadı. Lütfen ağ bağlantınızı ve sunucu adresini kontrol edin."
       );
@@ -174,16 +253,58 @@ export default function ReceivingSupplierSelectPage() {
     }
   };
 
-  // Proceed Handler (Header top-right button)
+  // Proceed Handler: Opens İrsaliye & Depo Popup Modal
   const handleProceedNextStep = () => {
     if (!selectedSupplier) return;
+    setWaybillNo("");
+    setWaybillError("");
+    setSourceError("");
+    setTargetError("");
+    setIsModalOpen(true);
+  };
+
+  const handleConfirmModal = () => {
+    const trimmedWaybill = waybillNo.trim();
+    const trimmedSource = sourceWarehouse.trim();
+    const trimmedTarget = targetWarehouse.trim();
+
+    let hasErr = false;
+    if (!trimmedWaybill) {
+      setWaybillError("Lütfen İrsaliye Numarasını giriniz.");
+      hasErr = true;
+    }
+    if (!trimmedSource) {
+      setSourceError("Lütfen Malzemenin Alınacağı Depoyu giriniz.");
+      hasErr = true;
+    }
+    if (!trimmedTarget) {
+      setTargetError("Lütfen Kabul Edileceği Depoyu giriniz.");
+      hasErr = true;
+    }
+
+    if (hasErr) return;
+
+    setIsModalOpen(false);
     setStepNotice({
       open: true,
-      message: `${selectedSupplier.name} (${selectedSupplier.poNumber}) seçildi. Adım 2: İrsaliye No Girişi ekranına geçiliyor...`,
+      message: `${selectedSupplier?.name} (${selectedSupplier?.poNumber}) — İrsaliye No: ${trimmedWaybill} [Çıkış: ${trimmedSource} → Kabul: ${trimmedTarget}] kaydedildi. Detay ekranına yönlendiriliyor...`,
     });
+
     setTimeout(() => {
-      navigate(`/receiving/${selectedSupplier.poNumber}`);
-    }, 1800);
+      if (selectedSupplier) {
+        navigate(
+          `/receiving/${selectedSupplier.poNumber}?waybill=${encodeURIComponent(trimmedWaybill)}&sourceWH=${encodeURIComponent(trimmedSource)}&targetWH=${encodeURIComponent(trimmedTarget)}`,
+          {
+            state: {
+              waybillNo: trimmedWaybill,
+              sourceWarehouse: trimmedSource,
+              targetWarehouse: trimmedTarget,
+              supplier: selectedSupplier,
+            },
+          }
+        );
+      }
+    }, 1500);
   };
 
   return (
@@ -433,6 +554,178 @@ export default function ReceivingSupplierSelectPage() {
             label="Tedarikçi"
           />
         </>
+      )}
+
+      {/* İrsaliye No ve Depo Seçimi Popup Modal */}
+      {isModalOpen && selectedSupplier && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-line pb-3">
+              <div>
+                <h3 className="text-sm sm:text-base font-extrabold text-fg flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                  Mal Kabul & İrsaliye Bilgileri
+                </h3>
+                <p className="mt-1 text-xs text-subtle font-medium truncate max-w-[280px]">
+                  {selectedSupplier.name} <span className="font-bold text-fg">({selectedSupplier.poNumber})</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="rounded-lg p-1 text-subtle hover:bg-elevated hover:text-fg transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Form Inputs */}
+            <div className="space-y-3.5 text-xs">
+              {/* Field 1: İrsaliye Numarası */}
+              <div>
+                <label className="mb-1 block font-bold text-fg">
+                  İrsaliye Numarası <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={waybillNo}
+                    onChange={(e) => {
+                      setWaybillNo(e.target.value);
+                      if (waybillError) setWaybillError("");
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && handleConfirmModal()}
+                    placeholder="İrsaliye numarasını giriniz"
+                    className={`field-input w-full pl-9 ${
+                      waybillError ? "border-red-500 focus:ring-red-500" : ""
+                    }`}
+                    autoFocus
+                  />
+                  <FileText className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
+                </div>
+                {waybillError && (
+                  <p className="mt-1 text-[11px] font-semibold text-red-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" /> {waybillError}
+                  </p>
+                )}
+              </div>
+
+              {/* Field 2: Malzemenin Alınacağı Depo */}
+              <div>
+                <label className="mb-1 block font-bold text-fg">
+                  Malzemenin Alınacağı Depo <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  {caniasWarehouses.length > 0 ? (
+                    <select
+                      value={sourceWarehouse}
+                      onChange={(e) => {
+                        setSourceWarehouse(e.target.value);
+                        if (sourceError) setSourceError("");
+                      }}
+                      className={`field-input w-full pl-9 bg-surface text-fg ${
+                        sourceError ? "border-red-500 focus:ring-red-500" : ""
+                      }`}
+                    >
+                      <option value="">Depo Seçiniz</option>
+                      {caniasWarehouses.map((w) => (
+                        <option key={`src-${w.code}`} value={w.code}>
+                          {w.code} {w.name ? `— ${w.name}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={sourceWarehouse}
+                      onChange={(e) => {
+                        setSourceWarehouse(e.target.value);
+                        if (sourceError) setSourceError("");
+                      }}
+                      placeholder="Depo kodunu yazınız"
+                      className={`field-input w-full pl-9 ${
+                        sourceError ? "border-red-500 focus:ring-red-500" : ""
+                      }`}
+                    />
+                  )}
+                  <Truck className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
+                </div>
+                {sourceError && (
+                  <p className="mt-1 text-[11px] font-semibold text-red-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" /> {sourceError}
+                  </p>
+                )}
+              </div>
+
+              {/* Field 3: Kabul Edileceği Depo */}
+              <div>
+                <label className="mb-1 block font-bold text-fg">
+                  Kabul Edileceği Depo <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  {caniasWarehouses.length > 0 ? (
+                    <select
+                      value={targetWarehouse}
+                      onChange={(e) => {
+                        setTargetWarehouse(e.target.value);
+                        if (targetError) setTargetError("");
+                      }}
+                      className={`field-input w-full pl-9 bg-surface text-fg ${
+                        targetError ? "border-red-500 focus:ring-red-500" : ""
+                      }`}
+                    >
+                      <option value="">Depo Seçiniz</option>
+                      {caniasWarehouses.map((w) => (
+                        <option key={`tgt-${w.code}`} value={w.code}>
+                          {w.code} {w.name ? `— ${w.name}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={targetWarehouse}
+                      onChange={(e) => {
+                        setTargetWarehouse(e.target.value);
+                        if (targetError) setTargetError("");
+                      }}
+                      placeholder="Depo kodunu yazınız"
+                      className={`field-input w-full pl-9 ${
+                        targetError ? "border-red-500 focus:ring-red-500" : ""
+                      }`}
+                    />
+                  )}
+                  <Warehouse className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
+                </div>
+                {targetError && (
+                  <p className="mt-1 text-[11px] font-semibold text-red-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" /> {targetError}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-line">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="rounded-xl border border-line px-4 py-2 text-xs font-semibold text-subtle hover:bg-elevated transition"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmModal}
+                className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700 active:bg-emerald-800"
+              >
+                <span>Mal Kabule Başla</span>
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

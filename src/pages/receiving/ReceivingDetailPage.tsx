@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Minus, Plus, Check, Loader2, ArrowRight, Tag, Calendar, X } from "lucide-react";
+import { Minus, Plus, Check, Loader2, ArrowRight, Tag, Calendar, X, FileText, Truck, Warehouse } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import BarcodeScanner from "../../components/BarcodeScanner";
 import ToastView, { useToast } from "../../components/Toast";
@@ -11,7 +11,13 @@ import type { ReceiptLine } from "../../types";
 export default function ReceivingDetailPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { id } = useParams<{ id: string }>();
+
+  const waybillNo = searchParams.get("waybill") || location.state?.waybillNo;
+  const sourceWH = searchParams.get("sourceWH") || location.state?.sourceWarehouse;
+  const targetWH = searchParams.get("targetWH") || location.state?.targetWarehouse;
 
   const receipt = useReceivingStore((s) => s.receipt);
   const loading = useReceivingStore((s) => s.loading);
@@ -71,6 +77,25 @@ export default function ReceivingDetailPage() {
         backTo="/receiving"
         right={<span className="chip bg-emerald-100 px-3 py-1 font-mono text-sm text-emerald-700">{received}/{expected}</span>}
       />
+
+      {/* İrsaliye No ve Depo Bilgi Banners */}
+      {waybillNo && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+          <span className="flex items-center gap-1.5 font-bold">
+            <FileText className="h-4 w-4 shrink-0" /> İrsaliye No: {waybillNo}
+          </span>
+          {sourceWH && (
+            <span className="flex items-center gap-1.5 border-l border-emerald-500/30 pl-3">
+              <Truck className="h-4 w-4 shrink-0" /> Alınan Depo: {sourceWH}
+            </span>
+          )}
+          {targetWH && (
+            <span className="flex items-center gap-1.5 border-l border-emerald-500/30 pl-3">
+              <Warehouse className="h-4 w-4 shrink-0" /> Kabul Deposu: {targetWH}
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[400px_1fr]">
         <div className="lg:sticky lg:top-24 lg:self-start">
