@@ -1249,15 +1249,12 @@ export const api = {
     });
 
     const mesaj = serviceMessage(r);
-    const dataObj = r.data || {};
-    const table = (dataObj.PURORDERLIST as Record<string, unknown>[]) ||
-      (dataObj.TABLE as Record<string, unknown>[]) ||
-      [];
+    const tableRows = rowsOf(r, ["PURORDERLIST", "TABLE", "ORDERS", "PURORDER"]);
 
     return {
       ok: true,
       message: mesaj,
-      orders: Array.isArray(table) ? table : [],
+      orders: tableRows,
     };
   },
 
@@ -1354,13 +1351,14 @@ export const api = {
     company?: string;
   }): Promise<{ ok: boolean; message: string; customers: Record<string, unknown>[] }> {
     const c = ctx();
-    const query = (payload.name || payload.customer || "").trim();
-    const isCode = /^TED-?\d+$/i.test(query) || /^\d+$/.test(query);
+    const rawQuery = (payload.name || payload.customer || "").trim();
+    const isCode = /^TED-?\d+$/i.test(rawQuery) || /^\d+$/.test(rawQuery);
+    const namePattern = rawQuery ? (rawQuery.includes("%") ? rawQuery : `%${rawQuery}%`) : "";
 
     const params: Record<string, unknown> = {
       PSCOMPANY: payload.company || c.company || "01",
-      PSCUSTOMER: isCode ? query : (payload.customer || "").trim(),
-      PSCUSNAME1: isCode ? "" : (payload.name || query).trim(),
+      PSCUSTOMER: isCode ? rawQuery : (payload.customer || "").trim(),
+      PSCUSNAME1: isCode ? "" : namePattern,
       PICUSTYPE: payload.customerType ?? 1,
       PSCUSTYPE: payload.customerType ?? 1,
     };
