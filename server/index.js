@@ -78,6 +78,7 @@ const ALLOWED = new Set([
   "MZYGetMaterial",
   "MzySetMatSize",
   "MzyGetCustomer",
+  "MZYSAVEINVPURORDER",
 ]);
 
 const app = express();

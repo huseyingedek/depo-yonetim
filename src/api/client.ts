@@ -1282,6 +1282,7 @@ export const api = {
     matList: Record<string, unknown>[];
     barcodeList: Record<string, unknown>[];
     matSize: Record<string, unknown> | Record<string, unknown>[];
+    image?: string;
   }> {
     const c = ctx();
     const r = await call(SERVICES.getMaterialDetail, {
@@ -1292,10 +1293,16 @@ export const api = {
 
     const mesaj = serviceMessage(r);
     const dataObj = r.data || {};
-
     const matList = (dataObj.MATLIST as Record<string, unknown>[]) || [];
     const barcodeList = (dataObj.BARCODELIST as Record<string, unknown>[]) || [];
     const matSize = (dataObj.MATSIZE as Record<string, unknown>[]) || (dataObj.MATSIZELIST as Record<string, unknown>[]) || {};
+    const imageList = (dataObj.MATIMAGES as Record<string, unknown>[]) || (dataObj.IMAGES as Record<string, unknown>[]) || (dataObj.PICTURELIST as Record<string, unknown>[]) || [];
+    const rootImage = dataObj.IMAGE || dataObj.PICTURE || dataObj.IMAGEDATA || dataObj.RESIM || imageList[0]?.IMAGE || imageList[0]?.IMAGEDATA || imageList[0]?.DOCDATA;
+
+    // Attach rootImage to first matList row if not already present
+    if (matList.length > 0 && rootImage && !matList[0].IMAGE && !matList[0].PICTURE) {
+      matList[0].IMAGE = rootImage;
+    }
 
     return {
       ok: true,
@@ -1303,6 +1310,7 @@ export const api = {
       matList: Array.isArray(matList) ? matList : [],
       barcodeList: Array.isArray(barcodeList) ? barcodeList : [],
       matSize,
+      image: typeof rootImage === "string" ? rootImage : undefined,
     };
   },
 
@@ -1384,6 +1392,47 @@ export const api = {
       ok: true,
       message: mesaj,
       customers: tableRows,
+    };
+  },
+
+  // 5. MZYSAVEINVPURORDER - Mal Kabul Tamamlama ve Saklama Servisi
+  async saveReceipt(payload: {
+    company?: string;
+    plant?: string;
+    vendor: string;
+    waybillNo: string;
+    sourceWarehouse?: string;
+    targetWarehouse?: string;
+    user?: string;
+    items: Array<{
+      orderNum: string;
+      itemNum: number | string;
+      material: string;
+      quantity: number;
+      batchNum?: string;
+      expiryDate?: string;
+    }>;
+  }): Promise<{ ok: boolean; message: string }> {
+    const c = ctx();
+    const r = await call(SERVICES.saveReceipt, {
+      PSCOMPANY: String(payload.company || c.company || "01").trim(),
+      PSPLANT: String(payload.plant || c.plant || "100").trim(),
+      PSVENDOR: String(payload.vendor || "").trim(),
+      PSWAYBILL: String(payload.waybillNo || "").trim(),
+      PSSOURCEWH: String(payload.sourceWarehouse || "").trim(),
+      PSTARGETWH: String(payload.targetWarehouse || c.warehouse || "").trim(),
+      PSUSER: String(payload.user || c.worker || "").trim(),
+      PSITEMS: payload.items,
+    });
+
+    const mesaj = serviceMessage(r);
+    if (mesaj && /error|fail|hata/i.test(mesaj)) {
+      return { ok: false, message: mesaj };
+    }
+
+    return {
+      ok: true,
+      message: mesaj || "Mal kabul işlemi başarıyla kaydedildi.",
     };
   },
 };

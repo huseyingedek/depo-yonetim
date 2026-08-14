@@ -18,7 +18,6 @@ import PageHeader from "../../components/PageHeader";
 import BarcodeScanner from "../../components/BarcodeScanner";
 import Pagination, { usePagination } from "../../components/Pagination";
 import { api } from "../../api/client";
-import { useAppStore } from "../../store/appStore";
 
 export interface SupplierOrder {
   id: string; // Tedarikçi Kodu (VENDOR)
@@ -32,7 +31,6 @@ type SearchTab = "barcode" | "supplierName";
 
 export default function ReceivingSupplierSelectPage() {
   const navigate = useNavigate();
-  const activeWh = useAppStore((s) => s.settings.warehouse) || "";
   const [activeTab, setActiveTab] = useState<SearchTab>("barcode");
 
   // Search & Selection State
@@ -57,7 +55,7 @@ export default function ReceivingSupplierSelectPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [waybillNo, setWaybillNo] = useState("");
   const [sourceWarehouse, setSourceWarehouse] = useState("");
-  const [targetWarehouse, setTargetWarehouse] = useState(activeWh);
+  const [targetWarehouse, setTargetWarehouse] = useState("");
   const [waybillError, setWaybillError] = useState("");
   const [sourceError, setSourceError] = useState("");
   const [targetError, setTargetError] = useState("");
@@ -257,6 +255,8 @@ export default function ReceivingSupplierSelectPage() {
   const handleProceedNextStep = () => {
     if (!selectedSupplier) return;
     setWaybillNo("");
+    setSourceWarehouse("");
+    setTargetWarehouse("");
     setWaybillError("");
     setSourceError("");
     setTargetError("");
@@ -476,9 +476,6 @@ export default function ReceivingSupplierSelectPage() {
         <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-line bg-surface p-6 text-center text-subtle shadow-sm">
           <Loader2 className="mb-3 h-8 w-8 animate-spin text-emerald-600 dark:text-emerald-400" />
           <p className="text-xs font-bold text-fg">CANIAS Veritabanından Sorgulanıyor...</p>
-          <p className="mt-1 text-[11px] text-subtle">
-            Lütfen bekleyiniz, MZYGetOpenOrder servisi çağrılıyor.
-          </p>
         </div>
       ) : !hasSearched ? (
         <div className="flex flex-col items-center justify-center py-12 rounded-2xl border border-dashed border-line bg-surface p-5 text-center text-subtle">
