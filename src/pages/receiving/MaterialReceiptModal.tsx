@@ -436,7 +436,7 @@ export default function MaterialReceiptModal({
               <div>
                 <strong>Ölçü ve Güvenlik Nitelikleri Eksik!</strong>
                 <p className="text-[11px] mt-0.5">
-                  Bu malzemenin sistemde en, boy, yükseklik veya ağırlık bilgileri sıfır olduğu için devam etmeden önce doldurulması zorunludur (MzySetMatSize).
+                  Bu malzemenin sistemde en, boy, yükseklik veya ağırlık bilgileri sıfır olduğu için devam etmeden önce doldurulması zorunludur.
                 </p>
               </div>
             </div>
