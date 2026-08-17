@@ -278,7 +278,7 @@ export default function ExpiryLabelPage() {
             }`}
         >
           <Package className="h-4 w-4" />
-          <span>2. Yöntem: Ürün Barkodu / Kodu ile Arama (3x1 Grid)</span>
+          <span>2. Yöntem: Ürün Barkodu / Kodu ile Arama</span>
         </button>
       </div>
 
