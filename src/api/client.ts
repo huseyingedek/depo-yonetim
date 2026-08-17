@@ -1370,9 +1370,9 @@ export const api = {
 
     const mesaj = serviceMessage(r);
     const dataObj = r.data || {};
-    const matList = (dataObj.MATLIST as Record<string, unknown>[]) || [];
-    const barcodeList = (dataObj.BARCODELIST as Record<string, unknown>[]) || [];
-    const matSize = (dataObj.MATSIZE as Record<string, unknown>[]) || (dataObj.MATSIZELIST as Record<string, unknown>[]) || {};
+    const matList = rowsOf(r, ["MATLIST", "TABLE", "MATERIALS"]);
+    const barcodeList = rowsOf(r, ["BARCODELIST", "BARCODES"]);
+    const matSizeList = rowsOf(r, ["MATSIZE", "MATSIZELIST", "SIZE"]);
     const imageList = (dataObj.MATIMAGES as Record<string, unknown>[]) || (dataObj.IMAGES as Record<string, unknown>[]) || (dataObj.PICTURELIST as Record<string, unknown>[]) || [];
     const rootImage = dataObj.IMAGE || dataObj.PICTURE || dataObj.IMAGEDATA || dataObj.RESIM || imageList[0]?.IMAGE || imageList[0]?.IMAGEDATA || imageList[0]?.DOCDATA;
 
@@ -1384,9 +1384,9 @@ export const api = {
     return {
       ok: true,
       message: mesaj,
-      matList: Array.isArray(matList) ? matList : [],
-      barcodeList: Array.isArray(barcodeList) ? barcodeList : [],
-      matSize,
+      matList,
+      barcodeList,
+      matSize: matSizeList.length > 0 ? matSizeList[0] : (dataObj.MATSIZE as Record<string, unknown> || {}),
       image: typeof rootImage === "string" ? rootImage : undefined,
     };
   },
@@ -1491,6 +1491,16 @@ export const api = {
     }>;
   }): Promise<{ ok: boolean; message: string }> {
     const c = ctx();
+    const formattedItems = (payload.items || []).map((it) => ({
+      PURORDER: String(it.orderNum || "").trim(),
+      ORDERNUM: String(it.orderNum || "").trim(),
+      ITEMNUM: Number(it.itemNum) || 1,
+      MATERIAL: String(it.material || "").trim(),
+      QUANTITY: Number(it.quantity) || 1,
+      BATCHNUM: String(it.batchNum || "").trim(),
+      EXPIRYDATE: String(it.expiryDate || "").trim(),
+    }));
+
     const r = await call(SERVICES.saveReceipt, {
       PSCOMPANY: String(payload.company || c.company || "01").trim(),
       PSPLANT: String(payload.plant || c.plant || "100").trim(),
@@ -1499,7 +1509,7 @@ export const api = {
       PSSOURCEWH: String(payload.sourceWarehouse || "").trim(),
       PSTARGETWH: String(payload.targetWarehouse || c.warehouse || "").trim(),
       PSUSER: String(payload.user || c.worker || "").trim(),
-      PSITEMS: payload.items,
+      PSITEMS: formattedItems,
     });
 
     const mesaj = serviceMessage(r);

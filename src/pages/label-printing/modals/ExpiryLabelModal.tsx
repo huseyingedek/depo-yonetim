@@ -46,13 +46,14 @@ export default function ExpiryLabelModal({ isOpen, onClose }: Props) {
 
     const mat = materialCode.trim();
     const lot = batchNum.trim();
+    const exp = expiryDate.trim();
 
     if (!mat) {
       setErrorMsg("Malzeme Kodu girilmelidir.");
       return;
     }
-    if (!lot) {
-      setErrorMsg("Parti / Lot Numarası girilmelidir.");
+    if (!lot && !exp) {
+      setErrorMsg("Lütfen Parti / Lot Numarası veya Son Kullanma Tarihi girin.");
       return;
     }
 
@@ -66,15 +67,19 @@ export default function ExpiryLabelModal({ isOpen, onClose }: Props) {
 
     try {
       // Bora: SKT / Parti / Batch etiketi basımı MZYPrintBarcode ile
+      const targetBarcode = lot || exp;
       const res = await api.printBarcode({
         company: "01",
         plant: "100",
-        barcode: lot,
+        barcode: targetBarcode,
         repeat: count,
       });
 
       if (res.ok) {
-        setSuccessMsg(res.message || `SKT/Parti etiketi (${mat} - Lot: ${lot} - ${count} kopya) yazdırma isteği CANIAS'a iletildi.`);
+        setSuccessMsg(
+          res.message ||
+            `SKT/Parti etiketi (${mat} - ${lot ? `Lot: ${lot}` : `SKT: ${exp}`} - ${count} kopya) yazdırma isteği CANIAS'a iletildi.`
+        );
       } else {
         setErrorMsg(res.message || "SKT etiketi yazdırma başarısız oldu.");
       }
@@ -148,11 +153,10 @@ export default function ExpiryLabelModal({ isOpen, onClose }: Props) {
 
           <div>
             <label className="mb-1.5 block text-xs font-semibold text-fg">
-              Parti / Lot Numarası <span className="text-red-500">*</span>
+              Parti / Lot Numarası
             </label>
             <input
               type="text"
-              required
               value={batchNum}
               onChange={(e) => setBatchNum(e.target.value)}
               placeholder="Örn: LOT-2026-08"

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { FileText, Search, Printer, Check, Loader2, RefreshCw } from "lucide-react";
 import { api } from "../../api/client";
+import { useAppStore } from "../../store/appStore";
 import type { PickOrder } from "../../types";
 import PageHeader from "../../components/PageHeader";
 import Pagination, { usePagination } from "../../components/Pagination";
 
 export default function WaybillLabelPage() {
+  const settings = useAppStore((s) => s.settings);
   const [pickOrders, setPickOrders] = useState<PickOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -80,7 +82,7 @@ export default function WaybillLabelPage() {
         const res = await api.printContainer({
           company: "01",
           plant: "100",
-          warehouse: "10",
+          warehouse: settings.warehouse || "D1",
           container: waybill.id,
           repeat: count,
         });

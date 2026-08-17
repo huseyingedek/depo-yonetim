@@ -292,7 +292,7 @@ export default function ReceivingSupplierSelectPage() {
     setTimeout(() => {
       if (selectedSupplier) {
         navigate(
-          `/receiving/${selectedSupplier.poNumber}?waybill=${encodeURIComponent(trimmedWaybill)}&sourceWH=${encodeURIComponent(trimmedSource)}&targetWH=${encodeURIComponent(trimmedTarget)}`,
+          `/receiving/${encodeURIComponent(selectedSupplier.poNumber)}?waybill=${encodeURIComponent(trimmedWaybill)}&sourceWH=${encodeURIComponent(trimmedSource)}&targetWH=${encodeURIComponent(trimmedTarget)}&vendor=${encodeURIComponent(selectedSupplier.id)}&vendorName=${encodeURIComponent(selectedSupplier.name)}`,
           {
             state: {
               waybillNo: trimmedWaybill,

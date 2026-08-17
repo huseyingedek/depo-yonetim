@@ -287,8 +287,15 @@ async function callServiceInner(serviceId, params, retry = true) {
 
   const yazanServis =
     serviceId === "MZYSavePick" ||
+    serviceId === "MZYSavePlacement" ||
     serviceId === "MZYCreateContainer" ||
-    serviceId === "MZYPrintContainer";
+    serviceId === "MZYPrintContainer" ||
+    serviceId === "MZYPrintWHSP" ||
+    serviceId === "MZYPrintMaterial" ||
+    serviceId === "MZYPrintBarcode" ||
+    serviceId === "MzySetMatSize" ||
+    serviceId === "MZYSetMatSize" ||
+    serviceId === "MZYSAVEINVPURORDER";
   const bosYanit = !String(rawResponse ?? "").trim();
   const oturumHatasi = /session/i.test(String(sysError) + String(rawResponse));
   const oturumEski = session ? Date.now() - session.at > 3000 : true;
