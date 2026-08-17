@@ -537,7 +537,6 @@ export default function MaterialReceiptModal({
               <div className="flex flex-col items-center justify-center py-8 text-center text-subtle">
                 <Loader2 className="mb-2 h-8 w-8 animate-spin text-emerald-600" />
                 <p className="text-xs font-bold text-fg">CANIAS Malzeme Bilgileri ve Açık Siparişler Getiriliyor...</p>
-                <p className="text-[11px] text-subtle mt-0.5">MZYGetMaterial & MZYGetOpenOrder sorgulanıyor</p>
               </div>
             )}
           </div>
