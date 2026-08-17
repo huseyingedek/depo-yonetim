@@ -630,6 +630,10 @@ export default function PickingDetailPage() {
                             <MapPin className="h-3.5 w-3.5 shrink-0 text-subtle" />
                             <select
                               value={secilenRaf[line.id] ?? line.suggestions[0].barcode}
+                              // onChange yalnızca DEĞER değişince tetiklenir; ilk (zaten seçili)
+                              // rafı seçince yazmıyordu. onClick ile açılışta mevcut seçili rafı
+                              // barkod alanına taşıyoruz → aynı seçim de çalışır.
+                              onClick={() => setRafPrefill(secilenRaf[line.id] ?? line.suggestions![0].barcode)}
                               onChange={(e) => {
                                 setSecilenRaf((s) => ({ ...s, [line.id]: e.target.value }));
                                 setRafPrefill(e.target.value); // barkod alanına taşı

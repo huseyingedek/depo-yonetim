@@ -35,6 +35,9 @@ export default function PutawayItemPage() {
   const [busy, setBusy] = useState(false);
   const [okutmaAdedi, setOkutmaAdedi] = useState("");
   const [partiPrefill, setPartiPrefill] = useState("");
+  // Hedef adımı: önerilen rafı seçince barkod alanına yazılsın (toplamadaki gibi).
+  const [hedefPrefill, setHedefPrefill] = useState("");
+  const [secilenHedef, setSecilenHedef] = useState<Record<string, string>>({});
   const [redMesaji, setRedMesaji] = useState<string | null>(null);
   // Tamamlanma KİLİDİ — bir kez tamamlandıysa özet ekranda kalır (tazeleme geri çevirmez).
   const [tamamGoster, setTamamGoster] = useState(false);
@@ -306,7 +309,7 @@ export default function PutawayItemPage() {
             )}
 
             {}
-            <BarcodeScanner onDetected={handleDetected} prompt={promptText} prefill={pending ? partiPrefill : undefined} />
+            <BarcodeScanner onDetected={handleDetected} prompt={promptText} prefill={pending ? partiPrefill : ready ? hedefPrefill : undefined} />
 
             {busy && <p className="mt-2 flex items-center gap-1.5 text-xs text-subtle"><Loader2 className="h-3.5 w-3.5 animate-spin" /> okunuyor…</p>}
           </div>
@@ -358,7 +361,15 @@ export default function PutawayItemPage() {
                         {line.weight !== undefined && <span className="font-medium text-muted">· Ağırlık: {line.weight}</span>}
                         {line.volume !== undefined && <span className="font-medium text-muted">· Hacim: {line.volume}</span>}
                         {line.lotTracked && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700">Parti takipli</span>}
-                        {line.product.barcode && <span className="rounded-lg bg-elevated px-2 py-0.5 font-mono text-[11px] font-semibold text-muted">{line.product.barcode}</span>}
+                        {line.product.barcode && (
+                          <span
+                            onDoubleClick={() => handleDetected(line.product.barcode)}
+                            title="Çift tıkla → okut"
+                            className="cursor-pointer select-none rounded-lg bg-elevated px-2 py-0.5 font-mono text-[13px] font-semibold text-muted transition hover:bg-brand-100 hover:text-brand-700"
+                          >
+                            {line.product.barcode}
+                          </span>
+                        )}
                       </div>
 
                       {line.suggestions?.length ? (
@@ -367,7 +378,14 @@ export default function PutawayItemPage() {
                             <MapPin className="h-3.5 w-3.5" /> Önerilen raf ({line.suggestions.length}):
                           </span>
                           <select
-                            defaultValue={line.suggestions[0].barcode}
+                            value={secilenHedef[line.id] ?? line.suggestions[0].barcode}
+                            // onChange yalnızca değer değişince tetiklenir; onClick ile
+                            // ilk (zaten seçili) rafı seçmek de barkod alanına yazsın.
+                            onClick={() => setHedefPrefill(secilenHedef[line.id] ?? line.suggestions![0].barcode)}
+                            onChange={(e) => {
+                              setSecilenHedef((s) => ({ ...s, [line.id]: e.target.value }));
+                              setHedefPrefill(e.target.value);
+                            }}
                             className="h-7 w-40 max-w-[45%] shrink-0 rounded-lg border border-brand-200 bg-brand-50 px-2 font-mono text-[11px] font-semibold text-brand-700 outline-none focus:border-brand-500"
                           >
                             {line.suggestions.map((s) => (
