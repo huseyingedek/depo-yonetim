@@ -29,6 +29,48 @@ export interface SupplierOrder {
 
 type SearchTab = "barcode" | "supplierName";
 
+// Türkçe karakter duyarsız arama normalizasyonu (İ/i, I/ı, Ş/ş, vb. uyumlu)
+function trNormalize(str: string): string {
+  return (str || '')
+    .toLocaleLowerCase('tr-TR')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/ı/g, 'i')
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ş/g, 's')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c')
+    .trim();
+}
+
+// Siparişleri Tedarikçiye göre gruplama yardımcısı
+const groupOrdersToSuppliers = (orders: Record<string, unknown>[], barcodeFilter = ""): SupplierOrder[] => {
+  const map = new Map<string, SupplierOrder>();
+  orders.forEach((row, idx) => {
+    const vendorCode = String(row.VENDOR || row.PSVENDOR || row.SUPPLIERID || `TED-${idx + 1}`).trim();
+    const vendorName = String(row.NAME1 || row.SUPPLIERNAME || row.VENDORNAME || "Tedarikçi").trim();
+    const poNum = String(row.ORDERNUM || row.PURORDER || row.POORDER || row.PO_NUMBER || "").trim();
+
+    if (!map.has(vendorCode)) {
+      map.set(vendorCode, {
+        id: vendorCode,
+        name: vendorName,
+        poNumber: poNum || "Açık Sipariş",
+        orderCount: 1,
+        barcode: barcodeFilter,
+      });
+    } else {
+      const existing = map.get(vendorCode)!;
+      existing.orderCount += 1;
+      if ((!existing.poNumber || existing.poNumber === "Açık Sipariş") && poNum) {
+        existing.poNumber = poNum;
+      }
+    }
+  });
+  return Array.from(map.values());
+};
+
 export default function ReceivingSupplierSelectPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<SearchTab>("barcode");
@@ -91,32 +133,24 @@ export default function ReceivingSupplierSelectPage() {
     setSelectedSupplier(null);
 
     try {
-      const res = await api.getOpenOrders(params);
-      if (res.ok && res.orders && res.orders.length > 0) {
-        // Process PURORDERLIST table returned from CANIAS
-        const map = new Map<string, SupplierOrder>();
-        res.orders.forEach((row, idx) => {
-          const vendorCode = String(row.VENDOR || row.PSVENDOR || row.SUPPLIERID || `TED-${idx + 1}`).trim();
-          const vendorName = String(row.NAME1 || row.SUPPLIERNAME || row.VENDORNAME || "Tedarikçi").trim();
-          const poNum = String(row.PURORDER || row.POORDER || row.PO_NUMBER || "").trim();
+      const res = await api.getOpenOrders({ barcode: params.barcode });
+      let matchedOrders = res.orders || [];
 
-          if (!map.has(vendorCode)) {
-            map.set(vendorCode, {
-              id: vendorCode,
-              name: vendorName,
-              poNumber: poNum || "Açık Sipariş",
-              orderCount: 1,
-              barcode: params.barcode || "",
-            });
-          } else {
-            const existing = map.get(vendorCode)!;
-            existing.orderCount += 1;
-          }
+      // If specific barcode returned 0 rows directly, check against all open orders
+      if (matchedOrders.length === 0 && params.barcode) {
+        const allRes = await api.getOpenOrders();
+        const bCode = trNormalize(params.barcode);
+        matchedOrders = (allRes.orders || []).filter((r) => {
+          const ordNum = trNormalize(String(r.ORDERNUM || r.PURORDER || ""));
+          const vCode = trNormalize(String(r.VENDOR || ""));
+          const mat = trNormalize(String(r.MATERIAL || ""));
+          const ean = trNormalize(String(r.BARCODE || r.EAN || ""));
+          return ordNum === bCode || vCode === bCode || mat === bCode || ean === bCode;
         });
-        setSuppliers(Array.from(map.values()));
-      } else {
-        setSuppliers([]);
       }
+
+      const supplierList = groupOrdersToSuppliers(matchedOrders, params.barcode || "");
+      setSuppliers(supplierList);
     } catch (err: any) {
       console.error("CANIAS MZYGetOpenOrder error:", err);
       setApiError(
@@ -136,92 +170,36 @@ export default function ReceivingSupplierSelectPage() {
     fetchCaniasOpenOrders({ barcode: trimmed });
   };
 
+  // Fetch Suppliers / Open Orders by Name from CANIAS
   const fetchCaniasSuppliersByName = async (nameQuery: string) => {
+    const query = nameQuery.trim();
+    if (!query) {
+      setSuppliers([]);
+      setHasSearched(false);
+      return;
+    }
+
     setIsLoading(true);
     setApiError(null);
     setHasSearched(true);
     setSelectedSupplier(null);
 
-    const query = nameQuery.trim();
-    if (!query) return;
-
-    const trLower = (s: string) =>
-      s.replace(/İ/g, "i").replace(/I/g, "ı").replace(/Ş/g, "ş").replace(/Ğ/g, "ğ").replace(/Ü/g, "ü").replace(/Ö/g, "ö").replace(/Ç/g, "ç").toLowerCase();
-
-    const isCode = /^TED-?\d+$/i.test(query) || /^\d+$/.test(query);
-
     try {
-      // 1) CANIAS faal açık sipariş servisi MZYGetOpenOrder ile tedarikçi araması
-      const res = await api.getOpenOrders({
-        vendorName: isCode ? undefined : query,
-        vendor: isCode ? query : undefined,
+      const res = await api.getOpenOrders();
+      const allOrders = res.orders || [];
+      const normQ = trNormalize(query);
+
+      const matchedOrders = allOrders.filter((r) => {
+        const name = trNormalize(String(r.NAME1 || r.SUPPLIERNAME || r.VENDORNAME || ""));
+        const code = trNormalize(String(r.VENDOR || ""));
+        const po = trNormalize(String(r.ORDERNUM || r.PURORDER || ""));
+        return name.includes(normQ) || code.includes(normQ) || po.includes(normQ);
       });
 
-      if (res.ok && res.orders && res.orders.length > 0) {
-        const map = new Map<string, SupplierOrder>();
-        res.orders.forEach((row, idx) => {
-          const vendorCode = String(row.VENDOR || row.PSVENDOR || row.SUPPLIERID || `TED-${idx + 1}`).trim();
-          const vendorName = String(row.NAME1 || row.SUPPLIERNAME || row.VENDORNAME || "Tedarikçi").trim();
-          const poNum = String(row.PURORDER || row.POORDER || row.PO_NUMBER || "").trim();
-
-          if (!map.has(vendorCode)) {
-            map.set(vendorCode, {
-              id: vendorCode,
-              name: vendorName,
-              poNumber: poNum || "Açık Sipariş",
-              orderCount: 1,
-              barcode: "",
-            });
-          } else {
-            const existing = map.get(vendorCode)!;
-            existing.orderCount += 1;
-          }
-        });
-
-        const normQuery = trLower(query);
-        const filtered = Array.from(map.values()).filter((s) => {
-          const normName = trLower(s.name);
-          const normId = trLower(s.id);
-          return normName.includes(normQuery) || normId.includes(normQuery);
-        });
-
-        setSuppliers(filtered);
-        return;
-      }
-
-      // 2) Eğer MZYGetOpenOrder sonuç vermezse yedek olarak MzyGetCustomer denenir
-      const custRes = await api.getCustomers({ name: query, customerType: 1 }).catch(() => null);
-      if (custRes && custRes.ok && custRes.customers && custRes.customers.length > 0) {
-        const map = new Map<string, SupplierOrder>();
-        custRes.customers.forEach((row, idx) => {
-          const vendorCode = String(row.CUSTOMER || row.VENDOR || row.PSCUSTOMER || row.ID || `TED-${idx + 1}`).trim();
-          const vendorName = String(row.NAME1 || row.CUSNAME1 || row.VENDORNAME || row.NAME || "Tedarikçi").trim();
-          const poNum = String(row.PURORDER || row.POORDER || row.PO_NUMBER || "").trim();
-
-          if (!map.has(vendorCode)) {
-            map.set(vendorCode, {
-              id: vendorCode,
-              name: vendorName,
-              poNumber: poNum || "Aktif Tedarikçi",
-              orderCount: 1,
-              barcode: "",
-            });
-          }
-        });
-
-        const normQuery = trLower(query);
-        const filtered = Array.from(map.values()).filter((s) => {
-          const normName = trLower(s.name);
-          const normId = trLower(s.id);
-          return normName.includes(normQuery) || normId.includes(normQuery);
-        });
-
-        setSuppliers(filtered);
-      } else {
-        setSuppliers([]);
-      }
+      const supplierList = groupOrdersToSuppliers(matchedOrders);
+      setSuppliers(supplierList);
     } catch (err: any) {
-      console.error("CANIAS tedarikçi arama hatası:", err);
+      console.error("CANIAS OpenOrders supplier search error:", err);
       setApiError(
         err?.message || "CANIAS sunucusuna bağlanılamadı. Lütfen ağ bağlantınızı ve sunucu adresini kontrol edin."
       );
@@ -252,8 +230,29 @@ export default function ReceivingSupplierSelectPage() {
   };
 
   // Proceed Handler: Opens İrsaliye & Depo Popup Modal
-  const handleProceedNextStep = () => {
+  const handleProceedNextStep = async () => {
     if (!selectedSupplier) return;
+    let targetPo = selectedSupplier.poNumber;
+    if (!targetPo || targetPo === "Aktif Tedarikçi" || targetPo === "Açık Sipariş") {
+      setIsLoading(true);
+      try {
+        const res = await api.getOpenOrders({ vendor: selectedSupplier.id });
+        if (res.ok && res.orders && res.orders.length > 0) {
+          const firstOrder = res.orders[0];
+          const foundPo = String(firstOrder.PURORDER || firstOrder.POORDER || firstOrder.PO_NUMBER || "").trim();
+          if (foundPo) {
+            targetPo = foundPo;
+          }
+        }
+      } catch (err) {
+        console.error("Açık sipariş kontrolü hatası:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    if (targetPo && targetPo !== "Aktif Tedarikçi" && targetPo !== "Açık Sipariş") {
+      setSelectedSupplier((prev) => prev ? { ...prev, poNumber: targetPo } : prev);
+    }
     setWaybillNo("");
     setSourceWarehouse("");
     setTargetWarehouse("");

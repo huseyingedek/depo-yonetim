@@ -68,6 +68,7 @@ const ALLOWED = new Set([
   "GetCompany",
   "GetPlant",
   "GetWarehouse",
+  "GetStockPlace",
   "MZYPrintContainer",
   "MZYPrintWHSP",
   "MZYPrintMaterial",
@@ -76,7 +77,9 @@ const ALLOWED = new Set([
   // Mal Kabul Servisleri
   "MZYGetOpenOrder",
   "MZYGetMaterial",
+  "MZYSetMatSize",
   "MzySetMatSize",
+  "MZYGetCustomer",
   "MzyGetCustomer",
   "MZYSAVEINVPURORDER",
 ]);
@@ -143,55 +146,75 @@ async function getClient() {
 }
 
 let session = null;
+let loginPromise = null;
 const SESSION_TTL = 20 * 60 * 1000; // 20 dk
 
-async function login() {
+async function logout(sid) {
+  if (!sid) return;
   try {
     const client = await getClient();
-
     if (V1) {
-      const [res] = await client.loginAsync({
-        p_strClient: CANIAS_CLIENT,
-        p_strLanguage: CANIAS_LANGUAGE,
-        p_strDBName: CANIAS_DBNAME,
-        p_strDBServer: CANIAS_DBSERVER,
-        p_strAppServer: CANIAS_APPSERVER,
-        p_strUserName: WMS_USER,
-        p_strPassword: WMS_PASSWORD,
-      });
-      const sessionId = val(res?.loginReturn ?? res);
-      if (!sessionId || typeof sessionId !== "string" || /error|fail|hata/i.test(sessionId)) {
-        throw new Error("CANIAS login yanıtı geçersiz: " + (sessionId || "bilinmeyen hata"));
-      }
-      session = { sessionId, securityKey: "", at: Date.now() };
+      await client.logoutAsync({ p_strSessionId: sid });
     } else {
-      const [res] = await client.loginAsync({
-        Client: CANIAS_CLIENT,
-        Language: CANIAS_LANGUAGE,
-        DBServer: CANIAS_DBSERVER,
-        DBName: CANIAS_DBNAME,
-        ApplicationServer: CANIAS_APPSERVER,
-        Username: WMS_USER,
-        Password: WMS_PASSWORD,
-        Encrypted: false,
-        Compression: false,
-        LCheck: "",
-        VKey: "",
-      });
-      const r = val(res?.loginReturn ?? res) ?? {};
-      if (r.Success !== true || typeof r.SessionId !== "string" || !r.SessionId) {
-        throw new Error("CANIAS login yanıtı geçersiz: " + (r.ErrorMessage || "bilinmeyen hata"));
-      }
-      session = { sessionId: r.SessionId, securityKey: r.SecurityKey || "", at: Date.now() };
+      await client.logoutAsync({ SessionId: sid });
     }
-
-    console.log(`✓ CANIAS oturumu açıldı (${V1 ? "v1" : "v2"}):`, session.sessionId);
-    return session;
+    console.log("✓ CANIAS oturumu kapatıldı (logout):", sid);
   } catch (err) {
-    clientPromise = null; // Stale client reset
-    session = null;
-    throw err;
+    console.warn("CANIAS logout uyarısı (ihmal edilebilir):", err?.message || err);
   }
+}
+
+async function login() {
+  if (loginPromise) return loginPromise;
+
+  loginPromise = (async () => {
+    try {
+      const client = await getClient();
+
+      if (V1) {
+        const [res] = await client.loginAsync({
+          p_strClient: CANIAS_CLIENT,
+          p_strLanguage: CANIAS_LANGUAGE,
+          p_strDBName: CANIAS_DBNAME,
+          p_strDBServer: CANIAS_DBSERVER,
+          p_strAppServer: CANIAS_APPSERVER,
+          p_strUserName: WMS_USER,
+          p_strPassword: WMS_PASSWORD,
+        });
+        const sessionId = val(res?.loginReturn ?? res);
+        if (!sessionId || typeof sessionId !== "string" || /error|fail|hata/i.test(sessionId)) {
+          throw new Error("CANIAS login başarısız: " + (sessionId || "bilinmeyen hata"));
+        }
+        session = { sessionId, securityKey: "", at: Date.now() };
+      } else {
+        const [res] = await client.loginAsync({
+          Client: CANIAS_CLIENT,
+          Language: CANIAS_LANGUAGE,
+          DBServer: CANIAS_DBSERVER,
+          DBName: CANIAS_DBNAME,
+          ApplicationServer: CANIAS_APPSERVER,
+          Username: WMS_USER,
+          Password: WMS_PASSWORD,
+          Encrypted: false,
+          Compression: false,
+          LCheck: "",
+          VKey: "",
+        });
+        const r = val(res?.loginReturn ?? res) ?? {};
+        if (r.Success !== true || typeof r.SessionId !== "string" || !r.SessionId) {
+          throw new Error("CANIAS login başarısız: " + (r.ErrorMessage || "bilinmeyen hata"));
+        }
+        session = { sessionId: r.SessionId, securityKey: r.SecurityKey || "", at: Date.now() };
+      }
+
+      console.log(`✓ CANIAS oturumu açıldı (${V1 ? "v1" : "v2"}):`, session.sessionId);
+      return session;
+    } finally {
+      loginPromise = null;
+    }
+  })();
+
+  return loginPromise;
 }
 
 async function ensureSession() {
@@ -271,9 +294,11 @@ async function callServiceInner(serviceId, params, retry = true) {
   const oturumEski = session ? Date.now() - session.at > 3000 : true;
   if (retry && (oturumHatasi || (bosYanit && !yazanServis && oturumEski))) {
     console.warn(`[${serviceId}] boş/ölü oturum — SOAP client + session yenilenip tekrar denenecek`);
-
+    const oldSid = session?.sessionId;
     session = null;
+    loginPromise = null;
     clientPromise = null;
+    if (oldSid) logout(oldSid).catch(() => {});
     return callServiceInner(serviceId, params, false);
   }
 
@@ -331,8 +356,16 @@ app.get("/services", async (_req, res) => {
   }
 });
 
+const SERVICE_ALIASES = {
+  MzyGetCustomer: "MZYGetCustomer",
+  MzySetMatSize: "MZYSetMatSize",
+};
+
 app.post("/api/mzy/:service", async (req, res) => {
-  const { service } = req.params;
+  let { service } = req.params;
+  if (SERVICE_ALIASES[service]) {
+    service = SERVICE_ALIASES[service];
+  }
   if (!ALLOWED.has(service)) {
     return res.status(404).json({ error: `Bilinmeyen servis: ${service}` });
   }
@@ -382,7 +415,7 @@ app.use((req, res, next) => {
   res.sendFile(join(DIST_DIR, "index.html"));
 });
 
-app.listen(PORT, () => {
+const serverInstance = app.listen(PORT, () => {
   console.log(`WMS proxy : http://localhost:${PORT}`);
   console.log(`Sürüm     : ${V1 ? "v1 (args virgülle)" : "v2 (Parameters XML)"}`);
   console.log(`CANIAS    : ${CANIAS_WSDL_URL || "(tanımsız)"}`);
@@ -395,3 +428,22 @@ app.listen(PORT, () => {
     console.warn("⚠  CANIAS_APPSERVER port içermiyor — 'ip:27499' olmalı");
   }
 });
+
+// Graceful Shutdown
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`\n[${signal}] Sunucu kapatılıyor, CANIAS oturumu sonlandırılıyor...`);
+  if (session?.sessionId) {
+    await logout(session.sessionId);
+    session = null;
+  }
+  serverInstance.close(() => {
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(0), 3000).unref();
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));

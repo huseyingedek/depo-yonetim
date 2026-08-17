@@ -13,6 +13,7 @@ import type {
   ProductRef,
   User,
   Receipt,
+  ReceiptLine,
   PutawayItem,
   TransferTask,
   CountTask,
@@ -886,10 +887,83 @@ export const api = {
   },
 
   async getReceipts(): Promise<Receipt[]> {
-    return [];
+    const res = await api.getOpenOrders();
+    if (!res.ok || !res.orders) return [];
+
+    const map = new Map<string, Receipt>();
+    res.orders.forEach((o, idx) => {
+      const poNumber = String(o.ORDERNUM || o.PURORDER || `PO-${idx + 1}`).trim();
+      const supplierName = String(o.NAME1 || o.SUPPLIERNAME || o.VENDORNAME || "Tedarikçi").trim();
+      if (!map.has(poNumber)) {
+        map.set(poNumber, {
+          id: poNumber,
+          supplier: supplierName,
+          reference: poNumber,
+          createdAt: String(o.ORDERDATE || new Date().toLocaleDateString("tr-TR")),
+          lines: [],
+        });
+      }
+      const r = map.get(poNumber)!;
+      const matCode = String(o.MATERIAL || `MAT-${idx + 1}`).trim();
+      const matName = String(o.STEXT || o.MTEXT || o.NAME1 || matCode).trim();
+      r.lines.push({
+        id: String(o.ITEMNUM || r.lines.length + 1),
+        product: {
+          code: matCode,
+          name: matName,
+          barcode: String(o.BARCODE || o.EAN || matCode).trim(),
+          unit: String(o.PURUNIT || "Adet"),
+        },
+        expectedQty: Number(o.REMQUANTITY || o.QUANTITY || 1) || 1,
+        receivedQty: 0,
+        tracksLot: false,
+      });
+    });
+
+    return Array.from(map.values());
   },
-  async getReceipt(_id: string): Promise<Receipt | undefined> {
-    return undefined;
+
+  async getReceipt(id: string): Promise<Receipt | undefined> {
+    const res = await api.getOpenOrders({ vendor: id });
+    let orders = res.orders;
+    if (!orders || orders.length === 0) {
+      const allRes = await api.getOpenOrders();
+      orders = allRes.orders.filter(
+        (o) => String(o.ORDERNUM || o.PURORDER || "").trim() === id || String(o.VENDOR || "").trim() === id
+      );
+    }
+    if (!orders || orders.length === 0) return undefined;
+
+    const first = orders[0];
+    const supplierName = String(first.NAME1 || first.SUPPLIERNAME || first.VENDORNAME || "Tedarikçi").trim();
+    const poNumber = String(first.ORDERNUM || first.PURORDER || id).trim();
+
+    const lines: ReceiptLine[] = orders.map((o, idx) => {
+      const matCode = String(o.MATERIAL || `MAT-${idx + 1}`).trim();
+      const matName = String(o.STEXT || o.MTEXT || o.NAME1 || matCode).trim();
+      const barcode = String(o.BARCODE || o.EAN || matCode).trim();
+      const qty = Number(o.REMQUANTITY || o.QUANTITY || o.NET || 1) || 1;
+      return {
+        id: String(o.ITEMNUM || idx + 1),
+        product: {
+          code: matCode,
+          name: matName,
+          barcode: barcode,
+          unit: String(o.PURUNIT || "Adet"),
+        },
+        expectedQty: qty > 0 ? qty : 1,
+        receivedQty: 0,
+        tracksLot: false,
+      };
+    });
+
+    return {
+      id: poNumber,
+      supplier: supplierName,
+      reference: poNumber,
+      createdAt: String(first.ORDERDATE || new Date().toLocaleDateString("tr-TR")),
+      lines,
+    };
   },
   async completeReceipt(receipt: Receipt): Promise<{ ok: true; caniasRef: string }> {
     return { ok: true, caniasRef: receipt.reference };
@@ -1244,7 +1318,7 @@ export const api = {
     vendorName?: string;
     company?: string;
     plant?: string;
-  }): Promise<{ ok: boolean; message: string; orders: Record<string, unknown>[] }> {
+  } = {}): Promise<{ ok: boolean; message: string; orders: Record<string, unknown>[] }> {
     const c = ctx();
     const params: Record<string, unknown> = {
       PSCOMPANY: payload.company || c.company || "01",
@@ -1265,7 +1339,7 @@ export const api = {
     const r = await call(SERVICES.getOpenOrder, params);
 
     const mesaj = serviceMessage(r);
-    const tableRows = rowsOf(r, ["PURORDERLIST", "TABLE", "ORDERS", "PURORDER"]);
+    const tableRows = rowsOf(r, ["PURORDERLIST", "TABLE", "ORDERS", "PURORDER", "ROW"]);
 
     return {
       ok: true,
