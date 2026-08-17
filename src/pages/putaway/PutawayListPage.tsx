@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Search, ChevronRight, Warehouse, MapPin, Building2 } from "lucide-react";
+import { Search, ChevronRight, Warehouse, MapPin, Building2, Camera, X, ScanLine } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
+import CameraScanOverlay from "../../components/CameraScanOverlay";
 import Pagination, { usePagination } from "../../components/Pagination";
 import { api } from "../../api/client";
 import type { PickOrder } from "../../types";
@@ -14,17 +15,52 @@ export default function PutawayListPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // Ürün barkoduyla emir filtresi (Bora, 14.08: listingPlacement PSBARCODE).
+  const [kamera, setKamera] = useState(false);
+  const [barkodFiltre, setBarkodFiltre] = useState("");
+  const [taramaHatasi, setTaramaHatasi] = useState<string | null>(null);
+
   const istendi = useRef(false);
+
+  const yukle = (barcode = "") => {
+    setLoading(true);
+    setError(null);
+    api
+      .getPutawayOrders(barcode)
+      .then((list) => {
+        setOrders(list);
+        if (barcode && list.length === 0) {
+          setTaramaHatasi(`${barcode} — bu ürünü içeren açık yerleştirme emri yok`);
+        }
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
     if (istendi.current) return;
     istendi.current = true;
-    api
-      .getPutawayOrders()
-      .then(setOrders)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false));
+    yukle();
   }, []);
+
+  // Ürün okutunca → sunucudan o ürünü içeren emirleri getir.
+  const barkodOkundu = (code: string) => {
+    const kod = code.trim();
+    if (!kod) return;
+    setKamera(false);
+    setTaramaHatasi(null);
+    setQ("");
+    setBarkodFiltre(kod);
+    yukle(kod);
+  };
+
+  const barkodTemizle = () => {
+    setBarkodFiltre("");
+    setTaramaHatasi(null);
+    setQ("");
+    yukle();
+  };
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -33,9 +69,34 @@ export default function PutawayListPage() {
   }, [orders, q]);
 
   const pg = usePagination(filtered, 9);
-  useEffect(() => pg.reset(), [q]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => pg.reset(), [q, barkodFiltre]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const emreGir = (o: PickOrder) => navigate(`/putaway/${o.id}?type=${encodeURIComponent(o.orderType ?? "")}`);
+
+  // Arama kutusu: yazarken metin filtresi; Enter'da (el tarayıcı) ürün barkodu filtresi.
+  const aramaField = (mobil = false) => (
+    <div className={`relative ${mobil ? "" : "w-72"}`}>
+      <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && q.trim()) barkodOkundu(q);
+        }}
+        placeholder="Ürün okut / emir ara…"
+        className="field-input w-full pl-11 pr-12"
+      />
+      <button
+        type="button"
+        onClick={() => setKamera(true)}
+        aria-label="Ürün okut"
+        title="Ürünü okutup emri bul"
+        className={`absolute right-2 top-1/2 flex ${mobil ? "h-9 w-9" : "h-8 w-8"} -translate-y-1/2 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg`}
+      >
+        <Camera className="h-5 w-5" />
+      </button>
+    </div>
+  );
 
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8">
@@ -43,17 +104,37 @@ export default function PutawayListPage() {
         title={t("putaway.title")}
         subtitle={t("putaway.waiting")}
         backTo="/home"
-        right={
-          <div className="relative hidden sm:block">
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("putaway.search")} className="field-input w-72 pl-11" />
-          </div>
-        }
+        right={<div className="hidden sm:block">{aramaField(false)}</div>}
       />
-      <div className="relative mb-5 sm:hidden">
-        <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("putaway.search")} className="field-input pl-11" />
-      </div>
+      <div className="mb-5 sm:hidden">{aramaField(true)}</div>
+
+      {/* Aktif ürün filtresi rozeti */}
+      {barkodFiltre && (
+        <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-brand-500/30 bg-brand-500/10 p-3 text-sm font-medium text-brand-700">
+          <span className="inline-flex min-w-0 items-center gap-2">
+            <ScanLine className="h-4 w-4 shrink-0" />
+            <span className="truncate">Ürün filtresi: <span className="font-mono font-bold">{barkodFiltre}</span> · {filtered.length} emir</span>
+          </span>
+          <button type="button" onClick={barkodTemizle} className="inline-flex shrink-0 items-center gap-1 font-semibold hover:underline">
+            <X className="h-4 w-4" /> Temizle
+          </button>
+        </div>
+      )}
+
+      {kamera && (
+        <CameraScanOverlay
+          onDetected={barkodOkundu}
+          onClose={() => setKamera(false)}
+          prompt="Ürünü okutun — ait olduğu emir listelensin"
+        />
+      )}
+
+      {taramaHatasi && (
+        <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-medium text-amber-600">
+          <span>{taramaHatasi}</span>
+          <button type="button" onClick={barkodTemizle} className="shrink-0 underline">{t("common.close")}</button>
+        </div>
+      )}
 
       {error && (
         <div className="mb-5 whitespace-pre-line rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm font-medium text-rose-500">{error}</div>
@@ -66,7 +147,7 @@ export default function PutawayListPage() {
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-subtle">
           <Warehouse className="mb-2 h-10 w-10" />
-          <p className="text-sm">{t("putaway.allPlaced")}</p>
+          <p className="text-sm">{barkodFiltre ? "Bu ürün için emir yok" : t("putaway.allPlaced")}</p>
         </div>
       ) : (
         <>

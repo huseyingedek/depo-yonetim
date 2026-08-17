@@ -148,7 +148,7 @@ function call(service: string, params: Record<string, unknown>): Promise<MzyResu
 
 function baglantiHatasi(detay = ""): WmsError {
   if (detay) console.warn("[bağlantı] istek cevapsız:", detay);
-  return new WmsError("Sunucuya ulaşılamadı / servis yanıt vermedi — lütfen tekrar deneyin");
+  return new WmsError("İstek cevaplanmadı, bağlantınızı kontrol ediniz");
 }
 
 const ISTEK_TIMEOUT_MS = 30000;
@@ -903,7 +903,9 @@ export const api = {
     return undefined;
   },
 
-  async getPutawayOrders(): Promise<PickOrder[]> {
+  // barcode verilirse (Bora, 14.08: listingPlacement'a PSBARCODE eklendi) sadece o
+  // ürünü içeren yerleştirme emirleri döner — depocu önündeki ürünü okutup emri bulur.
+  async getPutawayOrders(barcode = ""): Promise<PickOrder[]> {
     const c = ctx();
     const r = await call(SERVICES.listingPlacement, {
       PSCOMPANY: c.company,
@@ -916,6 +918,7 @@ export const api = {
       PIISDELETE: 0,
       PIISSTARTED: 1,
       PIORDER: 0,
+      PSBARCODE: barcode,
     });
     return rowsOf(r, ["TBLPOLIST"])
       .map((row) => ({
