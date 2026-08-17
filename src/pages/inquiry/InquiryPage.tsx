@@ -73,14 +73,11 @@ export default function InquiryPage() {
     setPrintingIndex(index);
     setToastMsg(null);
     try {
-      const isContainer = /^[A-Za-z]{2,}\d{6,}$/.test(b.stockPlace.trim());
       const res = await api.printWHSP({
         company: "01",
         plant: "100",
         warehouse: b.warehouse,
         stockPlace: b.stockPlace,
-        container: b.batchNum && b.batchNum !== "*" ? b.batchNum : "",
-        isContainer: isContainer ? 1 : 0,
         repeat: 1,
       });
 

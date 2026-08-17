@@ -25,9 +25,17 @@ export const SERVICES = {
   getCompany: "GetCompany", // parametresiz
   getPlant: "GetPlant", // PSCOMPANY
   getWarehouse: "GetWarehouse", // PSCOMPANY, PSPLANT
+  getStockPlace: "GetStockPlace", // PSCOMPANY, PSPLANT, PSWAREHOUSE
 
   printContainer: "MZYPrintContainer", // Konteyner/paket etiket yazdırma
   printWHSP: "MZYPrintWHSP", // Raf / Konteyner / Parti etiket yazdırma
   printMaterial: "MZYPrintMaterial", // Ürün barkodu etiket yazdırma
   printBarcode: "MZYPrintBarcode", // SKT / Parti barkod etiket yazdırma
+
+  // Mal Kabul Servisleri
+  getOpenOrder: "MZYGetOpenOrder", // Açık satın alma siparişleri listesi
+  getMaterialDetail: "MZYGetMaterial", // Malzeme detay, resim, barkod ve ölçü listesi
+  setMatSize: "MzySetMatSize", // Malzeme boyut, ağırlık ve güvenlik nitelikleri kaydı
+  getCustomer: "MzyGetCustomer", // Tedarikçi / Müşteri arama servisi
+  saveReceipt: "MZYSAVEINVPURORDER", // Mal kabul tamamlama ve saklama servisi
 } as const;

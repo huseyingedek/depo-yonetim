@@ -862,10 +862,26 @@ export const api = {
 
   async getWarehouses(): Promise<{ code: string; name: string }[]> {
     const c = ctx();
-    const r = await call(SERVICES.getWarehouse, { PSCOMPANY: c.company, PSPLANT: c.plant });
-    return rowsOf(r, ["TBLWAREHOUSE"]).map((x) => ({
-      code: pick(x, ["WAREHOUSE"]),
-      name: pick(x, ["NAME", "STEXT"]) || pick(x, ["WAREHOUSE"]),
+    const r = await call(SERVICES.getWarehouse, {
+      PSCOMPANY: String(c.company || "01").trim(),
+      PSPLANT: String(c.plant || "100").trim(),
+    });
+    return rowsOf(r, ["TBLWAREHOUSE", "WAREHOUSELIST", "TABLE", "WAREHOUSE"]).map((x) => ({
+      code: pick(x, ["WAREHOUSE", "CODE", "ID"]),
+      name: pick(x, ["NAME", "STEXT", "DESCRIPTION"]) || pick(x, ["WAREHOUSE", "CODE"]),
+    }));
+  },
+
+  async getStockPlaces(warehouse = ""): Promise<{ code: string; name: string }[]> {
+    const c = ctx();
+    const r = await call(SERVICES.getStockPlace, {
+      PSCOMPANY: c.company,
+      PSPLANT: c.plant,
+      PSWAREHOUSE: warehouse,
+    });
+    return rowsOf(r, ["TBLSTOCKPLACE", "TBLSP"]).map((x) => ({
+      code: pick(x, ["STOCKPLACE", "SP"]),
+      name: pick(x, ["NAME", "STEXT", "DESCRIPTION"]) || pick(x, ["STOCKPLACE", "SP"]),
     }));
   },
 
@@ -1074,63 +1090,8 @@ export const api = {
     return { ok: true, message: "" };
   },
 
-  // Bora, 05.08: Raf / Konteyner / Parti Etiketi Yazdırma (MZYPrintWHSP)
-  // PARAMETRELER:
-  //   PSCOMPANY: "01", PSPLANT: "100", PSWAREHOUSE: depo, PSSTOCKPLACE: raf
-  //   PSCONTAINER: parti/batchnum veya konteyner kodu
-  //   PIISCONTAINER: 1 (konteyner ise) veya 0
-  //   PIREPEAT: tekrar sayısı
-  //   PSUSER: kullanıcı
-  async printWHSP(payload: {
-    company?: string;
-    plant?: string;
-    warehouse?: string;
-    stockPlace?: string;
-    container?: string;
-    isContainer?: boolean | number;
-    repeat?: number;
-    user?: string;
-  }): Promise<{ ok: boolean; message: string }> {
-    const c = ctx();
-    const repeatNum = Math.min(99, Math.max(1, Number(payload.repeat) || 1));
-    if (repeatNum < 1 || repeatNum > 99) {
-      throw new WmsError("Kopya sayısı 1 ile 99 arasında olmalıdır");
-    }
-
-    try {
-      const r = await call(SERVICES.printWHSP, {
-        PSCOMPANY: payload.company || c.company || "01",
-        PSPLANT: payload.plant || c.plant || "100",
-        PSWAREHOUSE: payload.warehouse || "",
-        PSSTOCKPLACE: payload.stockPlace || "",
-        PSCONTAINER: payload.container || "",
-        PIISCONTAINER: payload.isContainer ? 1 : 0,
-        PIREPEAT: repeatNum,
-        PSUSER: payload.user || c.worker,
-      });
-
-      const mesaj = serviceMessage(r);
-      if (mesaj && /error|fail|hata/i.test(mesaj)) {
-        return { ok: false, message: mesaj };
-      }
-
-      return { ok: true, message: mesaj || "Etiket yazdırma isteği CANIAS sunucusuna iletildi." };
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : "";
-      if (/bilinmeyen servis/i.test(errMsg) || /not found/i.test(errMsg)) {
-        return this.printContainer({
-          company: payload.company,
-          plant: payload.plant,
-          warehouse: payload.warehouse || "10",
-          container: payload.container || "",
-          repeat: repeatNum,
-          user: payload.user,
-        });
-      }
-      throw err;
-    }
-  },
-
+  // 1. MZYPrintContainer - Konteyner Etiketi Bas
+  // PARAMETRELER: PSCOMPANY ("01"), PSPLANT ("100"), PSCONTAINER, PIREPEAT, PSUSER
   async printContainer(payload: {
     company?: string;
     plant?: string;
@@ -1149,15 +1110,10 @@ export const api = {
       throw new WmsError("Kopya sayısı 1 ile 99 arasında olmalıdır");
     }
 
-    // Bora, 05.08: Konteyner etiketi basma MZYPrintContainer ile:
-    // PSCOMPANY: "01", PSPLANT: "100", PSWAREHOUSE: "10", PIISCONTAINER: 1, PSCONTAINER: batchnumber
     const r = await call(SERVICES.printContainer, {
       PSCOMPANY: payload.company || c.company || "01",
       PSPLANT: payload.plant || c.plant || "100",
-      PSWAREHOUSE: payload.warehouse || "10",
-      PSSTOCKPLACE: "",
       PSCONTAINER: containerStr,
-      PIISCONTAINER: 1,
       PIREPEAT: repeatNum,
       PSUSER: payload.user || c.worker,
     });
@@ -1167,94 +1123,319 @@ export const api = {
       return { ok: false, message: mesaj };
     }
 
-    return { ok: true, message: mesaj || "Etiket yazdırma isteği CANIAS sunucusuna iletildi." };
+    return { ok: true, message: mesaj || "Konteyner etiket yazdırma isteği CANIAS sunucusuna iletildi." };
   },
 
-  // Ürün Barkodu Etiketi Yazdırma (MZYPrintMaterial, yoksa printWHSP'e düşer)
+  // 2. MZYPrintWHSP - Raf Etiketi Bas
+  // PARAMETRELER: PSCOMPANY ("01"), PSPLANT ("100"), PSWAREHOUSE, PSSTOCKPLACE, PIREPEAT, PSUSER
+  async printWHSP(payload: {
+    company?: string;
+    plant?: string;
+    warehouse?: string;
+    stockPlace?: string;
+    repeat?: number;
+    user?: string;
+  }): Promise<{ ok: boolean; message: string }> {
+    const c = ctx();
+    const repeatNum = Math.min(99, Math.max(1, Number(payload.repeat) || 1));
+    if (repeatNum < 1 || repeatNum > 99) {
+      throw new WmsError("Kopya sayısı 1 ile 99 arasında olmalıdır");
+    }
+
+    const r = await call(SERVICES.printWHSP, {
+      PSCOMPANY: payload.company || c.company || "01",
+      PSPLANT: payload.plant || c.plant || "100",
+      PSWAREHOUSE: payload.warehouse || "",
+      PSSTOCKPLACE: payload.stockPlace || "",
+      PIREPEAT: repeatNum,
+      PSUSER: payload.user || c.worker,
+    });
+
+    const mesaj = serviceMessage(r);
+    if (mesaj && /error|fail|hata/i.test(mesaj)) {
+      return { ok: false, message: mesaj };
+    }
+
+    return { ok: true, message: mesaj || "Raf etiket yazdırma isteği CANIAS sunucusuna iletildi." };
+  },
+
+  // 3. MZYPrintMaterial - Malzeme Barkodu Bas
+  // PARAMETRELER: PSCOMPANY ("01"), PSPLANT ("100"), PSBARCODE, PSUNIT, PIREPEAT, PSUSER
   async printMaterial(payload: {
     company?: string;
     plant?: string;
-    warehouse?: string;
-    stockPlace?: string;
+    barcode?: string;
     container?: string;
-    isContainer?: boolean | number;
+    unit?: string;
     repeat?: number;
     user?: string;
   }): Promise<{ ok: boolean; message: string }> {
     const c = ctx();
+    const barcodeStr = (payload.barcode || payload.container || "").trim();
+    if (!barcodeStr) {
+      throw new WmsError("Malzeme kodu veya barkodu girilmelidir");
+    }
     const repeatNum = Math.min(99, Math.max(1, Number(payload.repeat) || 1));
     if (repeatNum < 1 || repeatNum > 99) {
       throw new WmsError("Kopya sayısı 1 ile 99 arasında olmalıdır");
     }
 
-    try {
-      const r = await call(SERVICES.printMaterial, {
-        PSCOMPANY: payload.company || c.company || "01",
-        PSPLANT: payload.plant || c.plant || "100",
-        PSWAREHOUSE: payload.warehouse || "",
-        PSSTOCKPLACE: payload.stockPlace || "",
-        PSCONTAINER: payload.container || "",
-        PIISCONTAINER: payload.isContainer ? 1 : 0,
-        PIREPEAT: repeatNum,
-        PSUSER: payload.user || c.worker,
-      });
+    const r = await call(SERVICES.printMaterial, {
+      PSCOMPANY: payload.company || c.company || "01",
+      PSPLANT: payload.plant || c.plant || "100",
+      PSBARCODE: barcodeStr,
+      PSUNIT: payload.unit || "",
+      PIREPEAT: repeatNum,
+      PSUSER: payload.user || c.worker,
+    });
 
-      const mesaj = serviceMessage(r);
-      if (mesaj && /error|fail|hata/i.test(mesaj)) {
-        return { ok: false, message: mesaj };
-      }
-
-      return { ok: true, message: mesaj || "Ürün etiket yazdırma isteği CANIAS sunucusuna iletildi." };
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : "";
-      if (/bilinmeyen servis/i.test(errMsg) || /not found/i.test(errMsg)) {
-        return this.printWHSP(payload);
-      }
-      throw err;
+    const mesaj = serviceMessage(r);
+    if (mesaj && /error|fail|hata/i.test(mesaj)) {
+      return { ok: false, message: mesaj };
     }
+
+    return { ok: true, message: mesaj || "Malzeme barkod etiket yazdırma isteği CANIAS sunucusuna iletildi." };
   },
 
-  // SKT / Parti Etiketi Yazdırma (MZYPrintBarcode, yoksa printWHSP'e düşer)
+  // 4. MZYPrintBarcode - Barkodu Bas (SKT / Parti)
+  // PARAMETRELER: PSCOMPANY ("01"), PSPLANT ("100"), PSBARCODE, PIREPEAT, PSUSER
   async printBarcode(payload: {
     company?: string;
     plant?: string;
-    warehouse?: string;
-    stockPlace?: string;
+    barcode?: string;
     container?: string;
-    isContainer?: boolean | number;
     repeat?: number;
     user?: string;
   }): Promise<{ ok: boolean; message: string }> {
     const c = ctx();
+    const barcodeStr = (payload.barcode || payload.container || "").trim();
+    if (!barcodeStr) {
+      throw new WmsError("Barkod / SKT bilgisi girilmelidir");
+    }
     const repeatNum = Math.min(99, Math.max(1, Number(payload.repeat) || 1));
     if (repeatNum < 1 || repeatNum > 99) {
       throw new WmsError("Kopya sayısı 1 ile 99 arasında olmalıdır");
     }
 
-    try {
-      const r = await call(SERVICES.printBarcode, {
-        PSCOMPANY: payload.company || c.company || "01",
-        PSPLANT: payload.plant || c.plant || "100",
-        PSWAREHOUSE: payload.warehouse || "",
-        PSSTOCKPLACE: payload.stockPlace || "",
-        PSCONTAINER: payload.container || "",
-        PIISCONTAINER: payload.isContainer ? 1 : 0,
-        PIREPEAT: repeatNum,
-        PSUSER: payload.user || c.worker,
-      });
+    const r = await call(SERVICES.printBarcode, {
+      PSCOMPANY: payload.company || c.company || "01",
+      PSPLANT: payload.plant || c.plant || "100",
+      PSBARCODE: barcodeStr,
+      PIREPEAT: repeatNum,
+      PSUSER: payload.user || c.worker,
+    });
 
-      const mesaj = serviceMessage(r);
-      if (mesaj && /error|fail|hata/i.test(mesaj)) {
-        return { ok: false, message: mesaj };
-      }
-
-      return { ok: true, message: mesaj || "SKT/Barkod etiket yazdırma isteği CANIAS sunucusuna iletildi." };
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : "";
-      if (/bilinmeyen servis/i.test(errMsg) || /not found/i.test(errMsg)) {
-        return this.printWHSP(payload);
-      }
-      throw err;
+    const mesaj = serviceMessage(r);
+    if (mesaj && /error|fail|hata/i.test(mesaj)) {
+      return { ok: false, message: mesaj };
     }
+
+    return { ok: true, message: mesaj || "SKT / Barkod etiket yazdırma isteği CANIAS sunucusuna iletildi." };
+  },
+
+  // ---------------------------------------------------------------------------
+  // MAL KABUL (GOODS RECEIPT) SERVİSLERİ
+  // ---------------------------------------------------------------------------
+
+  // 1. MZYGetOpenOrder - Açık Satın Alma Siparişleri Listesi
+  async getOpenOrders(payload: {
+    barcode?: string;
+    vendor?: string;
+    vendorName?: string;
+    company?: string;
+    plant?: string;
+  }): Promise<{ ok: boolean; message: string; orders: Record<string, unknown>[] }> {
+    const c = ctx();
+    const params: Record<string, unknown> = {
+      PSCOMPANY: payload.company || c.company || "01",
+      PSPLANT: payload.plant || c.plant || "100",
+    };
+
+    if (payload.barcode?.trim()) {
+      params.PSBARCODE = payload.barcode.trim();
+    }
+    if (payload.vendor?.trim()) {
+      params.PSVENDOR = payload.vendor.trim();
+    }
+    if (payload.vendorName?.trim()) {
+      params.PSVENDORNAME = payload.vendorName.trim();
+      params.PSNAME = payload.vendorName.trim();
+    }
+
+    const r = await call(SERVICES.getOpenOrder, params);
+
+    const mesaj = serviceMessage(r);
+    const tableRows = rowsOf(r, ["PURORDERLIST", "TABLE", "ORDERS", "PURORDER"]);
+
+    return {
+      ok: true,
+      message: mesaj,
+      orders: tableRows,
+    };
+  },
+
+  // 2. MZYGetMaterial - Malzeme Detay Kartı, Barkod ve Ölçü Listesi
+  async getMaterialDetail(
+    barcode: string,
+    company?: string,
+    plant?: string
+  ): Promise<{
+    ok: boolean;
+    message: string;
+    matList: Record<string, unknown>[];
+    barcodeList: Record<string, unknown>[];
+    matSize: Record<string, unknown> | Record<string, unknown>[];
+    image?: string;
+  }> {
+    const c = ctx();
+    const r = await call(SERVICES.getMaterialDetail, {
+      PSCOMPANY: company || c.company || "01",
+      PSPLANT: plant || c.plant || "100",
+      PSBARCODE: (barcode || "").trim(),
+    });
+
+    const mesaj = serviceMessage(r);
+    const dataObj = r.data || {};
+    const matList = (dataObj.MATLIST as Record<string, unknown>[]) || [];
+    const barcodeList = (dataObj.BARCODELIST as Record<string, unknown>[]) || [];
+    const matSize = (dataObj.MATSIZE as Record<string, unknown>[]) || (dataObj.MATSIZELIST as Record<string, unknown>[]) || {};
+    const imageList = (dataObj.MATIMAGES as Record<string, unknown>[]) || (dataObj.IMAGES as Record<string, unknown>[]) || (dataObj.PICTURELIST as Record<string, unknown>[]) || [];
+    const rootImage = dataObj.IMAGE || dataObj.PICTURE || dataObj.IMAGEDATA || dataObj.RESIM || imageList[0]?.IMAGE || imageList[0]?.IMAGEDATA || imageList[0]?.DOCDATA;
+
+    // Attach rootImage to first matList row if not already present
+    if (matList.length > 0 && rootImage && !matList[0].IMAGE && !matList[0].PICTURE) {
+      matList[0].IMAGE = rootImage;
+    }
+
+    return {
+      ok: true,
+      message: mesaj,
+      matList: Array.isArray(matList) ? matList : [],
+      barcodeList: Array.isArray(barcodeList) ? barcodeList : [],
+      matSize,
+      image: typeof rootImage === "string" ? rootImage : undefined,
+    };
+  },
+
+  // 3. MzySetMatSize - Malzeme Ölçü, Ağırlık ve Güvenlik Nitelikleri Güncelleme
+  async setMatSize(payload: {
+    company?: string;
+    material: string;
+    volume?: number;
+    vunit?: string;
+    pwidth?: number;
+    plength?: number;
+    pheight?: number;
+    netweight?: number;
+    nwunit?: string;
+    brutweight?: number;
+    bwunit?: string;
+    isexplos?: number | boolean;
+    isspoil?: number | boolean;
+    aklisbreakable?: number | boolean;
+    aklisliquid?: number | boolean;
+    aklistoxic?: number | boolean;
+    aklpalpos?: number;
+  }): Promise<{ ok: boolean; message: string }> {
+    const c = ctx();
+    const r = await call(SERVICES.setMatSize, {
+      COMPANY: payload.company || c.company || "01",
+      MATERIAL: payload.material,
+      VOLUME: payload.volume ?? 0,
+      VUNIT: payload.vunit || "M3",
+      PWIDTH: payload.pwidth ?? 0,
+      PLENGTH: payload.plength ?? 0,
+      PHEIGHT: payload.pheight ?? 0,
+      NETWEIGHT: payload.netweight ?? 0,
+      NWUNIT: payload.nwunit || "KG",
+      BRUTWEIGHT: payload.brutweight ?? 0,
+      BWUNIT: payload.bwunit || "KG",
+      ISEXPLOS: payload.isexplos ? 1 : 0,
+      ISSPOIL: payload.isspoil ? 1 : 0,
+      AKLISBREAKABLE: payload.aklisbreakable ? 1 : 0,
+      AKLISLIQUID: payload.aklisliquid ? 1 : 0,
+      AKLISTOXIC: payload.aklistoxic ? 1 : 0,
+      AKLPALPOS: payload.aklpalpos ?? 0,
+    });
+
+    const mesaj = serviceMessage(r);
+    if (mesaj && /error|fail|hata/i.test(mesaj)) {
+      return { ok: false, message: mesaj };
+    }
+
+    return { ok: true, message: mesaj || "Malzeme ölçü ve nitelik bilgileri başarıyla kaydedildi." };
+  },
+
+  // 4. MzyGetCustomer - Tedarikçi / Müşteri Arama Servisi
+  // PARAMETRELER: PSCOMPANY ("01"), PSCUSTOMER (Tedarikçi Kodu), PSCUSNAME1 (Tedarikçi Adı), PICUSTYPE / PSCUSTYPE (1 = Tedarikçi)
+  async getCustomers(payload: {
+    customer?: string;
+    name?: string;
+    customerType?: number;
+    company?: string;
+  }): Promise<{ ok: boolean; message: string; customers: Record<string, unknown>[] }> {
+    const c = ctx();
+    const rawQuery = (payload.name || payload.customer || "").trim();
+    const isCode = /^TED-?\d+$/i.test(rawQuery) || /^\d+$/.test(rawQuery);
+    const namePattern = rawQuery ? (rawQuery.includes("%") ? rawQuery : `%${rawQuery}%`) : "";
+
+    const params: Record<string, unknown> = {
+      PSCOMPANY: payload.company || c.company || "01",
+      PSCUSTOMER: isCode ? rawQuery : (payload.customer || "").trim(),
+      PSCUSNAME1: isCode ? "" : namePattern,
+      PICUSTYPE: payload.customerType ?? 1,
+      PSCUSTYPE: payload.customerType ?? 1,
+    };
+
+    const r = await call(SERVICES.getCustomer, params);
+    const mesaj = serviceMessage(r);
+    const tableRows = rowsOf(r, ["CUSTOMERLIST", "VENDORLIST", "TABLE", "CUSTOMER", "VENDOR"]);
+
+    return {
+      ok: true,
+      message: mesaj,
+      customers: tableRows,
+    };
+  },
+
+  // 5. MZYSAVEINVPURORDER - Mal Kabul Tamamlama ve Saklama Servisi
+  async saveReceipt(payload: {
+    company?: string;
+    plant?: string;
+    vendor: string;
+    waybillNo: string;
+    sourceWarehouse?: string;
+    targetWarehouse?: string;
+    user?: string;
+    items: Array<{
+      orderNum: string;
+      itemNum: number | string;
+      material: string;
+      quantity: number;
+      batchNum?: string;
+      expiryDate?: string;
+    }>;
+  }): Promise<{ ok: boolean; message: string }> {
+    const c = ctx();
+    const r = await call(SERVICES.saveReceipt, {
+      PSCOMPANY: String(payload.company || c.company || "01").trim(),
+      PSPLANT: String(payload.plant || c.plant || "100").trim(),
+      PSVENDOR: String(payload.vendor || "").trim(),
+      PSWAYBILL: String(payload.waybillNo || "").trim(),
+      PSSOURCEWH: String(payload.sourceWarehouse || "").trim(),
+      PSTARGETWH: String(payload.targetWarehouse || c.warehouse || "").trim(),
+      PSUSER: String(payload.user || c.worker || "").trim(),
+      PSITEMS: payload.items,
+    });
+
+    const mesaj = serviceMessage(r);
+    if (mesaj && /error|fail|hata/i.test(mesaj)) {
+      return { ok: false, message: mesaj };
+    }
+
+    return {
+      ok: true,
+      message: mesaj || "Mal kabul işlemi başarıyla kaydedildi.",
+    };
   },
 };

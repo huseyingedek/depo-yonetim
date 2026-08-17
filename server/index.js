@@ -70,6 +70,15 @@ const ALLOWED = new Set([
   "GetWarehouse",
   "MZYPrintContainer",
   "MZYPrintWHSP",
+  "MZYPrintMaterial",
+  "MZYPrintBarcode",
+
+  // Mal Kabul Servisleri
+  "MZYGetOpenOrder",
+  "MZYGetMaterial",
+  "MzySetMatSize",
+  "MzyGetCustomer",
+  "MZYSAVEINVPURORDER",
 ]);
 
 const app = express();
@@ -137,46 +146,52 @@ let session = null;
 const SESSION_TTL = 20 * 60 * 1000; // 20 dk
 
 async function login() {
-  const client = await getClient();
+  try {
+    const client = await getClient();
 
-  if (V1) {
-    const [res] = await client.loginAsync({
-      p_strClient: CANIAS_CLIENT,
-      p_strLanguage: CANIAS_LANGUAGE,
-      p_strDBName: CANIAS_DBNAME,
-      p_strDBServer: CANIAS_DBSERVER,
-      p_strAppServer: CANIAS_APPSERVER,
-      p_strUserName: WMS_USER,
-      p_strPassword: WMS_PASSWORD,
-    });
-    const sessionId = val(res?.loginReturn ?? res);
-    if (!sessionId || typeof sessionId !== "string" || /error|fail|hata/i.test(sessionId)) {
-      throw new Error("CANIAS login başarısız: " + (sessionId || "bilinmeyen hata"));
+    if (V1) {
+      const [res] = await client.loginAsync({
+        p_strClient: CANIAS_CLIENT,
+        p_strLanguage: CANIAS_LANGUAGE,
+        p_strDBName: CANIAS_DBNAME,
+        p_strDBServer: CANIAS_DBSERVER,
+        p_strAppServer: CANIAS_APPSERVER,
+        p_strUserName: WMS_USER,
+        p_strPassword: WMS_PASSWORD,
+      });
+      const sessionId = val(res?.loginReturn ?? res);
+      if (!sessionId || typeof sessionId !== "string" || /error|fail|hata/i.test(sessionId)) {
+        throw new Error("CANIAS login yanıtı geçersiz: " + (sessionId || "bilinmeyen hata"));
+      }
+      session = { sessionId, securityKey: "", at: Date.now() };
+    } else {
+      const [res] = await client.loginAsync({
+        Client: CANIAS_CLIENT,
+        Language: CANIAS_LANGUAGE,
+        DBServer: CANIAS_DBSERVER,
+        DBName: CANIAS_DBNAME,
+        ApplicationServer: CANIAS_APPSERVER,
+        Username: WMS_USER,
+        Password: WMS_PASSWORD,
+        Encrypted: false,
+        Compression: false,
+        LCheck: "",
+        VKey: "",
+      });
+      const r = val(res?.loginReturn ?? res) ?? {};
+      if (r.Success !== true || typeof r.SessionId !== "string" || !r.SessionId) {
+        throw new Error("CANIAS login yanıtı geçersiz: " + (r.ErrorMessage || "bilinmeyen hata"));
+      }
+      session = { sessionId: r.SessionId, securityKey: r.SecurityKey || "", at: Date.now() };
     }
-    session = { sessionId, securityKey: "", at: Date.now() };
-  } else {
-    const [res] = await client.loginAsync({
-      Client: CANIAS_CLIENT,
-      Language: CANIAS_LANGUAGE,
-      DBServer: CANIAS_DBSERVER,
-      DBName: CANIAS_DBNAME,
-      ApplicationServer: CANIAS_APPSERVER,
-      Username: WMS_USER,
-      Password: WMS_PASSWORD,
-      Encrypted: false,
-      Compression: false,
-      LCheck: "",
-      VKey: "",
-    });
-    const r = val(res?.loginReturn ?? res) ?? {};
-    if (r.Success !== true || typeof r.SessionId !== "string" || !r.SessionId) {
-      throw new Error("CANIAS login başarısız: " + (r.ErrorMessage || "bilinmeyen hata"));
-    }
-    session = { sessionId: r.SessionId, securityKey: r.SecurityKey || "", at: Date.now() };
+
+    console.log(`✓ CANIAS oturumu açıldı (${V1 ? "v1" : "v2"}):`, session.sessionId);
+    return session;
+  } catch (err) {
+    clientPromise = null; // Stale client reset
+    session = null;
+    throw err;
   }
-
-  console.log(`✓ CANIAS oturumu açıldı (${V1 ? "v1" : "v2"}):`, session.sessionId);
-  return session;
 }
 
 async function ensureSession() {

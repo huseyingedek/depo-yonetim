@@ -69,7 +69,7 @@ export default function ExpiryLabelModal({ isOpen, onClose }: Props) {
       const res = await api.printBarcode({
         company: "01",
         plant: "100",
-        container: lot,
+        barcode: lot,
         repeat: count,
       });
 

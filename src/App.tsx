@@ -10,6 +10,7 @@ import PickingDetailPage from "./pages/picking/PickingDetailPage";
 import PickingSummaryPage from "./pages/picking/PickingSummaryPage";
 import PickingRecordsPage from "./pages/picking/PickingRecordsPage";
 import ReceivingListPage from "./pages/receiving/ReceivingListPage";
+import ReceivingSupplierSelectPage from "./pages/receiving/ReceivingSupplierSelectPage";
 import ReceivingDetailPage from "./pages/receiving/ReceivingDetailPage";
 import ReceivingSummaryPage from "./pages/receiving/ReceivingSummaryPage";
 import PutawayListPage from "./pages/putaway/PutawayListPage";
@@ -54,8 +55,9 @@ export default function App() {
         <Route path="/picking/:id/kayitlar" element={<PickingRecordsPage />} />
         <Route path="/picking/:id/summary" element={<PickingSummaryPage />} />
 
-        {}
-        <Route path="/receiving" element={<ReceivingListPage />} />
+        {/* Mal Kabul */}
+        <Route path="/receiving" element={<ReceivingSupplierSelectPage />} />
+        <Route path="/receiving/list" element={<ReceivingListPage />} />
         <Route path="/receiving/:id" element={<ReceivingDetailPage />} />
         <Route path="/receiving/:id/summary" element={<ReceivingSummaryPage />} />
 
