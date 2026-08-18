@@ -31,7 +31,7 @@ interface MzyResult {
   raw?: string;
 }
 
-export class WmsError extends Error {}
+export class WmsError extends Error { }
 
 
 export const DATE_MIN = "01.01.1975";
@@ -692,25 +692,25 @@ export const api = {
 
         .filter((r) => !(r.specialStock === "1" && (!r.lot || r.lot === "*")))
         .map((r) => ({
-        COMPANY: c.company,
-        PLANT: c.plant,
-        MATERIAL: r.material,
-        WAREHOUSE: r.warehouse,
-        STOCKPLACE: r.stockPlace,
-        SPECIALSTOCK: r.specialStock,
-        BATCHNUM: r.lot ?? "*",
+          COMPANY: c.company,
+          PLANT: c.plant,
+          MATERIAL: r.material,
+          WAREHOUSE: r.warehouse,
+          STOCKPLACE: r.stockPlace,
+          SPECIALSTOCK: r.specialStock,
+          BATCHNUM: r.lot ?? "*",
 
-        READQTY: String(r.qty),
-        QUNIT: r.unit,
-        ORDERTYPE: order.orderType ?? "",
-        ORDERNUM: order.id,
-        ITEMNO: r.itemNo,
+          READQTY: String(r.qty),
+          QUNIT: r.unit,
+          ORDERTYPE: order.orderType ?? "",
+          ORDERNUM: order.id,
+          ITEMNO: r.itemNo,
 
-        MOVEQTY: String(line.requestedQty),
-        MOVEDQTY: String(line.pickedQty),
+          MOVEQTY: String(line.requestedQty),
+          MOVEDQTY: String(line.pickedQty),
 
-        VOPTIONS: "",
-      }))
+          VOPTIONS: "",
+        }))
     );
   },
 
@@ -1370,11 +1370,27 @@ export const api = {
 
     const mesaj = serviceMessage(r);
     const dataObj = r.data || {};
-    const matList = rowsOf(r, ["MATLIST", "TABLE", "MATERIALS"]);
-    const barcodeList = rowsOf(r, ["BARCODELIST", "BARCODES"]);
-    const matSizeList = rowsOf(r, ["MATSIZE", "MATSIZELIST", "SIZE"]);
+    const matList = rowsOf(r, ["WMSXMLTABLE", "MATLIST", "TABLE", "MATERIALS", "IASMATBASIC"]);
+    const rootRow = matList[0] || (dataObj.WMSXMLTABLE as Record<string, unknown>)?.ROW || (dataObj.ROW as Record<string, unknown>) || {};
+
+    // Barcode List
+    let barcodeList = rowsOf(r, ["BARCODELIST", "BARCODES"]);
+    if (!barcodeList.length && rootRow.BARCODELIST) {
+      barcodeList = Array.isArray(rootRow.BARCODELIST) ? rootRow.BARCODELIST : [rootRow.BARCODELIST];
+    }
+
+    // MatSize
+    let matSize: Record<string, unknown> = {};
+    if (rootRow.MATSIZE) {
+      const ms = rootRow.MATSIZE as Record<string, unknown>;
+      matSize = (ms.ROW || ms) as Record<string, unknown>;
+    } else {
+      const matSizeList = rowsOf(r, ["MATSIZE", "MATSIZELIST", "SIZE", "IASMATSIZE"]);
+      matSize = matSizeList.length > 0 ? matSizeList[0] : ((dataObj.MATSIZE || dataObj.SIZE || {}) as Record<string, unknown>);
+    }
+
     const imageList = (dataObj.MATIMAGES as Record<string, unknown>[]) || (dataObj.IMAGES as Record<string, unknown>[]) || (dataObj.PICTURELIST as Record<string, unknown>[]) || [];
-    const rootImage = dataObj.IMAGE || dataObj.PICTURE || dataObj.IMAGEDATA || dataObj.RESIM || imageList[0]?.IMAGE || imageList[0]?.IMAGEDATA || imageList[0]?.DOCDATA;
+    const rootImage = dataObj.IMAGE || dataObj.PICTURE || dataObj.IMAGEDATA || dataObj.RESIM || rootRow.IMAGE || rootRow.PICTURE || imageList[0]?.IMAGE || imageList[0]?.IMAGEDATA || imageList[0]?.DOCDATA;
 
     // Attach rootImage to first matList row if not already present
     if (matList.length > 0 && rootImage && !matList[0].IMAGE && !matList[0].PICTURE) {
@@ -1386,7 +1402,7 @@ export const api = {
       message: mesaj,
       matList,
       barcodeList,
-      matSize: matSizeList.length > 0 ? matSizeList[0] : (dataObj.MATSIZE as Record<string, unknown> || {}),
+      matSize,
       image: typeof rootImage === "string" ? rootImage : undefined,
     };
   },

@@ -293,8 +293,8 @@ export default function MaterialReceiptModal({
       const matSizeRow: Record<string, unknown> = Array.isArray(rawSize)
         ? ((rawSize[0] as Record<string, unknown>) || {})
         : rawSize && typeof rawSize === "object" && "ROW" in rawSize
-        ? (((Array.isArray(rawSize.ROW) ? rawSize.ROW[0] : rawSize.ROW) as Record<string, unknown>) || {})
-        : ((rawSize as Record<string, unknown>) || {});
+          ? (((Array.isArray(rawSize.ROW) ? rawSize.ROW[0] : rawSize.ROW) as Record<string, unknown>) || {})
+          : ((rawSize as Record<string, unknown>) || {});
 
       const matCode = String(matListRow.MATERIAL || matListRow.STOKKODU || trimmed);
       const matName = String(matListRow.NAME1 || matListRow.STEXT || matListRow.AÇIKLAMA || "Malzeme Tanımı");
@@ -620,9 +620,8 @@ export default function MaterialReceiptModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/70 backdrop-blur-sm p-3 sm:p-5 overflow-y-auto animate-fade-in">
-      <div className={`relative w-full rounded-3xl border border-line bg-surface p-5 sm:p-6 shadow-2xl transition-all ${
-        stage === "details" ? "max-w-5xl" : "max-w-2xl"
-      }`}>
+      <div className={`relative w-full rounded-3xl border border-line bg-surface p-5 sm:p-6 shadow-2xl transition-all ${stage === "details" ? "max-w-5xl" : "max-w-2xl"
+        }`}>
         {/* Header (Kompakt ve az yer kaplayan başlık) */}
         <div className="flex items-center justify-between pb-2.5 border-b border-line">
           <div className="flex items-center gap-2">
@@ -932,9 +931,8 @@ export default function MaterialReceiptModal({
                             if (lotError) setLotError("");
                           }}
                           placeholder="Örn: LOT-202608-01"
-                          className={`field-input w-full font-mono text-xs ${
-                            lotError ? "border-red-500 focus:ring-red-500" : ""
-                          }`}
+                          className={`field-input w-full font-mono text-xs ${lotError ? "border-red-500 focus:ring-red-500" : ""
+                            }`}
                           autoFocus
                         />
                       </div>
@@ -1058,19 +1056,17 @@ export default function MaterialReceiptModal({
                       return (
                         <div
                           key={`${alloc.orderNum}-${alloc.itemNum}-${idx}`}
-                          className={`p-3 rounded-2xl border text-xs transition-all ${
-                            isAllocated
+                          className={`p-3 rounded-2xl border text-xs transition-all ${isAllocated
                               ? "border-2 border-emerald-500 bg-emerald-500/10 dark:bg-emerald-950/30 shadow-md ring-1 ring-emerald-500/30"
                               : "border-line bg-surface opacity-60"
-                          }`}
+                            }`}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-center gap-2">
-                              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[10px] font-extrabold ${
-                                isAllocated
+                              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[10px] font-extrabold ${isAllocated
                                   ? "bg-emerald-600 text-white"
                                   : "bg-elevated text-subtle border border-line"
-                              }`}>
+                                }`}>
                                 #{idx + 1}
                               </span>
                               <div>

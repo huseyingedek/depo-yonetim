@@ -326,6 +326,25 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
   - `PICUSTYPE` / `PSCUSTYPE` (*INTEGER*): Müşteri/Tedarikçi tipi (`0`: Hepsi, `1`: Tedarikçi, `2`: Müşteri). Mal Kabul için `1` gönderilir.
 - **WMS İstemci Karşılığı**: `api.getCustomers(payload)`
 
+### 5.5. `MZYSAVEINVPURORDER` — Mal Kabul Tamamlama ve Saklama Servisi
+- **Açıklama**: Kabul edilen sipariş kalemlerini, irsaliye numarası ve depo bilgisiyle CANIAS satın alma/irsaliye kaydına dönüştürür.
+- **Parametreler**:
+  - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
+  - `PSPLANT` (*STRING*): Tesis kodu (`"100"`).
+  - `PSVENDOR` (*STRING*): Tedarikçi kodu (Örn: `"800980"`).
+  - `PSWAYBILL` (*STRING*): İrsaliye numarası.
+  - `PSSOURCEWH` (*STRING*): Çıkış deposu (varsa).
+  - `PSTARGETWH` (*STRING*): Mal kabul deposu.
+  - `PSUSER` (*STRING*): İşlemi yapan kullanıcı/personel.
+  - `PSITEMS` (*TABLE*): Kabul edilen ürün kalemleri listesi.
+    - `PURORDER` / `ORDERNUM` (*STRING*): Satın alma sipariş numarası.
+    - `ITEMNUM` (*INTEGER*): Sipariş kalem numarası.
+    - `MATERIAL` (*STRING*): Malzeme kodu.
+    - `QUANTITY` (*DECIMAL*): Kabul edilen adet.
+    - `BATCHNUM` (*STRING*): Parti / Lot numarası (varsa).
+    - `EXPIRYDATE` (*STRING*): Son kullanma tarihi (varsa).
+- **WMS İstemci Karşılığı**: `api.saveReceipt(payload)`
+
 ---
 
 ## 6. Özet Tablo: Servis İsimleri ve Kullanım Yerleri
@@ -359,3 +378,4 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 | **Malzeme Detayı & Ölçü** | `MZYGetMaterial` | `api.getMaterialDetail` | `src/api/client.ts` |
 | **Malzeme Ölçü Kaydı** | `MzySetMatSize` | `api.setMatSize` | `src/api/client.ts` |
 | **Tedarikçi Arama** | `MzyGetCustomer` | `api.getCustomers` | `src/api/client.ts` |
+| **Mal Kabul Sakla / Bitir** | `MZYSAVEINVPURORDER` | `api.saveReceipt` | `src/api/client.ts` |

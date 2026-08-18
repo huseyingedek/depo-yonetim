@@ -94,14 +94,13 @@ export default function ReceivingRecordsPage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-line bg-surface shadow-card">
-          <table className="w-full min-w-[760px] text-left text-xs">
+          <table className="w-full min-w-[640px] text-left text-xs">
             <thead className="border-b border-line bg-elevated/60 text-muted">
               <tr>
                 <th className="px-4 py-3 font-bold text-fg">Sıra</th>
                 <th className="px-4 py-3 font-bold text-fg">Malzeme Kodu & Adı</th>
                 <th className="px-4 py-3 font-bold text-fg text-center">Okutulan Adet</th>
-                <th className="px-4 py-3 font-bold text-fg">Sipariş No (Kalem)</th>
-                <th className="px-4 py-3 font-bold text-fg">Parti / SKT</th>
+                <th className="px-4 py-3 font-bold text-fg">Sipariş No</th>
                 <th className="px-4 py-3 font-bold text-fg">Ölçü Bilgileri</th>
                 <th className="px-4 py-3 font-bold text-fg text-right">İşlem</th>
               </tr>
@@ -115,11 +114,6 @@ export default function ReceivingRecordsPage() {
                       <span className="chip bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-mono font-bold text-[11px]">
                         {item.material}
                       </span>
-                      {item.isSpecialLot && (
-                        <span className="chip bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 text-[10px] font-bold">
-                          Partili
-                        </span>
-                      )}
                     </div>
                     <p className="mt-1 font-semibold text-fg text-xs truncate leading-snug" title={item.name}>
                       {item.name}
@@ -132,18 +126,6 @@ export default function ReceivingRecordsPage() {
                   </td>
                   <td className="px-4 py-3.5 font-mono text-fg">
                     <span className="font-bold">{item.orderNum || "—"}</span>
-                    {item.itemNum && <span className="text-subtle text-[11px] block">Kalem: {item.itemNum}</span>}
-                  </td>
-                  <td className="px-4 py-3.5 text-subtle font-mono">
-                    {item.batchNum ? (
-                      <div className="text-violet-700 dark:text-violet-300 font-bold flex items-center gap-1">
-                        <Tag className="h-3 w-3 shrink-0" />
-                        <span>{item.batchNum}</span>
-                        {item.expiryDate && <span className="text-[10px] text-subtle font-normal">({item.expiryDate})</span>}
-                      </div>
-                    ) : (
-                      <span className="text-subtle">—</span>
-                    )}
                   </td>
                   <td className="px-4 py-3.5 font-mono text-subtle text-[11px]">
                     {item.dimensions && item.dimensions.width > 0 ? (

@@ -53,6 +53,7 @@ export interface ReceivedItem {
 // Helper: Sayı ayrıştırma
 function parseNum(val: unknown): number {
   if (val === null || val === undefined) return 0;
+  if (Array.isArray(val)) return parseNum(val[0]);
   if (typeof val === "number") return isNaN(val) ? 0 : val;
   if (typeof val === "string") {
     const cleaned = val.replace(/\s/g, "").replace(",", ".");
@@ -207,6 +208,48 @@ function formatImageSrc(raw: unknown): string | undefined {
   return `data:image/jpeg;base64,${str}`;
 }
 
+// Helper: CANIAS ve farklı veri kaynaklarından boyut/ağırlık değerini tüm takma adlarla bulma
+function extractDimensionValue(
+  sources: (Record<string, unknown> | undefined)[],
+  candidates: string[],
+  regexPattern?: RegExp
+): number {
+  for (const src of sources) {
+    if (!src || typeof src !== "object") continue;
+
+    // 1. Doğrudan aday kolon adları
+    for (const key of candidates) {
+      if (src[key] !== undefined && src[key] !== null && src[key] !== "") {
+        const val = parseNum(src[key]);
+        if (val > 0) return val;
+      }
+    }
+
+    // 2. Büyük/küçük harf ve alt çizgi duyarsız eşleşme
+    const srcEntries = Object.entries(src);
+    for (const cand of candidates) {
+      const normalizedCand = cand.toUpperCase().replace(/[_\-\s]/g, "");
+      for (const [k, v] of srcEntries) {
+        if (k.toUpperCase().replace(/[_\-\s]/g, "") === normalizedCand) {
+          const val = parseNum(v);
+          if (val > 0) return val;
+        }
+      }
+    }
+
+    // 3. Regex eşleşmesi
+    if (regexPattern) {
+      for (const [k, v] of srcEntries) {
+        if (regexPattern.test(k) && !/price|fiyat|cost|curr|val|unit|date|tarih/i.test(k)) {
+          const val = parseNum(v);
+          if (val > 0) return val;
+        }
+      }
+    }
+  }
+  return 0;
+}
+
 export default function ReceivingDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -306,7 +349,7 @@ export default function ReceivingDetailPage() {
   useEffect(() => {
     try {
       localStorage.setItem(storageKey, JSON.stringify(receivedItems));
-    } catch {}
+    } catch { }
   }, [receivedItems, storageKey]);
 
   // Mal Kabulü Kaydetme ve Onay Modal State'leri
@@ -367,12 +410,12 @@ export default function ReceivingDetailPage() {
         const matSizeRow: Record<string, unknown> = Array.isArray(rawSize)
           ? ((rawSize[0] as Record<string, unknown>) || {})
           : rawSize && typeof rawSize === "object" && "ROW" in rawSize
-          ? (((Array.isArray(rawSize.ROW) ? rawSize.ROW[0] : rawSize.ROW) as Record<string, unknown>) || {})
-          : ((rawSize as Record<string, unknown>) || {});
+            ? (((Array.isArray(rawSize.ROW) ? rawSize.ROW[0] : rawSize.ROW) as Record<string, unknown>) || {})
+            : ((rawSize as Record<string, unknown>) || {});
 
         const matCode = String(matListRow.MATERIAL || matListRow.STOKKODU || targetBarcode);
-        const matName = String(matListRow.NAME1 || matListRow.STEXT || matListRow.AÇIKLAMA || "Malzeme");
-        const matUnit = String(matListRow.UNIT || matListRow.BİRİM || "AD");
+        const matName = String(matListRow.NAME1 || matListRow.STEXT || matListRow.AÇIKLAMA || matListRow.MTEXT || "Malzeme");
+        const matUnit = String(matListRow.UNIT || matListRow.BİRİM || matListRow.SKUNIT || "AD");
         const defSpecial = String(matListRow.DEFSPECIAL ?? matListRow.SPECIALSTOCK ?? matListRow.SPECIAL ?? "").trim();
         const isSpecialLot = defSpecial === "1";
 
@@ -386,30 +429,144 @@ export default function ReceivingDetailPage() {
           matRes.image;
         const matImage = formatImageSrc(rawImg);
 
-        const pwidth = parseNum(matSizeRow.PWIDTH || matSizeRow.WIDTH || matSizeRow.EN);
-        const plength = parseNum(matSizeRow.PLENGTH || matSizeRow.LENGTH || matSizeRow.BOY);
-        const pheight = parseNum(matSizeRow.PHEIGHT || matSizeRow.HEIGHT || matSizeRow.YUKSEKLIK);
-        const netweight = parseNum(matSizeRow.NETWEIGHT || matSizeRow.NETAGIRLIK);
-        const brutweight = parseNum(matSizeRow.BRUTWEIGHT || matSizeRow.GROSSWEIGHT || matSizeRow.BRUTAGIRLIK);
-        const volume = parseNum(matSizeRow.VOLUME || matSizeRow.HACIM || (pwidth * plength * pheight) / 1000000);
+        const nestedSize = (matListRow.MATSIZE as Record<string, unknown>)?.ROW || matListRow.MATSIZE;
+        const nestedSizeRow: Record<string, unknown> =
+          nestedSize && typeof nestedSize === "object" ? (nestedSize as Record<string, unknown>) : {};
+
+        const dimSources = [nestedSizeRow, matSizeRow, matListRow, ...(matListRows as Record<string, unknown>[])];
+
+        const plength = extractDimensionValue(
+          dimSources,
+          [
+            "PLENGTH",
+            "LENGTH",
+            "UZUNLUK",
+            "BOY",
+            "DERINLIK",
+            "DEPTH",
+            "PDEPTH",
+            "LENGHT",
+            "PLENGHT",
+            "PBOY",
+            "PUZUNLUK",
+            "MLENGTH",
+            "ILENGTH",
+            "SIZEL",
+            "DIML",
+            "P_LENGTH",
+            "P_BOY",
+            "P_UZUNLUK",
+            "BOYU",
+            "UZUNLUGU",
+            "LONGITUDE",
+            "LONG",
+          ],
+          /^(p_?)?(length|lenght|boy|uzunluk|depth|derinlik)/i
+        );
+
+        const pwidth = extractDimensionValue(
+          dimSources,
+          [
+            "PWIDTH",
+            "WIDTH",
+            "EN",
+            "GENISLIK",
+            "PGENISLIK",
+            "PEN",
+            "MWIDTH",
+            "IWIDTH",
+            "WIDHT",
+            "PWIDHT",
+            "SIZEW",
+            "DIMW",
+            "P_WIDTH",
+            "P_EN",
+            "P_GENISLIK",
+            "ENI",
+            "GENISLIGI",
+          ],
+          /^(p_?)?(width|widht|en|genislik)/i
+        );
+
+        const pheight = extractDimensionValue(
+          dimSources,
+          [
+            "PHEIGHT",
+            "HEIGHT",
+            "YUKSEKLIK",
+            "PYUKSEKLIK",
+            "MHEIGHT",
+            "IHEIGHT",
+            "HEIGTH",
+            "PHEIGTH",
+            "SIZEH",
+            "DIMH",
+            "P_HEIGHT",
+            "P_YUKSEKLIK",
+            "YUKSEKLIGI",
+          ],
+          /^(p_?)?(height|heigth|yukseklik)/i
+        );
+
+        const netweight = extractDimensionValue(
+          dimSources,
+          [
+            "NETWEIGHT",
+            "NETAGIRLIK",
+            "NET_WEIGHT",
+            "NET_AGIRLIK",
+            "NWEIGHT",
+            "NETW",
+            "NETAGIRLIGI",
+            "NET",
+          ],
+          /^net(weight|agirlik|w)?$/i
+        );
+
+        const brutweight = extractDimensionValue(
+          dimSources,
+          [
+            "BRUTWEIGHT",
+            "GROSSWEIGHT",
+            "BRUTAGIRLIK",
+            "BRUT_WEIGHT",
+            "BRUT_AGIRLIK",
+            "BWEIGHT",
+            "GWEIGHT",
+            "BRUTW",
+            "GROSSW",
+            "BRUTAGIRLIGI",
+            "GROSSAGIRLIK",
+            "BRUT",
+            "GROSS",
+          ],
+          /^(brut|gross)(weight|agirlik|w)?$/i
+        );
+
+        const volume =
+          extractDimensionValue(
+            dimSources,
+            ["VOLUME", "HACIM", "PVOLUME", "VOL", "HACMI", "M3"],
+            /^(p_?)?(volume|hacim|vol)$/i
+          ) || (pwidth > 0 && plength > 0 && pheight > 0 ? Number(((pwidth * plength * pheight) / 1000000).toFixed(4)) : 0);
 
         const parsedMatSize = {
           pwidth,
           plength,
           pheight,
-          lunit: String(matSizeRow.LUNIT || matSizeRow.PUNIT || "CM"),
+          lunit: String(matSizeRow.LUNIT || matSizeRow.PUNIT || nestedSizeRow.LUNIT || nestedSizeRow.PUNIT || "CM"),
           volume,
-          vunit: String(matSizeRow.VUNIT || "M3"),
+          vunit: String(matSizeRow.VUNIT || nestedSizeRow.VUNIT || "M3"),
           netweight,
-          nwunit: String(matSizeRow.NWUNIT || "KG"),
+          nwunit: String(matSizeRow.NWUNIT || nestedSizeRow.NWUNIT || "KG"),
           brutweight,
-          bwunit: String(matSizeRow.BWUNIT || "KG"),
-          isexplos: Number(matSizeRow.ISEXPLOS) === 1,
-          isspoil: Number(matSizeRow.ISSPOIL) === 1,
-          aklisbreakable: Number(matSizeRow.AKLISBREAKABLE) === 1,
-          aklisliquid: Number(matSizeRow.AKLISLIQUID) === 1,
-          aklistoxic: Number(matSizeRow.AKLISTOXIC) === 1,
-          aklpalpos: Number(matSizeRow.AKLPALPOS) || 1,
+          bwunit: String(matSizeRow.BWUNIT || nestedSizeRow.BWUNIT || "KG"),
+          isexplos: Number(matSizeRow.ISEXPLOS ?? nestedSizeRow.ISEXPLOS) === 1,
+          isspoil: Number(matSizeRow.ISSPOIL ?? nestedSizeRow.ISSPOIL) === 1,
+          aklisbreakable: Number(matSizeRow.AKLISBREAKABLE ?? nestedSizeRow.AKLISBREAKABLE) === 1,
+          aklisliquid: Number(matSizeRow.AKLISLIQUID ?? nestedSizeRow.AKLISLIQUID) === 1,
+          aklistoxic: Number(matSizeRow.AKLISTOXIC ?? nestedSizeRow.AKLISTOXIC) === 1,
+          aklpalpos: Number(matSizeRow.AKLPALPOS ?? nestedSizeRow.AKLPALPOS) || 1,
         };
 
         setMatSizeForm(parsedMatSize);
@@ -541,16 +698,16 @@ export default function ReceivingDetailPage() {
       setCurrentMaterial((prev) =>
         prev
           ? {
-              ...prev,
-              dimensions: {
-                width: matSizeForm.pwidth,
-                length: matSizeForm.plength,
-                height: matSizeForm.pheight,
-                volume: autoVol,
-                netWeight: matSizeForm.netweight,
-                brutWeight: matSizeForm.brutweight,
-              },
-            }
+            ...prev,
+            dimensions: {
+              width: matSizeForm.pwidth,
+              length: matSizeForm.plength,
+              height: matSizeForm.pheight,
+              volume: autoVol,
+              netWeight: matSizeForm.netweight,
+              brutWeight: matSizeForm.brutweight,
+            },
+          }
           : prev
       );
 
@@ -806,7 +963,7 @@ export default function ReceivingDetailPage() {
         right={
           <div className="flex items-center gap-3">
             <span className="chip bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 font-mono text-xs sm:text-sm px-3.5 py-1.5 font-extrabold border border-emerald-500/20 shadow-sm">
-              {totalReceivedQty} {receivedItems[0]?.unit || "AD"} Okutuldu ({receivedItems.length} Kalem)
+              {receivedItems.length} Kalem Okutuldu
             </span>
 
             {/* Mal Kabulü Bitir Butonu */}
@@ -870,15 +1027,14 @@ export default function ReceivingDetailPage() {
                     type="button"
                     onClick={() => isClickable && setActiveStep(stepKey)}
                     disabled={!isClickable}
-                    className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 truncate rounded-xl px-2 py-2 text-xs font-bold transition-all duration-200 ${
-                      isActive
+                    className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 truncate rounded-xl px-2 py-2 text-xs font-bold transition-all duration-200 ${isActive
                         ? "bg-emerald-600 text-white shadow-soft"
                         : isDone
-                        ? "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300"
-                        : isClickable
-                        ? "bg-elevated hover:bg-line text-fg"
-                        : "bg-elevated/40 text-subtle/60 cursor-not-allowed"
-                    }`}
+                          ? "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300"
+                          : isClickable
+                            ? "bg-elevated hover:bg-line text-fg"
+                            : "bg-elevated/40 text-subtle/60 cursor-not-allowed"
+                      }`}
                   >
                     <span className="shrink-0 font-mono">{isDone ? "✓" : ""}</span>
                     <span className="truncate">{label}</span>
@@ -928,11 +1084,10 @@ export default function ReceivingDetailPage() {
                   <button
                     type="button"
                     onClick={() => (cameraOpen ? stopCamera() : startCamera())}
-                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition ${
-                      cameraOpen
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition ${cameraOpen
                         ? "border-emerald-600 bg-emerald-600 text-white shadow-md"
                         : "border-line bg-elevated/60 text-subtle hover:bg-elevated hover:text-fg"
-                    }`}
+                      }`}
                     title="Kamera ile Barkod Tara"
                   >
                     {cameraOpen ? <X className="h-5 w-5" /> : <Camera className="h-5 w-5" />}
@@ -1211,9 +1366,8 @@ export default function ReceivingDetailPage() {
                           if (lotError) setLotError("");
                         }}
                         placeholder="Parti numarasını giriniz"
-                        className={`field-input w-full font-mono text-xs font-bold ${
-                          lotError ? "border-red-500" : ""
-                        }`}
+                        className={`field-input w-full font-mono text-xs font-bold ${lotError ? "border-red-500" : ""
+                          }`}
                       />
                       {lotError && <p className="text-[10px] text-red-500 mt-1 font-semibold">{lotError}</p>}
                     </div>
@@ -1269,7 +1423,7 @@ export default function ReceivingDetailPage() {
                 <div>
                   <h4 className="text-xs font-extrabold text-fg">Okutulanlar</h4>
                   <p className="text-[11px] text-subtle font-mono mt-0.5">
-                    {receivedItems.length} Kalem · {totalReceivedQty} Adet
+                    {receivedItems.length} Kalem
                   </p>
                 </div>
               </div>
@@ -1296,7 +1450,7 @@ export default function ReceivingDetailPage() {
                 }
                 className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-elevated/60 px-3 py-1.5 text-xs font-bold text-subtle hover:bg-emerald-600 hover:text-white transition shadow-sm"
               >
-                <span>Tümünü Gör (Yatay Tablo)</span>
+                <span>Tümünü Gör</span>
                 <ExternalLink className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -1307,49 +1461,45 @@ export default function ReceivingDetailPage() {
         {/* SAĞ SÜTUN: SAĞ ÜSTTE ÜRÜN BİLGİ KARTI + SAĞ ALTTA FIFO AÇIK SİPARİŞLER    */}
         {/* ========================================================================= */}
         <div className="lg:col-span-7 xl:col-span-7 space-y-4">
-          {/* SAĞ ÜST KART: ÜRÜNÜN BİLGİ KARTI (İSİM, RESİM, ÖLÇÜ VB.) */}
-          <div className="rounded-3xl border border-line bg-surface p-5 shadow-card">
-            <h3 className="text-xs font-extrabold text-subtle uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <Package className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Ürün Bilgisi
-            </h3>
-
+          {/* SAĞ ÜST KART: ÜRÜNÜN BİLGİ KARTI (İSİM, RESİM, ÖLÇÜ VB.) - İNCELTİLMİŞ TASARIM */}
+          <div className="rounded-2xl border border-line bg-surface p-3.5 shadow-sm">
             {currentMaterial ? (
-              <div className="flex flex-col sm:flex-row items-start gap-4">
+              <div className="flex items-center gap-3">
                 {currentMaterial.image ? (
                   <img
                     src={currentMaterial.image}
                     alt={currentMaterial.name}
-                    className="h-20 w-20 rounded-2xl object-cover border border-line shrink-0 shadow-sm"
+                    className="h-12 w-12 rounded-xl object-cover border border-line shrink-0 shadow-xs"
                   />
                 ) : (
-                  <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                    <Package className="h-9 w-9" />
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    <Package className="h-6 w-6" />
                   </div>
                 )}
 
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="chip bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-mono text-xs font-extrabold">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="chip bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-mono text-[11px] font-extrabold py-0.5 px-2">
                       {currentMaterial.material}
                     </span>
                     {currentMaterial.isSpecialLot && (
-                      <span className="chip bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 text-[10px] font-bold flex items-center gap-1">
-                        <Tag className="h-3 w-3" /> Partili Malzeme
+                      <span className="chip bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1">
+                        <Tag className="h-2.5 w-2.5" /> Parti
                       </span>
                     )}
-                    <span className="chip bg-slate-100 dark:bg-slate-800 text-subtle text-[11px] font-bold">
-                      Birim: {currentMaterial.unit}
+                    <span className="text-subtle text-[11px] font-mono font-medium ml-auto">
+                      Birim: <strong className="text-fg">{currentMaterial.unit}</strong>
                     </span>
                   </div>
 
-                  <h4 className="font-extrabold text-fg text-sm leading-snug" title={currentMaterial.name}>
+                  <h4 className="font-bold text-fg text-xs truncate mt-0.5" title={currentMaterial.name}>
                     {currentMaterial.name}
                   </h4>
 
                   {/* Ölçü & Ağırlık Bilgileri */}
                   {currentMaterial.dimensions && currentMaterial.dimensions.width > 0 ? (
-                    <div className="flex items-center gap-2 text-xs font-mono text-subtle pt-1">
-                      <Ruler className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                    <div className="flex items-center gap-1.5 text-[11px] font-mono text-subtle mt-0.5 truncate">
+                      <Ruler className="h-3 w-3 text-emerald-600 shrink-0" />
                       <span>
                         {currentMaterial.dimensions.width}x{currentMaterial.dimensions.length}x
                         {currentMaterial.dimensions.height} cm · {currentMaterial.dimensions.brutWeight} kg
@@ -1357,16 +1507,16 @@ export default function ReceivingDetailPage() {
                       </span>
                     </div>
                   ) : (
-                    <div className="text-[11px] text-amber-600 font-semibold pt-1">
+                    <div className="text-[10px] text-amber-600 font-medium mt-0.5">
                       Ölçü bilgisi henüz girilmedi
                     </div>
                   )}
                 </div>
               </div>
             ) : (
-              <div className="py-6 text-center text-subtle text-xs">
-                <Package className="mx-auto h-8 w-8 text-subtle/40 mb-2" />
-                <p>Barkod okutulduğunda ürün detayları burada görüntülenecektir.</p>
+              <div className="py-2 text-center text-subtle text-xs flex items-center justify-center gap-2">
+                <Package className="h-4 w-4 text-subtle/50" />
+                <span>Barkod okutulduğunda ürün detayları burada görüntülenecektir.</span>
               </div>
             )}
           </div>
@@ -1377,7 +1527,7 @@ export default function ReceivingDetailPage() {
               <div className="flex items-center gap-2">
                 <Layers className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                 <h3 className="text-xs font-extrabold text-fg uppercase tracking-wider">
-                  Açık Siparişler (FIFO Sıralı)
+                  Açık Siparişler (eskiden yeniye sıralı)
                 </h3>
               </div>
               <span className="chip bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-mono text-[11px] font-bold">
@@ -1395,18 +1545,17 @@ export default function ReceivingDetailPage() {
                 {fifoAllocation.allocations.map((al, idx) => (
                   <div
                     key={`${al.orderNum}-${al.itemNum}-${idx}`}
-                    className={`rounded-2xl border p-4 transition-all duration-200 ${
-                      al.isFullyAllocated
+                    className={`rounded-2xl border p-4 transition-all duration-200 ${al.isFullyAllocated
                         ? "border-emerald-500/60 bg-emerald-500/10 shadow-sm"
                         : al.isPartiallyAllocated
-                        ? "border-amber-500/60 bg-amber-500/10 shadow-sm"
-                        : "border-line bg-elevated/30"
-                    }`}
+                          ? "border-amber-500/60 bg-amber-500/10 shadow-sm"
+                          : "border-line bg-elevated/30"
+                      }`}
                   >
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-extrabold text-fg">
-                          {al.orderNum} (K: {al.itemNum})
+                        <span className="text-xs font-extrabold text-fg truncate max-w-[240px]" title={currentMaterial?.name || "Malzeme"}>
+                          {currentMaterial?.name || "Malzeme"}
                         </span>
                         {idx === 0 && (
                           <span className="chip bg-emerald-600 text-white font-bold text-[10px] px-2 py-0.5 shadow-sm">
