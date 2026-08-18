@@ -96,11 +96,10 @@ export default function ReceivingSupplierSelectPage() {
   // Waybill & Warehouse Popup Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [waybillNo, setWaybillNo] = useState("");
-  const [sourceWarehouse, setSourceWarehouse] = useState("");
-  const [targetWarehouse, setTargetWarehouse] = useState("");
+  const [targetWarehouse, setTargetWarehouse] = useState("00&*");
   const [waybillError, setWaybillError] = useState("");
-  const [sourceError, setSourceError] = useState("");
   const [targetError, setTargetError] = useState("");
+  const [isValidatingWarehouse, setIsValidatingWarehouse] = useState(false);
 
   // CANIAS Live Warehouses State
   const [caniasWarehouses, setCaniasWarehouses] = useState<{ code: string; name: string }[]>([]);
@@ -109,7 +108,9 @@ export default function ReceivingSupplierSelectPage() {
     api
       .getWarehouses()
       .then((list) => {
-        if (list && list.length > 0) setCaniasWarehouses(list);
+        if (list && list.length > 0) {
+          setCaniasWarehouses(list);
+        }
       })
       .catch(() => {});
   }, []);
@@ -251,20 +252,17 @@ export default function ReceivingSupplierSelectPage() {
       }
     }
     if (targetPo && targetPo !== "Aktif Tedarikçi" && targetPo !== "Açık Sipariş") {
-      setSelectedSupplier((prev) => prev ? { ...prev, poNumber: targetPo } : prev);
+      setSelectedSupplier((prev) => (prev ? { ...prev, poNumber: targetPo } : prev));
     }
     setWaybillNo("");
-    setSourceWarehouse("");
-    setTargetWarehouse("");
+    setTargetWarehouse("00&*");
     setWaybillError("");
-    setSourceError("");
     setTargetError("");
     setIsModalOpen(true);
   };
 
-  const handleConfirmModal = () => {
+  const handleConfirmModal = async () => {
     const trimmedWaybill = waybillNo.trim();
-    const trimmedSource = sourceWarehouse.trim();
     const trimmedTarget = targetWarehouse.trim();
 
     let hasErr = false;
@@ -272,38 +270,73 @@ export default function ReceivingSupplierSelectPage() {
       setWaybillError("Lütfen İrsaliye Numarasını giriniz.");
       hasErr = true;
     }
-    if (!trimmedSource) {
-      setSourceError("Lütfen Malzemenin Alınacağı Depoyu giriniz.");
-      hasErr = true;
-    }
     if (!trimmedTarget) {
-      setTargetError("Lütfen Kabul Edileceği Depoyu giriniz.");
+      setTargetError("Lütfen Mal Kabul Deposunu giriniz.");
       hasErr = true;
     }
 
     if (hasErr) return;
 
-    setIsModalOpen(false);
-    setStepNotice({
-      open: true,
-      message: `${selectedSupplier?.name} (${selectedSupplier?.poNumber}) — İrsaliye No: ${trimmedWaybill} [Çıkış: ${trimmedSource} → Kabul: ${trimmedTarget}] kaydedildi. Detay ekranına yönlendiriliyor...`,
-    });
+    setIsValidatingWarehouse(true);
+    setTargetError("");
 
-    setTimeout(() => {
-      if (selectedSupplier) {
-        navigate(
-          `/receiving/${encodeURIComponent(selectedSupplier.poNumber)}?waybill=${encodeURIComponent(trimmedWaybill)}&sourceWH=${encodeURIComponent(trimmedSource)}&targetWH=${encodeURIComponent(trimmedTarget)}&vendor=${encodeURIComponent(selectedSupplier.id)}&vendorName=${encodeURIComponent(selectedSupplier.name)}`,
-          {
-            state: {
-              waybillNo: trimmedWaybill,
-              sourceWarehouse: trimmedSource,
-              targetWarehouse: trimmedTarget,
-              supplier: selectedSupplier,
-            },
-          }
+    try {
+      let confirmedWh = trimmedTarget;
+      const isPatternOrWildcard =
+        trimmedTarget.includes("*") ||
+        trimmedTarget.includes("&") ||
+        trimmedTarget.toUpperCase().startsWith("00");
+
+      if (!isPatternOrWildcard) {
+        // CANIAS MZYReadBarcodeSP ile depoyu doğrula
+        const shelfRes = await api.readShelfBarcode(trimmedTarget);
+        const isKnownWh = caniasWarehouses.some(
+          (w) => w.code.toUpperCase() === trimmedTarget.toUpperCase()
         );
+
+        const isValid =
+          (shelfRes.ok && (shelfRes.warehouse || shelfRes.stockPlace)) ||
+          isKnownWh ||
+          (shelfRes.warehouse && !shelfRes.message);
+
+        if (!isValid && !shelfRes.ok && !isKnownWh) {
+          setTargetError(
+            shelfRes.message ||
+              "Girilen mal kabul deposu CANIAS sisteminde bulunamadı. Lütfen geçerli bir depo giriniz."
+          );
+          return;
+        }
+
+        confirmedWh = shelfRes.warehouse || trimmedTarget;
       }
-    }, 1500);
+
+      setIsModalOpen(false);
+      setStepNotice({
+        open: true,
+        message: `${selectedSupplier?.name} (${selectedSupplier?.poNumber}) — İrsaliye No: ${trimmedWaybill} [Depo: ${confirmedWh}] doğrulandı. Detay ekranına yönlendiriliyor...`,
+      });
+
+      setTimeout(() => {
+        if (selectedSupplier) {
+          navigate(
+            `/receiving/${encodeURIComponent(selectedSupplier.poNumber)}?waybill=${encodeURIComponent(trimmedWaybill)}&targetWH=${encodeURIComponent(confirmedWh)}&vendor=${encodeURIComponent(selectedSupplier.id)}&vendorName=${encodeURIComponent(selectedSupplier.name)}`,
+            {
+              state: {
+                waybillNo: trimmedWaybill,
+                targetWarehouse: confirmedWh,
+                supplier: selectedSupplier,
+              },
+            }
+          );
+        }
+      }, 1000);
+    } catch (err: any) {
+      setTargetError(
+        err?.message || "Depo doğrulanırken hata oluştu. Lütfen bağlantınızı kontrol ediniz."
+      );
+    } finally {
+      setIsValidatingWarehouse(false);
+    }
   };
 
   return (
@@ -607,90 +640,36 @@ export default function ReceivingSupplierSelectPage() {
                 )}
               </div>
 
-              {/* Field 2: Malzemenin Alınacağı Depo */}
+              {/* Field 2: Mal Kabul Deposu */}
               <div>
                 <label className="mb-1 block font-bold text-fg">
-                  Malzemenin Alınacağı Depo <span className="text-red-500">*</span>
+                  Mal Kabul Deposu <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
-                  {caniasWarehouses.length > 0 ? (
-                    <select
-                      value={sourceWarehouse}
-                      onChange={(e) => {
-                        setSourceWarehouse(e.target.value);
-                        if (sourceError) setSourceError("");
-                      }}
-                      className={`field-input w-full pl-9 bg-surface text-fg ${
-                        sourceError ? "border-red-500 focus:ring-red-500" : ""
-                      }`}
-                    >
-                      <option value="">Depo Seçiniz</option>
-                      {caniasWarehouses.map((w) => (
-                        <option key={`src-${w.code}`} value={w.code}>
-                          {w.code} {w.name ? `— ${w.name}` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={sourceWarehouse}
-                      onChange={(e) => {
-                        setSourceWarehouse(e.target.value);
-                        if (sourceError) setSourceError("");
-                      }}
-                      placeholder="Depo kodunu yazınız"
-                      className={`field-input w-full pl-9 ${
-                        sourceError ? "border-red-500 focus:ring-red-500" : ""
-                      }`}
-                    />
-                  )}
-                  <Truck className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
-                </div>
-                {sourceError && (
-                  <p className="mt-1 text-[11px] font-semibold text-red-500 flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" /> {sourceError}
-                  </p>
-                )}
-              </div>
-
-              {/* Field 3: Kabul Edileceği Depo */}
-              <div>
-                <label className="mb-1 block font-bold text-fg">
-                  Kabul Edileceği Depo <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  {caniasWarehouses.length > 0 ? (
-                    <select
-                      value={targetWarehouse}
-                      onChange={(e) => {
-                        setTargetWarehouse(e.target.value);
-                        if (targetError) setTargetError("");
-                      }}
-                      className={`field-input w-full pl-9 bg-surface text-fg ${
-                        targetError ? "border-red-500 focus:ring-red-500" : ""
-                      }`}
-                    >
-                      <option value="">Depo Seçiniz</option>
+                  <input
+                    type="text"
+                    value={targetWarehouse}
+                    onChange={(e) => {
+                      setTargetWarehouse(e.target.value);
+                      if (targetError) setTargetError("");
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && handleConfirmModal()}
+                    disabled={isValidatingWarehouse}
+                    list="canias-warehouse-options"
+                    placeholder="00&*"
+                    className={`field-input w-full pl-9 font-semibold ${
+                      targetError ? "border-red-500 focus:ring-red-500" : ""
+                    }`}
+                  />
+                  {caniasWarehouses.length > 0 && (
+                    <datalist id="canias-warehouse-options">
+                      <option value="00&*" label="Standart Depo Kodu" />
                       {caniasWarehouses.map((w) => (
                         <option key={`tgt-${w.code}`} value={w.code}>
                           {w.code} {w.name ? `— ${w.name}` : ""}
                         </option>
                       ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={targetWarehouse}
-                      onChange={(e) => {
-                        setTargetWarehouse(e.target.value);
-                        if (targetError) setTargetError("");
-                      }}
-                      placeholder="Depo kodunu yazınız"
-                      className={`field-input w-full pl-9 ${
-                        targetError ? "border-red-500 focus:ring-red-500" : ""
-                      }`}
-                    />
+                    </datalist>
                   )}
                   <Warehouse className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
                 </div>
@@ -707,17 +686,28 @@ export default function ReceivingSupplierSelectPage() {
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-xl border border-line px-4 py-2 text-xs font-semibold text-subtle hover:bg-elevated transition"
+                disabled={isValidatingWarehouse}
+                className="rounded-xl border border-line px-4 py-2 text-xs font-semibold text-subtle hover:bg-elevated transition disabled:opacity-50"
               >
                 Vazgeç
               </button>
               <button
                 type="button"
                 onClick={handleConfirmModal}
-                className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700 active:bg-emerald-800"
+                disabled={isValidatingWarehouse}
+                className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50"
               >
-                <span>Mal Kabule Başla</span>
-                <ArrowRight className="h-4 w-4" />
+                {isValidatingWarehouse ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Depo Doğrulanıyor...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Mal Kabule Başla</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -152,11 +152,6 @@ export default function MaterialReceiptModal({
       ord.PURQTY,
       ord.ORDERQUANTITY,
       ord.PURQUANTITY,
-      ord.NET,
-      ord.AMOUNT,
-      ord.TOTALQTY,
-      ord.TOTALQUANTITY,
-      ord.S_QUANTITY,
       ord.REQQUANTITY,
       ord.PDCQUANTITY,
       ord.AKLSQUANTITY,
@@ -173,7 +168,7 @@ export default function MaterialReceiptModal({
     for (const [k, v] of Object.entries(ord)) {
       if (
         /remquantity|remqty|remaining|openqty|restqty|balance|kalan|acik|quantity|qty|orderqty|miktar/i.test(k) &&
-        !/price|fiyat|cost|curr|val|unit|date|tarih/i.test(k)
+        !/net|gross|amount|total|tutar|price|fiyat|cost|curr|val|unit|date|tarih/i.test(k)
       ) {
         const num = parseNum(v);
         if (num > 0) return num;
@@ -375,14 +370,8 @@ export default function MaterialReceiptModal({
 
       setOpenOrders(sortedOrders);
 
-      // Default receipt quantity: if open orders exist, total first order's remaining qty or 1
-      if (sortedOrders.length > 0) {
-        const topOrder = sortedOrders[0];
-        const remQty = getOrderRemainingQty(topOrder);
-        setReceiptQty(remQty > 0 ? remQty : 1);
-      } else {
-        setReceiptQty(1);
-      }
+      // Default receipt quantity: starts at 0
+      setReceiptQty(0);
 
       // If dimensions are missing/zero, trigger mandatory SetMatSize screen
       if (isDimensionZero) {
@@ -404,7 +393,7 @@ export default function MaterialReceiptModal({
       setErrorMessage(null);
       setMaterialData(null);
       setOpenOrders([]);
-      setReceiptQty(1);
+      setReceiptQty(0);
       setLotNumber("");
       setExpiryDate("");
       setLotError("");
@@ -972,38 +961,74 @@ export default function MaterialReceiptModal({
 
                 {/* QUANTITY INPUT SECTION */}
                 <div className="rounded-2xl border border-line bg-surface p-3 space-y-2">
-                  <label className="text-xs font-extrabold text-fg block">
-                    Kabul Edilecek Miktar ({materialData.unit}) <span className="text-red-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-extrabold text-fg">
+                      Kabul Edilecek Miktar ({materialData.unit}) <span className="text-red-500">*</span>
+                    </label>
+                    <span className="text-[11px] font-semibold text-subtle">
+                      Adet: <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{receiptQty}</strong>
+                    </span>
+                  </div>
 
                   {/* Quantity Stepper */}
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setReceiptQty((q) => Math.max(1, q - 1))}
-                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-elevated text-subtle hover:bg-line active:scale-95 transition"
+                      onClick={() => setReceiptQty((q) => Math.max(0, q - 1))}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-elevated text-subtle hover:bg-line active:scale-95 transition shrink-0"
                     >
                       <Minus className="h-4 w-4" />
                     </button>
                     <input
                       type="number"
-                      min="1"
+                      min="0"
                       value={receiptQty === 0 ? "" : receiptQty}
+                      placeholder="0"
                       onChange={(e) => {
                         const val = parseInt(e.target.value, 10);
                         setReceiptQty(isNaN(val) ? 0 : Math.max(0, val));
                       }}
-                      onBlur={() => {
-                        if (receiptQty <= 0) setReceiptQty(1);
-                      }}
                       className="field-input flex-1 text-center font-mono text-lg font-extrabold text-fg py-1.5"
+                      autoFocus
                     />
                     <button
                       type="button"
                       onClick={() => setReceiptQty((q) => q + 1)}
-                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition"
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition shrink-0"
                     >
                       <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* Hızlı Artırma ve Sıfırlama Butonları (+5, +10, +50, Sıfırla) */}
+                  <div className="grid grid-cols-4 gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setReceiptQty((prev) => prev + 5)}
+                      className="rounded-lg border border-line bg-elevated/70 py-1.5 text-xs font-extrabold text-fg hover:bg-emerald-600 hover:text-white transition active:scale-95 shadow-xs"
+                    >
+                      +5
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReceiptQty((prev) => prev + 10)}
+                      className="rounded-lg border border-line bg-elevated/70 py-1.5 text-xs font-extrabold text-fg hover:bg-emerald-600 hover:text-white transition active:scale-95 shadow-xs"
+                    >
+                      +10
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReceiptQty((prev) => prev + 50)}
+                      className="rounded-lg border border-line bg-elevated/70 py-1.5 text-xs font-extrabold text-fg hover:bg-emerald-600 hover:text-white transition active:scale-95 shadow-xs"
+                    >
+                      +50
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReceiptQty(0)}
+                      className="rounded-lg border border-line bg-elevated/40 py-1.5 text-xs font-bold text-subtle hover:bg-red-500/20 hover:text-red-500 hover:border-red-500/30 transition active:scale-95 shadow-xs"
+                    >
+                      Sıfırla
                     </button>
                   </div>
                 </div>

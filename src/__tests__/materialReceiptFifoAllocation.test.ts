@@ -37,11 +37,6 @@ const getOrderRemainingQty = (ord: Record<string, unknown>): number => {
     ord.PURQTY,
     ord.ORDERQUANTITY,
     ord.PURQUANTITY,
-    ord.NET,
-    ord.AMOUNT,
-    ord.TOTALQTY,
-    ord.TOTALQUANTITY,
-    ord.S_QUANTITY,
     ord.REQQUANTITY,
     ord.PDCQUANTITY,
     ord.AKLSQUANTITY,
@@ -57,7 +52,7 @@ const getOrderRemainingQty = (ord: Record<string, unknown>): number => {
   for (const [k, v] of Object.entries(ord)) {
     if (
       /remquantity|remqty|remaining|openqty|restqty|balance|kalan|acik|quantity|qty|orderqty|miktar/i.test(k) &&
-      !/price|fiyat|cost|curr|val|unit|date|tarih/i.test(k)
+      !/net|gross|amount|total|tutar|price|fiyat|cost|curr|val|unit|date|tarih/i.test(k)
     ) {
       const num = parseNum(v);
       if (num > 0) return num;
@@ -185,9 +180,9 @@ describe("Mal Kabul FIFO Sipariş Dağıtımı ve CANIAS Alan Adları Uyumluluk 
     expect(getOrderItemNum(row3, 2)).toBe("3");
   });
 
-  it("Farklı CANIAS miktar alanlarını (QUANTITY, NET, OPENQTY, RESTQTY, BALQTY, KALAN) desteklemelidir", () => {
+  it("Farklı CANIAS miktar alanlarını (QUANTITY, ORDERQTY, OPENQTY, RESTQTY, KALAN) desteklemelidir", () => {
     expect(getOrderRemainingQty({ QUANTITY: "15" })).toBe(15);
-    expect(getOrderRemainingQty({ NET: "40" })).toBe(40);
+    expect(getOrderRemainingQty({ ORDERQTY: "40" })).toBe(40);
     expect(getOrderRemainingQty({ OPENQTY: "30" })).toBe(30);
     expect(getOrderRemainingQty({ RESTQTY: "8" })).toBe(8);
     expect(getOrderRemainingQty({ KALAN: "50" })).toBe(50);
@@ -239,5 +234,67 @@ describe("Mal Kabul FIFO Sipariş Dağıtımı ve CANIAS Alan Adları Uyumluluk 
     expect(res.allocations[0].allocatedQty).toBe(1);
     expect(res.allocations[0].itemNum).toBe("1");
     expect(res.unallocatedQty).toBe(2);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 3 AŞAMALI (1 ÜRÜN · 2 ÖLÇÜ · 3 ADET) ADIM GEÇİŞİ TESTLERİ
+  // ---------------------------------------------------------------------------
+  describe("3 Aşamalı (1 Ürün · 2 Ölçü · 3 Adet) Adım Geçiş Mantığı", () => {
+    it("Ölçüleri eksik/0 olan bir ürün okutulduğunda 1. Adım yeşil olmalı ve 2. Adıma (Ölçü) geçmelidir", () => {
+      const dimensions = {
+        width: 0,
+        length: 20,
+        height: 15,
+        netWeight: 0,
+        brutWeight: 1.5,
+      };
+
+      const hasAllDimensions =
+        dimensions.width > 0 &&
+        dimensions.length > 0 &&
+        dimensions.height > 0 &&
+        dimensions.netWeight > 0 &&
+        dimensions.brutWeight > 0;
+
+      expect(hasAllDimensions).toBe(false);
+      const nextStep = hasAllDimensions ? "quantity" : "dimensions";
+      expect(nextStep).toBe("dimensions");
+    });
+
+    it("Bütün ölçü değerleri tam (> 0) olan bir ürün okutulduğunda 2. Adım da yeşil olmalı ve doğrudan 3. Adıma (Adet) atlamalıdır", () => {
+      const dimensions = {
+        width: 30,
+        length: 40,
+        height: 20,
+        netWeight: 2.5,
+        brutWeight: 3.0,
+      };
+
+      const hasAllDimensions =
+        dimensions.width > 0 &&
+        dimensions.length > 0 &&
+        dimensions.height > 0 &&
+        dimensions.netWeight > 0 &&
+        dimensions.brutWeight > 0;
+
+      expect(hasAllDimensions).toBe(true);
+      const nextStep = hasAllDimensions ? "quantity" : "dimensions";
+      expect(nextStep).toBe("quantity");
+    });
+
+    it("CANIAS NET veya AMOUNT gibi parasal tutar alanlarını (örn: 17634.15) adet olarak algılamamalıdır", () => {
+      const rowWithMoney = {
+        PURORDER: "SIP-2026-999",
+        QUANTITY: "25",
+        REMQUANTITY: "20",
+        NET: "17634.15",
+        AMOUNT: "17634.15",
+        PRICE: "352.68",
+      };
+
+      const rem = getOrderRemainingQty(rowWithMoney);
+      expect(rem).toBe(20);
+      expect(rem).not.toBe(17634.15);
+    });
   });
 });

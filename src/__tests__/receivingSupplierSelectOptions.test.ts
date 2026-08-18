@@ -353,5 +353,36 @@ describe("Mal Kabul (Goods Receipt) - 1. Seçenek (Barkod) & 2. Seçenek (Tedari
       const targetPath = `/receiving/${encodeURIComponent(selectedSupplier.poNumber)}`;
       expect(targetPath).toBe("/receiving/Aktif%20Tedarik%C3%A7i");
     });
+
+    it("Mal Kabul & İrsaliye modalında girilen depo CANIAS MZYReadBarcodeSP (readShelfBarcode) ile doğrulanmalıdır", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          sysStatus: 0,
+          data: {
+            IASINV007: {
+              ROW: [
+                {
+                  WAREHOUSE: "D01",
+                  STOCKPLACE: "MK-01",
+                },
+              ],
+            },
+          },
+        }),
+      } as Response);
+
+      const shelfRes = await api.readShelfBarcode("D01");
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, options] = fetchSpy.mock.calls[0];
+      expect(url).toContain(SERVICES.readBarcodeSP);
+
+      const body = JSON.parse(options?.body as string);
+      expect(body.PSBARCODE).toBe("D01");
+      expect(shelfRes.ok).toBe(true);
+      expect(shelfRes.warehouse).toBe("D01");
+    });
   });
 });
