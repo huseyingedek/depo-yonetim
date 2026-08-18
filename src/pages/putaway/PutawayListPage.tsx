@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Search, ChevronRight, Warehouse, MapPin, Building2, Camera, X, ScanLine } from "lucide-react";
+import { Search, ChevronRight, Warehouse, MapPin, Building2, Camera, X, ScanLine, CornerDownLeft } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import CameraScanOverlay from "../../components/CameraScanOverlay";
 import Pagination, { usePagination } from "../../components/Pagination";
@@ -44,15 +44,26 @@ export default function PutawayListPage() {
     yukle();
   }, []);
 
-  // Ürün okutunca → sunucudan o ürünü içeren emirleri getir.
-  const barkodOkundu = (code: string) => {
+  // Ürün okutunca → sunucudan o ürünü içeren emirleri getir (PSBARCODE = ham barkod).
+  // Not: filtreleme SERVİSTE olmalı; Bora PSBARCODE'u sorguya bağlayınca çalışır.
+  const barkodOkundu = async (code: string) => {
     const kod = code.trim();
     if (!kod) return;
     setKamera(false);
     setTaramaHatasi(null);
     setQ("");
     setBarkodFiltre(kod);
-    yukle(kod);
+    setLoading(true);
+    setError(null);
+    try {
+      const list = await api.getPutawayOrders(kod);
+      setOrders(list);
+      if (list.length === 0) setTaramaHatasi(`${kod} — bu ürünü içeren açık yerleştirme emri yok`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const barkodTemizle = () => {
@@ -62,20 +73,16 @@ export default function PutawayListPage() {
     yukle();
   };
 
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return orders;
-    return orders.filter((o) => o.id.toLowerCase().includes(s) || o.customer.toLowerCase().includes(s));
-  }, [orders, q]);
-
-  const pg = usePagination(filtered, 9);
-  useEffect(() => pg.reset(), [q, barkodFiltre]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Yazarken client-side filtre YOK — ürün barkodunu yazınca liste boşalmasın.
+  // Filtreleme serviste (PSBARCODE); Enter / ↵ butonu / kamera ile tetiklenir.
+  const pg = usePagination(orders, 9);
+  useEffect(() => pg.reset(), [barkodFiltre]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const emreGir = (o: PickOrder) => navigate(`/putaway/${o.id}?type=${encodeURIComponent(o.orderType ?? "")}`);
 
   // Arama kutusu: yazarken metin filtresi; Enter'da (el tarayıcı) ürün barkodu filtresi.
   const aramaField = (mobil = false) => (
-    <div className={`relative ${mobil ? "" : "w-72"}`}>
+    <div className={`relative ${mobil ? "" : "w-80"}`}>
       <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
       <input
         value={q}
@@ -83,18 +90,35 @@ export default function PutawayListPage() {
         onKeyDown={(e) => {
           if (e.key === "Enter" && q.trim()) barkodOkundu(q);
         }}
-        placeholder="Ürün okut / emir ara…"
-        className="field-input w-full pl-11 pr-12"
+        enterKeyHint="search"
+        inputMode="search"
+        autoComplete="off"
+        placeholder="Ürün okut/gir → emri bul"
+        className="field-input w-full pl-11 pr-[4.75rem]"
       />
-      <button
-        type="button"
-        onClick={() => setKamera(true)}
-        aria-label="Ürün okut"
-        title="Ürünü okutup emri bul"
-        className={`absolute right-2 top-1/2 flex ${mobil ? "h-9 w-9" : "h-8 w-8"} -translate-y-1/2 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg`}
-      >
-        <Camera className="h-5 w-5" />
-      </button>
+      <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+        {/* Ara (enter) — telefonda tıklanabilir tetikleyici */}
+        <button
+          type="button"
+          onClick={() => q.trim() && barkodOkundu(q)}
+          disabled={!q.trim()}
+          aria-label="Bu barkodla emri bul"
+          title="Bu barkodla emri bul"
+          className={`flex ${mobil ? "h-9 w-9" : "h-8 w-8"} items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-30`}
+        >
+          <CornerDownLeft className="h-5 w-5" />
+        </button>
+        {/* Kamera ile okut */}
+        <button
+          type="button"
+          onClick={() => setKamera(true)}
+          aria-label="Ürün okut"
+          title="Kamerayla ürünü okut"
+          className={`flex ${mobil ? "h-9 w-9" : "h-8 w-8"} items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg`}
+        >
+          <Camera className="h-5 w-5" />
+        </button>
+      </div>
     </div>
   );
 
@@ -113,7 +137,7 @@ export default function PutawayListPage() {
         <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-brand-500/30 bg-brand-500/10 p-3 text-sm font-medium text-brand-700">
           <span className="inline-flex min-w-0 items-center gap-2">
             <ScanLine className="h-4 w-4 shrink-0" />
-            <span className="truncate">Ürün filtresi: <span className="font-mono font-bold">{barkodFiltre}</span> · {filtered.length} emir</span>
+            <span className="truncate">Ürün filtresi: <span className="font-mono font-bold">{barkodFiltre}</span> · {orders.length} emir</span>
           </span>
           <button type="button" onClick={barkodTemizle} className="inline-flex shrink-0 items-center gap-1 font-semibold hover:underline">
             <X className="h-4 w-4" /> Temizle
@@ -144,10 +168,10 @@ export default function PutawayListPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((i) => <div key={i} className="h-32 animate-pulse rounded-2xl bg-elevated" />)}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : orders.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-subtle">
           <Warehouse className="mb-2 h-10 w-10" />
-          <p className="text-sm">{barkodFiltre ? "Bu ürün için emir yok" : t("putaway.allPlaced")}</p>
+          <p className="text-sm">{barkodFiltre ? "Bu ürünü içeren açık yerleştirme emri yok" : t("putaway.allPlaced")}</p>
         </div>
       ) : (
         <>
