@@ -215,7 +215,7 @@ export default function ReceivingDetailPage() {
         right={
           <div className="flex items-center gap-2.5">
             <span className="chip bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 font-mono text-xs sm:text-sm px-3 py-1.5 font-extrabold border border-emerald-500/20 shadow-sm">
-              {totalQuantity} / {totalExpected > 0 ? totalExpected : totalQuantity} AD
+              {totalQuantity} / {totalExpected > 0 ? totalExpected : totalQuantity} {receivedItems[0]?.unit || "AD"}
             </span>
 
             {/* Sağ Üst: Mal Kabulü Bitir Butonu */}
@@ -465,7 +465,7 @@ export default function ReceivingDetailPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-subtle">Toplam Kabul Edilen Adet:</span>
-                <strong className="text-emerald-600 dark:text-emerald-400 font-mono font-bold">{totalQuantity} AD</strong>
+                <strong className="text-emerald-600 dark:text-emerald-400 font-mono font-bold">{totalQuantity} {receivedItems[0]?.unit || "AD"}</strong>
               </div>
             </div>
 

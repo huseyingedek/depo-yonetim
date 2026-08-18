@@ -115,13 +115,155 @@ export default function MaterialReceiptModal({
 
   // Helper: Turkish number / decimal parser
   const parseNum = (val: unknown): number => {
-    if (typeof val === "number") return val;
+    if (val === null || val === undefined) return 0;
+    if (typeof val === "number") return isNaN(val) ? 0 : val;
     if (typeof val === "string") {
       const cleaned = val.replace(/\s/g, "").replace(",", ".");
       const n = parseFloat(cleaned);
       return isNaN(n) ? 0 : n;
     }
     return 0;
+  };
+
+  // Helper: CANIAS Açık Sipariş Miktarı / Kalan Bakiye Çıkarıcı
+  const getOrderRemainingQty = (ord: Record<string, unknown>): number => {
+    if (!ord || typeof ord !== "object") return 0;
+
+    // 1. Doğrudan bilinen tüm CANIAS kolon adları
+    const candidates = [
+      ord.REMQUANTITY,
+      ord.REMQTY,
+      ord.REMAININGQTY,
+      ord.REMAININGQUANTITY,
+      ord.OPENQTY,
+      ord.OPENQUANTITY,
+      ord.RESTQTY,
+      ord.RESTQUANTITY,
+      ord.PENDINGQTY,
+      ord.BALQTY,
+      ord.BALANCE,
+      ord.KALAN,
+      ord.KALANMIKTAR,
+      ord.ACIKMIKTAR,
+      ord.ACIK,
+      ord.QUANTITY,
+      ord.QTY,
+      ord.ORDERQTY,
+      ord.PURQTY,
+      ord.ORDERQUANTITY,
+      ord.PURQUANTITY,
+      ord.NET,
+      ord.AMOUNT,
+      ord.TOTALQTY,
+      ord.TOTALQUANTITY,
+      ord.S_QUANTITY,
+      ord.REQQUANTITY,
+      ord.PDCQUANTITY,
+      ord.AKLSQUANTITY,
+    ];
+
+    for (const c of candidates) {
+      if (c !== undefined && c !== null && c !== "") {
+        const num = parseNum(c);
+        if (num > 0) return num;
+      }
+    }
+
+    // 2. Dinamik regex arama (CANIAS tablosundan dönen herhangi bir miktar/bakiye kolonu)
+    for (const [k, v] of Object.entries(ord)) {
+      if (
+        /remquantity|remqty|remaining|openqty|restqty|balance|kalan|acik|quantity|qty|orderqty|miktar/i.test(k) &&
+        !/price|fiyat|cost|curr|val|unit|date|tarih/i.test(k)
+      ) {
+        const num = parseNum(v);
+        if (num > 0) return num;
+      }
+    }
+
+    return 0;
+  };
+
+  // Helper: CANIAS Kalem No Çıkarıcı (Asla 0 dönmez, 0 ise sıra numarasını kullanır)
+  const getOrderItemNum = (ord: Record<string, unknown>, fallbackIndex: number): string => {
+    if (!ord || typeof ord !== "object") return String(fallbackIndex + 1);
+
+    const candidates = [
+      ord.ITEMNUM,
+      ord.ITEM,
+      ord.ITEMNO,
+      ord.LINE,
+      ord.LINENO,
+      ord.POITEM,
+      ord.PURITEM,
+      ord.DOCITEM,
+      ord.POSNO,
+      ord.ORDERITEM,
+      ord.KALEMNO,
+      ord.KALEM,
+      ord.ROWNUM,
+      ord.ORDITEM,
+    ];
+
+    for (const c of candidates) {
+      if (c !== undefined && c !== null) {
+        const s = String(c).trim();
+        if (s !== "" && s !== "0") {
+          return s;
+        }
+      }
+    }
+
+    return String(fallbackIndex + 1);
+  };
+
+  // Helper: CANIAS Sipariş Tarihi Çıkarıcı
+  const getOrderDate = (ord: Record<string, unknown>): string => {
+    if (!ord || typeof ord !== "object") return "";
+
+    const candidates = [
+      ord.ORDERDATE,
+      ord.DOCDATE,
+      ord.CREATEDAT,
+      ord.CREATEDATE,
+      ord.VALIDFROM,
+      ord.PURDATE,
+      ord.DATE,
+      ord.DELIVERYDATE,
+      ord.PODATE,
+    ];
+
+    for (const c of candidates) {
+      if (c !== undefined && c !== null) {
+        const s = String(c).trim();
+        if (s !== "") return s;
+      }
+    }
+    return "";
+  };
+
+  // Helper: CANIAS Sipariş No Çıkarıcı
+  const getOrderNum = (ord: Record<string, unknown>, fallbackIndex: number): string => {
+    if (!ord || typeof ord !== "object") return `SIP-${fallbackIndex + 1}`;
+
+    const candidates = [
+      ord.PURORDER,
+      ord.ORDERNUM,
+      ord.ORDERNO,
+      ord.POORDER,
+      ord.PO_NUMBER,
+      ord.DOCNUM,
+      ord.DOCNO,
+      ord.ORDER_NUM,
+      ord.ORDER,
+    ];
+
+    for (const c of candidates) {
+      if (c !== undefined && c !== null) {
+        const s = String(c).trim();
+        if (s !== "") return s;
+      }
+    }
+    return `SIP-${fallbackIndex + 1}`;
   };
 
   // Helper: Format Image URL / Base64 from CANIAS response
@@ -226,8 +368,8 @@ export default function MaterialReceiptModal({
 
       // Sort open orders strictly FIFO: Oldest to Newest (by ORDERDATE or PURORDER)
       const sortedOrders = [...rawOrders].sort((a, b) => {
-        const dateA = String(a.ORDERDATE || a.CREATEDAT || a.DOCDATE || a.PURORDER || "");
-        const dateB = String(b.ORDERDATE || b.CREATEDAT || b.DOCDATE || b.PURORDER || "");
+        const dateA = getOrderDate(a) || getOrderNum(a, 0);
+        const dateB = getOrderDate(b) || getOrderNum(b, 0);
         return dateA.localeCompare(dateB);
       });
 
@@ -236,7 +378,7 @@ export default function MaterialReceiptModal({
       // Default receipt quantity: if open orders exist, total first order's remaining qty or 1
       if (sortedOrders.length > 0) {
         const topOrder = sortedOrders[0];
-        const remQty = parseNum(topOrder.REMAININGQTY || topOrder.QUANTITY || 1);
+        const remQty = getOrderRemainingQty(topOrder);
         setReceiptQty(remQty > 0 ? remQty : 1);
       } else {
         setReceiptQty(1);
@@ -292,11 +434,12 @@ export default function MaterialReceiptModal({
       isPartiallyAllocated: boolean;
     }> = [];
 
-    for (const ord of openOrders) {
-      const orderNum = String(ord.PURORDER || ord.ORDERNUM || "");
-      const itemNum = String(ord.ITEMNUM || ord.LINE || "1");
-      const orderDate = String(ord.ORDERDATE || ord.CREATEDAT || ord.DOCDATE || "");
-      const remainingQty = parseNum(ord.REMAININGQTY || ord.QUANTITY || 0);
+    openOrders.forEach((ord, idx) => {
+      const orderNum = getOrderNum(ord, idx);
+      const itemNum = getOrderItemNum(ord, idx);
+      const orderDate = getOrderDate(ord);
+      const rawRem = getOrderRemainingQty(ord);
+      const remainingQty = rawRem > 0 ? rawRem : 1;
 
       const alloc = Math.min(remainingToDistribute, remainingQty);
       remainingToDistribute -= alloc;
@@ -312,7 +455,7 @@ export default function MaterialReceiptModal({
         isFullyAllocated: remainingQty > 0 && alloc === remainingQty,
         isPartiallyAllocated: alloc > 0 && alloc < remainingQty,
       });
-    }
+    });
 
     return {
       allocations: allocatedOrders,
@@ -845,8 +988,14 @@ export default function MaterialReceiptModal({
                     <input
                       type="number"
                       min="1"
-                      value={receiptQty}
-                      onChange={(e) => setReceiptQty(Math.max(1, Number(e.target.value) || 1))}
+                      value={receiptQty === 0 ? "" : receiptQty}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setReceiptQty(isNaN(val) ? 0 : Math.max(0, val));
+                      }}
+                      onBlur={() => {
+                        if (receiptQty <= 0) setReceiptQty(1);
+                      }}
                       className="field-input flex-1 text-center font-mono text-lg font-extrabold text-fg py-1.5"
                     />
                     <button
