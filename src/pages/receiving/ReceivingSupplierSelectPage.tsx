@@ -78,7 +78,6 @@ export default function ReceivingSupplierSelectPage() {
   // Search & Selection State
   const [barcodeSearch, setBarcodeSearch] = useState("");
   const [nameSearch, setNameSearch] = useState("");
-  const [scannedBarcode, setScannedBarcode] = useState("");
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierOrder | null>(null);
 
   // Real CANIAS API Search State
@@ -128,7 +127,6 @@ export default function ReceivingSupplierSelectPage() {
     setActiveTab(tab);
     setBarcodeSearch("");
     setNameSearch("");
-    setScannedBarcode("");
     setSelectedSupplier(null);
     setSuppliers([]);
     setApiError(null);
@@ -176,7 +174,6 @@ export default function ReceivingSupplierSelectPage() {
     const trimmed = code.trim();
     if (!trimmed) return;
     setBarcodeSearch(trimmed);
-    setScannedBarcode(trimmed);
     fetchCaniasOpenOrders({ barcode: trimmed });
   };
 
@@ -440,15 +437,6 @@ export default function ReceivingSupplierSelectPage() {
               onDetected={handleBarcodeScan}
               hideCardWrapper
             />
-
-            {scannedBarcode && (
-              <div className="mt-2 flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-2 text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
-                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                <span>
-                  Sorgulanan Barkod: <strong>{scannedBarcode}</strong>
-                </span>
-              </div>
-            )}
           </div>
         )}
 

@@ -9,6 +9,7 @@ import {
   GlassWater,
   Skull,
   Clock,
+  Ruler,
 } from "lucide-react";
 import ToastView, { useToast } from "../../components/Toast";
 import { api } from "../../api/client";
@@ -36,21 +37,21 @@ export default function ReceivingDimensionsPage() {
   const receivedItems = stateData.items || [];
 
   const initialForm = stateData.matSizeForm || {
-    pwidth: 0,
-    plength: 0,
-    pheight: 0,
+    pwidth: stateData.dimensions?.width || 0,
+    plength: stateData.dimensions?.length || 0,
+    pheight: stateData.dimensions?.height || 0,
     lunit: "CM",
-    volume: 0,
+    volume: stateData.dimensions?.volume || 0,
     vunit: "M3",
-    netweight: 0,
+    netweight: stateData.dimensions?.netWeight || 0,
     nwunit: "KG",
-    brutweight: 0,
+    brutweight: stateData.dimensions?.brutWeight || 0,
     bwunit: "KG",
-    isexplos: false,
-    isspoil: false,
-    aklisbreakable: false,
-    aklisliquid: false,
-    aklistoxic: false,
+    isexplos: Boolean(stateData.specialAttributes?.isexplos),
+    isspoil: Boolean(stateData.specialAttributes?.isspoil),
+    aklisbreakable: Boolean(stateData.specialAttributes?.aklisbreakable),
+    aklisliquid: Boolean(stateData.specialAttributes?.aklisliquid),
+    aklistoxic: Boolean(stateData.specialAttributes?.aklistoxic),
     aklpalpos: 1,
   };
 
@@ -61,7 +62,7 @@ export default function ReceivingDimensionsPage() {
   const handleNumChange = (field: string, valStr: string) => {
     const sanitized = valStr.replace(",", ".");
     const num = Number(sanitized) || 0;
-    setForm((prev: any) => {
+    setForm((prev: typeof initialForm) => {
       const next = { ...prev, [field]: num };
       // En x Boy x Yükseklik girildiyse otomatik hacim (m3) hesapla
       if (field === "pwidth" || field === "plength" || field === "pheight") {
@@ -82,7 +83,7 @@ export default function ReceivingDimensionsPage() {
     vendorCode
   )}&vendorName=${encodeURIComponent(vendorName)}`;
 
-  const handleCancel = () => {
+  const handleBack = () => {
     navigate(backUrl, {
       state: {
         items: receivedItems,
@@ -90,9 +91,21 @@ export default function ReceivingDimensionsPage() {
         targetWarehouse: targetWH,
         vendor: vendorCode,
         vendorName,
-        currentMaterial: stateData.currentMaterial,
+        currentMaterial: stateData.material ? {
+          material: stateData.material,
+          name: stateData.name,
+          image: stateData.image,
+          unit: stateData.unit,
+          isSpecialLot: stateData.isSpecialLot ?? false,
+          barcodes: stateData.barcodes || [],
+          selectedBarcode: stateData.selectedBarcode || "",
+          dimensions: stateData.dimensions,
+          specialAttributes: stateData.specialAttributes,
+        } : null,
         openOrders,
-        matSizeForm: form,
+        activeStep: stateData.activeStep || "product",
+        isProductScanned: Boolean(stateData.material),
+        areDimensionsDone: Boolean(stateData.areDimensionsDone),
       },
     });
   };
@@ -108,7 +121,7 @@ export default function ReceivingDimensionsPage() {
     if (form.pwidth <= 0 || form.plength <= 0 || form.pheight <= 0) {
       show({
         kind: "err",
-        text: "Lütfen En, Boy ve Yükseklik ölçülerini (0'dan büyük) giriniz.",
+        text: "Lütfen Genişlik (En), Uzunluk (Boy) ve Yükseklik ölçülerini (0'dan büyük) giriniz.",
       });
       sesHata();
       return;
@@ -117,7 +130,7 @@ export default function ReceivingDimensionsPage() {
     if (form.brutweight <= 0 && form.netweight <= 0) {
       show({
         kind: "err",
-        text: "Lütfen en az bir geçerli Ağırlık değeri giriniz.",
+        text: "Lütfen en az bir geçerli Ağırlık (Net veya Brüt) değeri giriniz.",
       });
       sesHata();
       return;
@@ -159,10 +172,6 @@ export default function ReceivingDimensionsPage() {
       }
 
       sesBasarili();
-      show({
-        kind: "ok",
-        text: `${materialName} ölçüleri kaydedildi.`,
-      });
 
       const updatedDimensions = {
         width: form.pwidth,
@@ -182,32 +191,37 @@ export default function ReceivingDimensionsPage() {
         barcodes,
         selectedBarcode,
         dimensions: updatedDimensions,
+        specialAttributes: {
+          isexplos: form.isexplos,
+          isspoil: form.isspoil,
+          aklisbreakable: form.aklisbreakable,
+          aklisliquid: form.aklisliquid,
+          aklistoxic: form.aklistoxic,
+        },
       };
 
-      setTimeout(() => {
-        navigate(backUrl, {
-          state: {
-            matSizeSaved: true,
-            updatedDimensions,
-            currentMaterial: updatedMaterial,
-            matSizeForm: form,
-            items: receivedItems,
-            waybillNo,
-            targetWarehouse: targetWH,
-            vendor: vendorCode,
-            vendorName,
-            openOrders,
-            activeStep: "quantity",
-            areDimensionsDone: true,
-            isProductScanned: true,
-          },
-        });
-      }, 500);
-    } catch (err: any) {
+      navigate(backUrl, {
+        state: {
+          matSizeSaved: true,
+          updatedDimensions,
+          currentMaterial: updatedMaterial,
+          matSizeForm: form,
+          items: receivedItems,
+          waybillNo,
+          targetWarehouse: targetWH,
+          vendor: vendorCode,
+          vendorName,
+          openOrders,
+          activeStep: "quantity",
+          areDimensionsDone: true,
+          isProductScanned: true,
+        },
+      });
+    } catch (err: unknown) {
       sesHata();
       show({
         kind: "err",
-        text: err?.message || "CANIAS MzySetMatSize çağrısında hata oluştu.",
+        text: err instanceof Error ? err.message : "CANIAS MzySetMatSize çağrısında hata oluştu.",
       });
     } finally {
       setIsSaving(false);
@@ -215,231 +229,246 @@ export default function ReceivingDimensionsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl p-2 sm:p-3 animate-fade-in space-y-2 select-none">
+    <div className="w-full min-h-[calc(100vh-4rem)] p-2 sm:p-3 bg-surface text-fg flex flex-col justify-start animate-fade-in select-none max-w-5xl mx-auto space-y-2">
       {/* Toast Bildirimleri */}
       <ToastView toast={toast} />
 
-      {/* ULTRA KOMPAKT ÜST BAŞLIK & AKSİYON ŞERİDİ (TEK SATIR) */}
-      <div className="flex items-center justify-between gap-2 bg-surface border border-line px-3 py-1.5 rounded-2xl shadow-xs">
-        {/* Sol Taraf: Geri Butonu + Başlık + Ürün Adı & Kodu */}
+      {/* Kompakt Üst Başlık Satırı */}
+      <div className="flex items-center justify-between border-b border-line/40 pb-1.5">
         <div className="flex items-center gap-2 min-w-0">
           <button
             type="button"
-            onClick={handleCancel}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-line bg-elevated/60 text-subtle hover:bg-elevated hover:text-fg transition"
+            onClick={handleBack}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-elevated border border-line text-subtle hover:bg-emerald-600 hover:text-white transition active:scale-95 shadow-2xs"
             title="Geri Dön"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
-
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-xs font-black text-fg whitespace-nowrap">
-              2 · Ölçü Girişi
-            </span>
-            <span className="chip bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 font-mono text-[10px] font-extrabold py-0.5 px-1.5 shrink-0">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-2xs">
+            <Ruler className="h-3.5 w-3.5" />
+          </div>
+          <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+            <h3 className="text-xs sm:text-sm font-black text-fg whitespace-nowrap">
+              Ölçü ve Nitelik Tanımlama
+            </h3>
+            <span className="font-mono text-[11px] font-extrabold text-emerald-800 dark:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.2 rounded shadow-2xs">
               {material || "KOD"}
             </span>
-            <span className="text-xs font-bold text-subtle truncate max-w-[200px] sm:max-w-[340px]" title={materialName}>
+            <span className="text-xs text-subtle truncate max-w-[220px] sm:max-w-md font-semibold" title={materialName}>
               {materialName}
             </span>
           </div>
         </div>
-
-        {/* Sağ Taraf: Vazgeç ve Kaydet Butonları */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="rounded-lg border border-line bg-surface hover:bg-elevated px-2.5 py-1 text-[11px] font-bold text-subtle transition"
-          >
-            Vazgeç
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1 text-[11px] font-extrabold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition disabled:opacity-40"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Kaydediliyor...
-              </>
-            ) : (
-              <>
-                <Save className="h-3.5 w-3.5" /> Kaydet
-              </>
-            )}
-          </button>
-        </div>
       </div>
 
-      {/* TÜM GİRİŞLERİ BARINDIRAN TEK KOMPAKT YATAY KART (6 INCH YATAY TELEFON İÇİN SCROLL'SUZ) */}
-      <form onSubmit={handleSave} className="rounded-2xl border border-line bg-surface p-2.5 sm:p-3 shadow-card space-y-2">
-        {/* 1. SATIR: EN, BOY, YÜKSEKLİK, NET KG, BRÜT KG, HACİM (TEK 6'LI YATAY IZGARA) */}
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-          {/* Genişlik / En */}
-          <div>
-            <label className="text-[10px] font-extrabold text-subtle block mb-0.5 truncate">
-              Genişlik / En (cm) <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              value={form.pwidth || ""}
-              onChange={(e) => handleNumChange("pwidth", e.target.value)}
-              placeholder="0.0"
-              className="field-input w-full font-mono text-xs font-bold text-center h-8 py-1 px-1 rounded-lg"
-              autoFocus
-              required
-            />
+      {/* Form Gövdesi: 914x412 Boyutunda Kaydırmasız Tek Parça Düzen */}
+      <form onSubmit={handleSave} className="space-y-2">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-stretch">
+          {/* Sol Taraf (8 Kolon): Boyut, Ağırlık ve Hacim Girişleri */}
+          <div className="md:col-span-8 rounded-xl border border-line bg-elevated/20 p-2 sm:p-2.5 space-y-1.5">
+            {/* 1. Sıra: En, Boy, Yükseklik */}
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-[11px] font-black text-ink-700 dark:text-ink-200 block mb-0.5 text-center">
+                  En (cm) <span className="text-rose-500 font-black">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={form.pwidth || ""}
+                  onChange={(e) => handleNumChange("pwidth", e.target.value)}
+                  placeholder="0.0"
+                  className="w-full font-mono text-sm font-black text-center h-8 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  autoFocus
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-black text-ink-700 dark:text-ink-200 block mb-0.5 text-center">
+                  Boy (cm) <span className="text-rose-500 font-black">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={form.plength || ""}
+                  onChange={(e) => handleNumChange("plength", e.target.value)}
+                  placeholder="0.0"
+                  className="w-full font-mono text-sm font-black text-center h-8 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-black text-ink-700 dark:text-ink-200 block mb-0.5 text-center">
+                  Yükseklik (cm) <span className="text-rose-500 font-black">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={form.pheight || ""}
+                  onChange={(e) => handleNumChange("pheight", e.target.value)}
+                  placeholder="0.0"
+                  className="w-full font-mono text-sm font-black text-center h-8 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* 2. Sıra: Net KG, Brüt KG, Hacim M³ */}
+            <div className="grid grid-cols-3 gap-2 border-t border-line/40 pt-1.5">
+              <div>
+                <label className="text-[11px] font-black text-ink-700 dark:text-ink-200 block mb-0.5 text-center">
+                  Net (kg) <span className="text-rose-500 font-black">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.netweight || ""}
+                  onChange={(e) => handleNumChange("netweight", e.target.value)}
+                  placeholder="0.00"
+                  className="w-full font-mono text-sm font-black text-center h-8 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-black text-ink-700 dark:text-ink-200 block mb-0.5 text-center">
+                  Brüt (kg) <span className="text-rose-500 font-black">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.brutweight || ""}
+                  onChange={(e) => handleNumChange("brutweight", e.target.value)}
+                  placeholder="0.00"
+                  className="w-full font-mono text-sm font-black text-center h-8 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-black text-ink-700 dark:text-ink-200 block mb-0.5 text-center">
+                  Hacim (m³)
+                </label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  value={form.volume || ""}
+                  onChange={(e) => handleNumChange("volume", e.target.value)}
+                  placeholder="0.0000"
+                  className="w-full font-mono text-sm font-black text-center h-8 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Uzunluk / Boy */}
-          <div>
-            <label className="text-[10px] font-extrabold text-subtle block mb-0.5 truncate">
-              Uzunluk / Boy (cm) <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              value={form.plength || ""}
-              onChange={(e) => handleNumChange("plength", e.target.value)}
-              placeholder="0.0"
-              className="field-input w-full font-mono text-xs font-bold text-center h-8 py-1 px-1 rounded-lg"
-              required
-            />
-          </div>
+          {/* Sağ Taraf (4 Kolon): Özel Güvenlik Nitelikleri Çipleri ve Entegre Kaydet Butonu */}
+          <div className="md:col-span-4 rounded-xl border border-line bg-elevated/20 p-2 sm:p-2.5 flex flex-col justify-between space-y-1.5">
+            <span className="text-[11px] font-black text-ink-700 dark:text-ink-200 uppercase tracking-wider block text-center">
+              Özel Nitelikler
+            </span>
 
-          {/* Yükseklik */}
-          <div>
-            <label className="text-[10px] font-extrabold text-subtle block mb-0.5 truncate">
-              Yükseklik (cm) <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              value={form.pheight || ""}
-              onChange={(e) => handleNumChange("pheight", e.target.value)}
-              placeholder="0.0"
-              className="field-input w-full font-mono text-xs font-bold text-center h-8 py-1 px-1 rounded-lg"
-              required
-            />
-          </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {/* Kırılabilir */}
+              <label className={`flex items-center justify-center gap-1 rounded-lg border py-1 px-1 cursor-pointer transition-colors select-none ${
+                form.aklisbreakable
+                  ? "border-amber-500 bg-amber-500/20 text-amber-800 dark:text-amber-200 font-black shadow-2xs"
+                  : "border-line bg-surface text-ink-700 dark:text-ink-200 font-bold hover:bg-elevated/40"
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={form.aklisbreakable}
+                  onChange={(e) => setForm((prev: typeof initialForm) => ({ ...prev, aklisbreakable: e.target.checked }))}
+                  className="sr-only"
+                />
+                <GlassWater className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                <span className="text-[11px] leading-tight">Kırılabilir</span>
+              </label>
 
-          {/* Net Ağırlık */}
-          <div>
-            <label className="text-[10px] font-extrabold text-subtle block mb-0.5 truncate">
-              Net Ağırlık (kg) <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.netweight || ""}
-              onChange={(e) => handleNumChange("netweight", e.target.value)}
-              placeholder="0.00"
-              className="field-input w-full font-mono text-xs font-bold text-center h-8 py-1 px-1 rounded-lg"
-            />
-          </div>
+              {/* Toksik */}
+              <label className={`flex items-center justify-center gap-1 rounded-lg border py-1 px-1 cursor-pointer transition-colors select-none ${
+                form.aklistoxic
+                  ? "border-purple-500 bg-purple-500/20 text-purple-800 dark:text-purple-200 font-black shadow-2xs"
+                  : "border-line bg-surface text-ink-700 dark:text-ink-200 font-bold hover:bg-elevated/40"
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={form.aklistoxic}
+                  onChange={(e) => setForm((prev: typeof initialForm) => ({ ...prev, aklistoxic: e.target.checked }))}
+                  className="sr-only"
+                />
+                <Skull className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+                <span className="text-[11px] leading-tight">Toksik</span>
+              </label>
 
-          {/* Brüt Ağırlık */}
-          <div>
-            <label className="text-[10px] font-extrabold text-subtle block mb-0.5 truncate">
-              Brüt Ağırlık (kg) <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.brutweight || ""}
-              onChange={(e) => handleNumChange("brutweight", e.target.value)}
-              placeholder="0.00"
-              className="field-input w-full font-mono text-xs font-bold text-center h-8 py-1 px-1 rounded-lg"
-            />
-          </div>
+              {/* Yanıcı */}
+              <label className={`flex items-center justify-center gap-1 rounded-lg border py-1 px-1 cursor-pointer transition-colors select-none ${
+                form.isexplos
+                  ? "border-rose-500 bg-rose-500/20 text-rose-800 dark:text-rose-200 font-black shadow-2xs"
+                  : "border-line bg-surface text-ink-700 dark:text-ink-200 font-bold hover:bg-elevated/40"
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={form.isexplos}
+                  onChange={(e) => setForm((prev: typeof initialForm) => ({ ...prev, isexplos: e.target.checked }))}
+                  className="sr-only"
+                />
+                <Flame className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+                <span className="text-[11px] leading-tight">Yanıcı</span>
+              </label>
 
-          {/* Hacim */}
-          <div>
-            <label className="text-[10px] font-extrabold text-subtle block mb-0.5 truncate">
-              Hacim (m³)
-            </label>
-            <input
-              type="number"
-              step="0.0001"
-              min="0"
-              value={form.volume || ""}
-              onChange={(e) => handleNumChange("volume", e.target.value)}
-              placeholder="0.0000"
-              className="field-input w-full font-mono text-xs font-bold text-center h-8 py-1 px-1 rounded-lg bg-elevated/40"
-            />
-          </div>
-        </div>
+              {/* Bozulabilir */}
+              <label className={`flex items-center justify-center gap-1 rounded-lg border py-1 px-1 cursor-pointer transition-colors select-none ${
+                form.isspoil
+                  ? "border-orange-500 bg-orange-500/20 text-orange-800 dark:text-orange-200 font-black shadow-2xs"
+                  : "border-line bg-surface text-ink-700 dark:text-ink-200 font-bold hover:bg-elevated/40"
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={form.isspoil}
+                  onChange={(e) => setForm((prev: typeof initialForm) => ({ ...prev, isspoil: e.target.checked }))}
+                  className="sr-only"
+                />
+                <Clock className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+                <span className="text-[11px] leading-tight">Bozulur</span>
+              </label>
 
-        {/* 2. SATIR: ÖZEL NİTELİKLER & GÜVENLİK & PALET KATI (TEK YATAY ESNEK SATIR) */}
-        <div className="flex items-center justify-between gap-1.5 flex-wrap pt-1.5 border-t border-line/60">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Kırılabilir */}
-            <label className="flex items-center gap-1 rounded-lg border border-line bg-elevated/30 px-2 py-1 cursor-pointer hover:border-emerald-500/50 transition">
-              <input
-                type="checkbox"
-                checked={form.aklisbreakable}
-                onChange={(e) => setForm({ ...form, aklisbreakable: e.target.checked })}
-                className="h-3.5 w-3.5 rounded border-line text-emerald-600 focus:ring-0"
-              />
-              <GlassWater className="h-3.5 w-3.5 text-amber-500" />
-              <span className="text-[11px] font-bold text-fg">Kırılabilir</span>
-            </label>
+              {/* Sıvı (2 kolon kaplar) */}
+              <label className={`col-span-2 flex items-center justify-center gap-1 rounded-lg border py-1 px-1 cursor-pointer transition-colors select-none ${
+                form.aklisliquid
+                  ? "border-blue-500 bg-blue-500/20 text-blue-800 dark:text-blue-200 font-black shadow-2xs"
+                  : "border-line bg-surface text-ink-700 dark:text-ink-200 font-bold hover:bg-elevated/40"
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={form.aklisliquid}
+                  onChange={(e) => setForm((prev: typeof initialForm) => ({ ...prev, aklisliquid: e.target.checked }))}
+                  className="sr-only"
+                />
+                <Droplets className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                <span className="text-[11px] leading-tight">Sıvı</span>
+              </label>
+            </div>
 
-            {/* Sıvı */}
-            <label className="flex items-center gap-1 rounded-lg border border-line bg-elevated/30 px-2 py-1 cursor-pointer hover:border-emerald-500/50 transition">
-              <input
-                type="checkbox"
-                checked={form.aklisliquid}
-                onChange={(e) => setForm({ ...form, aklisliquid: e.target.checked })}
-                className="h-3.5 w-3.5 rounded border-line text-emerald-600 focus:ring-0"
-              />
-              <Droplets className="h-3.5 w-3.5 text-blue-500" />
-              <span className="text-[11px] font-bold text-fg">Sıvı</span>
-            </label>
-
-            {/* Yanıcı */}
-            <label className="flex items-center gap-1 rounded-lg border border-line bg-elevated/30 px-2 py-1 cursor-pointer hover:border-emerald-500/50 transition">
-              <input
-                type="checkbox"
-                checked={form.isexplos}
-                onChange={(e) => setForm({ ...form, isexplos: e.target.checked })}
-                className="h-3.5 w-3.5 rounded border-line text-emerald-600 focus:ring-0"
-              />
-              <Flame className="h-3.5 w-3.5 text-rose-500" />
-              <span className="text-[11px] font-bold text-fg">Yanıcı</span>
-            </label>
-
-            {/* Bozulabilir */}
-            <label className="flex items-center gap-1 rounded-lg border border-line bg-elevated/30 px-2 py-1 cursor-pointer hover:border-emerald-500/50 transition">
-              <input
-                type="checkbox"
-                checked={form.isspoil}
-                onChange={(e) => setForm({ ...form, isspoil: e.target.checked })}
-                className="h-3.5 w-3.5 rounded border-line text-emerald-600 focus:ring-0"
-              />
-              <Clock className="h-3.5 w-3.5 text-orange-500" />
-              <span className="text-[11px] font-bold text-fg">Bozulabilir</span>
-            </label>
-
-            {/* Toksik */}
-            <label className="flex items-center gap-1 rounded-lg border border-line bg-elevated/30 px-2 py-1 cursor-pointer hover:border-emerald-500/50 transition">
-              <input
-                type="checkbox"
-                checked={form.aklistoxic}
-                onChange={(e) => setForm({ ...form, aklistoxic: e.target.checked })}
-                className="h-3.5 w-3.5 rounded border-line text-emerald-600 focus:ring-0"
-              />
-              <Skull className="h-3.5 w-3.5 text-purple-500" />
-              <span className="text-[11px] font-bold text-fg">Toksik</span>
-            </label>
+            {/* Entegre Kaydet Butonu (Ayrı bir kart olmadan doğrudan bu bloğun içinde) */}
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 h-8 sm:h-9 text-xs font-black text-white shadow-md active:scale-95 transition disabled:opacity-40 w-full"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Kaydediliyor...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-3.5 w-3.5" />
+                  <span>Kaydet</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       </form>
