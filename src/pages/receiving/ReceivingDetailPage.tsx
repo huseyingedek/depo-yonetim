@@ -17,9 +17,14 @@ import {
   Check,
   Calendar,
   Layers,
-  ArrowRight,
   List,
   ExternalLink,
+  ImageIcon,
+  GlassWater,
+  Droplets,
+  Flame,
+  Clock,
+  Skull,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import ToastView, { useToast } from "../../components/Toast";
@@ -250,6 +255,43 @@ function extractDimensionValue(
   return 0;
 }
 
+// Güvenlik & Özel Nitelik Değeri Ayıklayıcı (CANIAS Boolean/1/true uyumlu)
+function checkAttr(sources: (Record<string, unknown> | undefined)[], keys: string[]): boolean {
+  for (const src of sources) {
+    if (!src || typeof src !== "object") continue;
+    for (const k of keys) {
+      if (k in src) {
+        const val = src[k];
+        if (
+          val === true ||
+          val === 1 ||
+          val === "1" ||
+          String(val).toLowerCase() === "true" ||
+          String(val).toUpperCase() === "Y" ||
+          String(val).toUpperCase() === "E"
+        ) {
+          return true;
+        }
+      }
+      for (const [sk, sv] of Object.entries(src)) {
+        if (sk.toUpperCase() === k.toUpperCase()) {
+          if (
+            sv === true ||
+            sv === 1 ||
+            sv === "1" ||
+            String(sv).toLowerCase() === "true" ||
+            String(sv).toUpperCase() === "Y" ||
+            String(sv).toUpperCase() === "E"
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
 export default function ReceivingDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -293,6 +335,15 @@ export default function ReceivingDetailPage() {
     image?: string;
     unit: string;
     isSpecialLot: boolean;
+    barcodes: Array<{ barcode: string; unit: string }>;
+    selectedBarcode: string;
+    specialAttributes?: {
+      isexplos: boolean;
+      isspoil: boolean;
+      aklisbreakable: boolean;
+      aklisliquid: boolean;
+      aklistoxic: boolean;
+    };
     dimensions?: {
       width: number;
       length: number;
@@ -303,7 +354,7 @@ export default function ReceivingDetailPage() {
     };
   } | null>(null);
 
-  // 2. Adım: Ölçü Formu State'leri
+  // Ölçü Formu State'leri (Sayfalar arası aktarım için)
   const [matSizeForm, setMatSizeForm] = useState({
     pwidth: 0,
     plength: 0,
@@ -322,7 +373,6 @@ export default function ReceivingDetailPage() {
     aklistoxic: false,
     aklpalpos: 1,
   });
-  const [isSavingMatSize, setIsSavingMatSize] = useState(false);
 
   // 3. Adım: Adet, Parti & SKT State'leri
   const [receiptQty, setReceiptQty] = useState<number>(0);
@@ -333,24 +383,99 @@ export default function ReceivingDetailPage() {
   // Açık Siparişler (FIFO Sıralı)
   const [openOrders, setOpenOrders] = useState<Record<string, unknown>[]>([]);
 
-  // Okutulanlar Listesi
+  // Okutulanlar Listesi (Sadece aktif oturum veya kayitlar/ölçü sayfasından dönüşte aktarılır)
   const [receivedItems, setReceivedItems] = useState<ReceivedItem[]>(() => {
     try {
       const stateItems = location.state?.items as ReceivedItem[] | undefined;
-      if (stateItems && stateItems.length > 0) return stateItems;
-      const raw = localStorage.getItem(storageKey);
-      return raw ? JSON.parse(raw) : [];
+      if (Array.isArray(stateItems) && stateItems.length > 0) return stateItems;
+      return [];
     } catch {
       return [];
     }
   });
 
-  // LocalStorage senkronizasyonu
+  // Sayfadan tamamen çıkıldığında localStorage kalıntılarını temizle
   useEffect(() => {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(receivedItems));
-    } catch { }
-  }, [receivedItems, storageKey]);
+    return () => {
+      try {
+        localStorage.removeItem(storageKey);
+      } catch {}
+    };
+  }, [storageKey]);
+
+  // Ölçü Sayfasına Yönlendirme
+  const handleOpenDimensionsPage = useCallback(() => {
+    if (!currentMaterial) {
+      show({ kind: "err", text: "Lütfen önce bir ürün barkodu okutunuz." });
+      return;
+    }
+    navigate(
+      `/receiving/${encodeURIComponent(vendorCode)}/olculer?waybill=${encodeURIComponent(
+        waybillNo
+      )}&targetWH=${encodeURIComponent(targetWH)}&vendor=${encodeURIComponent(
+        vendorCode
+      )}&vendorName=${encodeURIComponent(vendorName)}`,
+      {
+        state: {
+          material: currentMaterial.material,
+          name: currentMaterial.name,
+          image: currentMaterial.image,
+          unit: currentMaterial.unit,
+          isSpecialLot: currentMaterial.isSpecialLot,
+          barcodes: currentMaterial.barcodes,
+          selectedBarcode: currentMaterial.selectedBarcode,
+          currentMaterial,
+          matSizeForm,
+          items: receivedItems,
+          waybillNo,
+          targetWarehouse: targetWH,
+          vendor: vendorCode,
+          vendorName,
+          openOrders,
+        },
+      }
+    );
+  }, [
+    currentMaterial,
+    matSizeForm,
+    receivedItems,
+    waybillNo,
+    targetWH,
+    vendorCode,
+    vendorName,
+    openOrders,
+    navigate,
+    show,
+  ]);
+
+  // Adım ve malzeme geri yükleme (Ölçü veya Kayıtlar sayfasından dönüşte)
+  useEffect(() => {
+    if (location.state?.matSizeSaved) {
+      if (location.state.currentMaterial) {
+        setCurrentMaterial(location.state.currentMaterial);
+        setIsProductScanned(true);
+      }
+      if (location.state.matSizeForm) {
+        setMatSizeForm(location.state.matSizeForm);
+      }
+      if (location.state.openOrders) {
+        setOpenOrders(location.state.openOrders);
+      }
+      setAreDimensionsDone(true);
+      setActiveStep("quantity");
+    } else if (location.state?.currentMaterial) {
+      setCurrentMaterial(location.state.currentMaterial);
+      setIsProductScanned(true);
+      if (location.state.matSizeForm) setMatSizeForm(location.state.matSizeForm);
+      if (location.state.openOrders) setOpenOrders(location.state.openOrders);
+      if (location.state.areDimensionsDone !== undefined) {
+        setAreDimensionsDone(Boolean(location.state.areDimensionsDone));
+      }
+      if (location.state.activeStep) {
+        setActiveStep(location.state.activeStep);
+      }
+    }
+  }, [location.state]);
 
   // Mal Kabulü Kaydetme ve Onay Modal State'leri
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -571,7 +696,26 @@ export default function ReceivingDetailPage() {
 
         setMatSizeForm(parsedMatSize);
 
-        // 2. MZYGetOpenOrder ile açık siparişleri getir ve FIFO sırala (Eskiden Yeniye)
+        // 2. Barcode Listesini Topla ve Eşle
+        const rawBarcodeList = Array.isArray(matRes.barcodeList) ? matRes.barcodeList : [];
+        const seenBarcodes = new Set<string>();
+        const barcodes: Array<{ barcode: string; unit: string }> = [];
+
+        if (targetBarcode) {
+          seenBarcodes.add(targetBarcode);
+          barcodes.push({ barcode: targetBarcode, unit: matUnit || "AD" });
+        }
+
+        for (const b of rawBarcodeList) {
+          const bCode = String(b.BARCODE || "").trim();
+          const bUnit = String(b.BUNIT || b.UNIT || matUnit || "AD").trim();
+          if (bCode && !seenBarcodes.has(bCode)) {
+            seenBarcodes.add(bCode);
+            barcodes.push({ barcode: bCode, unit: bUnit });
+          }
+        }
+
+        // 3. MZYGetOpenOrder ile açık siparişleri getir ve YENİDEN ESKİYE sırala (Newest first)
         const orderRes = await api.getOpenOrders({
           barcode: targetBarcode,
           vendor: vendorCode,
@@ -581,7 +725,7 @@ export default function ReceivingDetailPage() {
         const sortedOrders = [...rawOrders].sort((a, b) => {
           const dateA = getOrderDate(a) || getOrderNum(a, 0);
           const dateB = getOrderDate(b) || getOrderNum(b, 0);
-          return dateA.localeCompare(dateB);
+          return dateB.localeCompare(dateA); // Yeniden eskiye sıralama (LIFO)
         });
 
         setOpenOrders(sortedOrders);
@@ -597,12 +741,23 @@ export default function ReceivingDetailPage() {
           netweight > 0 &&
           brutweight > 0;
 
-        setCurrentMaterial({
+        const specialAttributes = {
+          isexplos: checkAttr(dimSources, ["ISEXPLOS", "ISEXPLOSIVE", "EXPLOSIVE", "YANICI", "PATLAYICI", "IS_EXPLOS"]),
+          isspoil: checkAttr(dimSources, ["ISSPOIL", "ISSPOILAGE", "SPOIL", "BOZULABILIR", "BOZULUR", "IS_SPOIL"]),
+          aklisbreakable: checkAttr(dimSources, ["AKLISBREAKABLE", "ISBREAKABLE", "BREAKABLE", "KIRILABILIR", "KIRILIR", "AKL_ISBREAKABLE"]),
+          aklisliquid: checkAttr(dimSources, ["AKLISLIQUID", "ISLIQUID", "LIQUID", "SIVI", "AKL_ISLIQUID"]),
+          aklistoxic: checkAttr(dimSources, ["AKLISTOXIC", "ISTOXIC", "TOXIC", "TOKSIK", "ZEHIRLI", "AKL_ISTOXIC"]),
+        };
+
+        const matObj = {
           material: matCode,
           name: matName,
           image: matImage,
           unit: matUnit,
           isSpecialLot,
+          barcodes,
+          selectedBarcode: targetBarcode || barcodes[0]?.barcode || "",
+          specialAttributes,
           dimensions: {
             width: pwidth,
             length: plength,
@@ -611,19 +766,48 @@ export default function ReceivingDetailPage() {
             netWeight: netweight,
             brutWeight: brutweight,
           },
-        });
+        };
 
+        setCurrentMaterial(matObj);
         setIsProductScanned(true);
 
         if (!hasAllDimensions) {
-          // Ölçüler eksik -> 2. yere atar (2 Ölçü)
+          // Ölçüler eksik -> 2. Adım Ölçü Sayfasına Yönlendir
           setAreDimensionsDone(false);
           setActiveStep("dimensions");
           sesBasarili();
           show({
             kind: "ok",
-            text: `${matName} okundu. Lütfen eksik ölçü bilgilerini giriniz.`,
+            text: `${matName} okundu. Ölçü bilgilerini girmek için ölçü sayfasına yönlendiriliyor...`,
           });
+          setTimeout(() => {
+            navigate(
+              `/receiving/${encodeURIComponent(vendorCode)}/olculer?waybill=${encodeURIComponent(
+                waybillNo
+              )}&targetWH=${encodeURIComponent(targetWH)}&vendor=${encodeURIComponent(
+                vendorCode
+              )}&vendorName=${encodeURIComponent(vendorName)}`,
+              {
+                state: {
+                  material: matCode,
+                  name: matName,
+                  image: matImage,
+                  unit: matUnit,
+                  isSpecialLot,
+                  barcodes,
+                  selectedBarcode: targetBarcode || barcodes[0]?.barcode || "",
+                  currentMaterial: matObj,
+                  matSizeForm: parsedMatSize,
+                  items: receivedItems,
+                  waybillNo,
+                  targetWarehouse: targetWH,
+                  vendor: vendorCode,
+                  vendorName,
+                  openOrders: sortedOrders,
+                },
+              }
+            );
+          }, 500);
         } else {
           // Bütün ölçü değerleri var -> 2. yer de 1. yer gibi yeşil olur ve 3. Adet kısmına atar!
           setAreDimensionsDone(true);
@@ -646,88 +830,6 @@ export default function ReceivingDetailPage() {
     },
     [barcodeInput, vendorCode, show]
   );
-
-  // ---------------------------------------------------------------------------
-  // 2. ADIM: ÖLÇÜ BİLGİLERİNİ KAYDETME VE SAĞDAKİ KARTA YANSITMA
-  // ---------------------------------------------------------------------------
-  const handleSaveDimensions = async () => {
-    if (!currentMaterial) return;
-
-    if (
-      matSizeForm.pwidth <= 0 ||
-      matSizeForm.plength <= 0 ||
-      matSizeForm.pheight <= 0 ||
-      matSizeForm.netweight <= 0 ||
-      matSizeForm.brutweight <= 0
-    ) {
-      sesHata();
-      show({
-        kind: "error",
-        text: "Lütfen En, Boy, Yükseklik, Net Ağırlık ve Brüt Ağırlık alanlarını 0'dan büyük giriniz.",
-      });
-      return;
-    }
-
-    setIsSavingMatSize(true);
-    try {
-      const autoVol =
-        matSizeForm.volume > 0
-          ? matSizeForm.volume
-          : Number(((matSizeForm.pwidth * matSizeForm.plength * matSizeForm.pheight) / 1000000).toFixed(4));
-
-      await api.setMatSize({
-        material: currentMaterial.material,
-        pwidth: matSizeForm.pwidth,
-        plength: matSizeForm.plength,
-        pheight: matSizeForm.pheight,
-        volume: autoVol,
-        vunit: matSizeForm.vunit || "M3",
-        netweight: matSizeForm.netweight,
-        nwunit: matSizeForm.nwunit || "KG",
-        brutweight: matSizeForm.brutweight,
-        bwunit: matSizeForm.bwunit || "KG",
-        isexplos: matSizeForm.isexplos ? 1 : 0,
-        isspoil: matSizeForm.isspoil ? 1 : 0,
-        aklisbreakable: matSizeForm.aklisbreakable ? 1 : 0,
-        aklisliquid: matSizeForm.aklisliquid ? 1 : 0,
-        aklistoxic: matSizeForm.aklistoxic ? 1 : 0,
-        aklpalpos: matSizeForm.aklpalpos || 1,
-      });
-
-      // Sağdaki Ürün Bilgi Kartına anında kaydet/yansıt
-      setCurrentMaterial((prev) =>
-        prev
-          ? {
-            ...prev,
-            dimensions: {
-              width: matSizeForm.pwidth,
-              length: matSizeForm.plength,
-              height: matSizeForm.pheight,
-              volume: autoVol,
-              netWeight: matSizeForm.netweight,
-              brutWeight: matSizeForm.brutweight,
-            },
-          }
-          : prev
-      );
-
-      setAreDimensionsDone(true);
-      setActiveStep("quantity");
-      sesBasarili();
-      show({
-        kind: "ok",
-        text: "Ölçü bilgileri başarıyla kaydedildi. Kabul adedini giriniz.",
-      });
-    } catch (err: unknown) {
-      sesHata();
-      show({
-        kind: "error",
-        text: err instanceof Error ? err.message : "Ölçü bilgileri kaydedilemedi.",
-      });
-    } finally {
-      setIsSavingMatSize(false);
-    }
-  };
 
   // ---------------------------------------------------------------------------
   // FIFO OTOMATİK MİKTAR DAĞITIMI VE SİPARİŞ KARŞILAMA HESAPLAYICISI
@@ -775,6 +877,15 @@ export default function ReceivingDetailPage() {
     };
   }, [openOrders, receiptQty]);
 
+  // Açık Siparişlerdeki Toplam Bakiye (Kabul Edilebilecek Maksimum Adet)
+  const totalAvailableQty = useMemo(() => {
+    if (!openOrders || openOrders.length === 0) return 0;
+    return openOrders.reduce((sum, ord) => {
+      const q = getOrderRemainingQty(ord);
+      return sum + (q > 0 ? q : 1);
+    }, 0);
+  }, [openOrders]);
+
   // ---------------------------------------------------------------------------
   // 3. ADIM: ADET GİRİŞİ TAMAMLAMA VE OKUTULANLARA KAYDETME
   // ---------------------------------------------------------------------------
@@ -784,6 +895,15 @@ export default function ReceivingDetailPage() {
     if (receiptQty <= 0) {
       sesHata();
       show({ kind: "error", text: "Lütfen 0'dan büyük bir kabul adedi giriniz." });
+      return;
+    }
+
+    if (totalAvailableQty > 0 && receiptQty > totalAvailableQty) {
+      sesHata();
+      show({
+        kind: "error",
+        text: `Kabul adedi (${receiptQty}), açık siparişlerin toplam bakiyesini (${totalAvailableQty} ${currentMaterial.unit || "AD"}) aşamaz!`,
+      });
       return;
     }
 
@@ -954,15 +1074,15 @@ export default function ReceivingDetailPage() {
   const totalReceivedQty = receivedItems.reduce((sum, it) => sum + it.receivedQty, 0);
 
   return (
-    <div className="mx-auto max-w-7xl p-3.5 sm:p-6 lg:p-8 animate-fade-in space-y-6">
-      {/* Üst Başlık ve Aksiyonlar */}
+    <div className="mx-auto max-w-7xl p-2 sm:p-4 lg:p-6 animate-fade-in space-y-3 sm:space-y-4">
+      {/* Üst Başlık ve Aksiyonlar (Mobil Yatay Uyumlu Kompakt) */}
       <PageHeader
         title={`Mal Kabul: ${vendorName}`}
         subtitle={`İrsaliye: ${waybillNo || "—"} · Depo: ${targetWH || "—"}`}
         backTo="/receiving"
         right={
-          <div className="flex items-center gap-3">
-            <span className="chip bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 font-mono text-xs sm:text-sm px-3.5 py-1.5 font-extrabold border border-emerald-500/20 shadow-sm">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <span className="chip bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 font-mono text-xs sm:text-sm px-2.5 sm:px-3 py-1 font-extrabold border border-emerald-500/20 shadow-xs">
               {receivedItems.length} Kalem Okutuldu
             </span>
 
@@ -971,7 +1091,7 @@ export default function ReceivingDetailPage() {
               type="button"
               onClick={() => setIsConfirmModalOpen(true)}
               disabled={receivedItems.length === 0 || isSavingReceipt}
-              className="flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 text-xs sm:text-sm font-extrabold text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 sm:gap-2 rounded-xl bg-emerald-600 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-extrabold text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isSavingReceipt ? (
                 <>
@@ -989,21 +1109,21 @@ export default function ReceivingDetailPage() {
 
       {/* Başarı Bildirimi */}
       {saveSuccessMessage && (
-        <div className="flex items-center gap-2.5 rounded-2xl border border-emerald-500 bg-emerald-500/20 p-4 text-xs font-bold text-emerald-800 dark:text-emerald-200 animate-slide-up">
-          <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+        <div className="flex items-center gap-2.5 rounded-2xl border border-emerald-500 bg-emerald-500/20 p-3 text-xs font-bold text-emerald-800 dark:text-emerald-200 animate-slide-up">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
           <span>{saveSuccessMessage} Yönlendiriliyor...</span>
         </div>
       )}
 
-      {/* ANA İKİ SÜTUNLU YAPI */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {/* ANA İKİ SÜTUNLU YAPI - MOBİL YATAY (LANDSCAPE) VE MASAÜSTÜNDE ASLA ÜST ÜSTE BİNMEZ */}
+      <div className="grid grid-cols-1 sm:grid-cols-12 md:grid-cols-12 landscape:grid-cols-12 gap-3 sm:gap-4 items-start">
         {/* ========================================================================= */}
         {/* SOL SÜTUN: 3 AŞAMALI KART (1 ÜRÜN · 2 ÖLÇÜ · 3 ADET) + OKUTULANLAR KARTI */}
         {/* ========================================================================= */}
-        <div className="lg:col-span-5 xl:col-span-5 space-y-4">
-          <div className="rounded-3xl border border-line bg-surface p-5 shadow-card space-y-4">
-            {/* 3 Aşamalı Adım Hapları (1 Ürün · 2 Ölçü · 3 Adet) */}
-            <div className="flex items-center gap-1.5">
+        <div className="sm:col-span-5 md:col-span-5 lg:col-span-5 landscape:col-span-5 space-y-3 sm:space-y-4 min-w-0">
+          <div className="rounded-3xl border border-line bg-surface p-3.5 sm:p-4.5 shadow-card space-y-3 sm:space-y-3.5">
+            {/* 3 Aşamalı Adım Hapları (1 Ürün · 2 Ölçü · 3 Adet) - Kompakt & Küçük Tuşlar */}
+            <div className="flex items-center gap-1 bg-elevated/40 p-1 rounded-xl border border-line/60">
               {(
                 [
                   ["product", "1 Ürün"],
@@ -1025,18 +1145,24 @@ export default function ReceivingDetailPage() {
                   <button
                     key={stepKey}
                     type="button"
-                    onClick={() => isClickable && setActiveStep(stepKey)}
+                    onClick={() => {
+                      if (stepKey === "dimensions") {
+                        handleOpenDimensionsPage();
+                      } else if (isClickable) {
+                        setActiveStep(stepKey);
+                      }
+                    }}
                     disabled={!isClickable}
-                    className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 truncate rounded-xl px-2 py-2 text-xs font-bold transition-all duration-200 ${isActive
-                        ? "bg-emerald-600 text-white shadow-soft"
+                    className={`flex min-w-0 flex-1 items-center justify-center gap-1 truncate rounded-lg py-1.5 px-1.5 text-[11px] font-bold transition-all duration-200 ${isActive
+                        ? "bg-emerald-600 text-white shadow-sm"
                         : isDone
-                          ? "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300"
+                          ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
                           : isClickable
-                            ? "bg-elevated hover:bg-line text-fg"
-                            : "bg-elevated/40 text-subtle/60 cursor-not-allowed"
+                            ? "bg-surface hover:bg-elevated text-fg border border-line/50"
+                            : "bg-transparent text-subtle/50 cursor-not-allowed"
                       }`}
                   >
-                    <span className="shrink-0 font-mono">{isDone ? "✓" : ""}</span>
+                    <span className="shrink-0 font-mono text-[10px]">{isDone ? "✓" : ""}</span>
                     <span className="truncate">{label}</span>
                   </button>
                 );
@@ -1124,148 +1250,26 @@ export default function ReceivingDetailPage() {
             )}
 
             {/* ------------------------------------------------------------------- */}
-            {/* ADIM 2 GÖRÜNÜMÜ: ÖLÇÜ GİRİŞİ FORMU */}
+            {/* ADIM 2 GÖRÜNÜMÜ: ÖLÇÜ SAYFASINA YÖNLENDİRME KARTI                   */}
             {/* ------------------------------------------------------------------- */}
             {activeStep === "dimensions" && currentMaterial && (
-              <div className="space-y-3.5 animate-fade-in">
-                <div className="flex items-center justify-between pb-2 border-b border-line">
-                  <span className="text-xs font-bold text-fg flex items-center gap-1.5">
-                    <Ruler className="h-4 w-4 text-amber-500" /> Ölçü ve Ağırlık Girişi
-                  </span>
-                  <span className="chip bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 text-[10px] font-bold">
-                    Zorunlu Alanlar
-                  </span>
+              <div className="space-y-3 p-4 text-center rounded-2xl bg-elevated/40 border border-line animate-fade-in">
+                <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                  <Ruler className="h-6 w-6" />
                 </div>
-
-                <div className="grid grid-cols-3 gap-2.5 text-xs">
-                  <div>
-                    <label className="text-[11px] font-bold text-subtle block mb-1">En (cm) *</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min={0}
-                      value={matSizeForm.pwidth || ""}
-                      onChange={(e) => setMatSizeForm({ ...matSizeForm, pwidth: parseNum(e.target.value) })}
-                      placeholder="0"
-                      className="field-input w-full font-mono text-center text-xs font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-subtle block mb-1">Boy (cm) *</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min={0}
-                      value={matSizeForm.plength || ""}
-                      onChange={(e) => setMatSizeForm({ ...matSizeForm, plength: parseNum(e.target.value) })}
-                      placeholder="0"
-                      className="field-input w-full font-mono text-center text-xs font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-subtle block mb-1">Yükseklik (cm) *</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min={0}
-                      value={matSizeForm.pheight || ""}
-                      onChange={(e) => setMatSizeForm({ ...matSizeForm, pheight: parseNum(e.target.value) })}
-                      placeholder="0"
-                      className="field-input w-full font-mono text-center text-xs font-bold"
-                    />
-                  </div>
+                <div>
+                  <h4 className="text-xs font-extrabold text-fg">Ölçü ve Boyut Tanımlama</h4>
+                  <p className="text-[11px] text-subtle mt-0.5">
+                    Ölçü, ağırlık ve özel nitelikleri yatay giriş sayfasında düzenleyebilirsiniz.
+                  </p>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2.5 text-xs">
-                  <div>
-                    <label className="text-[11px] font-bold text-subtle block mb-1">Net Ağırlık (kg) *</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min={0}
-                      value={matSizeForm.netweight || ""}
-                      onChange={(e) => setMatSizeForm({ ...matSizeForm, netweight: parseNum(e.target.value) })}
-                      placeholder="0"
-                      className="field-input w-full font-mono text-center text-xs font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-subtle block mb-1">Brüt Ağırlık (kg) *</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min={0}
-                      value={matSizeForm.brutweight || ""}
-                      onChange={(e) => setMatSizeForm({ ...matSizeForm, brutweight: parseNum(e.target.value) })}
-                      placeholder="0"
-                      className="field-input w-full font-mono text-center text-xs font-bold"
-                    />
-                  </div>
-                </div>
-
-                {/* Güvenlik & Taşıma Nitelikleri */}
-                <div className="pt-2 border-t border-line space-y-1.5">
-                  <span className="text-[11px] font-bold text-subtle block">Özel Nitelikler:</span>
-                  <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    <label className="flex items-center gap-2 p-1.5 rounded-lg border border-line hover:bg-elevated cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={matSizeForm.aklisbreakable}
-                        onChange={(e) => setMatSizeForm({ ...matSizeForm, aklisbreakable: e.target.checked })}
-                        className="rounded text-emerald-600"
-                      />
-                      <span>Kırılabilir</span>
-                    </label>
-                    <label className="flex items-center gap-2 p-1.5 rounded-lg border border-line hover:bg-elevated cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={matSizeForm.aklisliquid}
-                        onChange={(e) => setMatSizeForm({ ...matSizeForm, aklisliquid: e.target.checked })}
-                        className="rounded text-emerald-600"
-                      />
-                      <span>Sıvı</span>
-                    </label>
-                    <label className="flex items-center gap-2 p-1.5 rounded-lg border border-line hover:bg-elevated cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={matSizeForm.isexplos}
-                        onChange={(e) => setMatSizeForm({ ...matSizeForm, isexplos: e.target.checked })}
-                        className="rounded text-emerald-600"
-                      />
-                      <span>Yanıcı</span>
-                    </label>
-                    <label className="flex items-center gap-2 p-1.5 rounded-lg border border-line hover:bg-elevated cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={matSizeForm.isspoil}
-                        onChange={(e) => setMatSizeForm({ ...matSizeForm, isspoil: e.target.checked })}
-                        className="rounded text-emerald-600"
-                      />
-                      <span>Çabuk Bozulan</span>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Ölçüleri Kaydet & İlerle Butonu */}
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={handleSaveDimensions}
-                    disabled={isSavingMatSize}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-xs font-bold text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-50"
-                  >
-                    {isSavingMatSize ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" /> Kaydediliyor...
-                      </>
-                    ) : (
-                      <>
-                        <span>Ölçüleri Kaydet & İlerle</span>
-                        <ArrowRight className="h-4 w-4" />
-                      </>
-                    )}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenDimensionsPage}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition"
+                >
+                  <ExternalLink className="h-4 w-4" /> Ölçü Sayfasına Git
+                </button>
               </div>
             )}
 
@@ -1273,10 +1277,10 @@ export default function ReceivingDetailPage() {
             {/* ADIM 3 GÖRÜNÜMÜ: ADET, PARTİ GİRİŞİ VE SAĞ ALTTA TAMAMLA TUŞU */}
             {/* ------------------------------------------------------------------- */}
             {activeStep === "quantity" && currentMaterial && (
-              <div className="space-y-4 animate-fade-in">
+              <div className="space-y-2.5 animate-fade-in">
                 {/* Miktar Stepper Girişi */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-bold text-fg">
                       Kabul Edilecek Miktar ({currentMaterial.unit || "AD"}) <span className="text-red-500">*</span>
                     </label>
@@ -1285,63 +1289,90 @@ export default function ReceivingDetailPage() {
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setReceiptQty((prev) => Math.max(0, prev - 1))}
-                      className="flex h-11 w-11 items-center justify-center rounded-2xl bg-elevated text-subtle hover:bg-line transition active:scale-95 shrink-0"
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-elevated text-subtle hover:bg-line transition active:scale-95 shrink-0"
                     >
-                      <Minus className="h-5 w-5" />
+                      <Minus className="h-4 w-4" />
                     </button>
                     <input
                       type="number"
                       min={0}
+                      max={totalAvailableQty > 0 ? totalAvailableQty : undefined}
                       step={1}
                       value={receiptQty === 0 ? "" : receiptQty}
                       placeholder="0"
                       onChange={(e) => {
                         const val = parseInt(e.target.value, 10);
-                        setReceiptQty(isNaN(val) ? 0 : Math.max(0, val));
+                        if (isNaN(val)) {
+                          setReceiptQty(0);
+                          return;
+                        }
+                        if (totalAvailableQty > 0 && val > totalAvailableQty) {
+                          setReceiptQty(totalAvailableQty);
+                          sesHata();
+                          show({
+                            kind: "err",
+                            text: `Açık siparişlerin toplam bakiyesi (${totalAvailableQty} ${currentMaterial.unit || "AD"}) aşılamaz.`,
+                          });
+                        } else {
+                          setReceiptQty(Math.max(0, val));
+                        }
                       }}
-                      className="field-input flex-1 text-center font-mono text-xl font-extrabold text-emerald-600 dark:text-emerald-400"
+                      className="field-input flex-1 text-center font-mono text-lg font-extrabold text-emerald-600 dark:text-emerald-400 h-10 py-1"
                       autoFocus
                     />
                     <button
                       type="button"
-                      onClick={() => setReceiptQty((prev) => prev + 1)}
-                      className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 transition active:scale-95 shadow-md shrink-0"
+                      disabled={totalAvailableQty > 0 && receiptQty >= totalAvailableQty}
+                      onClick={() => {
+                        if (totalAvailableQty > 0 && receiptQty >= totalAvailableQty) {
+                          sesHata();
+                          show({
+                            kind: "err",
+                            text: `Maksimum sipariş bakiyesine (${totalAvailableQty}) ulaşıldı.`,
+                          });
+                          return;
+                        }
+                        setReceiptQty((prev) => (totalAvailableQty > 0 ? Math.min(totalAvailableQty, prev + 1) : prev + 1));
+                      }}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition active:scale-95 shadow-md shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      <Plus className="h-5 w-5" />
+                      <Plus className="h-4 w-4" />
                     </button>
                   </div>
 
                   {/* Hızlı Artırma ve Sıfırlama Butonları (+5, +10, +50, Sıfırla) */}
-                  <div className="grid grid-cols-4 gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setReceiptQty((prev) => prev + 5)}
-                      className="rounded-xl border border-line bg-elevated/70 py-2 text-xs font-extrabold text-fg hover:bg-emerald-600 hover:text-white transition active:scale-95 shadow-xs"
-                    >
-                      +5
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setReceiptQty((prev) => prev + 10)}
-                      className="rounded-xl border border-line bg-elevated/70 py-2 text-xs font-extrabold text-fg hover:bg-emerald-600 hover:text-white transition active:scale-95 shadow-xs"
-                    >
-                      +10
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setReceiptQty((prev) => prev + 50)}
-                      className="rounded-xl border border-line bg-elevated/70 py-2 text-xs font-extrabold text-fg hover:bg-emerald-600 hover:text-white transition active:scale-95 shadow-xs"
-                    >
-                      +50
-                    </button>
+                  <div className="grid grid-cols-4 gap-1.5 pt-1.5">
+                    {[5, 10, 50].map((inc) => (
+                      <button
+                        key={inc}
+                        type="button"
+                        onClick={() => {
+                          setReceiptQty((prev) => {
+                            const target = prev + inc;
+                            if (totalAvailableQty > 0 && target > totalAvailableQty) {
+                              show({
+                                kind: "info",
+                                text: `Miktar toplam bakiye olan ${totalAvailableQty} ${currentMaterial.unit || "AD"} ile sınırlandırıldı.`,
+                              });
+                              return totalAvailableQty;
+                            }
+                            return target;
+                          });
+                        }}
+                        disabled={totalAvailableQty > 0 && receiptQty >= totalAvailableQty}
+                        className="rounded-lg border border-line bg-elevated/70 py-1.5 text-xs font-extrabold text-fg hover:bg-emerald-600 hover:text-white transition active:scale-95 shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        +{inc}
+                      </button>
+                    ))}
                     <button
                       type="button"
                       onClick={() => setReceiptQty(0)}
-                      className="rounded-xl border border-line bg-elevated/40 py-2 text-xs font-bold text-subtle hover:bg-red-500/20 hover:text-red-500 hover:border-red-500/30 transition active:scale-95 shadow-xs"
+                      className="rounded-lg border border-line bg-elevated/40 py-1.5 text-xs font-bold text-subtle hover:bg-red-500/20 hover:text-red-500 hover:border-red-500/30 transition active:scale-95 shadow-xs"
                     >
                       Sıfırla
                     </button>
@@ -1350,14 +1381,14 @@ export default function ReceivingDetailPage() {
 
                 {/* Partili Malzeme ise Parti No ve SKT Alanları */}
                 {currentMaterial.isSpecialLot && (
-                  <div className="space-y-2.5 rounded-2xl border border-violet-500/30 bg-violet-500/10 p-3.5 text-xs animate-fade-in">
+                  <div className="space-y-2 rounded-2xl border border-violet-500/30 bg-violet-500/10 p-2.5 text-xs animate-fade-in">
                     <div className="flex items-center gap-1.5 font-bold text-violet-800 dark:text-violet-200">
-                      <Tag className="h-4 w-4" />
+                      <Tag className="h-3.5 w-3.5" />
                       <span>Parti & SKT Girişi (Zorunlu)</span>
                     </div>
 
                     <div>
-                      <label className="text-[11px] font-bold text-subtle block mb-1">Parti No (Lot) *</label>
+                      <label className="text-[10px] font-bold text-subtle block mb-0.5">Parti No (Lot) *</label>
                       <input
                         type="text"
                         value={lotNumber}
@@ -1366,26 +1397,26 @@ export default function ReceivingDetailPage() {
                           if (lotError) setLotError("");
                         }}
                         placeholder="Parti numarasını giriniz"
-                        className={`field-input w-full font-mono text-xs font-bold ${lotError ? "border-red-500" : ""
+                        className={`field-input w-full font-mono text-xs font-bold h-8 py-1 ${lotError ? "border-red-500" : ""
                           }`}
                       />
-                      {lotError && <p className="text-[10px] text-red-500 mt-1 font-semibold">{lotError}</p>}
+                      {lotError && <p className="text-[10px] text-red-500 mt-0.5 font-semibold">{lotError}</p>}
                     </div>
 
                     <div>
-                      <label className="text-[11px] font-bold text-subtle block mb-1">Son Kullanma Tarihi (SKT)</label>
+                      <label className="text-[10px] font-bold text-subtle block mb-0.5">Son Kullanma Tarihi (SKT)</label>
                       <input
                         type="date"
                         value={expiryDate}
                         onChange={(e) => setExpiryDate(e.target.value)}
-                        className="field-input w-full font-mono text-xs"
+                        className="field-input w-full font-mono text-xs h-8 py-1"
                       />
                     </div>
                   </div>
                 )}
 
-                {/* ADET KARTININ SAĞ ALTINDA: TAMAMLA TUŞU */}
-                <div className="flex items-center justify-between pt-3 border-t border-line">
+                {/* ADET KARTININ SAĞ ALTINDA: TAMAMLA TUŞU (SIFIRLAYA YAKIN & ÇİZGİSİZ) */}
+                <div className="flex items-center justify-between pt-1.5">
                   <button
                     type="button"
                     onClick={() => {
@@ -1393,7 +1424,7 @@ export default function ReceivingDetailPage() {
                       setActiveStep("product");
                       setBarcodeInput("");
                     }}
-                    className="text-xs font-semibold text-subtle hover:text-fg transition"
+                    className="text-[11px] font-semibold text-subtle hover:text-fg transition"
                   >
                     Vazgeç / Yeni Barkod
                   </button>
@@ -1401,7 +1432,7 @@ export default function ReceivingDetailPage() {
                   <button
                     type="button"
                     onClick={handleCompleteItemReceipt}
-                    className="flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-lg hover:bg-emerald-700 active:scale-95 transition"
+                    className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-extrabold text-white shadow-md hover:bg-emerald-700 active:scale-95 transition"
                   >
                     <Check className="h-4 w-4" />
                     <span>Tamamla</span>
@@ -1458,94 +1489,227 @@ export default function ReceivingDetailPage() {
         </div>
 
         {/* ========================================================================= */}
-        {/* SAĞ SÜTUN: SAĞ ÜSTTE ÜRÜN BİLGİ KARTI + SAĞ ALTTA FIFO AÇIK SİPARİŞLER    */}
+        {/* SAĞ SÜTUN: SAĞ ÜSTTE ÜRÜN BİLGİ KARTI + SAĞ ALTTA AÇIK SİPARİŞLER         */}
         {/* ========================================================================= */}
-        <div className="lg:col-span-7 xl:col-span-7 space-y-4">
-          {/* SAĞ ÜST KART: ÜRÜNÜN BİLGİ KARTI (İSİM, RESİM, ÖLÇÜ VB.) - İNCELTİLMİŞ TASARIM */}
-          <div className="rounded-2xl border border-line bg-surface p-3.5 shadow-sm">
+        <div className="sm:col-span-7 md:col-span-7 lg:col-span-7 landscape:col-span-7 space-y-3 sm:space-y-4 min-w-0">
+          {/* SAĞ ÜST KART: ÜRÜNÜN BİLGİ KARTI (İSİM EN ÜSTTE, RESİM İSMİN ALTINDA) */}
+          <div className="rounded-3xl border border-line bg-surface p-3 sm:p-3.5 shadow-card min-h-[140px] flex flex-col justify-start space-y-2">
             {currentMaterial ? (
-              <div className="flex items-center gap-3">
-                {currentMaterial.image ? (
-                  <img
-                    src={currentMaterial.image}
-                    alt={currentMaterial.name}
-                    className="h-12 w-12 rounded-xl object-cover border border-line shrink-0 shadow-xs"
-                  />
-                ) : (
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                    <Package className="h-6 w-6" />
-                  </div>
-                )}
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="chip bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-mono text-[11px] font-extrabold py-0.5 px-2">
-                      {currentMaterial.material}
-                    </span>
-                    {currentMaterial.isSpecialLot && (
-                      <span className="chip bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1">
-                        <Tag className="h-2.5 w-2.5" /> Parti
-                      </span>
-                    )}
-                    <span className="text-subtle text-[11px] font-mono font-medium ml-auto">
-                      Birim: <strong className="text-fg">{currentMaterial.unit}</strong>
-                    </span>
-                  </div>
-
-                  <h4 className="font-bold text-fg text-xs truncate mt-0.5" title={currentMaterial.name}>
+              <div className="space-y-2 w-full">
+                {/* 1. Satır: En Üstte Tam Genişlikte Ürün İsmi ve Sağda Birim */}
+                <div className="flex items-start justify-between gap-2 border-b border-line/60 pb-1.5">
+                  <h4 className="font-extrabold text-fg text-xs sm:text-sm leading-snug text-left truncate" title={currentMaterial.name}>
                     {currentMaterial.name}
                   </h4>
+                  <span className="text-subtle text-[11px] font-mono font-medium shrink-0">
+                    Birim: <strong className="text-fg">{currentMaterial.unit}</strong>
+                  </span>
+                </div>
 
-                  {/* Ölçü & Ağırlık Bilgileri */}
-                  {currentMaterial.dimensions && currentMaterial.dimensions.width > 0 ? (
-                    <div className="flex items-center gap-1.5 text-[11px] font-mono text-subtle mt-0.5 truncate">
-                      <Ruler className="h-3 w-3 text-emerald-600 shrink-0" />
-                      <span>
-                        {currentMaterial.dimensions.width}x{currentMaterial.dimensions.length}x
-                        {currentMaterial.dimensions.height} cm · {currentMaterial.dimensions.brutWeight} kg
-                        {currentMaterial.dimensions.volume > 0 && ` (${currentMaterial.dimensions.volume} m³)`}
-                      </span>
-                    </div>
+                {/* 2. Satır: İsmin Altında Solda Resim, Sağında Kod + Ölçü/Ağırlık/Hacim ve Nitelikler ve Barkod */}
+                <div className="flex items-start gap-3 w-full">
+                  {/* Solda Ürün Görseli veya Fotoğraf Yok İmgesi */}
+                  {currentMaterial.image ? (
+                    <img
+                      src={currentMaterial.image}
+                      alt={currentMaterial.name}
+                      className="h-20 w-20 sm:h-22 sm:w-22 rounded-2xl object-cover border border-line shrink-0 shadow-sm"
+                    />
                   ) : (
-                    <div className="text-[10px] text-amber-600 font-medium mt-0.5">
-                      Ölçü bilgisi henüz girilmedi
+                    <div className="flex flex-col h-20 w-20 sm:h-22 sm:w-22 shrink-0 items-center justify-center rounded-2xl bg-elevated/80 border border-line/80 text-subtle/80 gap-1 p-1 text-center shadow-inner">
+                      <ImageIcon className="h-5 w-5 text-subtle/50" />
+                      <span className="text-[9px] font-bold text-subtle leading-tight">Fotoğraf Yok</span>
                     </div>
                   )}
+
+                  {/* Sağda: Kod + Ölçü/Ağırlık/Hacim + Özel Nitelikler ve Altta Barkod Combobox */}
+                  <div className="flex-1 space-y-1.5 min-w-0">
+                    {/* Ürün Kodu, Ölçü/Ağırlık/Hacim ve Özel Nitelikler Tek Birleşik Kutuda */}
+                    {currentMaterial.dimensions && currentMaterial.dimensions.width > 0 ? (
+                      <div className="flex items-center gap-1.5 text-xs font-mono text-fg/90 bg-elevated/50 py-1 px-2 rounded-xl border border-line/60 flex-wrap">
+                        <span className="font-extrabold text-fg bg-surface px-1.5 py-0.5 rounded-md border border-line text-[11px] shadow-2xs shrink-0">
+                          {currentMaterial.material}
+                        </span>
+                        <Ruler className="h-3 w-3 text-subtle shrink-0" />
+                        <span className="font-medium text-subtle text-xs flex items-center gap-1 flex-wrap">
+                          <span className="text-fg font-semibold">
+                            ({currentMaterial.dimensions.width})x({currentMaterial.dimensions.length})x({currentMaterial.dimensions.height})
+                          </span>
+                          <strong className="text-xs font-bold text-fg">CM</strong>
+                          <span className="text-subtle/50">·</span>
+                          <span className="text-[11px] font-medium text-subtle">Net:</span>
+                          <span className="text-fg font-semibold">({currentMaterial.dimensions.netWeight})</span>
+                          <strong className="text-xs font-bold text-fg">KG</strong>
+                          <span className="text-subtle/50">·</span>
+                          <span className="text-[11px] font-medium text-subtle">Brüt:</span>
+                          <span className="text-fg font-semibold">({currentMaterial.dimensions.brutWeight})</span>
+                          <strong className="text-xs font-bold text-fg">KG</strong>
+                          {((currentMaterial.dimensions.volume && currentMaterial.dimensions.volume > 0) ||
+                            (currentMaterial.dimensions.width * currentMaterial.dimensions.length * currentMaterial.dimensions.height > 0)) && (
+                            <>
+                              <span className="text-subtle/50">·</span>
+                              <span className="text-fg font-semibold">
+                                (
+                                {currentMaterial.dimensions.volume && currentMaterial.dimensions.volume > 0
+                                  ? currentMaterial.dimensions.volume
+                                  : Number(
+                                      (
+                                        (currentMaterial.dimensions.width *
+                                          currentMaterial.dimensions.length *
+                                          currentMaterial.dimensions.height) /
+                                        1000000
+                                      ).toFixed(3)
+                                    )}
+                                )
+                              </span>
+                              <strong className="text-xs font-bold text-fg">M³</strong>
+                            </>
+                          )}
+                        </span>
+
+                        {/* Özel Nitelikler (Sıvı, Yanıcı, Kırılabilir, Bozulabilir, Toksik, Parti) */}
+                        {(currentMaterial.isSpecialLot ||
+                          currentMaterial.specialAttributes?.aklisliquid ||
+                          currentMaterial.specialAttributes?.isexplos ||
+                          currentMaterial.specialAttributes?.aklisbreakable ||
+                          currentMaterial.specialAttributes?.isspoil ||
+                          currentMaterial.specialAttributes?.aklistoxic) && (
+                          <div className="flex items-center gap-1 pl-1 border-l border-line/60 flex-wrap">
+                            {currentMaterial.specialAttributes?.aklisliquid && (
+                              <span className="chip bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1">
+                                <Droplets className="h-2.5 w-2.5" /> Sıvı
+                              </span>
+                            )}
+                            {currentMaterial.specialAttributes?.isexplos && (
+                              <span className="chip bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1">
+                                <Flame className="h-2.5 w-2.5" /> Yanıcı
+                              </span>
+                            )}
+                            {currentMaterial.specialAttributes?.aklisbreakable && (
+                              <span className="chip bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1">
+                                <GlassWater className="h-2.5 w-2.5" /> Kırılabilir
+                              </span>
+                            )}
+                            {currentMaterial.specialAttributes?.isspoil && (
+                              <span className="chip bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1">
+                                <Clock className="h-2.5 w-2.5" /> Bozulabilir
+                              </span>
+                            )}
+                            {currentMaterial.specialAttributes?.aklistoxic && (
+                              <span className="chip bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1">
+                                <Skull className="h-2.5 w-2.5" /> Toksik
+                              </span>
+                            )}
+                            {currentMaterial.isSpecialLot && (
+                              <span className="chip bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1">
+                                <Tag className="h-2.5 w-2.5" /> Parti
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-xs font-mono text-subtle bg-elevated/50 py-1 px-2 rounded-xl border border-line/60 flex-wrap">
+                        <span className="font-extrabold text-fg bg-surface px-1.5 py-0.5 rounded-md border border-line text-[11px] shadow-2xs shrink-0">
+                          {currentMaterial.material}
+                        </span>
+                        <span className="text-[10px] text-amber-600 font-medium py-0.5">
+                          Ölçü bilgisi henüz girilmedi
+                        </span>
+                        {(currentMaterial.isSpecialLot ||
+                          currentMaterial.specialAttributes?.aklisliquid ||
+                          currentMaterial.specialAttributes?.isexplos ||
+                          currentMaterial.specialAttributes?.aklisbreakable ||
+                          currentMaterial.specialAttributes?.isspoil ||
+                          currentMaterial.specialAttributes?.aklistoxic) && (
+                          <div className="flex items-center gap-1 pl-1 border-l border-line/60 flex-wrap">
+                            {currentMaterial.specialAttributes?.aklisliquid && (
+                              <span className="chip bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1">
+                                <Droplets className="h-2.5 w-2.5" /> Sıvı
+                              </span>
+                            )}
+                            {currentMaterial.specialAttributes?.isexplos && (
+                              <span className="chip bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1">
+                                <Flame className="h-2.5 w-2.5" /> Yanıcı
+                              </span>
+                            )}
+                            {currentMaterial.specialAttributes?.aklisbreakable && (
+                              <span className="chip bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1">
+                                <GlassWater className="h-2.5 w-2.5" /> Kırılabilir
+                              </span>
+                            )}
+                            {currentMaterial.specialAttributes?.isspoil && (
+                              <span className="chip bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1">
+                                <Clock className="h-2.5 w-2.5" /> Bozulabilir
+                              </span>
+                            )}
+                            {currentMaterial.specialAttributes?.aklistoxic && (
+                              <span className="chip bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1">
+                                <Skull className="h-2.5 w-2.5" /> Toksik
+                              </span>
+                            )}
+                            {currentMaterial.isSpecialLot && (
+                              <span className="chip bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30 text-[10px] font-bold py-0.5 px-1.5 flex items-center gap-1">
+                                <Tag className="h-2.5 w-2.5" /> Parti
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Kompakt Barkod Combobox */}
+                    <div className="flex items-center gap-1.5 pt-0.5">
+                      <label className="text-[10px] font-bold text-subtle shrink-0">Barkod:</label>
+                      <select
+                        value={currentMaterial.selectedBarcode}
+                        onChange={(e) =>
+                          setCurrentMaterial((prev) =>
+                            prev ? { ...prev, selectedBarcode: e.target.value } : prev
+                          )
+                        }
+                        className="field-input text-[11px] font-mono font-bold py-0.5 px-2 h-7 rounded-lg border border-line bg-surface text-fg flex-1 shadow-xs cursor-pointer focus:border-emerald-500 truncate max-w-[280px] sm:max-w-none"
+                      >
+                        {currentMaterial.barcodes.map((b) => (
+                          <option key={b.barcode} value={b.barcode}>
+                            {b.barcode} ({b.unit})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : (
-              <div className="py-2 text-center text-subtle text-xs flex items-center justify-center gap-2">
-                <Package className="h-4 w-4 text-subtle/50" />
-                <span>Barkod okutulduğunda ürün detayları burada görüntülenecektir.</span>
+              <div className="py-6 text-center text-subtle text-xs flex flex-col items-center justify-center gap-2">
+                <Package className="h-7 w-7 text-subtle/40" />
+                <span className="font-medium">Barkod okutulduğunda ürün detayları burada görüntülenecektir.</span>
               </div>
             )}
           </div>
 
-          {/* SAĞ ALT KART: FIFO'YA GÖRE SIRALANMIŞ AÇIK SİPARİŞLER */}
-          <div className="rounded-3xl border border-line bg-surface p-5 shadow-card space-y-3.5">
+          {/* SAĞ ALT KART: YENİDEN ESKİYE SIRALANMIŞ AÇIK SİPARİŞLER */}
+          <div className="rounded-3xl border border-line bg-surface p-3.5 sm:p-4.5 shadow-card space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-line">
               <div className="flex items-center gap-2">
                 <Layers className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                 <h3 className="text-xs font-extrabold text-fg uppercase tracking-wider">
-                  Açık Siparişler (eskiden yeniye sıralı)
+                  Açık Siparişler (yeniden eskiye)
                 </h3>
               </div>
-              <span className="chip bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-mono text-[11px] font-bold">
-                {openOrders.length} Sipariş Bulundu
-              </span>
             </div>
 
             {openOrders.length === 0 ? (
               <div className="py-6 text-center text-subtle text-xs">
-                <Layers className="mx-auto h-8 w-8 text-subtle/40 mb-2" />
+                <Layers className="mx-auto h-7 w-7 text-subtle/40 mb-1.5" />
                 <p>Bu ürüne ait açık sipariş bulunamadı veya henüz barkod okutulmadı.</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5 max-h-[42vh] sm:max-h-[50vh] overflow-y-auto pr-1">
                 {fifoAllocation.allocations.map((al, idx) => (
                   <div
                     key={`${al.orderNum}-${al.itemNum}-${idx}`}
-                    className={`rounded-2xl border p-4 transition-all duration-200 ${al.isFullyAllocated
+                    className={`rounded-2xl border p-3.5 sm:p-4 transition-all duration-200 ${al.isFullyAllocated
                         ? "border-emerald-500/60 bg-emerald-500/10 shadow-sm"
                         : al.isPartiallyAllocated
                           ? "border-amber-500/60 bg-amber-500/10 shadow-sm"
@@ -1559,7 +1723,7 @@ export default function ReceivingDetailPage() {
                         </span>
                         {idx === 0 && (
                           <span className="chip bg-emerald-600 text-white font-bold text-[10px] px-2 py-0.5 shadow-sm">
-                            1. Öncelik (En Eski)
+                            1. Öncelik (En Yeni)
                           </span>
                         )}
                         {idx > 0 && (

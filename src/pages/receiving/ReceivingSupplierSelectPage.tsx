@@ -105,6 +105,15 @@ export default function ReceivingSupplierSelectPage() {
   const [caniasWarehouses, setCaniasWarehouses] = useState<{ code: string; name: string }[]>([]);
 
   useEffect(() => {
+    // Mal kabul seçim sayfasına gelindiğinde eski yarım kalmış oturum kalıntılarını temizle
+    try {
+      Object.keys(localStorage).forEach((k) => {
+        if (k.startsWith("mzy_receiving_items_")) {
+          localStorage.removeItem(k);
+        }
+      });
+    } catch {}
+
     api
       .getWarehouses()
       .then((list) => {

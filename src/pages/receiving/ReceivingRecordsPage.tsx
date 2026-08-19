@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
-import { ArrowLeft, Trash2, Package, Tag, Ruler } from "lucide-react";
+import { ArrowLeft, Trash2, Package, Ruler } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import type { ReceivedItem } from "./MaterialReceiptModal";
 
@@ -15,14 +15,11 @@ export default function ReceivingRecordsPage() {
   const vendorCode = searchParams.get("vendor") || location.state?.vendor || "";
   const vendorName = searchParams.get("vendorName") || location.state?.vendorName || "Tedarikçi";
 
-  const storageKey = `mzy_receiving_items_${vendorCode || id}_${waybillNo || "active"}`;
-
   const [items, setItems] = useState<ReceivedItem[]>(() => {
     try {
       const stateItems = location.state?.items as ReceivedItem[] | undefined;
-      if (stateItems && stateItems.length > 0) return stateItems;
-      const raw = localStorage.getItem(storageKey);
-      return raw ? JSON.parse(raw) : [];
+      if (Array.isArray(stateItems) && stateItems.length > 0) return stateItems;
+      return [];
     } catch {
       return [];
     }
@@ -31,9 +28,6 @@ export default function ReceivingRecordsPage() {
   const handleDeleteItem = (itemId: string) => {
     const updated = items.filter((it) => it.id !== itemId);
     setItems(updated);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-    } catch {}
   };
 
   const totalQuantity = items.reduce((sum, it) => sum + it.receivedQty, 0);
@@ -49,7 +43,6 @@ export default function ReceivingRecordsPage() {
       <PageHeader
         title="Okutulan Ürünler"
         subtitle={`${vendorName} · İrsaliye: ${waybillNo || "—"} · Depo: ${targetWH || "—"}`}
-        backTo={backUrl}
         right={
           <div className="flex items-center gap-3">
             <span className="chip bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-mono font-bold text-xs sm:text-sm px-3 py-1.5 border border-emerald-500/20 shadow-sm">

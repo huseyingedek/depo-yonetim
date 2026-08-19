@@ -13,6 +13,7 @@ import ReceivingListPage from "./pages/receiving/ReceivingListPage";
 import ReceivingSupplierSelectPage from "./pages/receiving/ReceivingSupplierSelectPage";
 import ReceivingDetailPage from "./pages/receiving/ReceivingDetailPage";
 import ReceivingRecordsPage from "./pages/receiving/ReceivingRecordsPage";
+import ReceivingDimensionsPage from "./pages/receiving/ReceivingDimensionsPage";
 import ReceivingSummaryPage from "./pages/receiving/ReceivingSummaryPage";
 import PutawayListPage from "./pages/putaway/PutawayListPage";
 import PutawayItemPage from "./pages/putaway/PutawayItemPage";
@@ -61,6 +62,7 @@ export default function App() {
         <Route path="/receiving/list" element={<ReceivingListPage />} />
         <Route path="/receiving/:id" element={<ReceivingDetailPage />} />
         <Route path="/receiving/:id/kayitlar" element={<ReceivingRecordsPage />} />
+        <Route path="/receiving/:id/olculer" element={<ReceivingDimensionsPage />} />
         <Route path="/receiving/:id/summary" element={<ReceivingSummaryPage />} />
 
         {}
