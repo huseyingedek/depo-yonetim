@@ -297,26 +297,26 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
   - `MATSIZE`: Ölçü, ağırlık ve güvenlik nitelikleri tablosu
 - **WMS İstemci Karşılığı**: `api.getMaterialDetail(barcode)`
 
-### 5.3. `MzySetMatSize` — Malzeme Ölçü, Ağırlık ve Güvenlik Nitelikleri Güncelleme
-- **Açıklama**: Malzemenin eksik veya sıfır olan en, boy, yükseklik, ağırlık, hacim, kırılabilirlik, yanıcılık gibi ölçü niteliklerini kaydeder.
+### 5.3. `MZYSetMatSize` — Malzeme Ölçü, Ağırlık ve Güvenlik Nitelikleri Güncelleme
+- **Açıklama**: Malzemenin eksik veya sıfır olan en, boy, yükseklik, ağırlık, hacim, kırılabilirlik, yanıcılık gibi ölçü ve güvenlik niteliklerini kaydeder.
 - **Parametreler**:
-  - `COMPANY` (*STRING*): Firma kodu (`"01"`).
-  - `MATERIAL` (*STRING*): Malzeme kodu.
+  - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
+  - `PSMATERIAL` (*STRING*): Malzeme kodu.
   - `VOLUME` (*DECIMAL*): Hacim.
-  - `VUNIT` (*STRING*): Hacim birimi.
+  - `VUNIT` (*STRING*): Hacim birimi (`"M3"` veya `"DS"`).
   - `PWIDTH` (*DECIMAL*): En / Genişlik.
   - `PLENGTH` (*DECIMAL*): Boy / Uzunluk.
   - `PHEIGHT` (*DECIMAL*): Yükseklik.
   - `NETWEIGHT` (*DECIMAL*): Net Ağırlık.
-  - `NWUNIT` (*STRING*): Net Ağırlık birimi.
+  - `NWUNIT` (*STRING*): Net Ağırlık birimi (`"KG"` veya `"GR"`).
   - `BRUTWEIGHT` (*DECIMAL*): Brüt Ağırlık.
-  - `BWUNIT` (*STRING*): Brüt Ağırlık birimi.
-  - `ISEXPLOS` (*INTEGER*): Patlayıcı mı? (`0` / `1`).
-  - `ISSPOIL` (*INTEGER*): Bozulabilir mi? (`0` / `1`).
-  - `AKLISBREAKABLE` (*INTEGER*): Kırılabilir mi? (`0` / `1`).
-  - `AKLISLIQUID` (*INTEGER*): Sıvı mı? (`0` / `1`).
-  - `AKLISTOXIC` (*INTEGER*): Zehirli mi? (`0` / `1`).
-  - `AKLPALPOS` (*INTEGER*): Palet pozisyonu / Öncelik sırası.
+  - `BWUNIT` (*STRING*): Brüt Ağırlık birimi (`"KG"` veya `"GR"`).
+  - `ISEXPLOS` (*INTEGER*): Tehlikeli / Yanıcı Madde (`0` / `1`).
+  - `ISSPOIL` (*INTEGER*): Bozulabilir (`0` / `1`).
+  - `AKLISBREAKABLE` (*INTEGER*): Kırılabilir (`0` / `1`).
+  - `AKLISLIQUID` (*INTEGER*): Sıvı (`0` / `1`).
+  - `AKLISTOXIC` (*INTEGER*): Zehirli / Kimyasal (`0` / `1`).
+  - `AKLPALPOS` (*INTEGER*): Palet Pozisyonu (`1`).
 ### 5.4. `MzyGetCustomer` — Tedarikçi / Müşteri Arama Servisi
 - **Açıklama**: Tedarikçi adı veya kodu ile CANIAS veritabanından tedarikçileri listeler.
 - **Parametreler**:
@@ -326,23 +326,26 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
   - `PICUSTYPE` / `PSCUSTYPE` (*INTEGER*): Müşteri/Tedarikçi tipi (`0`: Hepsi, `1`: Tedarikçi, `2`: Müşteri). Mal Kabul için `1` gönderilir.
 - **WMS İstemci Karşılığı**: `api.getCustomers(payload)`
 
-### 5.5. `MZYSAVEINVPURORDER` — Mal Kabul Tamamlama ve Saklama Servisi
-- **Açıklama**: Kabul edilen sipariş kalemlerini, irsaliye numarası ve depo bilgisiyle CANIAS satın alma/irsaliye kaydına dönüştürür.
+### 5.5. `MZYSaveReceipt` — Mal Kabul Tamamlama ve Saklama Servisi
+- **Açıklama**: Kabul edilen sipariş kalemlerini, irsaliye numarası, depo, stok yeri, başlama zamanı ve kalem bilgileriyle CANIAS satın alma/irsaliye kaydına dönüştürür.
 - **Parametreler**:
   - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
   - `PSPLANT` (*STRING*): Tesis kodu (`"100"`).
-  - `PSVENDOR` (*STRING*): Tedarikçi kodu (Örn: `"800980"`).
-  - `PSWAYBILL` (*STRING*): İrsaliye numarası.
-  - `PSSOURCEWH` (*STRING*): Çıkış deposu (varsa).
-  - `PSTARGETWH` (*STRING*): Mal kabul deposu.
-  - `PSUSER` (*STRING*): İşlemi yapan kullanıcı/personel.
-  - `PSITEMS` (*TABLE*): Kabul edilen ürün kalemleri listesi.
-    - `PURORDER` / `ORDERNUM` (*STRING*): Satın alma sipariş numarası.
-    - `ITEMNUM` (*INTEGER*): Sipariş kalem numarası.
-    - `MATERIAL` (*STRING*): Malzeme kodu.
-    - `QUANTITY` (*DECIMAL*): Kabul edilen adet.
-    - `BATCHNUM` (*STRING*): Parti / Lot numarası (varsa).
-    - `EXPIRYDATE` (*STRING*): Son kullanma tarihi (varsa).
+  - `PSVENDOR` (*STRING*): Tedarikçi kodu (Örn: `"16660"`).
+  - `PSEXTDELNUM` (*STRING*): İrsaliye numarası.
+  - `PSWAREHOUSE` (*STRING*): Mal Kabul yapılan depo (Örn: `"100"`).
+  - `PSSTOCKPLACE` (*STRING*): Mal Kabul yapılan stok yeri (Örn: `"*"`).
+  - `PSUSER` (*STRING*): Login olan kullanıcı adı.
+  - `PDTSTARTTIME` (*DATETIME*): Mal kabule başlama zamanı.
+  - `PSIASPURITEMXML` (*TABLE / XML*): Kabul edilen malzemeler listesi:
+    - `MATERIAL` (*STRING*): Malzeme Kodu.
+    - `SPECIALSTOCK` (*STRING*): Özel Stok Tipi (`"0"`, `"1"` vb.).
+    - `BATCHNUM` (*STRING*): Parti No (Stok Birimi bazında).
+    - `READQUANTITY` (*DECIMAL*): Kabul Edilen Miktar (Stok Birimi bazında).
+    - `QUNIT` (*STRING*): Kabul Edilen Miktar Birimi (`"AD"`, `"KO"`, `"KT"`).
+    - `ORDERTYPE` (*STRING*): Satınalma Sipariş Belge Tipi (`"OP"` vb.).
+    - `ORDERNUM` (*STRING*): Satınalma Sipariş Belge No.
+    - `ITEMNUM` (*INTEGER*): Satınalma Sipariş Kalem No.
 - **WMS İstemci Karşılığı**: `api.saveReceipt(payload)`
 
 ---

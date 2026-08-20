@@ -33,6 +33,10 @@ export interface ReceivedItem {
   isSpecialLot: boolean; // DEFSPECIAL == "1"
   batchNum?: string; // Parti No (Lot)
   expiryDate?: string; // SKT
+  orderType?: string; // Belge Tipi (OP vb.)
+  warehouse?: string; // Depo
+  stockPlace?: string; // Stok Yeri
+  specialStock?: string; // Özel Stok
   // Ölçü Bilgileri
   dimensions?: {
     width: number;

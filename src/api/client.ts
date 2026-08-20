@@ -1374,9 +1374,20 @@ export const api = {
     const rootRow = matList[0] || (dataObj.WMSXMLTABLE as Record<string, unknown>)?.ROW || (dataObj.ROW as Record<string, unknown>) || {};
 
     // Barcode List
-    let barcodeList = rowsOf(r, ["BARCODELIST", "BARCODES"]);
-    if (!barcodeList.length && rootRow.BARCODELIST) {
-      barcodeList = Array.isArray(rootRow.BARCODELIST) ? rootRow.BARCODELIST : [rootRow.BARCODELIST];
+    let barcodeList: Record<string, unknown>[] = [];
+    const rawBC = (rootRow.BARCODELIST || dataObj.BARCODELIST) as unknown;
+    if (rawBC) {
+      if (Array.isArray(rawBC)) {
+        barcodeList = rawBC as Record<string, unknown>[];
+      } else if (typeof rawBC === "object" && (rawBC as Record<string, unknown>).ROW) {
+        const rowVal = (rawBC as Record<string, unknown>).ROW;
+        barcodeList = Array.isArray(rowVal) ? (rowVal as Record<string, unknown>[]) : [rowVal as Record<string, unknown>];
+      } else if (typeof rawBC === "object") {
+        barcodeList = [rawBC as Record<string, unknown>];
+      }
+    }
+    if (!barcodeList.length) {
+      barcodeList = rowsOf(r, ["BARCODELIST", "BARCODES"]);
     }
 
     // MatSize
@@ -1407,7 +1418,7 @@ export const api = {
     };
   },
 
-  // 3. MzySetMatSize - Malzeme Ölçü, Ağırlık ve Güvenlik Nitelikleri Güncelleme
+  // 3. MZYSetMatSize - Malzeme Ölçü, Ağırlık ve Güvenlik Nitelikleri Güncelleme
   async setMatSize(payload: {
     company?: string;
     material: string;
@@ -1428,9 +1439,14 @@ export const api = {
     aklpalpos?: number;
   }): Promise<{ ok: boolean; message: string }> {
     const c = ctx();
+    const matCode = (payload.material || "").trim();
+    const compCode = payload.company || c.company || "01";
+
     const r = await call(SERVICES.setMatSize, {
-      COMPANY: payload.company || c.company || "01",
-      MATERIAL: payload.material,
+      PSCOMPANY: compCode,
+      COMPANY: compCode,
+      PSMATERIAL: matCode,
+      MATERIAL: matCode,
       VOLUME: payload.volume ?? 0,
       VUNIT: payload.vunit || "M3",
       PWIDTH: payload.pwidth ?? 0,
@@ -1445,7 +1461,7 @@ export const api = {
       AKLISBREAKABLE: payload.aklisbreakable ? 1 : 0,
       AKLISLIQUID: payload.aklisliquid ? 1 : 0,
       AKLISTOXIC: payload.aklistoxic ? 1 : 0,
-      AKLPALPOS: payload.aklpalpos ?? 0,
+      AKLPALPOS: payload.aklpalpos ?? 1,
     });
 
     const mesaj = serviceMessage(r);
@@ -1488,44 +1504,80 @@ export const api = {
     };
   },
 
-  // 5. MZYSAVEINVPURORDER - Mal Kabul Tamamlama ve Saklama Servisi
+  // 5. MZYSaveReceipt - Mal Kabul Tamamlama ve Saklama Servisi
   async saveReceipt(payload: {
     company?: string;
     plant?: string;
     vendor: string;
     waybillNo: string;
-    sourceWarehouse?: string;
+    warehouse?: string;
     targetWarehouse?: string;
+    sourceWarehouse?: string;
+    stockPlace?: string;
     user?: string;
+    startTime?: string;
     items: Array<{
+      orderType?: string;
       orderNum: string;
       itemNum: number | string;
       material: string;
-      quantity: number;
+      quantity?: number;
+      receivedQty?: number;
+      unit?: string;
+      specialStock?: string;
+      isSpecialLot?: boolean;
       batchNum?: string;
       expiryDate?: string;
     }>;
   }): Promise<{ ok: boolean; message: string }> {
     const c = ctx();
-    const formattedItems = (payload.items || []).map((it) => ({
-      PURORDER: String(it.orderNum || "").trim(),
-      ORDERNUM: String(it.orderNum || "").trim(),
-      ITEMNUM: Number(it.itemNum) || 1,
-      MATERIAL: String(it.material || "").trim(),
-      QUANTITY: Number(it.quantity) || 1,
-      BATCHNUM: String(it.batchNum || "").trim(),
-      EXPIRYDATE: String(it.expiryDate || "").trim(),
-    }));
+    const formattedItems = (payload.items || []).map((it) => {
+      const readQty = it.receivedQty ?? it.quantity ?? 1;
+      const orderType = String(it.orderType || "OP").trim().toUpperCase();
+      const specialStock = String(
+        it.specialStock || (it.isSpecialLot ? "1" : "0")
+      ).trim();
+
+      return {
+        MATERIAL: String(it.material || "").trim(),
+        SPECIALSTOCK: specialStock,
+        BATCHNUM: String(it.batchNum || "").trim(),
+        READQUANTITY: Number(readQty),
+        QUNIT: String(it.unit || "AD").trim().toUpperCase(),
+        ORDERTYPE: orderType,
+        ORDERNUM: String(it.orderNum || "").trim(),
+        ITEMNUM: Number(it.itemNum) || 1,
+        // Geriye dönük uyumluluk alanları
+        PURORDER: String(it.orderNum || "").trim(),
+        QUANTITY: Number(readQty),
+        EXPIRYDATE: String(it.expiryDate || "").trim(),
+      };
+    });
+
+    const nowStr = new Date().toLocaleString("tr-TR", { hour12: false });
+    const startTimeStr = payload.startTime || nowStr;
+    const compCode = String(payload.company || c.company || "01").trim();
+    const plantCode = String(payload.plant || c.plant || "100").trim();
+    const whCode = String(payload.warehouse || payload.targetWarehouse || c.warehouse || "").trim();
+    const spCode = String(payload.stockPlace || "*").trim() || "*";
+    const userCode = String(payload.user || c.worker || "").trim();
+    const waybill = String(payload.waybillNo || "").trim();
+    const vendorCode = String(payload.vendor || "").trim();
 
     const r = await call(SERVICES.saveReceipt, {
-      PSCOMPANY: String(payload.company || c.company || "01").trim(),
-      PSPLANT: String(payload.plant || c.plant || "100").trim(),
-      PSVENDOR: String(payload.vendor || "").trim(),
-      PSWAYBILL: String(payload.waybillNo || "").trim(),
+      PSCOMPANY: compCode,
+      PSPLANT: plantCode,
+      PSVENDOR: vendorCode,
+      PSEXTDELNUM: waybill,
+      PSWAYBILL: waybill, // Geriye dönük uyumluluk
+      PSWAREHOUSE: whCode,
+      PSTARGETWH: whCode, // Geriye dönük uyumluluk
       PSSOURCEWH: String(payload.sourceWarehouse || "").trim(),
-      PSTARGETWH: String(payload.targetWarehouse || c.warehouse || "").trim(),
-      PSUSER: String(payload.user || c.worker || "").trim(),
-      PSITEMS: formattedItems,
+      PSSTOCKPLACE: spCode,
+      PSUSER: userCode,
+      PDTSTARTTIME: startTimeStr,
+      PSIASPURITEMXML: formattedItems,
+      PSITEMS: formattedItems, // Geriye dönük uyumluluk
     });
 
     const mesaj = serviceMessage(r);

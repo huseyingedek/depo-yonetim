@@ -81,6 +81,7 @@ const ALLOWED = new Set([
   "MzySetMatSize",
   "MZYGetCustomer",
   "MzyGetCustomer",
+  "MZYSaveReceipt",
   "MZYSAVEINVPURORDER",
 ]);
 
@@ -295,6 +296,7 @@ async function callServiceInner(serviceId, params, retry = true) {
     serviceId === "MZYPrintBarcode" ||
     serviceId === "MzySetMatSize" ||
     serviceId === "MZYSetMatSize" ||
+    serviceId === "MZYSaveReceipt" ||
     serviceId === "MZYSAVEINVPURORDER";
   const bosYanit = !String(rawResponse ?? "").trim();
   const oturumHatasi = /session/i.test(String(sysError) + String(rawResponse));
@@ -366,6 +368,7 @@ app.get("/services", async (_req, res) => {
 const SERVICE_ALIASES = {
   MzyGetCustomer: "MZYGetCustomer",
   MzySetMatSize: "MZYSetMatSize",
+  MZYSAVEINVPURORDER: "MZYSaveReceipt",
 };
 
 app.post("/api/mzy/:service", async (req, res) => {

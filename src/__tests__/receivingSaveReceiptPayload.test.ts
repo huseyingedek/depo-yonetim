@@ -28,42 +28,66 @@ function buildParametersXml(params: Record<string, unknown> = {}) {
   return `<PARAMETERS>${body}</PARAMETERS>`;
 }
 
-// Payload formatter for api.saveReceipt
+// Payload formatter for api.saveReceipt (MZYSaveReceipt)
 function formatSaveReceiptPayload(payload: {
   company?: string;
   plant?: string;
   vendor: string;
   waybillNo: string;
-  sourceWarehouse?: string;
+  warehouse?: string;
   targetWarehouse?: string;
+  stockPlace?: string;
   user?: string;
+  startTime?: string;
   items: Array<{
+    orderType?: string;
     orderNum: string;
     itemNum: number | string;
     material: string;
-    quantity: number;
+    quantity?: number;
+    receivedQty?: number;
+    unit?: string;
+    specialStock?: string;
+    isSpecialLot?: boolean;
     batchNum?: string;
     expiryDate?: string;
   }>;
 }) {
-  const formattedItems = (payload.items || []).map((it) => ({
-    PURORDER: String(it.orderNum || "").trim(),
-    ORDERNUM: String(it.orderNum || "").trim(),
-    ITEMNUM: Number(it.itemNum) || 1,
-    MATERIAL: String(it.material || "").trim(),
-    QUANTITY: Number(it.quantity) || 1,
-    BATCHNUM: String(it.batchNum || "").trim(),
-    EXPIRYDATE: String(it.expiryDate || "").trim(),
-  }));
+  const formattedItems = (payload.items || []).map((it) => {
+    const readQty = it.receivedQty ?? it.quantity ?? 1;
+    const orderType = String(it.orderType || "OP").trim().toUpperCase();
+    const specialStock = String(
+      it.specialStock || (it.isSpecialLot ? "1" : "0")
+    ).trim();
+
+    return {
+      MATERIAL: String(it.material || "").trim(),
+      SPECIALSTOCK: specialStock,
+      BATCHNUM: String(it.batchNum || "").trim(),
+      READQUANTITY: Number(readQty),
+      QUNIT: String(it.unit || "AD").trim().toUpperCase(),
+      ORDERTYPE: orderType,
+      ORDERNUM: String(it.orderNum || "").trim(),
+      ITEMNUM: Number(it.itemNum) || 1,
+      // Geriye dönük uyumluluk alanları
+      PURORDER: String(it.orderNum || "").trim(),
+      QUANTITY: Number(readQty),
+      EXPIRYDATE: String(it.expiryDate || "").trim(),
+    };
+  });
 
   const params = {
     PSCOMPANY: String(payload.company || "01").trim(),
     PSPLANT: String(payload.plant || "100").trim(),
     PSVENDOR: String(payload.vendor || "").trim(),
+    PSEXTDELNUM: String(payload.waybillNo || "").trim(),
     PSWAYBILL: String(payload.waybillNo || "").trim(),
-    PSSOURCEWH: String(payload.sourceWarehouse || "").trim(),
-    PSTARGETWH: String(payload.targetWarehouse || "D1").trim(),
+    PSWAREHOUSE: String(payload.warehouse || payload.targetWarehouse || "D1").trim(),
+    PSTARGETWH: String(payload.warehouse || payload.targetWarehouse || "D1").trim(),
+    PSSTOCKPLACE: String(payload.stockPlace || "*").trim(),
     PSUSER: String(payload.user || "WMSUSER").trim(),
+    PDTSTARTTIME: String(payload.startTime || "20.08.2026 14:00:00").trim(),
+    PSIASPURITEMXML: formattedItems,
     PSITEMS: formattedItems,
   };
 
@@ -73,91 +97,111 @@ function formatSaveReceiptPayload(payload: {
   };
 }
 
-describe("MZYSAVEINVPURORDER Payload & XML Construction Tests", () => {
-  it("formats single item payload correctly with company, plant, vendor, waybill, target warehouse", () => {
+describe("MZYSaveReceipt Payload & XML Construction Tests", () => {
+  it("formats single item payload correctly with company, plant, vendor, waybill, warehouse, stockplace, and PSIASPURITEMXML", () => {
     const { params, xml } = formatSaveReceiptPayload({
       company: "01",
       plant: "100",
-      vendor: "800980",
+      vendor: "16660",
       waybillNo: "IRS-2026-001",
       targetWarehouse: "D1",
+      stockPlace: "A-01-01",
       user: "AHMET",
       items: [
         {
+          orderType: "OP",
           orderNum: "179395",
-          itemNum: 1,
+          itemNum: 1000,
           material: "BS020",
           quantity: 25,
+          unit: "AD",
         },
       ],
     });
 
     expect(params.PSCOMPANY).toBe("01");
     expect(params.PSPLANT).toBe("100");
-    expect(params.PSVENDOR).toBe("800980");
-    expect(params.PSWAYBILL).toBe("IRS-2026-001");
-    expect(params.PSTARGETWH).toBe("D1");
+    expect(params.PSVENDOR).toBe("16660");
+    expect(params.PSEXTDELNUM).toBe("IRS-2026-001");
+    expect(params.PSWAREHOUSE).toBe("D1");
+    expect(params.PSSTOCKPLACE).toBe("A-01-01");
     expect(params.PSUSER).toBe("AHMET");
-    expect(params.PSITEMS).toHaveLength(1);
-    expect(params.PSITEMS[0]).toEqual({
-      PURORDER: "179395",
-      ORDERNUM: "179395",
-      ITEMNUM: 1,
+    expect(params.PSIASPURITEMXML).toHaveLength(1);
+    expect(params.PSIASPURITEMXML[0]).toEqual({
       MATERIAL: "BS020",
-      QUANTITY: 25,
+      SPECIALSTOCK: "0",
       BATCHNUM: "",
+      READQUANTITY: 25,
+      QUNIT: "AD",
+      ORDERTYPE: "OP",
+      ORDERNUM: "179395",
+      ITEMNUM: 1000,
+      PURORDER: "179395",
+      QUANTITY: 25,
       EXPIRYDATE: "",
     });
 
     expect(xml).toContain("<PSCOMPANY>01</PSCOMPANY>");
-    expect(xml).toContain("<PSVENDOR>800980</PSVENDOR>");
-    expect(xml).toContain("<PSWAYBILL>IRS-2026-001</PSWAYBILL>");
-    expect(xml).toContain("<PSTARGETWH>D1</PSTARGETWH>");
-    expect(xml).toContain("<PURORDER>179395</PURORDER>");
+    expect(xml).toContain("<PSVENDOR>16660</PSVENDOR>");
+    expect(xml).toContain("<PSEXTDELNUM>IRS-2026-001</PSEXTDELNUM>");
+    expect(xml).toContain("<PSWAREHOUSE>D1</PSWAREHOUSE>");
+    expect(xml).toContain("<PSSTOCKPLACE>A-01-01</PSSTOCKPLACE>");
+    expect(xml).toContain("<PSIASPURITEMXML>");
     expect(xml).toContain("<MATERIAL>BS020</MATERIAL>");
-    expect(xml).toContain("<QUANTITY>25</QUANTITY>");
+    expect(xml).toContain("<READQUANTITY>25</READQUANTITY>");
+    expect(xml).toContain("<QUNIT>AD</QUNIT>");
+    expect(xml).toContain("<ORDERTYPE>OP</ORDERTYPE>");
+    expect(xml).toContain("<ORDERNUM>179395</ORDERNUM>");
+    expect(xml).toContain("<ITEMNUM>1000</ITEMNUM>");
   });
 
-  it("handles multi-item receipts with batch and expiry date correctly", () => {
+  it("handles multi-item receipts with batch and special stock correctly", () => {
     const { params, xml } = formatSaveReceiptPayload({
-      vendor: "800980",
+      vendor: "16660",
       waybillNo: "IRS-LOT-99",
       targetWarehouse: "D2",
       items: [
         {
+          orderType: "OP",
           orderNum: "179395",
-          itemNum: 1,
+          itemNum: 1000,
           material: "BS020",
-          quantity: 10,
+          receivedQty: 10,
+          unit: "AD",
           batchNum: "LOT2026-A",
-          expiryDate: "2027-12-31",
+          isSpecialLot: true,
         },
         {
+          orderType: "OP",
           orderNum: "179395",
-          itemNum: 2,
+          itemNum: 2000,
           material: "BS021",
-          quantity: 50,
+          receivedQty: 50,
+          unit: "KO",
           batchNum: "LOT2026-B",
-          expiryDate: "2028-06-30",
         },
       ],
     });
 
-    expect(params.PSITEMS).toHaveLength(2);
-    expect(params.PSITEMS[0].BATCHNUM).toBe("LOT2026-A");
-    expect(params.PSITEMS[0].EXPIRYDATE).toBe("2027-12-31");
-    expect(params.PSITEMS[1].BATCHNUM).toBe("LOT2026-B");
-    expect(params.PSITEMS[1].EXPIRYDATE).toBe("2028-06-30");
+    expect(params.PSIASPURITEMXML).toHaveLength(2);
+    expect(params.PSIASPURITEMXML[0].BATCHNUM).toBe("LOT2026-A");
+    expect(params.PSIASPURITEMXML[0].SPECIALSTOCK).toBe("1");
+    expect(params.PSIASPURITEMXML[0].READQUANTITY).toBe(10);
+    expect(params.PSIASPURITEMXML[0].QUNIT).toBe("AD");
+    expect(params.PSIASPURITEMXML[1].BATCHNUM).toBe("LOT2026-B");
+    expect(params.PSIASPURITEMXML[1].READQUANTITY).toBe(50);
+    expect(params.PSIASPURITEMXML[1].QUNIT).toBe("KO");
 
     expect(xml).toContain("<BATCHNUM>LOT2026-A</BATCHNUM>");
-    expect(xml).toContain("<EXPIRYDATE>2027-12-31</EXPIRYDATE>");
+    expect(xml).toContain("<SPECIALSTOCK>1</SPECIALSTOCK>");
+    expect(xml).toContain("<QUNIT>AD</QUNIT>");
     expect(xml).toContain("<BATCHNUM>LOT2026-B</BATCHNUM>");
-    expect(xml).toContain("<EXPIRYDATE>2028-06-30</EXPIRYDATE>");
+    expect(xml).toContain("<QUNIT>KO</QUNIT>");
   });
 
   it("escapes XML special characters in waybill or material names properly", () => {
     const { xml } = formatSaveReceiptPayload({
-      vendor: "800980",
+      vendor: "16660",
       waybillNo: "IRS & CO <2026>",
       targetWarehouse: "D1",
       items: [
@@ -170,7 +214,7 @@ describe("MZYSAVEINVPURORDER Payload & XML Construction Tests", () => {
       ],
     });
 
-    expect(xml).toContain("<PSWAYBILL>IRS &amp; CO &lt;2026&gt;</PSWAYBILL>");
+    expect(xml).toContain("<PSEXTDELNUM>IRS &amp; CO &lt;2026&gt;</PSEXTDELNUM>");
     expect(xml).toContain("<MATERIAL>MAT &amp; 01</MATERIAL>");
   });
 });

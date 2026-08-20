@@ -49,8 +49,12 @@ export default function ReceivingRecordsPage() {
   const KOLONLAR = [
     ["MATERIAL", "Malzeme"],
     ["WAREHOUSE", "Depo"],
+    ["STOCKPLACE", "Stok yeri"],
+    ["SPECIALSTOCK", "Özel stok"],
+    ["BATCHNUM", "Parti"],
     ["READQTY", "Miktar"],
     ["QUNIT", "Birim"],
+    ["ORDERTYPE", "Belge tipi"],
     ["ORDERNUM", "Belge no"],
     ["ITEMNO", "Kalem no"],
   ] as const;
@@ -58,9 +62,8 @@ export default function ReceivingRecordsPage() {
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8 animate-fade-in">
       <PageHeader
-        title="Okutulanlar"
+        title="Kabul Edilenler"
         subtitle={`${vendorName || vendorCode || id} · ${items.length} satır`}
-        backTo={backUrl}
         right={
           <button
             onClick={() =>
@@ -85,50 +88,82 @@ export default function ReceivingRecordsPage() {
 
       {!items.length ? (
         <div className="rounded-2xl border border-line bg-surface p-10 text-center text-sm text-subtle">
-          Henüz okutma yok.
+          Henüz kabul edilen malzeme yok.
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-line bg-surface shadow-card">
-          <table className="w-full min-w-[750px] text-left text-xs">
+          <table className="w-full text-left text-xs table-auto">
             <thead className="border-b border-line bg-elevated">
               <tr>
-                <th className="px-3 py-2 font-semibold text-muted">Ürün</th>
                 {KOLONLAR.map(([k, ad]) => (
-                  <th key={k} className="whitespace-nowrap px-3 py-2 font-semibold text-muted">
+                  <th key={k} className="whitespace-nowrap px-1.5 py-2 font-semibold text-muted w-px">
                     {ad}
                   </th>
                 ))}
-                <th className="px-3 py-2" />
+                <th className="px-1 py-2 text-center w-7" />
+                <th className="w-full" />
               </tr>
             </thead>
             <tbody>
               {items.map((item, i) => {
                 const rowData: Record<string, string | number> = {
                   MATERIAL: item.material || "—",
-                  WAREHOUSE: targetWH || "—",
+                  WAREHOUSE: item.warehouse || targetWH || "—",
+                  STOCKPLACE: item.stockPlace || "*",
+                  SPECIALSTOCK: item.specialStock || (item.isSpecialLot ? "Takipli" : "Serbest"),
+                  BATCHNUM: item.batchNum || "—",
                   READQTY: item.receivedQty || 0,
                   QUNIT: item.unit || "AD",
+                  ORDERTYPE: item.orderType || "OP",
                   ORDERNUM: item.orderNum || waybillNo || "—",
                   ITEMNO: item.itemNum ?? 1,
                 };
 
                 return (
                   <tr key={item.id || i} className="border-b border-line last:border-0 hover:bg-elevated/20 transition-colors">
-                    <td className="max-w-[220px] truncate px-3 py-2 font-medium text-fg" title={item.name}>
-                      {item.name || "—"}
-                    </td>
                     {KOLONLAR.map(([k]) => {
                       const deger = String(rowData[k] ?? "").trim();
+                      if (k === "MATERIAL") {
+                        const displayName = item.name
+                          ? item.name.length > 31
+                            ? `${item.name.slice(0, 31)}...`
+                            : item.name
+                          : "";
+                        return (
+                          <td key={k} className="px-1.5 py-1.5 font-mono text-fg font-black whitespace-nowrap w-px" title={item.name}>
+                            <div>{deger || "—"}</div>
+                            {displayName && (
+                              <div className="font-sans text-[11px] font-normal text-subtle truncate">
+                                {displayName}
+                              </div>
+                            )}
+                          </td>
+                        );
+                      }
+                      if (k === "READQTY") {
+                        return (
+                          <td key={k} className="whitespace-nowrap px-1.5 py-1.5 font-mono font-black text-fg w-px">
+                            {deger}
+                          </td>
+                        );
+                      }
+                      if (k === "BATCHNUM" && item.batchNum) {
+                        return (
+                          <td key={k} className="whitespace-nowrap px-1.5 py-1.5 font-mono font-bold text-violet-600 dark:text-violet-400 w-px">
+                            {deger}
+                          </td>
+                        );
+                      }
                       return (
                         <td
                           key={k}
-                          className="whitespace-nowrap px-3 py-2 font-mono text-muted"
+                          className="whitespace-nowrap px-1.5 py-1.5 font-mono text-muted w-px"
                         >
                           {deger || "—"}
                         </td>
                       );
                     })}
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-1 py-1.5 text-center w-7 whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => handleDeleteItem(item.id)}
@@ -139,6 +174,7 @@ export default function ReceivingRecordsPage() {
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </td>
+                    <td className="w-full" />
                   </tr>
                 );
               })}

@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Barcode,
-  Truck,
   ArrowRight,
   CheckCircle2,
   Building2,
@@ -25,6 +24,9 @@ export interface SupplierOrder {
   poNumber: string; // Satın Alma Sipariş No (PURORDER)
   orderCount: number; // Açık Sipariş Kalem Sayısı
   barcode: string; // Malzeme Barkodu
+  city?: string; // Şehir (CITY / IL / PROVINCE)
+  location?: string; // Konum / Tesis (PLANT / DISTRICT / ADDRESS1 / COUNTRY)
+  phone?: string; // Telefon (TELEPHONE1 / PHONE)
 }
 
 type SearchTab = "barcode" | "supplierName";
@@ -48,9 +50,33 @@ function trNormalize(str: string): string {
 const groupOrdersToSuppliers = (orders: Record<string, unknown>[], barcodeFilter = ""): SupplierOrder[] => {
   const map = new Map<string, SupplierOrder>();
   orders.forEach((row, idx) => {
-    const vendorCode = String(row.VENDOR || row.PSVENDOR || row.SUPPLIERID || `TED-${idx + 1}`).trim();
-    const vendorName = String(row.NAME1 || row.SUPPLIERNAME || row.VENDORNAME || "Tedarikçi").trim();
+    const vendorCode = String(row.VENDOR || row.PSVENDOR || row.SUPPLIERID || row.CUSTOMER || `TED-${idx + 1}`).trim();
+    const vendorName = String(row.NAME1 || row.SUPPLIERNAME || row.VENDORNAME || row.CUSNAME1 || "Tedarikçi").trim();
     const poNum = String(row.ORDERNUM || row.PURORDER || row.POORDER || row.PO_NUMBER || "").trim();
+
+    // Şehir, İlçe, Adres ve Tesis alanları
+    const city = String(row.CITY || row.CUSCITY || row.VENDORCITY || row.IL || row.PROVINCE || row.SEHIR || "").trim();
+    const district = String(row.DISTRICT || row.ILCE || row.TOWN || row.COUNTY || "").trim();
+    const address = String(row.ADDRESS1 || row.STREET || row.ADRES || "").trim();
+    const country = String(row.COUNTRY || row.ULKE || "").trim();
+    const plant = String(row.PLANT || row.FACILITY || row.TESIS || "").trim();
+    const phone = String(row.TELEPHONE1 || row.PHONE || row.TEL || "").trim();
+
+    // Akıllı konum metni oluşturma (yalnızca gerçek veri varsa)
+    let formattedLocation = "";
+    if (city && district) {
+      formattedLocation = `${city} / ${district}`;
+    } else if (city) {
+      formattedLocation = country && country !== "TR" ? `${city} (${country})` : city;
+    } else if (district) {
+      formattedLocation = district;
+    } else if (address) {
+      formattedLocation = address;
+    } else if (plant && plant !== "100") {
+      formattedLocation = `Tesis ${plant}`;
+    } else if (country && country !== "TR") {
+      formattedLocation = country;
+    }
 
     if (!map.has(vendorCode)) {
       map.set(vendorCode, {
@@ -59,6 +85,9 @@ const groupOrdersToSuppliers = (orders: Record<string, unknown>[], barcodeFilter
         poNumber: poNum || "Açık Sipariş",
         orderCount: 1,
         barcode: barcodeFilter,
+        city: city || undefined,
+        location: formattedLocation || undefined,
+        phone: phone || undefined,
       });
     } else {
       const existing = map.get(vendorCode)!;
@@ -66,9 +95,61 @@ const groupOrdersToSuppliers = (orders: Record<string, unknown>[], barcodeFilter
       if ((!existing.poNumber || existing.poNumber === "Açık Sipariş") && poNum) {
         existing.poNumber = poNum;
       }
+      if (!existing.city && city) existing.city = city;
+      if (formattedLocation && !existing.location) {
+        existing.location = formattedLocation;
+      }
+      if (!existing.phone && phone) existing.phone = phone;
     }
   });
   return Array.from(map.values());
+};
+
+// Tedarikçilerin Şehir, İlçe, Adres ve Telefon bilgilerini CANIAS MzyGetCustomer servisiyle zenginleştirme
+const enrichSuppliersWithCustomerInfo = async (supplierList: SupplierOrder[]): Promise<SupplierOrder[]> => {
+  if (!supplierList || supplierList.length === 0) return supplierList;
+
+  try {
+    const enriched = await Promise.all(
+      supplierList.map(async (sup) => {
+        try {
+          const cusRes = await api.getCustomers({ customer: sup.id, customerType: 1 });
+          if (cusRes.ok && cusRes.customers && cusRes.customers.length > 0) {
+            const cRow = cusRes.customers[0];
+            const city = String(cRow.CITY || cRow.CUSCITY || cRow.IL || cRow.PROVINCE || cRow.SEHIR || "").trim();
+            const district = String(cRow.DISTRICT || cRow.ILCE || cRow.TOWN || cRow.COUNTY || "").trim();
+            const address = String(cRow.ADDRESS1 || cRow.STREET || cRow.ADRES || "").trim();
+            const country = String(cRow.COUNTRY || cRow.ULKE || "").trim();
+            const phone = String(cRow.TELEPHONE1 || cRow.PHONE || cRow.TEL || "").trim();
+
+            let loc = "";
+            if (city && district) {
+              loc = `${city} / ${district}`;
+            } else if (city) {
+              loc = country && country !== "TR" ? `${city} (${country})` : city;
+            } else if (district) {
+              loc = district;
+            } else if (address) {
+              loc = address;
+            }
+
+            return {
+              ...sup,
+              city: city || sup.city,
+              location: loc || sup.location,
+              phone: phone || sup.phone,
+            };
+          }
+        } catch (e) {
+          console.warn(`[getCustomers] Cari bilgisi çekilemedi (${sup.id}):`, e);
+        }
+        return sup;
+      })
+    );
+    return enriched;
+  } catch {
+    return supplierList;
+  }
 };
 
 export default function ReceivingSupplierSelectPage() {
@@ -159,6 +240,11 @@ export default function ReceivingSupplierSelectPage() {
 
       const supplierList = groupOrdersToSuppliers(matchedOrders, params.barcode || "");
       setSuppliers(supplierList);
+
+      // CANIAS MzyGetCustomer ile arka planda il/ilçe/telefon bilgilerini zenginleştir
+      enrichSuppliersWithCustomerInfo(supplierList).then((enrichedList) => {
+        setSuppliers(enrichedList);
+      });
     } catch (err: any) {
       console.error("CANIAS MZYGetOpenOrder error:", err);
       setApiError(
@@ -205,6 +291,11 @@ export default function ReceivingSupplierSelectPage() {
 
       const supplierList = groupOrdersToSuppliers(matchedOrders);
       setSuppliers(supplierList);
+
+      // CANIAS MzyGetCustomer ile arka planda il/ilçe/telefon bilgilerini zenginleştir
+      enrichSuppliersWithCustomerInfo(supplierList).then((enrichedList) => {
+        setSuppliers(enrichedList);
+      });
     } catch (err: any) {
       console.error("CANIAS OpenOrders supplier search error:", err);
       setApiError(
@@ -476,29 +567,7 @@ export default function ReceivingSupplierSelectPage() {
         </div>
       )}
 
-      {/* Supplier Results Grid Header (Tightly aligned to Search Card) */}
-      <div className="mt-3 mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Truck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          <h2 className="text-xs sm:text-sm font-extrabold text-fg">
-            {activeTab === "barcode" ? "Barkodla Eşleşen Tedarikçiler" : "Aktif Tedarikçi Listesi"}
-          </h2>
-          {isLoading ? (
-            <span className="chip bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 flex items-center gap-1">
-              <Loader2 className="h-3 w-3 animate-spin" /> CANIAS Sorgulanıyor...
-            </span>
-          ) : (
-            <span className="chip bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-              {suppliers.length} Sonuç
-            </span>
-          )}
-        </div>
-        {selectedSupplier && (
-          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-            <CheckCircle2 className="h-3.5 w-3.5" /> 1 Seçildi
-          </span>
-        )}
-      </div>
+
 
       {/* Grid States */}
       {isLoading ? (
@@ -526,45 +595,45 @@ export default function ReceivingSupplierSelectPage() {
         </div>
       ) : (
         <>
-          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {pg.pageItems.map((supplier) => {
               const isSelected = selectedSupplier?.id === supplier.id;
+
               return (
-                <div
+                <button
                   key={supplier.id}
+                  type="button"
                   onClick={() => handleSelectSupplier(supplier)}
-                  className={`relative flex items-center justify-between rounded-xl border p-3 cursor-pointer transition-all duration-200 ${
+                  className={`w-full rounded-2xl border p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft ${
                     isSelected
-                      ? "border-2 border-emerald-500 bg-emerald-500/10 dark:bg-emerald-950/20 shadow-sm ring-1 ring-emerald-500/30"
-                      : "border-line bg-surface hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-soft"
+                      ? "border-2 border-emerald-500 bg-emerald-500/10 dark:bg-emerald-950/20 shadow-soft ring-1 ring-emerald-500/30"
+                      : "border-line bg-surface hover:border-emerald-300 dark:hover:border-emerald-700"
                   }`}
                 >
-                  <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                    <div
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
-                        isSelected
-                          ? "bg-emerald-600 text-white"
-                          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
-                      }`}
-                    >
-                      <Building2 className="h-4 w-4" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-base font-bold text-fg">{supplier.id}</span>
+                      <span className="chip bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 font-medium">
+                        {supplier.orderCount > 1 ? `${supplier.orderCount} Kalem Açık` : "Açık Sipariş"}
+                      </span>
                     </div>
-                    <h4 className="text-xs font-bold text-fg leading-tight truncate">
-                      {supplier.name}
-                    </h4>
+                    {supplier.name && (
+                      <p className="mt-0.5 text-sm text-muted truncate" title={supplier.name}>
+                        {supplier.name}
+                      </p>
+                    )}
                   </div>
 
-                  {/* Checkbox / Radio Circle */}
-                  <div
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
-                      isSelected
-                        ? "border-emerald-600 bg-emerald-600 text-white"
-                        : "border-line bg-bg text-transparent"
-                    }`}
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                  </div>
-                </div>
+                  {(supplier.poNumber || supplier.location || supplier.phone) && (
+                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-subtle">
+                      {supplier.poNumber && supplier.poNumber !== "Açık Sipariş" && (
+                        <span>{supplier.poNumber}</span>
+                      )}
+                      {supplier.location && <span>{supplier.location}</span>}
+                      {supplier.phone && <span className="font-mono">{supplier.phone}</span>}
+                    </div>
+                  )}
+                </button>
               );
             })}
           </div>

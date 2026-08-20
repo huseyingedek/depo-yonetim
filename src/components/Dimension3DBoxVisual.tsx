@@ -25,8 +25,8 @@ export const Dimension3DBoxVisual: React.FC<Dimension3DBoxVisualProps> = ({
     return (
       <div className={`relative flex items-end justify-start shrink-0 select-none ${className}`}>
         <svg
-          viewBox="0 0 185 138"
-          className="w-[185px] h-[130px] block shrink-0"
+          viewBox="0 0 190 138"
+          className="w-[190px] h-[130px] block shrink-0"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >
@@ -100,7 +100,7 @@ export const Dimension3DBoxVisual: React.FC<Dimension3DBoxVisualProps> = ({
 
           {/* 2. EN (Solda: Üstte En Yazısı, Altta Uzunluk) */}
           <text
-            x="24"
+            x="26"
             y="118"
             textAnchor="middle"
             className="font-sans text-[10.5px] font-black fill-black dark:fill-white uppercase tracking-wider"
@@ -108,7 +108,7 @@ export const Dimension3DBoxVisual: React.FC<Dimension3DBoxVisualProps> = ({
             En
           </text>
           <text
-            x="24"
+            x="26"
             y="132"
             textAnchor="middle"
             className="font-mono text-[12.5px] font-black fill-black dark:fill-white"
