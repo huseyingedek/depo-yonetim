@@ -229,12 +229,13 @@ export default function ReceivingDimensionsPage() {
   };
 
   return (
-    <div className="w-full min-h-[calc(100vh-4rem)] p-2 sm:p-3 bg-surface text-fg flex flex-col justify-start animate-fade-in select-none max-w-5xl mx-auto space-y-2">
-      {/* Toast Bildirimleri */}
-      <ToastView toast={toast} />
+    <div className="w-full min-h-screen bg-surface text-fg flex flex-col justify-start animate-fade-in select-none p-2 sm:p-3">
+      <div className="w-full max-w-5xl mx-auto space-y-2 flex-1 flex flex-col justify-start">
+        {/* Toast Bildirimleri */}
+        <ToastView toast={toast} />
 
-      {/* Kompakt Üst Başlık Satırı */}
-      <div className="flex items-center justify-between border-b border-line/40 pb-1.5">
+        {/* Kompakt Üst Başlık Satırı */}
+        <div className="flex items-center justify-between border-b border-line/40 pb-1.5">
         <div className="flex items-center gap-2 min-w-0">
           <button
             type="button"
@@ -261,11 +262,15 @@ export default function ReceivingDimensionsPage() {
         </div>
       </div>
 
-      {/* Form Gövdesi: 914x412 Boyutunda Kaydırmasız Tek Parça Düzen */}
-      <form onSubmit={handleSave} className="space-y-2">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-stretch">
-          {/* Sol Taraf (8 Kolon): Boyut, Ağırlık ve Hacim Girişleri */}
-          <div className="md:col-span-8 rounded-xl border border-line bg-elevated/20 p-2 sm:p-2.5 space-y-1.5">
+      {/* Form Gövdesi: Tek Birleşik Kart İçerisinde Ölçümler ve Özel Nitelikler */}
+      <form onSubmit={handleSave} className="w-full">
+        <div className="rounded-2xl border border-line bg-surface p-3 sm:p-4 shadow-card flex flex-col md:flex-row gap-4 items-stretch">
+          {/* Sol Bölüm: Boyut, Ağırlık ve Hacim Girişleri */}
+          <div className="flex-1 min-w-0 space-y-2 flex flex-col justify-between">
+            <span className="text-[11px] font-black text-ink-700 dark:text-ink-200 uppercase tracking-wider block">
+              Ölçüm Bilgileri
+            </span>
+
             {/* 1. Sıra: En, Boy, Yükseklik */}
             <div className="grid grid-cols-3 gap-2">
               <div>
@@ -279,7 +284,7 @@ export default function ReceivingDimensionsPage() {
                   value={form.pwidth || ""}
                   onChange={(e) => handleNumChange("pwidth", e.target.value)}
                   placeholder="0.0"
-                  className="w-full font-mono text-sm font-black text-center h-8 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
                   autoFocus
                   required
                 />
@@ -295,7 +300,7 @@ export default function ReceivingDimensionsPage() {
                   value={form.plength || ""}
                   onChange={(e) => handleNumChange("plength", e.target.value)}
                   placeholder="0.0"
-                  className="w-full font-mono text-sm font-black text-center h-8 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
                   required
                 />
               </div>
@@ -310,14 +315,14 @@ export default function ReceivingDimensionsPage() {
                   value={form.pheight || ""}
                   onChange={(e) => handleNumChange("pheight", e.target.value)}
                   placeholder="0.0"
-                  className="w-full font-mono text-sm font-black text-center h-8 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
                   required
                 />
               </div>
             </div>
 
             {/* 2. Sıra: Net KG, Brüt KG, Hacim M³ */}
-            <div className="grid grid-cols-3 gap-2 border-t border-line/40 pt-1.5">
+            <div className="grid grid-cols-3 gap-2 border-t border-line/40 pt-2">
               <div>
                 <label className="text-[11px] font-black text-ink-700 dark:text-ink-200 block mb-0.5 text-center">
                   Net (kg) <span className="text-rose-500 font-black">*</span>
@@ -329,7 +334,7 @@ export default function ReceivingDimensionsPage() {
                   value={form.netweight || ""}
                   onChange={(e) => handleNumChange("netweight", e.target.value)}
                   placeholder="0.00"
-                  className="w-full font-mono text-sm font-black text-center h-8 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
                 />
               </div>
               <div>
@@ -343,7 +348,7 @@ export default function ReceivingDimensionsPage() {
                   value={form.brutweight || ""}
                   onChange={(e) => handleNumChange("brutweight", e.target.value)}
                   placeholder="0.00"
-                  className="w-full font-mono text-sm font-black text-center h-8 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
                 />
               </div>
               <div>
@@ -357,24 +362,27 @@ export default function ReceivingDimensionsPage() {
                   value={form.volume || ""}
                   onChange={(e) => handleNumChange("volume", e.target.value)}
                   placeholder="0.0000"
-                  className="w-full font-mono text-sm font-black text-center h-8 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
                 />
               </div>
             </div>
           </div>
 
-          {/* Sağ Taraf (4 Kolon): Özel Güvenlik Nitelikleri Çipleri ve Entegre Kaydet Butonu */}
-          <div className="md:col-span-4 rounded-xl border border-line bg-elevated/20 p-2 sm:p-2.5 flex flex-col justify-between space-y-1.5">
-            <span className="text-[11px] font-black text-ink-700 dark:text-ink-200 uppercase tracking-wider block text-center">
+          {/* Dikey Ayırıcı Çizgi */}
+          <div className="hidden md:block w-px bg-line/60 self-stretch my-0.5" />
+
+          {/* Sağ Bölüm: Özel Güvenlik Nitelikleri Çipleri ve Kaydet Butonu */}
+          <div className="w-full md:w-[300px] shrink-0 flex flex-col justify-between space-y-2">
+            <span className="text-[11px] font-black text-ink-700 dark:text-ink-200 uppercase tracking-wider block">
               Özel Nitelikler
             </span>
 
             <div className="grid grid-cols-2 gap-1.5">
               {/* Kırılabilir */}
-              <label className={`flex items-center justify-center gap-1 rounded-lg border py-1 px-1 cursor-pointer transition-colors select-none ${
+              <label className={`flex items-center justify-center gap-1 rounded-lg border py-1.5 px-1 cursor-pointer transition-colors select-none ${
                 form.aklisbreakable
                   ? "border-amber-500 bg-amber-500/20 text-amber-800 dark:text-amber-200 font-black shadow-2xs"
-                  : "border-line bg-surface text-ink-700 dark:text-ink-200 font-bold hover:bg-elevated/40"
+                  : "border-line bg-elevated/40 text-ink-700 dark:text-ink-200 font-bold hover:bg-elevated"
               }`}>
                 <input
                   type="checkbox"
@@ -387,10 +395,10 @@ export default function ReceivingDimensionsPage() {
               </label>
 
               {/* Toksik */}
-              <label className={`flex items-center justify-center gap-1 rounded-lg border py-1 px-1 cursor-pointer transition-colors select-none ${
+              <label className={`flex items-center justify-center gap-1 rounded-lg border py-1.5 px-1 cursor-pointer transition-colors select-none ${
                 form.aklistoxic
                   ? "border-purple-500 bg-purple-500/20 text-purple-800 dark:text-purple-200 font-black shadow-2xs"
-                  : "border-line bg-surface text-ink-700 dark:text-ink-200 font-bold hover:bg-elevated/40"
+                  : "border-line bg-elevated/40 text-ink-700 dark:text-ink-200 font-bold hover:bg-elevated"
               }`}>
                 <input
                   type="checkbox"
@@ -403,10 +411,10 @@ export default function ReceivingDimensionsPage() {
               </label>
 
               {/* Yanıcı */}
-              <label className={`flex items-center justify-center gap-1 rounded-lg border py-1 px-1 cursor-pointer transition-colors select-none ${
+              <label className={`flex items-center justify-center gap-1 rounded-lg border py-1.5 px-1 cursor-pointer transition-colors select-none ${
                 form.isexplos
                   ? "border-rose-500 bg-rose-500/20 text-rose-800 dark:text-rose-200 font-black shadow-2xs"
-                  : "border-line bg-surface text-ink-700 dark:text-ink-200 font-bold hover:bg-elevated/40"
+                  : "border-line bg-elevated/40 text-ink-700 dark:text-ink-200 font-bold hover:bg-elevated"
               }`}>
                 <input
                   type="checkbox"
@@ -419,10 +427,10 @@ export default function ReceivingDimensionsPage() {
               </label>
 
               {/* Bozulabilir */}
-              <label className={`flex items-center justify-center gap-1 rounded-lg border py-1 px-1 cursor-pointer transition-colors select-none ${
+              <label className={`flex items-center justify-center gap-1 rounded-lg border py-1.5 px-1 cursor-pointer transition-colors select-none ${
                 form.isspoil
                   ? "border-orange-500 bg-orange-500/20 text-orange-800 dark:text-orange-200 font-black shadow-2xs"
-                  : "border-line bg-surface text-ink-700 dark:text-ink-200 font-bold hover:bg-elevated/40"
+                  : "border-line bg-elevated/40 text-ink-700 dark:text-ink-200 font-bold hover:bg-elevated"
               }`}>
                 <input
                   type="checkbox"
@@ -435,10 +443,10 @@ export default function ReceivingDimensionsPage() {
               </label>
 
               {/* Sıvı (2 kolon kaplar) */}
-              <label className={`col-span-2 flex items-center justify-center gap-1 rounded-lg border py-1 px-1 cursor-pointer transition-colors select-none ${
+              <label className={`col-span-2 flex items-center justify-center gap-1 rounded-lg border py-1.5 px-1 cursor-pointer transition-colors select-none ${
                 form.aklisliquid
                   ? "border-blue-500 bg-blue-500/20 text-blue-800 dark:text-blue-200 font-black shadow-2xs"
-                  : "border-line bg-surface text-ink-700 dark:text-ink-200 font-bold hover:bg-elevated/40"
+                  : "border-line bg-elevated/40 text-ink-700 dark:text-ink-200 font-bold hover:bg-elevated"
               }`}>
                 <input
                   type="checkbox"
@@ -451,11 +459,11 @@ export default function ReceivingDimensionsPage() {
               </label>
             </div>
 
-            {/* Entegre Kaydet Butonu (Ayrı bir kart olmadan doğrudan bu bloğun içinde) */}
+            {/* Entegre Kaydet Butonu */}
             <button
               type="submit"
               disabled={isSaving}
-              className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 h-8 sm:h-9 text-xs font-black text-white shadow-md active:scale-95 transition disabled:opacity-40 w-full"
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 h-8.5 sm:h-9 text-xs font-black text-white shadow-md active:scale-95 transition disabled:opacity-40 w-full cursor-pointer"
             >
               {isSaving ? (
                 <>
@@ -472,6 +480,7 @@ export default function ReceivingDimensionsPage() {
           </div>
         </div>
       </form>
+      </div>
     </div>
   );
 }

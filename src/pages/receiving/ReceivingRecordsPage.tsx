@@ -98,7 +98,7 @@ export default function ReceivingRecordsPage() {
                     {ad}
                   </th>
                 ))}
-                <th className="px-3 py-2 text-right font-semibold text-muted">İşlem</th>
+                <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody>

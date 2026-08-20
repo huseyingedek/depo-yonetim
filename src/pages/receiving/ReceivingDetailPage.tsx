@@ -1153,20 +1153,20 @@ export default function ReceivingDetailPage() {
         {/* ========================================================================= */}
 
         {/* SOL ANA KART: 1 MALZEME · 2 MİKTAR ADIMLARI */}
-        <div className="sm:col-span-6 md:col-span-6 lg:col-span-6 landscape:col-span-6 rounded-3xl border border-line bg-surface p-3 sm:p-3.5 shadow-card flex flex-col justify-between space-y-2.5 min-w-0 h-full">
-          {/* 3 Eşit Büyüklükte Adım ve Bitir Butonu */}
-          <div className="grid grid-cols-3 gap-1 bg-elevated/40 p-0.5 rounded-lg border border-line/60 shrink-0">
+        <div className="col-span-1 sm:col-span-5 md:col-span-4 lg:col-span-4 xl:col-span-4 landscape:col-span-4 rounded-3xl border border-line bg-surface p-3 sm:p-3.5 shadow-card flex flex-col justify-between space-y-2.5 min-w-0 h-full">
+          {/* 3 Eşit Büyüklükte Adım ve Bitir Butonu (Kompakt ve Küçük Punto) */}
+          <div className="grid grid-cols-3 gap-0.5 sm:gap-1 bg-elevated/40 p-0.5 rounded-md border border-line/60 shrink-0">
             <button
               type="button"
               onClick={() => setActiveStep("product")}
-              className={`flex min-w-0 items-center justify-center gap-1 rounded-md py-1.5 px-2 text-xs font-black whitespace-nowrap transition-all duration-200 ${activeStep === "product"
-                  ? "bg-emerald-600 text-white shadow-xs"
+              className={`flex min-w-0 items-center justify-center gap-0.5 rounded py-1 px-1 text-[10px] sm:text-[10.5px] font-black whitespace-nowrap transition-all duration-200 ${activeStep === "product"
+                  ? "bg-emerald-600 text-white shadow-2xs"
                   : isProductScanned && areDimensionsDone
                     ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
                     : "bg-surface hover:bg-elevated text-fg border border-line/50"
                 }`}
             >
-              {isProductScanned && areDimensionsDone && <span className="shrink-0 font-mono text-[10px]">✓</span>}
+              {isProductScanned && areDimensionsDone && <span className="shrink-0 font-mono text-[9px]">✓</span>}
               <span>1 Malzeme</span>
             </button>
 
@@ -1178,8 +1178,8 @@ export default function ReceivingDetailPage() {
                 }
               }}
               disabled={!isProductScanned || !areDimensionsDone}
-              className={`flex min-w-0 items-center justify-center gap-1 rounded-md py-1.5 px-2 text-xs font-black whitespace-nowrap transition-all duration-200 ${activeStep === "quantity"
-                  ? "bg-emerald-600 text-white shadow-xs"
+              className={`flex min-w-0 items-center justify-center gap-0.5 rounded py-1 px-1 text-[10px] sm:text-[10.5px] font-black whitespace-nowrap transition-all duration-200 ${activeStep === "quantity"
+                  ? "bg-emerald-600 text-white shadow-2xs"
                   : isProductScanned && areDimensionsDone
                     ? "bg-surface hover:bg-elevated text-fg border border-line/50"
                     : "bg-transparent text-subtle/50 cursor-not-allowed"
@@ -1188,15 +1188,15 @@ export default function ReceivingDetailPage() {
               <span>2 Miktar</span>
             </button>
 
-            {/* Bitir Butonu (Tamamen aynı boyut ve hizada) */}
+            {/* Bitir Butonu */}
             <button
               type="button"
               onClick={handleCompleteItemReceipt}
               disabled={!isProductScanned || !areDimensionsDone}
-              className="flex min-w-0 items-center justify-center gap-1 rounded-md bg-emerald-600 py-1.5 px-2 text-xs font-black text-white shadow-xs hover:bg-emerald-700 active:scale-95 transition disabled:opacity-35 disabled:cursor-not-allowed whitespace-nowrap"
+              className="flex min-w-0 items-center justify-center gap-0.5 rounded bg-emerald-600 py-1 px-1 text-[10px] sm:text-[10.5px] font-black text-white shadow-2xs hover:bg-emerald-700 active:scale-95 transition disabled:opacity-35 disabled:cursor-not-allowed whitespace-nowrap"
               title="Okutulan Malzemeyi Bitir / Kaydet"
             >
-              <Check className="h-3.5 w-3.5" />
+              <Check className="h-3 w-3" />
               <span>Bitir</span>
             </button>
           </div>
@@ -1391,150 +1391,67 @@ export default function ReceivingDetailPage() {
         </div>
 
         {/* SAĞ ANA KART: MALZEME BİLGİ VE ÖLÇÜ KARTI */}
-        <div className="sm:col-span-6 md:col-span-6 lg:col-span-6 landscape:col-span-6 rounded-3xl border border-line bg-surface pt-1.5 pb-1 px-2.5 sm:pt-1.5 sm:pb-1 sm:px-3 shadow-card flex flex-col justify-between min-w-0 h-full">
+        <div className="col-span-1 sm:col-span-7 md:col-span-8 lg:col-span-8 xl:col-span-8 landscape:col-span-8 rounded-3xl border border-line bg-surface pt-1.5 pb-1.5 px-3 sm:pt-1.5 sm:pb-2 sm:px-3.5 shadow-card flex flex-col justify-start min-w-0 h-full">
           {currentMaterial ? (
-            <div className="w-full flex-1 flex flex-col justify-between">
-              {/* 1. Satır: En Üstte Malzeme İsmi (Sol) + Malzeme Kodu ve Barkod (Sağ) */}
-              <div className="flex items-center justify-between gap-2 border-b border-line/40 pb-0.5 min-w-0">
-                {/* Sol: Malzeme İsmi */}
-                <h4 className="font-extrabold text-fg text-xs sm:text-[13px] leading-tight truncate flex-1 min-w-0" title={currentMaterial.name}>
+            <div className="w-full flex-1 flex flex-col justify-start gap-1 sm:gap-1.5">
+              {/* 1. Satır: En Üstte Malzeme İsmi (Sol) + Değiştir Butonu ve Nitelik Çipleri (Sağ) */}
+              <div className="flex items-center justify-between gap-2 border-b border-line/40 pt-0 pb-1 min-w-0">
+                {/* Sol: Malzeme İsmi (Daha Belirgin & Büyük) */}
+                <h4 className="font-black text-fg text-sm sm:text-[14.5px] leading-snug truncate flex-1 min-w-0 tracking-tight" title={currentMaterial.name}>
                   {currentMaterial.name}
                 </h4>
 
-                {/* Sağ: Barkodun Solunda Malzeme Kodu (KF221 vb.) + Barkod Seçimi */}
-                <div className="shrink-0 flex items-center gap-1.5">
-                  <span className="font-extrabold text-fg bg-surface px-1.5 py-0.5 rounded border border-line font-mono text-[10.5px] shadow-2xs shrink-0 leading-tight">
-                    {currentMaterial.material}
-                  </span>
-                  {currentMaterial.barcodes.length > 1 ? (
-                    <div className="relative inline-flex items-center">
-                      <select
-                        value={currentMaterial.selectedBarcode}
-                        onChange={(e) =>
-                          setCurrentMaterial((prev) =>
-                            prev ? { ...prev, selectedBarcode: e.target.value } : prev
-                          )
-                        }
-                        className="text-[9.5px] font-mono font-bold py-0.5 pl-1.5 pr-4 h-5 rounded border border-line bg-surface text-fg shadow-2xs cursor-pointer focus:outline-none focus:border-emerald-500 appearance-none inline-block w-auto"
-                        title="Okutulan / Seçili Barkod"
-                      >
-                        {currentMaterial.barcodes.map((b) => (
-                          <option key={b.barcode} value={b.barcode}>
-                            {b.barcode} ({b.unit})
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-0.5 h-2.5 w-2.5 text-subtle" />
-                    </div>
-                  ) : (
-                    <span className="inline-flex items-center font-mono text-[9.5px] font-bold text-fg bg-surface px-1.5 py-0.5 rounded border border-line shadow-2xs leading-tight">
-                      {currentMaterial.selectedBarcode || currentMaterial.barcodes[0]?.barcode || "—"}
-                      {currentMaterial.barcodes[0]?.unit && (
-                        <span className="text-[8px] text-subtle font-sans ml-1 font-semibold">({currentMaterial.barcodes[0].unit})</span>
-                      )}
-                    </span>
-                  )}
-                </div>
-              </div>
+                {/* Sağ: Değiştir Butonu + Özel Nitelik Çipleri */}
+                <div className="shrink-0 flex items-center gap-1.5 flex-wrap">
+                  {/* Ölçüm Değiştir Butonu */}
+                  <button
+                    type="button"
+                    onClick={handleOpenDimensionModal}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 transition cursor-pointer font-sans text-[10.5px] font-black shadow-2xs shrink-0 active:scale-95 group leading-tight"
+                    title="Ölçü ve Boyutları Değiştir (CANIAS'a Kaydeder)"
+                  >
+                    <span>Ölçüm Değiştir</span>
+                    <Pencil className="h-3 w-3 text-emerald-600 dark:text-emerald-400 group-hover:rotate-12 transition-transform shrink-0" />
+                  </button>
 
-              {/* 2. Satır: Başlığın Hemen Altında Net/Brüt Ağırlık, Hacim, Değiştir Butonu ve Nitelikler (Büyük & Belirgin Punto) */}
-              <div className="flex items-center justify-between gap-1.5 flex-wrap min-w-0">
-                {/* Sol: Net KG · Brüt KG · Hacim M³ · Değiştir Butonu */}
-                <div className="flex items-center gap-1.5 text-xs sm:text-[12.5px] text-fg flex-wrap font-mono font-bold min-w-0">
-                  {currentMaterial.dimensions && currentMaterial.dimensions.width > 0 ? (
-                    <>
-                      <span className="text-subtle text-xs sm:text-[12px] leading-none">
-                        Net: <strong className="text-fg font-black text-[12.5px] sm:text-[13px]">{currentMaterial.dimensions.netWeight}</strong> KG
-                      </span>
-                      <span className="text-subtle/40">·</span>
-                      <span className="text-subtle text-xs sm:text-[12px] leading-none">
-                        Brüt: <strong className="text-fg font-black text-[12.5px] sm:text-[13px]">{currentMaterial.dimensions.brutWeight}</strong> KG
-                      </span>
-                      {((currentMaterial.dimensions.volume && currentMaterial.dimensions.volume > 0) ||
-                        (currentMaterial.dimensions.width * currentMaterial.dimensions.length * currentMaterial.dimensions.height > 0)) && (
-                          <>
-                            <span className="text-subtle/40">·</span>
-                            <span className="text-subtle text-xs sm:text-[12px] leading-none">
-                              <strong className="text-fg font-black text-[12.5px] sm:text-[13px]">
-                                {currentMaterial.dimensions.volume && currentMaterial.dimensions.volume > 0
-                                  ? currentMaterial.dimensions.volume
-                                  : Number(
-                                    (
-                                      (currentMaterial.dimensions.width *
-                                        currentMaterial.dimensions.length *
-                                        currentMaterial.dimensions.height) /
-                                      1000000
-                                    ).toFixed(3)
-                                  )}
-                              </strong>{" "}
-                              M³
-                            </span>
-                          </>
-                        )}
-                      {/* Değiştir Butonu */}
-                      <button
-                        type="button"
-                        onClick={handleOpenDimensionModal}
-                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 transition cursor-pointer font-sans text-[9.5px] font-black shadow-2xs shrink-0 active:scale-95 group ml-0.5 whitespace-nowrap leading-tight"
-                        title="Ölçü ve Boyutları Değiştir (CANIAS'a Kaydeder)"
-                      >
-                        <span>Değiştir</span>
-                        <Pencil className="h-2.5 w-2.5 text-emerald-600 dark:text-emerald-400 group-hover:rotate-12 transition-transform shrink-0" />
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleOpenDimensionModal}
-                      className="inline-flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-300 font-black py-0.5 px-2 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 transition shadow-2xs cursor-pointer active:scale-95 shrink-0"
-                      title="Ölçü ve Boyut Gir (CANIAS'a Kaydeder)"
-                    >
-                      <Ruler className="h-3 w-3 shrink-0" />
-                      <span>Ölçü Tanımla</span>
-                      <Pencil className="h-2.5 w-2.5 shrink-0" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Sağ: Özel Nitelik Çipleri (Tümü var olsa bile taşmayan kompakt yapı) */}
-                <div className="flex items-center gap-0.5 flex-wrap shrink-0">
+                  {/* Nitelik Çipleri */}
                   {currentMaterial.specialAttributes?.aklisliquid && (
-                    <span className="chip bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 text-[8px] font-extrabold py-0.5 px-1 rounded-sm flex items-center gap-0.5 leading-none">
+                    <span className="chip bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 text-[8.5px] font-extrabold py-0.5 px-1 rounded-sm flex items-center gap-0.5 leading-none">
                       <Droplets className="h-2 w-2" /> Sıvı
                     </span>
                   )}
                   {currentMaterial.specialAttributes?.isexplos && (
-                    <span className="chip bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30 text-[8px] font-extrabold py-0.5 px-1 rounded-sm flex items-center gap-0.5 leading-none">
+                    <span className="chip bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30 text-[8.5px] font-extrabold py-0.5 px-1 rounded-sm flex items-center gap-0.5 leading-none">
                       <Flame className="h-2 w-2" /> Yanıcı
                     </span>
                   )}
                   {currentMaterial.specialAttributes?.aklisbreakable && (
-                    <span className="chip bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[8px] font-extrabold py-0.5 px-1 rounded-sm flex items-center gap-0.5 leading-none">
+                    <span className="chip bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[8.5px] font-extrabold py-0.5 px-1 rounded-sm flex items-center gap-0.5 leading-none">
                       <GlassWater className="h-2 w-2" /> Kırılabilir
                     </span>
                   )}
                   {currentMaterial.specialAttributes?.isspoil && (
-                    <span className="chip bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30 text-[8px] font-extrabold py-0.5 px-1 rounded-sm flex items-center gap-0.5 leading-none">
+                    <span className="chip bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30 text-[8.5px] font-extrabold py-0.5 px-1 rounded-sm flex items-center gap-0.5 leading-none">
                       <Clock className="h-2 w-2" /> Bozulabilir
                     </span>
                   )}
                   {currentMaterial.specialAttributes?.aklistoxic && (
-                    <span className="chip bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 text-[8px] font-extrabold py-0.5 px-1 rounded-sm flex items-center gap-0.5 leading-none">
+                    <span className="chip bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 text-[8.5px] font-extrabold py-0.5 px-1 rounded-sm flex items-center gap-0.5 leading-none">
                       <Skull className="h-2 w-2" /> Toksik
                     </span>
                   )}
                   {currentMaterial.isSpecialLot && (
-                    <span className="chip bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30 text-[8px] font-extrabold py-0.5 px-1 rounded-sm flex items-center gap-0.5 leading-none">
-                      <Tag className="h-2 w-2" /> Parti
+                    <span className="chip bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30 text-[8.5px] font-extrabold py-0.5 px-1.5 rounded-sm flex items-center gap-0.5 leading-none">
+                      <Tag className="h-2 w-2" /> Parti Takipli
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* 3. Satır: Kartın En Altına Sıfırlanmış Fotoğraf ve 3D Şema (Aşağıda Boşluk Yok) */}
-              <div className="flex items-end gap-2.5 w-full mt-auto min-w-0 pt-1 pb-0">
-                {/* Solda Ürün Görseli (Hafifçe Yukarı Kaydırılmış) */}
-                <div className="h-24 w-24 sm:h-26 sm:w-26 rounded-2xl overflow-hidden shrink-0 border border-line bg-elevated/40 flex items-center justify-center shadow-xs mb-1.5">
+              {/* 3. Satır: Fotoğraf + 3D Şema + Sağ Bilgi & Barkod Paneli */}
+              <div className="flex items-end gap-0 w-full min-w-0 pt-0.5 pb-0">
+                {/* 1. Bölüm: Solda Ürün Görseli */}
+                <div className="h-24 w-24 sm:h-26 sm:w-26 rounded-2xl overflow-hidden shrink-0 border border-line bg-elevated/40 flex items-center justify-center shadow-xs mb-0.5 mr-1.5">
                   {currentMaterial.image ? (
                     <img
                       src={currentMaterial.image}
@@ -1549,23 +1466,108 @@ export default function ReceivingDetailPage() {
                   )}
                 </div>
 
-                {/* Sağda: Kartın En Altına Dayalı 3D Şema */}
-                <div className="flex-1 min-w-0 relative flex items-end justify-center h-full">
-                  <div className="w-full flex items-end justify-center min-w-0 h-full">
-                    {currentMaterial.dimensions && currentMaterial.dimensions.width > 0 ? (
-                      <Dimension3DBoxVisual
-                        width={currentMaterial.dimensions.width}
-                        length={currentMaterial.dimensions.length}
-                        height={currentMaterial.dimensions.height}
-                        unit="CM"
-                        compact={true}
-                        className="mt-auto"
-                      />
+                {/* Çizgi 1: Resim ile 3D Model Arasındaki Ayırıcı Çizgi */}
+                <div className="h-24 w-px bg-line shrink-0 self-center mr-1 mb-0.5" />
+
+                {/* 2. Bölüm: 3D Şema */}
+                <div className="shrink-0 flex items-end justify-start overflow-visible">
+                  {currentMaterial.dimensions && currentMaterial.dimensions.width > 0 ? (
+                    <Dimension3DBoxVisual
+                      width={currentMaterial.dimensions.width}
+                      length={currentMaterial.dimensions.length}
+                      height={currentMaterial.dimensions.height}
+                      unit="CM"
+                      compact={true}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center p-1.5 gap-1 text-subtle/70 my-auto ml-2">
+                      <Ruler className="h-4 w-4 text-amber-500/60" />
+                      <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                        Ölçü tanımlanmamış
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Çizgi 2: Boy Yazısının Sağındaki Ayırıcı Çizgi */}
+                <div className="h-24 w-px bg-line shrink-0 self-center ml-1.5 mr-2 mb-0.5" />
+
+                {/* 3. Bölüm: Sağ Bilgi & Barkod Paneli */}
+                <div className="flex-1 min-w-0 h-24 sm:h-26 flex flex-col justify-between mb-0.5">
+                  {/* Üst Kısım: Ürün Kodu, Parti, Net KG, Brüt KG, Hacim */}
+                  <div className="grid grid-cols-2 gap-x-2.5 gap-y-1 text-xs sm:text-[12px] leading-tight">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Ürün:</span>
+                      <span className="font-mono font-black text-fg text-xs sm:text-[12.5px] truncate">{currentMaterial.material}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Parti:</span>
+                      <span className={`font-mono font-black text-xs sm:text-[12.5px] truncate ${currentMaterial.isSpecialLot ? "text-violet-600 dark:text-violet-400" : "text-fg"}`}>
+                        {currentMaterial.isSpecialLot ? "Parti Takipli" : "Serbest"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Net:</span>
+                      <span className="font-mono font-black text-fg text-xs sm:text-[12.5px] truncate">
+                        {currentMaterial.dimensions?.netWeight ?? 0} KG
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Brüt:</span>
+                      <span className="font-mono font-black text-fg text-xs sm:text-[12.5px] truncate">
+                        {currentMaterial.dimensions?.brutWeight ?? 0} KG
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 min-w-0 col-span-2">
+                      <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Hacim:</span>
+                      <span className="font-mono font-black text-fg text-xs sm:text-[12.5px] truncate">
+                        {currentMaterial.dimensions?.volume && currentMaterial.dimensions.volume > 0
+                          ? currentMaterial.dimensions.volume
+                          : Number(
+                              ((currentMaterial.dimensions?.width || 0) *
+                                (currentMaterial.dimensions?.length || 0) *
+                                (currentMaterial.dimensions?.height || 0)) /
+                                1000000
+                            ).toFixed(3)}{" "}
+                        M³
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Alt Kısım: Barcode Combobox / Select */}
+                  <div className="w-full pt-1 border-t border-line/50">
+                    {currentMaterial.barcodes.length > 1 ? (
+                      <div className="relative flex items-center w-full">
+                        <select
+                          value={currentMaterial.selectedBarcode}
+                          onChange={(e) =>
+                            setCurrentMaterial((prev) =>
+                              prev ? { ...prev, selectedBarcode: e.target.value } : prev
+                            )
+                          }
+                          className="text-xs sm:text-[12.5px] font-mono font-black py-1 pl-2.5 pr-6 h-7.5 sm:h-8 rounded-lg border border-line bg-surface text-fg shadow-xs cursor-pointer focus:outline-none focus:border-emerald-500 appearance-none w-full tracking-wide truncate"
+                          title="Barkod Seçimi"
+                        >
+                          {currentMaterial.barcodes.map((b) => (
+                            <option key={b.barcode} value={b.barcode}>
+                              {b.barcode} ({b.unit})
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-subtle" />
+                      </div>
                     ) : (
-                      <div className="flex flex-col items-center justify-center text-center p-1.5 gap-1 text-subtle/70 my-auto">
-                        <Ruler className="h-4 w-4 text-amber-500/60" />
-                        <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">
-                          Ölçü tanımlanmamış
+                      <div className="flex items-center justify-between px-2.5 py-1 h-7.5 sm:h-8 rounded-lg border border-line bg-surface text-fg shadow-xs">
+                        <span className="text-[10px] text-subtle font-semibold">Barkod:</span>
+                        <span className="font-mono text-xs sm:text-[12.5px] font-black text-fg tracking-wide truncate">
+                          {currentMaterial.selectedBarcode || currentMaterial.barcodes[0]?.barcode || "—"}
+                          {currentMaterial.barcodes[0]?.unit && (
+                            <span className="text-[9px] text-subtle font-sans ml-1 font-semibold">({currentMaterial.barcodes[0].unit})</span>
+                          )}
                         </span>
                       </div>
                     )}
@@ -1586,7 +1588,7 @@ export default function ReceivingDetailPage() {
         {/* ========================================================================= */}
 
         {/* SOL ALT: OKUTULANLAR MİNİ SAYAÇ BARI */}
-        <div className="sm:col-span-6 md:col-span-6 lg:col-span-6 landscape:col-span-6">
+        <div className="col-span-1 sm:col-span-5 md:col-span-4 lg:col-span-4 xl:col-span-4 landscape:col-span-4">
           <div className="rounded-2xl border border-line bg-surface px-3 py-1.5 shadow-xs hover:border-emerald-500/40 transition">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -1632,7 +1634,7 @@ export default function ReceivingDetailPage() {
         </div>
 
         {/* SAĞ ALT: AÇIK SİPARİŞ KARTLARI (Varsa) */}
-        <div className="sm:col-span-6 md:col-span-6 lg:col-span-6 landscape:col-span-6">
+        <div className="col-span-1 sm:col-span-7 md:col-span-8 lg:col-span-8 xl:col-span-8 landscape:col-span-8">
           {openOrders.length > 0 && (
             <div className="space-y-1.5 max-h-[32vh] overflow-y-auto pr-0.5 animate-fade-in">
               {orderFulfillment.allocations.map((al, idx) => (
