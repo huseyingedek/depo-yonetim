@@ -365,6 +365,8 @@ export default function ReceivingDetailPage() {
     isSpecialLot: boolean;
     barcodes: Array<{ barcode: string; unit: string }>;
     selectedBarcode: string;
+    packageMultiplier?: number;
+    unitMultipliers?: Record<string, number>;
     specialAttributes?: {
       isexplos: boolean;
       isspoil: boolean;
@@ -486,7 +488,7 @@ export default function ReceivingDetailPage() {
         colorClass: "border-blue-500/40 bg-blue-500/15 text-blue-800 dark:text-blue-300",
       });
     }
-    if (sp.isheavy || (sp.aklpalpos && Number(sp.aklpalpos) > 1)) {
+    if (sp.isheavy) {
       attrs.push({
         id: "heavy",
         label: "Ağır Yük",
@@ -502,6 +504,28 @@ export default function ReceivingDetailPage() {
   const [lotNumber, setLotNumber] = useState<string>("");
   const [expiryDate, setExpiryDate] = useState<string>("");
   const [lotError, setLotError] = useState<string>("");
+
+  // Seçili Barkod ve Birim / Katsayı Bilgisi (Koli, Kutu, Adet)
+  const selectedBarcodeObj = useMemo(() => {
+    if (!currentMaterial || !currentMaterial.barcodes || currentMaterial.barcodes.length === 0) return undefined;
+    return (
+      currentMaterial.barcodes.find((b) => b.barcode === currentMaterial.selectedBarcode) ||
+      currentMaterial.barcodes[0]
+    );
+  }, [currentMaterial]);
+
+  const activeBarcodeUnit = useMemo(() => {
+    return String(selectedBarcodeObj?.unit || currentMaterial?.unit || "AD").trim().toUpperCase();
+  }, [selectedBarcodeObj, currentMaterial?.unit]);
+
+  const activeBarcodeMultiplier = useMemo(() => {
+    if (!currentMaterial) return 1;
+    if (currentMaterial.unitMultipliers?.[activeBarcodeUnit]) {
+      return currentMaterial.unitMultipliers[activeBarcodeUnit];
+    }
+    if (activeBarcodeUnit === "AD") return 1;
+    return currentMaterial.packageMultiplier || 1;
+  }, [currentMaterial, activeBarcodeUnit]);
 
   // Açık Siparişler (FIFO Sıralı)
   const [openOrders, setOpenOrders] = useState<Record<string, unknown>[]>([]);
@@ -780,10 +804,31 @@ export default function ReceivingDetailPage() {
 
         setMatSizeForm(parsedMatSize);
 
-        // 2. Barcode Listesini Topla ve Eşle (CANIAS'tan gelen gerçek BUNIT birimlerini koru)
-        const rawBarcodeList = Array.isArray(matRes.barcodeList) ? matRes.barcodeList : [];
+        // 2. Barcode Listesini Topla ve Eşle (CANIAS'tan gelen gerçek BUNIT ve katsayıları koru)
+        let rawBarcodeList = Array.isArray(matRes.barcodeList) ? matRes.barcodeList : [];
+        if (rawBarcodeList.length <= 1 && matCode && matCode !== targetBarcode) {
+          try {
+            const matCodeRes = await api.getMaterialDetail(matCode);
+            if (Array.isArray(matCodeRes.barcodeList) && matCodeRes.barcodeList.length > rawBarcodeList.length) {
+              rawBarcodeList = matCodeRes.barcodeList;
+            }
+          } catch {}
+        }
         const seenBarcodes = new Set<string>();
         const barcodes: Array<{ barcode: string; unit: string }> = [];
+        const unitMultipliers: Record<string, number> = { "AD": 1 };
+
+        const scannedMultiplier = parseNum(matListRow.QUANTITY || 1) || 1;
+        const scannedBarcodeRow = rawBarcodeList.find(
+          (b) => String(b.BARCODE || b.barcode || "").trim() === targetBarcode
+        );
+        const scannedUnit = String(
+          scannedBarcodeRow?.BUNIT || scannedBarcodeRow?.UNIT || matUnit || "AD"
+        ).trim().toUpperCase();
+
+        if (scannedMultiplier > 0) {
+          unitMultipliers[scannedUnit] = scannedMultiplier;
+        }
 
         // Önce CANIAS'tan gelen resmi barkodları kendi gerçek birimleriyle (KT, BR, KO, PK, AD, SET vb.) ekle
         for (const b of rawBarcodeList) {
@@ -811,12 +856,56 @@ export default function ReceivingDetailPage() {
           barcodes.push({ barcode: targetBarcode, unit: matUnit || "AD" });
         }
 
-        // 3. MZYGetOpenOrder ile açık siparişleri getir ve YENİDEN ESKİYE sırala (Newest first)
+        // Eğer KO veya KT barkodu var ve multiplier henüz bilinmiyorsa (Adet barkodu okutulduysa), o barkodun katsayısını çek
+        const nonAdBarcode = barcodes.find((b) => b.unit !== "AD" && !unitMultipliers[b.unit]);
+        if (nonAdBarcode) {
+          try {
+            const extraRes = await api.getMaterialDetail(nonAdBarcode.barcode);
+            const extraRows = Array.isArray(extraRes.matList) ? extraRes.matList : [];
+            const extraMultiplier = parseNum((extraRows[0] as Record<string, unknown>)?.QUANTITY || 1) || 1;
+            if (extraMultiplier > 0) {
+              unitMultipliers[nonAdBarcode.unit] = extraMultiplier;
+            }
+          } catch {}
+        }
+
+        // 3. MZYGetOpenOrder ile açık siparişleri getir (Barkod, Malzeme Kodu ve Tedarikçi Fallback'li)
+        let rawOrders: Record<string, unknown>[] = [];
         const orderRes = await api.getOpenOrders({
           barcode: targetBarcode,
           vendor: vendorCode,
         });
-        const rawOrders = (orderRes.orders || []) as Record<string, unknown>[];
+        if (orderRes.orders && orderRes.orders.length > 0) {
+          rawOrders = orderRes.orders as Record<string, unknown>[];
+        }
+
+        // Eğer okutulan barkodla bulunamadıysa ve malzeme kodu farklıysa malzeme kodu ile dene
+        if (rawOrders.length === 0 && matCode && matCode !== targetBarcode) {
+          const matOrderRes = await api.getOpenOrders({
+            barcode: matCode,
+            vendor: vendorCode,
+          });
+          if (matOrderRes.orders && matOrderRes.orders.length > 0) {
+            rawOrders = matOrderRes.orders as Record<string, unknown>[];
+          }
+        }
+
+        // Eğer tedarikçi filtreli aramada bulunamadıysa tedarikçisiz dene
+        if (rawOrders.length === 0 && vendorCode) {
+          const anyVendorRes = await api.getOpenOrders({
+            barcode: targetBarcode,
+          });
+          if (anyVendorRes.orders && anyVendorRes.orders.length > 0) {
+            rawOrders = anyVendorRes.orders as Record<string, unknown>[];
+          } else if (matCode && matCode !== targetBarcode) {
+            const anyVendorMatRes = await api.getOpenOrders({
+              barcode: matCode,
+            });
+            if (anyVendorMatRes.orders && anyVendorMatRes.orders.length > 0) {
+              rawOrders = anyVendorMatRes.orders as Record<string, unknown>[];
+            }
+          }
+        }
 
         const sortedOrders = [...rawOrders].sort((a, b) => {
           const dateA = getOrderDate(a) || getOrderNum(a, 0);
@@ -843,7 +932,7 @@ export default function ReceivingDetailPage() {
           aklisbreakable: checkAttr(dimSources, ["AKLISBREAKABLE", "ISBREAKABLE", "BREAKABLE", "KIRILABILIR", "KIRILIR", "AKL_ISBREAKABLE"]),
           aklisliquid: checkAttr(dimSources, ["AKLISLIQUID", "ISLIQUID", "LIQUID", "SIVI", "AKL_ISLIQUID"]),
           aklistoxic: checkAttr(dimSources, ["AKLISTOXIC", "ISTOXIC", "TOXIC", "TOKSIK", "ZEHIRLI", "AKL_ISTOXIC"]),
-          isheavy: checkAttr(dimSources, ["AKLISHEAVY", "ISHEAVY", "HEAVY", "AGIR", "AGIRYUK"]) || Number(dimSources.find((s) => s?.AKLPALPOS)?.AKLPALPOS) > 1,
+          isheavy: checkAttr(dimSources, ["AKLISHEAVY", "ISHEAVY", "HEAVY", "AGIR", "AGIRYUK"]),
           aklpalpos: Number(matSizeRow.AKLPALPOS ?? nestedSizeRow.AKLPALPOS) || 1,
         };
 
@@ -855,6 +944,8 @@ export default function ReceivingDetailPage() {
           isSpecialLot,
           barcodes,
           selectedBarcode: targetBarcode || barcodes[0]?.barcode || "",
+          packageMultiplier: scannedMultiplier,
+          unitMultipliers,
           specialAttributes,
           dimensions: {
             width: pwidth,
@@ -944,21 +1035,37 @@ export default function ReceivingDetailPage() {
       .reduce((sum, it) => sum + (it.receivedQty || 0), 0);
   }, [receivedItems, currentMaterial]);
 
-  // Açık Siparişlerin Başlangıç Toplam Adedi
+  // Açık Siparişlerin Başlangıç Toplam Adedi (Stok Birimi Bazında)
   const totalInitialOrderQty = useMemo(() => {
     if (!openOrders || openOrders.length === 0) return 0;
     return openOrders.reduce((sum, ord) => {
       const q = getOrderRemainingQty(ord);
-      return sum + (q > 0 ? q : 1);
+      const purUnit = String(ord?.PURUNIT || ord?.QUNIT || currentMaterial?.unit || "AD").trim().toUpperCase();
+      const stockUnit = String(ord?.SKUNIT || ord?.STOCKUNIT || currentMaterial?.unit || "AD").trim().toUpperCase();
+      let factor = 1;
+      if (purUnit !== stockUnit) {
+        if (currentMaterial?.unitMultipliers?.[purUnit]) {
+          factor = currentMaterial.unitMultipliers[purUnit];
+        } else if (currentMaterial?.packageMultiplier && currentMaterial.packageMultiplier > 1) {
+          factor = currentMaterial.packageMultiplier;
+        } else {
+          const conv1 = parseNum(ord.CONV1 || ord.PCONV1 || 1);
+          const conv2 = parseNum(ord.CONV2 || ord.PCONV2 || 1);
+          if (conv1 > 0 && conv2 > 0 && conv1 !== conv2) {
+            factor = conv2 / conv1;
+          }
+        }
+      }
+      return sum + (q > 0 ? q * factor : 1);
     }, 0);
-  }, [openOrders]);
+  }, [openOrders, currentMaterial]);
 
-  // Açık Siparişlerde Kalan Toplam Bakiye (Kabul Edilebilecek Maksimum Miktar)
+  // Açık Siparişlerde Kalan Toplam Bakiye (Kabul Edilebilecek Maksimum Miktar - Stok Birimi)
   const totalAvailableQty = useMemo(() => {
     return Math.max(0, totalInitialOrderQty - completedMaterialQty);
   }, [totalInitialOrderQty, completedMaterialQty]);
 
-  // Sipariş Karşılama Durumu (Sadece Tamamlanan/Eklenen Ürünlere Göre Renklenir)
+  // Sipariş Karşılama Durumu (Stok Birimi Bazında Dağıtım ve Sipariş Birimine Çevrim)
   const orderFulfillment = useMemo(() => {
     let remainingToDistribute = Math.max(0, completedMaterialQty);
     const allocations: Array<{
@@ -966,9 +1073,14 @@ export default function ReceivingDetailPage() {
       orderNum: string;
       itemNum: string;
       orderDate: string;
-      totalQty: number;
-      fulfilledQty: number;
-      remainingQty: number;
+      totalPurQty: number;
+      fulfilledPurQty: number;
+      remPurQty: number;
+      totalStockQty: number;
+      fulfilledStockQty: number;
+      purUnit: string;
+      stockUnit: string;
+      factor: number;
       isFullyAllocated: boolean;
       isPartiallyAllocated: boolean;
     }> = [];
@@ -977,22 +1089,49 @@ export default function ReceivingDetailPage() {
       const orderNum = getOrderNum(ord, idx);
       const itemNum = getOrderItemNum(ord, idx);
       const orderDate = getOrderDate(ord);
-      const rawRem = getOrderRemainingQty(ord);
-      const totalQty = rawRem > 0 ? rawRem : 1;
+      const purUnit = String(ord?.PURUNIT || ord?.QUNIT || currentMaterial?.unit || "AD").trim().toUpperCase();
+      const stockUnit = String(ord?.SKUNIT || ord?.STOCKUNIT || currentMaterial?.unit || "AD").trim().toUpperCase();
 
-      const fulfilled = Math.min(remainingToDistribute, totalQty);
-      remainingToDistribute -= fulfilled;
+      const rawPurQty = getOrderRemainingQty(ord);
+      const totalPurQty = rawPurQty > 0 ? rawPurQty : 1;
+
+      let factor = 1;
+      if (purUnit !== stockUnit) {
+        if (currentMaterial?.unitMultipliers?.[purUnit]) {
+          factor = currentMaterial.unitMultipliers[purUnit];
+        } else if (currentMaterial?.packageMultiplier && currentMaterial.packageMultiplier > 1) {
+          factor = currentMaterial.packageMultiplier;
+        } else {
+          const conv1 = parseNum(ord.CONV1 || ord.PCONV1 || 1);
+          const conv2 = parseNum(ord.CONV2 || ord.PCONV2 || 1);
+          if (conv1 > 0 && conv2 > 0 && conv1 !== conv2) {
+            factor = conv2 / conv1;
+          }
+        }
+      }
+
+      const totalStockQty = Number((totalPurQty * factor).toFixed(2));
+      const fulfilledStockQty = Math.min(remainingToDistribute, totalStockQty);
+      remainingToDistribute = Math.max(0, remainingToDistribute - fulfilledStockQty);
+
+      const fulfilledPurQty = factor > 1 ? Number((fulfilledStockQty / factor).toFixed(2)) : fulfilledStockQty;
+      const remPurQty = Math.max(0, Number((totalPurQty - fulfilledPurQty).toFixed(2)));
 
       allocations.push({
         order: ord,
         orderNum,
         itemNum,
         orderDate,
-        totalQty,
-        fulfilledQty: fulfilled,
-        remainingQty: Math.max(0, totalQty - fulfilled),
-        isFullyAllocated: totalQty > 0 && fulfilled >= totalQty,
-        isPartiallyAllocated: fulfilled > 0 && fulfilled < totalQty,
+        totalPurQty,
+        fulfilledPurQty,
+        remPurQty,
+        totalStockQty,
+        fulfilledStockQty,
+        purUnit,
+        stockUnit,
+        factor,
+        isFullyAllocated: totalStockQty > 0 && fulfilledStockQty >= totalStockQty,
+        isPartiallyAllocated: fulfilledStockQty > 0 && fulfilledStockQty < totalStockQty,
       });
     });
 
@@ -1000,7 +1139,7 @@ export default function ReceivingDetailPage() {
       allocations,
       totalFulfilled: completedMaterialQty,
     };
-  }, [openOrders, completedMaterialQty]);
+  }, [openOrders, completedMaterialQty, currentMaterial]);
 
   // ---------------------------------------------------------------------------
   // 2. ADIM: MİKTAR GİRİŞİ TAMAMLAMA (BİTİR BUTONU)
@@ -1014,12 +1153,16 @@ export default function ReceivingDetailPage() {
       return;
     }
 
+    const maxAllowedInActiveUnit = activeBarcodeMultiplier > 1
+      ? Math.floor(totalAvailableQty / activeBarcodeMultiplier)
+      : totalAvailableQty;
+
     // Açık siparişlerin kalan toplam bakiyesinden fazlaysa izin verme ve 0'a çek
-    if (totalInitialOrderQty > 0 && receiptQty > totalAvailableQty) {
+    if (totalInitialOrderQty > 0 && receiptQty > maxAllowedInActiveUnit) {
       sesHata();
       show({
         kind: "err",
-        text: `Fazla miktar girdiniz! Açık siparişlerin kalan bakiyesinden (${totalAvailableQty} ${currentMaterial.unit || "AD"}) daha fazla miktar kabul edilemez.`,
+        text: `Fazla miktar girdiniz! Açık siparişlerin kalan bakiyesinden (${maxAllowedInActiveUnit} ${activeBarcodeUnit}) daha fazla miktar kabul edilemez.`,
       });
       setReceiptQty(0);
       return;
@@ -1032,8 +1175,9 @@ export default function ReceivingDetailPage() {
       return;
     }
 
-    // FIFO ile siparişlere dağıtım yap ve okutulanlara ekle
-    let remainingToDistribute = receiptQty;
+    // Depocunun girdiği miktarı stok birimine çevir (Örn: 5 KO * 24 = 120 AD)
+    const totalReceivedStockQty = receiptQty * activeBarcodeMultiplier;
+    let remainingToDistribute = totalReceivedStockQty;
     const newItems: ReceivedItem[] = [];
 
     if (openOrders.length > 0) {
@@ -1042,14 +1186,34 @@ export default function ReceivingDetailPage() {
         const ord = openOrders[idx];
         const orderNum = getOrderNum(ord, idx);
         const itemNum = getOrderItemNum(ord, idx);
+        const purUnit = String(ord?.PURUNIT || ord?.QUNIT || currentMaterial?.unit || "AD").trim().toUpperCase();
+        const stockUnit = String(ord?.SKUNIT || ord?.STOCKUNIT || currentMaterial?.unit || "AD").trim().toUpperCase();
+
         const rawRem = getOrderRemainingQty(ord);
-        const totalOrdQty = rawRem > 0 ? rawRem : 1;
+        const totalPurQty = rawRem > 0 ? rawRem : 1;
+
+        let factor = 1;
+        if (purUnit !== stockUnit) {
+          if (currentMaterial?.unitMultipliers?.[purUnit]) {
+            factor = currentMaterial.unitMultipliers[purUnit];
+          } else if (currentMaterial?.packageMultiplier && currentMaterial.packageMultiplier > 1) {
+            factor = currentMaterial.packageMultiplier;
+          } else {
+            const conv1 = parseNum(ord.CONV1 || ord.PCONV1 || 1);
+            const conv2 = parseNum(ord.CONV2 || ord.PCONV2 || 1);
+            if (conv1 > 0 && conv2 > 0 && conv1 !== conv2) {
+              factor = conv2 / conv1;
+            }
+          }
+        }
+
+        const totalStockQty = Number((totalPurQty * factor).toFixed(2));
 
         const alreadyAllocated = receivedItems
           .filter((it) => it.material === currentMaterial.material && String(it.orderNum) === String(orderNum) && String(it.itemNum) === String(itemNum))
           .reduce((sum, it) => sum + it.receivedQty, 0);
 
-        const availableInThisOrder = Math.max(0, totalOrdQty - alreadyAllocated);
+        const availableInThisOrder = Math.max(0, totalStockQty - alreadyAllocated);
         if (availableInThisOrder > 0) {
           const alloc = Math.min(remainingToDistribute, availableInThisOrder);
           remainingToDistribute -= alloc;
@@ -1065,7 +1229,7 @@ export default function ReceivingDetailPage() {
             warehouse: targetWH,
             stockPlace: String(ord.STOCKPLACE || ord.BASESTOCKPLACE || "*").trim() || "*",
             specialStock: currentMaterial.isSpecialLot ? "Takipli" : "Serbest",
-            expectedQty: totalOrdQty,
+            expectedQty: totalStockQty,
             receivedQty: alloc,
             unit: currentMaterial.unit,
             isSpecialLot: currentMaterial.isSpecialLot,
@@ -1111,8 +1275,8 @@ export default function ReceivingDetailPage() {
         warehouse: targetWH,
         stockPlace: "*",
         specialStock: currentMaterial.isSpecialLot ? "Takipli" : "Serbest",
-        expectedQty: receiptQty,
-        receivedQty: receiptQty,
+        expectedQty: totalReceivedStockQty,
+        receivedQty: totalReceivedStockQty,
         unit: currentMaterial.unit,
         isSpecialLot: currentMaterial.isSpecialLot,
         batchNum: lotNumber.trim() || undefined,
@@ -1147,7 +1311,9 @@ export default function ReceivingDetailPage() {
     sesBasarili();
     show({
       kind: "ok",
-      text: `${currentMaterial.name} (${receiptQty} ${currentMaterial.unit}) kabul edildi.`,
+      text: activeBarcodeMultiplier > 1
+        ? `${currentMaterial.name} (${receiptQty} ${activeBarcodeUnit} = ${totalReceivedStockQty} ${currentMaterial.unit || "AD"}) kabul edildi.`
+        : `${currentMaterial.name} (${receiptQty} ${activeBarcodeUnit}) kabul edildi.`,
     });
 
     // 1. Aşamaya sıfırla (Yeni barkoda hazır ol)
@@ -1402,7 +1568,7 @@ export default function ReceivingDetailPage() {
               <div>
                 <div className="mb-1">
                   <label className="text-xs font-bold text-fg block">
-                    Kabul Edilecek Miktar ({currentMaterial.unit || "AD"}) <span className="text-red-500">*</span>
+                    Kabul Edilecek Miktar ({activeBarcodeUnit}) <span className="text-red-500">*</span>
                   </label>
                 </div>
 
@@ -1667,39 +1833,30 @@ export default function ReceivingDetailPage() {
                     </div>
                   )}
 
-                  {/* Alt Kısım: Barcode Combobox / Select (Kartın En Alt Kenarına İner) */}
+                  {/* Alt Kısım: Barcode Combobox / Select (Kartın En Alt Kenarında, Barkod Kelimesi Olmadan) */}
                   <div className="w-full mt-auto pt-1.5 pb-0.5 border-t border-line/40 flex items-center justify-start">
-                    {currentMaterial.barcodes.length > 1 ? (
-                      <div className="relative inline-flex items-center w-auto max-w-full">
-                        <select
-                          value={currentMaterial.selectedBarcode}
-                          onChange={(e) =>
-                            setCurrentMaterial((prev) =>
-                              prev ? { ...prev, selectedBarcode: e.target.value } : prev
-                            )
-                          }
-                          className="text-[10px] sm:text-[10.5px] font-mono font-black py-0 pl-1.5 pr-4.5 h-5.5 sm:h-6 rounded-md border border-line bg-surface text-fg shadow-2xs cursor-pointer focus:outline-none focus:border-emerald-500 appearance-none w-auto tracking-wide shrink-0 leading-none"
-                          title="Barkod Seçimi"
-                        >
-                          {currentMaterial.barcodes.map((b) => (
+                    <div className="relative inline-flex items-center w-auto max-w-full">
+                      <select
+                        value={currentMaterial.selectedBarcode}
+                        onChange={(e) =>
+                          setCurrentMaterial((prev) =>
+                            prev ? { ...prev, selectedBarcode: e.target.value } : prev
+                          )
+                        }
+                        className="text-[10px] sm:text-[10.5px] font-mono font-black py-0 pl-1.5 pr-5 h-5.5 sm:h-6 rounded-md border border-line bg-surface text-fg shadow-2xs cursor-pointer focus:outline-none focus:border-emerald-500 appearance-none w-auto tracking-wide shrink-0 leading-none"
+                        title="Barkod Seçimi"
+                      >
+                        {currentMaterial.barcodes.map((b) => {
+                          const u = (b.unit || "").toUpperCase();
+                          return (
                             <option key={b.barcode} value={b.barcode}>
-                              {b.barcode} ({b.unit})
+                              {b.barcode} ({u || "AD"})
                             </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-1 h-2.5 w-2.5 text-subtle" />
-                      </div>
-                    ) : (
-                      <div className="inline-flex items-center gap-1 px-1.5 py-0 h-5.5 sm:h-6 rounded-md border border-line bg-surface text-fg shadow-2xs w-auto leading-none">
-                        <span className="text-[9px] text-subtle font-semibold">Barkod:</span>
-                        <span className="font-mono text-[10px] sm:text-[10.5px] font-black text-fg tracking-wide">
-                          {currentMaterial.selectedBarcode || currentMaterial.barcodes[0]?.barcode || "—"}
-                          {currentMaterial.barcodes[0]?.unit && (
-                            <span className="text-[8.5px] text-subtle font-sans ml-1 font-semibold">({currentMaterial.barcodes[0].unit})</span>
-                          )}
-                        </span>
-                      </div>
-                    )}
+                          );
+                        })}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-1 h-2.5 w-2.5 text-subtle" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1766,30 +1923,6 @@ export default function ReceivingDetailPage() {
             <div className="space-y-1.5 max-h-[32vh] overflow-y-auto pr-0.5 animate-fade-in">
               {orderFulfillment.allocations.map((al, idx) => {
                 const orderType = getOrderType(al.order);
-                const purUnit = String(al.order?.PURUNIT || al.order?.QUNIT || currentMaterial?.unit || "AD").trim().toUpperCase();
-                const stockUnit = String(al.order?.SKUNIT || al.order?.STOCKUNIT || currentMaterial?.unit || "AD").trim().toUpperCase();
-
-                const rawPurQty = parseNum(al.order?.REMQUANTITY || al.order?.PURQUANTITY || al.order?.QUANTITY || 0);
-                const rawStockQty = parseNum(al.order?.SKREMQUANTITY || al.order?.SKQUANTITY || al.order?.STOCKQUANTITY || 0);
-                const conv1 = parseNum(al.order?.CONV1 || al.order?.PCONV1 || 1);
-                const conv2 = parseNum(al.order?.CONV2 || al.order?.PCONV2 || 1);
-
-                let factor = 1;
-                if (rawStockQty > 0 && rawPurQty > 0 && purUnit !== stockUnit) {
-                  factor = rawStockQty / rawPurQty;
-                } else if (conv1 > 0 && conv2 > 0 && conv1 !== conv2) {
-                  factor = conv2 / conv1;
-                }
-
-                const hasDifferentUnits = purUnit !== stockUnit && factor !== 1;
-
-                const totalPur = al.totalQty;
-                const fulfilledPur = al.fulfilledQty;
-                const remPur = Math.max(0, totalPur - fulfilledPur);
-
-                const totalStock = Number((totalPur * factor).toFixed(2));
-                const fulfilledStock = Number((fulfilledPur * factor).toFixed(2));
-                const remStock = Math.max(0, Number((remPur * factor).toFixed(2)));
 
                 return (
                   <div
@@ -1802,18 +1935,12 @@ export default function ReceivingDetailPage() {
                       }`}
                   >
                     <div className="flex items-center justify-between gap-2 text-xs flex-wrap">
-                      {/* Sol: En başta Toplandıkça Kalan Miktar, ardından Belge Tipi, Belge No, Kalem No, Tarih */}
+                      {/* Sol: Siparişten Ne Kaldığı (örn: 17 KO kaldı veya 30 AD kaldı), Belge Tipi, Belge No, Kalem No, Tarih */}
                       <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap min-w-0 font-mono text-[11px]">
-                        {/* 1. Kalan Miktar (En Başta) */}
+                        {/* 1. Ne Kaldığı (Sipariş Birimi Cinsinden) */}
                         <span className="font-bold text-fg">
-                          Kalan:{" "}
-                          <strong className="text-amber-600 dark:text-amber-400 font-black">
-                            {remPur} {purUnit}
-                            {hasDifferentUnits && (
-                              <span className="text-subtle font-bold ml-1">
-                                ({remStock} {stockUnit})
-                              </span>
-                            )}
+                          <strong className="text-fg font-black text-xs">
+                            {al.remPurQty} {al.purUnit} kaldı
                           </strong>
                         </span>
 
@@ -1838,28 +1965,25 @@ export default function ReceivingDetailPage() {
                         )}
                       </div>
 
-                      {/* Sağ: Toplanan / Açık Miktar ve Rozet */}
-                      <div className="flex items-center gap-2 font-mono text-xs shrink-0 ml-auto">
-                        <div className="text-right">
-                          <span className="font-black text-fg text-[11px]">
-                            {fulfilledPur}/{totalPur} {purUnit}
+                      {/* Sağ: 2 Satırlı Kaçta Kaçı Toplandı (1. Satır: Sipariş Birimi örn 3/20 KO, 2. Satır: Stok Birimi örn 18/120 AD) */}
+                      <div className="flex items-center gap-2.5 font-mono shrink-0 ml-auto mr-3 sm:mr-6 text-right">
+                        <div className="flex flex-col items-end leading-tight gap-0.5">
+                          {/* 1. Satır: Sipariş Birimi */}
+                          <span className="font-black text-fg text-xs sm:text-[12px]">
+                            {al.fulfilledPurQty}/{al.totalPurQty} {al.purUnit}
                           </span>
-                          {hasDifferentUnits && (
-                            <span className="text-subtle font-bold text-[10.5px] ml-1.5">
-                              · {fulfilledStock}/{totalStock} {stockUnit}
-                            </span>
-                          )}
+                          {/* 2. Satır: Stok / Adet Birimi (Aynı Büyüklük ve Renkte) */}
+                          <span className="font-black text-fg text-xs sm:text-[12px]">
+                            {al.fulfilledStockQty}/{al.totalStockQty} {al.stockUnit}
+                          </span>
                         </div>
 
-                        {al.isFullyAllocated ? (
+                        {/* Tamamlandı Rozeti */}
+                        {al.isFullyAllocated && (
                           <span className="chip bg-emerald-600 text-white font-black text-[10px] px-1.5 py-0.5 shadow-2xs flex items-center gap-0.5">
                             <Check className="h-3 w-3" /> Tamamlandı
                           </span>
-                        ) : al.isPartiallyAllocated ? (
-                          <span className="chip bg-amber-500 text-white font-black text-[10px] px-1.5 py-0.5 shadow-2xs">
-                            Kısmi: {fulfilledPur}/{totalPur}
-                          </span>
-                        ) : null}
+                        )}
                       </div>
                     </div>
                   </div>

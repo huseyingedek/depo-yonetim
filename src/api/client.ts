@@ -1370,12 +1370,18 @@ export const api = {
 
     const mesaj = serviceMessage(r);
     const dataObj = r.data || {};
-    const matList = rowsOf(r, ["WMSXMLTABLE", "MATLIST", "TABLE", "MATERIALS", "IASMATBASIC"]);
-    const rootRow = matList[0] || (dataObj.WMSXMLTABLE as Record<string, unknown>)?.ROW || (dataObj.ROW as Record<string, unknown>) || {};
+    const matList = rowsOf(r, ["WMSMATERIALXML", "WMSXMLTABLE", "MATLIST", "TABLE", "MATERIALS", "IASMATBASIC"]);
+    const rootRow = matList[0] || (dataObj.WMSMATERIALXML as Record<string, unknown>)?.ROW || (dataObj.WMSXMLTABLE as Record<string, unknown>)?.ROW || (dataObj.ROW as Record<string, unknown>) || {};
 
     // Barcode List
     let barcodeList: Record<string, unknown>[] = [];
-    const rawBC = (rootRow.BARCODELIST || dataObj.BARCODELIST) as unknown;
+    const rawBC = (
+      matList[0]?.BARCODELIST ||
+      rootRow.BARCODELIST ||
+      dataObj.BARCODELIST ||
+      ((dataObj.WMSXMLTABLE as Record<string, unknown>)?.ROW as Record<string, unknown>)?.BARCODELIST ||
+      ((dataObj.WMSMATERIALXML as Record<string, unknown>)?.ROW as Record<string, unknown>)?.BARCODELIST
+    ) as unknown;
     if (rawBC) {
       if (Array.isArray(rawBC)) {
         barcodeList = rawBC as Record<string, unknown>[];

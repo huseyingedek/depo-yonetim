@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Barcode,
   ArrowRight,
+  ChevronRight,
   CheckCircle2,
   Building2,
   AlertCircle,
@@ -192,7 +193,7 @@ export default function ReceivingSupplierSelectPage() {
           localStorage.removeItem(k);
         }
       });
-    } catch {}
+    } catch { }
 
     api
       .getWarehouses()
@@ -201,7 +202,7 @@ export default function ReceivingSupplierSelectPage() {
           setCaniasWarehouses(list);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const handleTabChange = (tab: SearchTab) => {
@@ -399,7 +400,7 @@ export default function ReceivingSupplierSelectPage() {
         if (!isValid && !shelfRes.ok && !isKnownWh) {
           setTargetError(
             shelfRes.message ||
-              "Girilen mal kabul deposu CANIAS sisteminde bulunamadı. Lütfen geçerli bir depo giriniz."
+            "Girilen mal kabul deposu CANIAS sisteminde bulunamadı. Lütfen geçerli bir depo giriniz."
           );
           return;
         }
@@ -494,11 +495,10 @@ export default function ReceivingSupplierSelectPage() {
           <button
             type="button"
             onClick={() => handleTabChange("barcode")}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-1.5 px-3 text-xs font-bold transition-all ${
-              activeTab === "barcode"
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-1.5 px-3 text-xs font-bold transition-all ${activeTab === "barcode"
                 ? "bg-emerald-600 text-white shadow-sm"
                 : "text-subtle hover:text-fg hover:bg-surface"
-            }`}
+              }`}
           >
             <Barcode className="h-4 w-4" />
             <span>1. Seçenek: Barkod ile Bul</span>
@@ -507,11 +507,10 @@ export default function ReceivingSupplierSelectPage() {
           <button
             type="button"
             onClick={() => handleTabChange("supplierName")}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-1.5 px-3 text-xs font-bold transition-all ${
-              activeTab === "supplierName"
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-1.5 px-3 text-xs font-bold transition-all ${activeTab === "supplierName"
                 ? "bg-emerald-600 text-white shadow-sm"
                 : "text-subtle hover:text-fg hover:bg-surface"
-            }`}
+              }`}
           >
             <Building2 className="h-4 w-4" />
             <span>2. Seçenek: Tedarikçi İsmi ile Bul</span>
@@ -604,24 +603,26 @@ export default function ReceivingSupplierSelectPage() {
                   key={supplier.id}
                   type="button"
                   onClick={() => handleSelectSupplier(supplier)}
-                  className={`w-full rounded-2xl border p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft ${
-                    isSelected
+                  className={`w-full rounded-2xl border p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft ${isSelected
                       ? "border-2 border-emerald-500 bg-emerald-500/10 dark:bg-emerald-950/20 shadow-soft ring-1 ring-emerald-500/30"
                       : "border-line bg-surface hover:border-emerald-300 dark:hover:border-emerald-700"
-                  }`}
+                    }`}
                 >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-base font-bold text-fg">{supplier.id}</span>
-                      <span className="chip bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 font-medium">
-                        {supplier.orderCount > 1 ? `${supplier.orderCount} Kalem Açık` : "Açık Sipariş"}
-                      </span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-base font-bold text-fg">{supplier.id}</span>
+                        <span className="chip bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 font-medium">
+                          {supplier.orderCount > 1 ? `${supplier.orderCount} Kalem Açık` : "Açık Sipariş"}
+                        </span>
+                      </div>
+                      {supplier.name && (
+                        <p className="mt-0.5 text-sm text-muted truncate" title={supplier.name}>
+                          {supplier.name}
+                        </p>
+                      )}
                     </div>
-                    {supplier.name && (
-                      <p className="mt-0.5 text-sm text-muted truncate" title={supplier.name}>
-                        {supplier.name}
-                      </p>
-                    )}
+                    <ChevronRight className="mt-1 h-5 w-5 text-subtle shrink-0" />
                   </div>
 
                   {(supplier.poNumber || supplier.location || supplier.phone) && (
@@ -692,9 +693,8 @@ export default function ReceivingSupplierSelectPage() {
                     }}
                     onKeyDown={(e) => e.key === "Enter" && handleConfirmModal()}
                     placeholder="İrsaliye numarasını giriniz"
-                    className={`field-input w-full pl-9 ${
-                      waybillError ? "border-red-500 focus:ring-red-500" : ""
-                    }`}
+                    className={`field-input w-full pl-9 ${waybillError ? "border-red-500 focus:ring-red-500" : ""
+                      }`}
                     autoFocus
                   />
                   <FileText className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
@@ -723,9 +723,8 @@ export default function ReceivingSupplierSelectPage() {
                     disabled={isValidatingWarehouse}
                     list="canias-warehouse-options"
                     placeholder="00&*"
-                    className={`field-input w-full pl-9 font-semibold ${
-                      targetError ? "border-red-500 focus:ring-red-500" : ""
-                    }`}
+                    className={`field-input w-full pl-9 font-semibold ${targetError ? "border-red-500 focus:ring-red-500" : ""
+                      }`}
                   />
                   {caniasWarehouses.length > 0 && (
                     <datalist id="canias-warehouse-options">
