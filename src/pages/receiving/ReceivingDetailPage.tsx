@@ -1398,6 +1398,8 @@ export default function ReceivingDetailPage() {
         quantity: it.receivedQty,
         receivedQty: it.receivedQty,
         unit: it.unit || "AD",
+        purQty: it.purQty,
+        purUnit: it.purUnit,
         specialStock: it.isSpecialLot || it.specialStock === "1" ? "1" : "0",
         isSpecialLot: it.isSpecialLot,
         batchNum: it.batchNum,
