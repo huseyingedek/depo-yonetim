@@ -83,6 +83,9 @@ export default function ReceivingDimensionsPage() {
     vendorCode
   )}&vendorName=${encodeURIComponent(vendorName)}`;
 
+  const packageMultiplier = stateData.packageMultiplier || stateData.currentMaterial?.packageMultiplier;
+  const unitMultipliers = stateData.unitMultipliers || stateData.currentMaterial?.unitMultipliers;
+
   const handleBack = () => {
     navigate(backUrl, {
       state: {
@@ -99,9 +102,12 @@ export default function ReceivingDimensionsPage() {
           isSpecialLot: stateData.isSpecialLot ?? false,
           barcodes: stateData.barcodes || [],
           selectedBarcode: stateData.selectedBarcode || "",
+          packageMultiplier,
+          unitMultipliers,
           dimensions: stateData.dimensions,
           specialAttributes: stateData.specialAttributes,
-        } : null,
+        } : (stateData.currentMaterial || null),
+        matSizeForm: stateData.matSizeForm,
         openOrders,
         activeStep: stateData.activeStep || "product",
         isProductScanned: Boolean(stateData.material),
@@ -190,6 +196,8 @@ export default function ReceivingDimensionsPage() {
         isSpecialLot: stateData.isSpecialLot ?? false,
         barcodes,
         selectedBarcode,
+        packageMultiplier,
+        unitMultipliers,
         dimensions: updatedDimensions,
         specialAttributes: {
           isexplos: form.isexplos,

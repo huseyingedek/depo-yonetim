@@ -419,6 +419,7 @@ export default function ReceivingDetailPage() {
       )}&vendorName=${encodeURIComponent(vendorName)}`,
       {
         state: {
+          currentMaterial: currentMaterial,
           material: currentMaterial.material,
           name: currentMaterial.name,
           image: currentMaterial.image,
@@ -426,6 +427,8 @@ export default function ReceivingDetailPage() {
           isSpecialLot: currentMaterial.isSpecialLot,
           barcodes: currentMaterial.barcodes,
           selectedBarcode: currentMaterial.selectedBarcode,
+          packageMultiplier: currentMaterial.packageMultiplier,
+          unitMultipliers: currentMaterial.unitMultipliers,
           dimensions: currentMaterial.dimensions,
           specialAttributes: currentMaterial.specialAttributes,
           matSizeForm: matSizeForm || formToSend,
@@ -560,7 +563,12 @@ export default function ReceivingDetailPage() {
     }
     if (location.state?.matSizeSaved) {
       if (location.state.currentMaterial) {
-        setCurrentMaterial(location.state.currentMaterial);
+        setCurrentMaterial((prev) => ({
+          ...prev,
+          ...location.state.currentMaterial,
+          packageMultiplier: location.state.currentMaterial.packageMultiplier ?? prev?.packageMultiplier,
+          unitMultipliers: location.state.currentMaterial.unitMultipliers ?? prev?.unitMultipliers,
+        }));
         setIsProductScanned(true);
       }
       if (location.state.matSizeForm) {
@@ -572,7 +580,12 @@ export default function ReceivingDetailPage() {
       setAreDimensionsDone(true);
       setActiveStep("quantity");
     } else if (location.state?.currentMaterial) {
-      setCurrentMaterial(location.state.currentMaterial);
+      setCurrentMaterial((prev) => ({
+        ...prev,
+        ...location.state.currentMaterial,
+        packageMultiplier: location.state.currentMaterial.packageMultiplier ?? prev?.packageMultiplier,
+        unitMultipliers: location.state.currentMaterial.unitMultipliers ?? prev?.unitMultipliers,
+      }));
       setIsProductScanned(true);
       if (location.state.matSizeForm) setMatSizeForm(location.state.matSizeForm);
       if (location.state.openOrders) setOpenOrders(location.state.openOrders);
