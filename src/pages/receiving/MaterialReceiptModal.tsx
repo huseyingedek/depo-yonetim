@@ -28,8 +28,10 @@ export interface ReceivedItem {
   orderNum: string; // Satın Alma Sipariş No (PURORDER)
   itemNum: number | string; // Kalem No (ITEMNUM)
   expectedQty: number; // Açık / Beklenen Miktar
-  receivedQty: number; // Kabul Edilen Miktar
-  unit: string; // Birim (AD, KG vb.)
+  receivedQty: number; // Kabul Edilen Miktar (Stok Birimi)
+  unit: string; // Stok Birimi (AD, KG vb.)
+  purQty?: number; // Kabul Edilen Miktar (Sipariş Birimi bazında)
+  purUnit?: string; // Sipariş Birimi (KO, PK, KT vb.)
   isSpecialLot: boolean; // DEFSPECIAL == "1"
   batchNum?: string; // Parti No (Lot)
   expiryDate?: string; // SKT

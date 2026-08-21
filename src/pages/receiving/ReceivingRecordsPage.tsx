@@ -52,8 +52,10 @@ export default function ReceivingRecordsPage() {
     ["STOCKPLACE", "Stok yeri"],
     ["SPECIALSTOCK", "Özel stok"],
     ["BATCHNUM", "Parti"],
-    ["READQTY", "Miktar"],
-    ["QUNIT", "Birim"],
+    ["READPURQTY", "Sip. Mik."],
+    ["PURUNIT", "Sip. Birim"],
+    ["READQTY", "Stok Mik."],
+    ["QUNIT", "Stok Birim"],
     ["ORDERTYPE", "Belge tipi"],
     ["ORDERNUM", "Belge no"],
     ["ITEMNO", "Kalem no"],
@@ -112,6 +114,8 @@ export default function ReceivingRecordsPage() {
                   STOCKPLACE: item.stockPlace || "*",
                   SPECIALSTOCK: item.specialStock || (item.isSpecialLot ? "Takipli" : "Serbest"),
                   BATCHNUM: item.batchNum || "—",
+                  READPURQTY: item.purQty !== undefined ? item.purQty : (item.receivedQty || 0),
+                  PURUNIT: item.purUnit || item.unit || "AD",
                   READQTY: item.receivedQty || 0,
                   QUNIT: item.unit || "AD",
                   ORDERTYPE: item.orderType || "OP",
@@ -137,6 +141,20 @@ export default function ReceivingRecordsPage() {
                                 {displayName}
                               </div>
                             )}
+                          </td>
+                        );
+                      }
+                      if (k === "READPURQTY") {
+                        return (
+                          <td key={k} className="whitespace-nowrap px-1.5 py-1.5 font-mono font-black text-fg w-px">
+                            {deger}
+                          </td>
+                        );
+                      }
+                      if (k === "PURUNIT") {
+                        return (
+                          <td key={k} className="whitespace-nowrap px-1.5 py-1.5 font-mono font-bold text-muted w-px">
+                            {deger}
                           </td>
                         );
                       }

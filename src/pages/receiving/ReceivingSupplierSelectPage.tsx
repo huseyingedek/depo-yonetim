@@ -177,7 +177,7 @@ export default function ReceivingSupplierSelectPage() {
   // Waybill & Warehouse Popup Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [waybillNo, setWaybillNo] = useState("");
-  const [targetWarehouse, setTargetWarehouse] = useState("00&*");
+  const [targetWarehouse, setTargetWarehouse] = useState("00$*");
   const [waybillError, setWaybillError] = useState("");
   const [targetError, setTargetError] = useState("");
   const [isValidatingWarehouse, setIsValidatingWarehouse] = useState(false);
@@ -353,7 +353,7 @@ export default function ReceivingSupplierSelectPage() {
       setSelectedSupplier((prev) => (prev ? { ...prev, poNumber: targetPo } : prev));
     }
     setWaybillNo("");
-    setTargetWarehouse("00&*");
+    setTargetWarehouse("00$*");
     setWaybillError("");
     setTargetError("");
     setIsModalOpen(true);
@@ -722,13 +722,13 @@ export default function ReceivingSupplierSelectPage() {
                     onKeyDown={(e) => e.key === "Enter" && handleConfirmModal()}
                     disabled={isValidatingWarehouse}
                     list="canias-warehouse-options"
-                    placeholder="00&*"
+                    placeholder="00$*"
                     className={`field-input w-full pl-9 font-semibold ${targetError ? "border-red-500 focus:ring-red-500" : ""
                       }`}
                   />
                   {caniasWarehouses.length > 0 && (
                     <datalist id="canias-warehouse-options">
-                      <option value="00&*" label="Standart Depo Kodu" />
+                      <option value="00$*" label="Standart Depo Kodu" />
                       {caniasWarehouses.map((w) => (
                         <option key={`tgt-${w.code}`} value={w.code}>
                           {w.code} {w.name ? `— ${w.name}` : ""}

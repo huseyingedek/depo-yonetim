@@ -692,28 +692,33 @@ export const api = {
     const c = ctx();
     return order.lines.flatMap((line) =>
       (line.records ?? [])
-
         .filter((r) => !(r.specialStock === "1" && (!r.lot || r.lot === "*")))
-        .map((r) => ({
-          COMPANY: c.company,
-          PLANT: c.plant,
-          MATERIAL: r.material,
-          WAREHOUSE: r.warehouse,
-          STOCKPLACE: r.stockPlace,
-          SPECIALSTOCK: r.specialStock,
-          BATCHNUM: r.lot ?? "*",
+        .map((r) => {
+          const isPartili = r.specialStock === "1" || /takipli|partili/i.test(String(r.specialStock || ""));
+          const specialStockVal = isPartili ? "1" : "*";
+          const batchVal = isPartili && r.lot && r.lot !== "*" ? String(r.lot).trim() : "*";
 
-          READQTY: String(r.qty),
-          QUNIT: r.unit,
-          ORDERTYPE: order.orderType ?? "",
-          ORDERNUM: order.id,
-          ITEMNO: r.itemNo,
+          return {
+            COMPANY: c.company,
+            PLANT: c.plant,
+            MATERIAL: r.material,
+            WAREHOUSE: r.warehouse,
+            STOCKPLACE: r.stockPlace,
+            SPECIALSTOCK: specialStockVal,
+            BATCHNUM: batchVal,
 
-          MOVEQTY: String(line.requestedQty),
-          MOVEDQTY: String(line.pickedQty),
+            READQTY: String(r.qty),
+            QUNIT: r.unit,
+            ORDERTYPE: order.orderType ?? "",
+            ORDERNUM: order.id,
+            ITEMNO: r.itemNo,
 
-          VOPTIONS: "",
-        }))
+            MOVEQTY: String(line.requestedQty),
+            MOVEDQTY: String(line.pickedQty),
+
+            VOPTIONS: "",
+          };
+        })
     );
   },
 
@@ -1136,6 +1141,7 @@ export const api = {
     startTime?: string; // PDSTARTTIME
   }): Promise<{ ok: boolean; message: string }> {
     const c = ctx();
+    const isPartili = input.specialStock === "1" || /takipli|partili/i.test(String(input.specialStock || ""));
     const r = await call(SERVICES.savePlacement, {
       PSCOMPANY: c.company,
       PSPLANT: c.plant,
@@ -1145,8 +1151,8 @@ export const api = {
       PSMATERIAL: input.material,
       PSWAREHOUSE: input.targetWarehouse,
       PSSTOCKPLACE: input.targetShelf,
-      PSSPECIALSTOCK: input.specialStock,
-      PSBATCHNUM: input.lot || "*",
+      PSSPECIALSTOCK: isPartili ? "1" : "*",
+      PSBATCHNUM: isPartili && input.lot && input.lot !== "*" ? input.lot : "*",
       PDCQUANTITY: input.qty,
       PSUSER: c.worker,
       PDSTARTTIME: input.startTime ?? "",
@@ -1533,6 +1539,8 @@ export const api = {
       quantity?: number;
       receivedQty?: number;
       unit?: string;
+      purQty?: number;
+      purUnit?: string;
       specialStock?: string;
       isSpecialLot?: boolean;
       batchNum?: string;
@@ -1543,16 +1551,21 @@ export const api = {
     const formattedItems = (payload.items || []).map((it) => {
       const readQty = it.receivedQty ?? it.quantity ?? 1;
       const orderType = String(it.orderType || "OP").trim().toUpperCase();
-      const specialStock = String(
+      const rawSpecial = String(
         it.specialStock || (it.isSpecialLot ? "1" : "0")
       ).trim();
+      const isPartili = rawSpecial === "1" || /takipli|partili/i.test(rawSpecial) || Boolean(it.isSpecialLot);
+      const specialStock = isPartili ? "1" : "0";
+      const batchNum = isPartili ? String(it.batchNum || "").trim() : "";
 
       return {
         MATERIAL: String(it.material || "").trim(),
         SPECIALSTOCK: specialStock,
-        BATCHNUM: String(it.batchNum || "").trim(),
+        BATCHNUM: batchNum,
         READQUANTITY: Number(readQty),
         QUNIT: String(it.unit || "AD").trim().toUpperCase(),
+        READPURQTY: it.purQty !== undefined ? Number(it.purQty) : Number(readQty),
+        PURUNIT: String(it.purUnit || it.unit || "AD").trim().toUpperCase(),
         ORDERTYPE: orderType,
         ORDERNUM: String(it.orderNum || "").trim(),
         ITEMNUM: Number(it.itemNum) || 1,

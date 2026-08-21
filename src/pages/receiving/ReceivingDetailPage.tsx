@@ -43,8 +43,10 @@ export interface ReceivedItem {
   orderNum: string; // Satın Alma Sipariş No (PURORDER)
   itemNum: number | string; // Kalem No (ITEMNUM)
   expectedQty: number; // Açık / Beklenen Miktar
-  receivedQty: number; // Kabul Edilen Miktar
-  unit: string; // Birim (AD, KG vb.)
+  receivedQty: number; // Kabul Edilen Miktar (Stok Birimi)
+  unit: string; // Stok Birimi (AD, KG vb.)
+  purQty?: number; // Kabul Edilen Miktar (Sipariş Birimi bazında)
+  purUnit?: string; // Sipariş Birimi (KO, PK, KT vb.)
   isSpecialLot: boolean; // DEFSPECIAL == "1"
   batchNum?: string; // Parti No (Lot)
   expiryDate?: string; // SKT
@@ -445,62 +447,84 @@ export default function ReceivingDetailPage() {
     );
   };
 
-  // Aktif Öz Nitelikler Listesi (Maksimum 6 adet: Kırılabilir, Toksik, Yanıcı, Bozulur, Sıvı, Ağır Yük)
+  // Aktif Öz Nitelikler Listesi (Takipli ilk sırada sipariş toplama tasarımıyla, Bozulur yeşil, Kırılabilir en sonda ve açık sarı)
   const activeSpecialAttrs = useMemo(() => {
-    if (!currentMaterial?.specialAttributes) return [];
+    if (!currentMaterial) return [];
     const attrs: Array<{ id: string; label: string; icon: typeof Flame; colorClass: string }> = [];
     const sp = currentMaterial.specialAttributes;
 
-    if (sp.aklisbreakable) {
+    // 1. Parti Takipli (Sipariş toplamaki birebir pill/rozet tasarımı - İlk sırada)
+    if (currentMaterial.isSpecialLot) {
       attrs.push({
-        id: "breakable",
-        label: "Kırılabilir",
-        icon: GlassWater,
-        colorClass: "border-amber-500/40 bg-amber-500/15 text-amber-800 dark:text-amber-300",
+        id: "special_lot",
+        label: "Parti takipli",
+        icon: Clock,
+        colorClass: "rounded-full border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 font-bold text-[9.5px] sm:text-[10px]",
       });
     }
-    if (sp.aklistoxic) {
-      attrs.push({
-        id: "toxic",
-        label: "Toksik",
-        icon: Skull,
-        colorClass: "border-purple-500/40 bg-purple-500/15 text-purple-800 dark:text-purple-300",
-      });
-    }
-    if (sp.isexplos) {
-      attrs.push({
-        id: "explos",
-        label: "Yanıcı",
-        icon: Flame,
-        colorClass: "border-rose-500/40 bg-rose-500/15 text-rose-800 dark:text-rose-300",
-      });
-    }
-    if (sp.isspoil) {
+
+    // 2. Bozulur (Yeşil)
+    if (sp?.isspoil) {
       attrs.push({
         id: "spoil",
         label: "Bozulur",
         icon: Clock,
-        colorClass: "border-orange-500/40 bg-orange-500/15 text-orange-800 dark:text-orange-300",
+        colorClass: "rounded border border-emerald-500/40 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 font-black text-[9px] sm:text-[9.5px]",
       });
     }
-    if (sp.aklisliquid) {
+
+    // 3. Yanıcı (Kırmızı)
+    if (sp?.isexplos) {
+      attrs.push({
+        id: "explos",
+        label: "Yanıcı",
+        icon: Flame,
+        colorClass: "rounded border border-rose-500/40 bg-rose-500/15 text-rose-800 dark:text-rose-300 font-black text-[9px] sm:text-[9.5px]",
+      });
+    }
+
+    // 4. Sıvı (Mavi)
+    if (sp?.aklisliquid) {
       attrs.push({
         id: "liquid",
         label: "Sıvı",
         icon: Droplets,
-        colorClass: "border-blue-500/40 bg-blue-500/15 text-blue-800 dark:text-blue-300",
+        colorClass: "rounded border border-blue-500/40 bg-blue-500/15 text-blue-800 dark:text-blue-300 font-black text-[9px] sm:text-[9.5px]",
       });
     }
-    if (sp.isheavy) {
+
+    // 5. Toksik (Mor)
+    if (sp?.aklistoxic) {
+      attrs.push({
+        id: "toxic",
+        label: "Toksik",
+        icon: Skull,
+        colorClass: "rounded border border-purple-500/40 bg-purple-500/15 text-purple-800 dark:text-purple-300 font-black text-[9px] sm:text-[9.5px]",
+      });
+    }
+
+    // 6. Ağır Yük (İndigo)
+    if (sp?.isheavy) {
       attrs.push({
         id: "heavy",
         label: "Ağır Yük",
         icon: Layers,
-        colorClass: "border-indigo-500/40 bg-indigo-500/15 text-indigo-800 dark:text-indigo-300",
+        colorClass: "rounded border border-indigo-500/40 bg-indigo-500/15 text-indigo-800 dark:text-indigo-300 font-black text-[9px] sm:text-[9.5px]",
       });
     }
+
+    // 7. Kırılabilir (Her zaman EN SONDA - Açık sarı)
+    if (sp?.aklisbreakable) {
+      attrs.push({
+        id: "breakable",
+        label: "Kırılabilir",
+        icon: GlassWater,
+        colorClass: "rounded border border-yellow-300/80 bg-yellow-50 text-yellow-900 dark:bg-yellow-950/40 dark:border-yellow-500/30 dark:text-yellow-300 font-black text-[9px] sm:text-[9.5px]",
+      });
+    }
+
     return attrs;
-  }, [currentMaterial?.specialAttributes]);
+  }, [currentMaterial?.specialAttributes, currentMaterial?.isSpecialLot]);
 
   // 2. Adım: Adet, Parti & SKT State'leri
   const [receiptQty, setReceiptQty] = useState<number>(0);
@@ -1231,6 +1255,7 @@ export default function ReceivingDetailPage() {
           const alloc = Math.min(remainingToDistribute, availableInThisOrder);
           remainingToDistribute -= alloc;
 
+          const allocPurQty = factor > 0 ? Number((alloc / factor).toFixed(2)) : alloc;
           newItems.push({
             id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
             material: currentMaterial.material,
@@ -1244,7 +1269,9 @@ export default function ReceivingDetailPage() {
             specialStock: currentMaterial.isSpecialLot ? "Takipli" : "Serbest",
             expectedQty: totalStockQty,
             receivedQty: alloc,
-            unit: currentMaterial.unit,
+            unit: currentMaterial.unit || "AD",
+            purQty: allocPurQty,
+            purUnit: purUnit || activeBarcodeUnit || "AD",
             isSpecialLot: currentMaterial.isSpecialLot,
             batchNum: lotNumber.trim() || undefined,
             expiryDate: expiryDate.trim() || undefined,
@@ -1255,6 +1282,9 @@ export default function ReceivingDetailPage() {
 
       // Kalan veya serbest miktar varsa ekle
       if (remainingToDistribute > 0) {
+        const excessPurQty = activeBarcodeMultiplier > 0
+          ? Number((remainingToDistribute / activeBarcodeMultiplier).toFixed(2))
+          : remainingToDistribute;
         newItems.push({
           id: `item-excess-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           material: currentMaterial.material,
@@ -1268,7 +1298,9 @@ export default function ReceivingDetailPage() {
           specialStock: currentMaterial.isSpecialLot ? "Takipli" : "Serbest",
           expectedQty: remainingToDistribute,
           receivedQty: remainingToDistribute,
-          unit: currentMaterial.unit,
+          unit: currentMaterial.unit || "AD",
+          purQty: excessPurQty,
+          purUnit: activeBarcodeUnit || "AD",
           isSpecialLot: currentMaterial.isSpecialLot,
           batchNum: lotNumber.trim() || undefined,
           expiryDate: expiryDate.trim() || undefined,
@@ -1277,6 +1309,9 @@ export default function ReceivingDetailPage() {
       }
     } else {
       // Açık sipariş yoksa doğrudan serbest kabul olarak ekle
+      const directPurQty = activeBarcodeMultiplier > 0
+        ? Number((totalReceivedStockQty / activeBarcodeMultiplier).toFixed(2))
+        : totalReceivedStockQty;
       newItems.push({
         id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         material: currentMaterial.material,
@@ -1290,7 +1325,9 @@ export default function ReceivingDetailPage() {
         specialStock: currentMaterial.isSpecialLot ? "Takipli" : "Serbest",
         expectedQty: totalReceivedStockQty,
         receivedQty: totalReceivedStockQty,
-        unit: currentMaterial.unit,
+        unit: currentMaterial.unit || "AD",
+        purQty: directPurQty,
+        purUnit: activeBarcodeUnit || "AD",
         isSpecialLot: currentMaterial.isSpecialLot,
         batchNum: lotNumber.trim() || undefined,
         expiryDate: expiryDate.trim() || undefined,
@@ -1313,6 +1350,7 @@ export default function ReceivingDetailPage() {
           updated[idx] = {
             ...updated[idx],
             receivedQty: updated[idx].receivedQty + it.receivedQty,
+            purQty: Number(((updated[idx].purQty || 0) + (it.purQty || 0)).toFixed(2)),
           };
         } else {
           updated = [it, ...updated];
@@ -1360,7 +1398,7 @@ export default function ReceivingDetailPage() {
         quantity: it.receivedQty,
         receivedQty: it.receivedQty,
         unit: it.unit || "AD",
-        specialStock: it.specialStock || (it.isSpecialLot ? "1" : "0"),
+        specialStock: it.isSpecialLot || it.specialStock === "1" ? "1" : "0",
         isSpecialLot: it.isSpecialLot,
         batchNum: it.batchNum,
         expiryDate: it.expiryDate,
@@ -1706,21 +1744,12 @@ export default function ReceivingDetailPage() {
         >
           {currentMaterial ? (
             <div className="w-full flex-1 flex flex-col justify-start gap-1 sm:gap-1.5">
-              {/* 1. Satır: En Üstte Malzeme İsmi (Sol) + Değiştir Butonu ve Nitelik Çipleri (Sağ) */}
+              {/* 1. Satır: En Üstte Malzeme İsmi */}
               <div className="flex items-center justify-between gap-2 border-b border-line/40 pt-0 pb-1 min-w-0">
-                {/* Sol: Malzeme İsmi (Daha Belirgin & Büyük) */}
+                {/* Malzeme İsmi (Belirgin & Büyük) */}
                 <h4 className="font-black text-fg text-[15px] sm:text-base leading-snug truncate flex-1 min-w-0 tracking-tight" title={currentMaterial.name}>
                   {currentMaterial.name}
                 </h4>
-
-                {/* Sağ: Sadece Özel Parti Takipli Rozeti (Varsa) */}
-                {currentMaterial.isSpecialLot && (
-                  <div className="shrink-0 flex items-center">
-                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 px-2 py-0.5 text-[10px] font-bold leading-none">
-                      Parti takipli
-                    </span>
-                  </div>
-                )}
               </div>
 
               {/* 3. Satır: Fotoğraf + 3D Şema + Sağ Bilgi & Barkod Paneli */}
@@ -1837,7 +1866,7 @@ export default function ReceivingDetailPage() {
                       {activeSpecialAttrs.map((attr) => (
                         <span
                           key={attr.id}
-                          className={`inline-flex items-center justify-center px-1 py-0.5 rounded border text-[9px] sm:text-[9.5px] font-black leading-tight tracking-tight shadow-2xs truncate select-none text-center ${attr.colorClass}`}
+                          className={`inline-flex items-center justify-center px-1 py-0.5 leading-tight tracking-tight shadow-2xs truncate select-none text-center ${attr.colorClass}`}
                           title={attr.label}
                         >
                           <span className="truncate">{attr.label}</span>
@@ -1886,47 +1915,38 @@ export default function ReceivingDetailPage() {
         {/* 2. SATIR: SOLDA OKUTULANLAR BARI & SAĞDA AÇIK SİPARİŞLER KARTLARI         */}
         {/* ========================================================================= */}
 
-        {/* SOL ALT: KABUL EDİLENLER MİNİ SAYAÇ BARI */}
-        <div className="col-span-1 sm:col-span-5 md:col-span-4 lg:col-span-4 xl:col-span-4 landscape:col-span-4">
-          <div className="rounded-2xl border border-line bg-surface px-3 py-1.5 shadow-xs hover:border-emerald-500/40 transition">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-fg leading-tight">Kabul Edilenler</span>
-                <span className="text-[11px] font-mono font-extrabold text-emerald-600 dark:text-emerald-400 leading-tight">
-                  {receivedItems.length} Kalem
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  navigate(
-                    `/receiving/${encodeURIComponent(vendorCode)}/kayitlar?waybill=${encodeURIComponent(
-                      waybillNo
-                    )}&targetWH=${encodeURIComponent(targetWH)}&vendor=${encodeURIComponent(
-                      vendorName
-                    )}`,
-                    {
-                      state: {
-                        items: receivedItems,
-                        waybillNo,
-                        targetWarehouse: targetWH,
-                        vendor: vendorCode,
-                        vendorName,
-                        currentMaterial,
-                        openOrders,
-                        areDimensionsDone,
-                        activeStep,
-                      },
-                    }
-                  )
-                }
-                className="inline-flex items-center gap-1 rounded-lg border border-line bg-elevated/60 px-2 py-1 text-[11px] font-bold text-subtle hover:bg-emerald-600 hover:text-white transition shadow-2xs"
-              >
-                <span>Tümünü Gör</span>
-                <ExternalLink className="h-3 w-3" />
-              </button>
-            </div>
+        {/* SOL ALT: KABUL EDİLENLER BARI */}
+        <div className="col-span-1 sm:col-span-5 md:col-span-4 lg:col-span-4 xl:col-span-4 landscape:col-span-4 self-start">
+          <div className="rounded-2xl border border-line bg-surface p-2.5 sm:p-3 shadow-xs hover:border-emerald-500/40 transition flex items-center min-h-[66px] sm:min-h-[68px]">
+            <button
+              type="button"
+              onClick={() =>
+                navigate(
+                  `/receiving/${encodeURIComponent(vendorCode)}/kayitlar?waybill=${encodeURIComponent(
+                    waybillNo
+                  )}&targetWH=${encodeURIComponent(targetWH)}&vendor=${encodeURIComponent(
+                    vendorName
+                  )}`,
+                  {
+                    state: {
+                      items: receivedItems,
+                      waybillNo,
+                      targetWarehouse: targetWH,
+                      vendor: vendorCode,
+                      vendorName,
+                      currentMaterial,
+                      openOrders,
+                      areDimensionsDone,
+                      activeStep,
+                    },
+                  }
+                )
+              }
+              className="flex w-full items-center justify-between text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+            >
+              <span>Kabul edilenler ({receivedItems.length})</span>
+              <span>Tümünü gör →</span>
+            </button>
           </div>
         </div>
 
@@ -1959,9 +1979,7 @@ export default function ReceivingDetailPage() {
 
                         {/* 2. Belge Tipi & Belge No */}
                         <span className="font-black text-fg flex items-center gap-1">
-                          <span className="px-1.5 py-0.5 rounded-md bg-elevated border border-line text-[10px] font-extrabold text-subtle">
-                            {orderType}
-                          </span>
+                          <span className="text-subtle font-extrabold">{orderType}</span>
                           <span className="font-black text-fg">{al.orderNum}</span>
                         </span>
 
