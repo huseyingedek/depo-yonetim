@@ -42,7 +42,7 @@ export default function ReceivingDimensionsPage() {
     pheight: stateData.dimensions?.height || 0,
     lunit: "CM",
     volume: stateData.dimensions?.volume || 0,
-    vunit: "M3",
+    vunit: "DS",
     netweight: stateData.dimensions?.netWeight || 0,
     nwunit: "KG",
     brutweight: stateData.dimensions?.brutWeight || 0,
@@ -64,13 +64,13 @@ export default function ReceivingDimensionsPage() {
     const num = Number(sanitized) || 0;
     setForm((prev: typeof initialForm) => {
       const next = { ...prev, [field]: num };
-      // En x Boy x Yükseklik girildiyse otomatik hacim (m3) hesapla
+      // En x Boy x Yükseklik girildiyse otomatik Desi ((En * Boy * Yükseklik) / 3000) hesapla
       if (field === "pwidth" || field === "plength" || field === "pheight") {
         const w = field === "pwidth" ? num : prev.pwidth;
         const l = field === "plength" ? num : prev.plength;
         const h = field === "pheight" ? num : prev.pheight;
         if (w > 0 && l > 0 && h > 0) {
-          next.volume = Number(((w * l * h) / 1000000).toFixed(4));
+          next.volume = Number(((w * l * h) / 3000).toFixed(2));
         }
       }
       return next;
@@ -150,14 +150,14 @@ export default function ReceivingDimensionsPage() {
       const calcVol =
         form.volume > 0
           ? form.volume
-          : Number(((form.pwidth * form.plength * form.pheight) / 1000000).toFixed(4));
+          : Number(((form.pwidth * form.plength * form.pheight) / 3000).toFixed(2));
 
       const payload = {
         material,
         pwidth: form.pwidth,
         plength: form.plength,
         pheight: form.pheight,
-        vunit: form.vunit || "M3",
+        vunit: form.vunit || "DS",
         volume: calcVol,
         netweight: netWeight,
         nwunit: form.nwunit || "KG",
@@ -168,7 +168,7 @@ export default function ReceivingDimensionsPage() {
         aklisbreakable: form.aklisbreakable,
         aklisliquid: form.aklisliquid,
         aklistoxic: form.aklistoxic,
-        aklpalpos: form.aklpalpos || 1,
+        aklpalpos: form.aklpalpos ?? 1,
       };
 
       const res = await api.setMatSize(payload);
@@ -361,16 +361,18 @@ export default function ReceivingDimensionsPage() {
               </div>
               <div>
                 <label className="text-[11px] font-black text-ink-700 dark:text-ink-200 block mb-0.5 text-center">
-                  Hacim (m³)
+                  Desi
                 </label>
                 <input
                   type="number"
-                  step="0.0001"
+                  step="0.01"
                   min="0"
                   value={form.volume || ""}
-                  onChange={(e) => handleNumChange("volume", e.target.value)}
-                  placeholder="0.0000"
-                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  readOnly
+                  disabled
+                  placeholder="0.00"
+                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-elevated/60 text-fg opacity-90 cursor-not-allowed shadow-2xs select-none"
+                  title="Desi otomatik hesaplanır: (En × Boy × Yükseklik) / 3000"
                 />
               </div>
             </div>

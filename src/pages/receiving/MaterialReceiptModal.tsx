@@ -94,7 +94,7 @@ export default function MaterialReceiptModal({
     pheight: 0,
     lunit: "CM",
     volume: 0,
-    vunit: "M3",
+    vunit: "DS",
     netweight: 0,
     nwunit: "KG",
     brutweight: 0,
@@ -319,7 +319,7 @@ export default function MaterialReceiptModal({
       const pheight = parseNum(matSizeRow.PHEIGHT || matSizeRow.HEIGHT || matSizeRow.YUKSEKLIK);
       const netweight = parseNum(matSizeRow.NETWEIGHT || matSizeRow.NETAGIRLIK);
       const brutweight = parseNum(matSizeRow.BRUTWEIGHT || matSizeRow.GROSSWEIGHT || matSizeRow.BRUTAGIRLIK);
-      const volume = parseNum(matSizeRow.VOLUME || matSizeRow.HACIM || (pwidth * plength * pheight) / 1000000);
+      const volume = parseNum(matSizeRow.VOLUME || matSizeRow.HACIM || (pwidth * plength * pheight) / 3000);
 
       const parsedMatSize = {
         pwidth,
@@ -327,7 +327,7 @@ export default function MaterialReceiptModal({
         pheight,
         lunit: String(matSizeRow.LUNIT || matSizeRow.PUNIT || "CM"),
         volume,
-        vunit: String(matSizeRow.VUNIT || "M3"),
+        vunit: String(matSizeRow.VUNIT || "DS"),
         netweight,
         nwunit: String(matSizeRow.NWUNIT || "KG"),
         brutweight,
@@ -480,7 +480,7 @@ export default function MaterialReceiptModal({
       const calcVol =
         matSizeForm.volume > 0
           ? matSizeForm.volume
-          : (matSizeForm.pwidth * matSizeForm.plength * matSizeForm.pheight) / 1000000;
+          : (matSizeForm.pwidth * matSizeForm.plength * matSizeForm.pheight) / 3000;
 
       const res = await api.setMatSize({
         material: materialData.material,
@@ -772,13 +772,13 @@ export default function MaterialReceiptModal({
                   <label className="text-[11px] font-bold text-fg mb-1 block">Hacim ({matSizeForm.vunit})</label>
                   <input
                     type="number"
-                    step="0.001"
+                    step="0.01"
                     value={
                       matSizeForm.volume ||
-                      ((matSizeForm.pwidth * matSizeForm.plength * matSizeForm.pheight) / 1000000 || "")
+                      Number(((matSizeForm.pwidth * matSizeForm.plength * matSizeForm.pheight) / 3000).toFixed(2)) || ""
                     }
                     onChange={(e) => setMatSizeForm({ ...matSizeForm, volume: Number(e.target.value) || 0 })}
-                    placeholder="0.000"
+                    placeholder="0.00"
                     className="field-input w-full text-center font-mono font-bold"
                   />
                 </div>

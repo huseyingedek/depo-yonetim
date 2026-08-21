@@ -302,8 +302,8 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 - **Parametreler**:
   - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
   - `PSMATERIAL` (*STRING*): Malzeme kodu.
-  - `VOLUME` (*DECIMAL*): Hacim.
-  - `VUNIT` (*STRING*): Hacim birimi (`"M3"` veya `"DS"`).
+  - `VOLUME` (*DECIMAL*): Desi / Hacim (`(En × Boy × Yükseklik) / 3000`).
+  - `VUNIT` (*STRING*): Hacim birimi (`"DS"` - Desi).
   - `PWIDTH` (*DECIMAL*): En / Genişlik.
   - `PLENGTH` (*DECIMAL*): Boy / Uzunluk.
   - `PHEIGHT` (*DECIMAL*): Yükseklik.

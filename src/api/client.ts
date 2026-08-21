@@ -59,16 +59,18 @@ export function serviceMessage(r: MzyResult): string {
   return "";
 }
 
-function mesajTablosu(data: Record<string, unknown> | null): string {
-  if (!data) return "";
+function mesajTablosu(data: unknown): string {
+  if (!data || typeof data !== "object") return "";
 
+  const d = data as Record<string, unknown>;
   const adlar = ["MESSAGETABLE", "TBLMESSAGE", "TROIAMESSAGES", "MSGTABLE", "TBLMSG", "ROW"];
   const lines: string[] = [];
   for (const ad of adlar) {
-    if (!(ad in data)) continue;
-    for (const row of unwrapRows(data[ad])) {
-      const t = pick(row, ["SYSTEMMSG", "TEXT", "MESSAGE", "MSG", "DESCRIPTION"]);
-      if (t) lines.push(t);
+    if (ad in d) {
+      for (const row of unwrapRows(d[ad])) {
+        const t = pick(row, ["SYSTEMMSG", "TEXT", "MESSAGE", "MSG", "DESCRIPTION"]);
+        if (t) lines.push(t);
+      }
     }
   }
   return lines.join("\n");
@@ -253,15 +255,16 @@ function flattenRow(input: unknown): Row {
 
 function rowsOf(result: MzyResult, tableNames: string[]): Row[] {
   const d = result.data;
-  if (!d) return [];
+  if (!d || typeof d !== "object") return [];
+  const obj = d as Record<string, unknown>;
   for (const name of tableNames) {
-    if (name in d) {
-      const rows = unwrapRows(d[name]);
+    if (name in obj) {
+      const rows = unwrapRows(obj[name]);
       if (rows.length) return rows;
     }
   }
 
-  for (const [k, v] of Object.entries(d)) {
+  for (const [k, v] of Object.entries(obj)) {
     if (/MESSAGE/i.test(k)) continue;
     const rows = unwrapRows(v);
     if (rows.length) return rows;
@@ -1454,7 +1457,7 @@ export const api = {
       PSMATERIAL: matCode,
       MATERIAL: matCode,
       VOLUME: payload.volume ?? 0,
-      VUNIT: payload.vunit || "M3",
+      VUNIT: payload.vunit || "DS",
       PWIDTH: payload.pwidth ?? 0,
       PLENGTH: payload.plength ?? 0,
       PHEIGHT: payload.pheight ?? 0,

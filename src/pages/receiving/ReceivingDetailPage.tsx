@@ -398,7 +398,7 @@ export default function ReceivingDetailPage() {
       pheight: currentMaterial.dimensions?.height || 0,
       lunit: "CM",
       volume: currentMaterial.dimensions?.volume || 0,
-      vunit: "M3",
+      vunit: "DS",
       netweight: currentMaterial.dimensions?.netWeight || 0,
       nwunit: "KG",
       brutweight: currentMaterial.dimensions?.brutWeight || 0,
@@ -792,9 +792,9 @@ export default function ReceivingDetailPage() {
         const volume =
           extractDimensionValue(
             dimSources,
-            ["VOLUME", "HACIM", "PVOLUME", "VOL", "HACMI", "M3"],
-            /^(p_?)?(volume|hacim|vol)$/i
-          ) || (pwidth > 0 && plength > 0 && pheight > 0 ? Number(((pwidth * plength * pheight) / 1000000).toFixed(4)) : 0);
+            ["VOLUME", "HACIM", "PVOLUME", "VOL", "HACMI", "DS", "DESI"],
+            /^(p_?)?(volume|hacim|vol|desi)$/i
+          ) || (pwidth > 0 && plength > 0 && pheight > 0 ? Number(((pwidth * plength * pheight) / 3000).toFixed(2)) : 0);
 
         const parsedMatSize = {
           pwidth,
@@ -802,7 +802,7 @@ export default function ReceivingDetailPage() {
           pheight,
           lunit: String(matSizeRow.LUNIT || matSizeRow.PUNIT || nestedSizeRow.LUNIT || nestedSizeRow.PUNIT || "CM"),
           volume,
-          vunit: String(matSizeRow.VUNIT || nestedSizeRow.VUNIT || "M3"),
+          vunit: String(matSizeRow.VUNIT || nestedSizeRow.VUNIT || "DS"),
           netweight,
           nwunit: String(matSizeRow.NWUNIT || nestedSizeRow.NWUNIT || "KG"),
           brutweight,
@@ -1000,7 +1000,7 @@ export default function ReceivingDetailPage() {
                   pheight,
                   lunit: "CM",
                   volume,
-                  vunit: "M3",
+                  vunit: "DS",
                   netweight,
                   nwunit: "KG",
                   brutweight,
@@ -1806,9 +1806,9 @@ export default function ReceivingDetailPage() {
                       </span>
                     </div>
 
-                    {/* Sol Alt: Hacim (Net Yerine) */}
+                    {/* Sol Alt: Desi (DS) */}
                     <div className="flex items-center gap-1 min-w-0">
-                      <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Hacim:</span>
+                      <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Desi:</span>
                       <span className="font-mono font-black text-fg text-xs sm:text-[12.5px] truncate">
                         {currentMaterial.dimensions?.volume && currentMaterial.dimensions.volume > 0
                           ? currentMaterial.dimensions.volume
@@ -1816,9 +1816,9 @@ export default function ReceivingDetailPage() {
                             ((currentMaterial.dimensions?.width || 0) *
                               (currentMaterial.dimensions?.length || 0) *
                               (currentMaterial.dimensions?.height || 0)) /
-                            1000000
-                          ).toFixed(3)}{" "}
-                        M³
+                            3000
+                          ).toFixed(2)}{" "}
+                        DS
                       </span>
                     </div>
 
