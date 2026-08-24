@@ -14,7 +14,7 @@ export default function WaybillLabelPage() {
 
   // Multi-selection state
   const [selectedWaybills, setSelectedWaybills] = useState<PickOrder[]>([]);
-  const [repeatCount, setRepeatCount] = useState<number>(1);
+  const [repeatCount, setRepeatCount] = useState<number | string>(1);
   const [printing, setPrinting] = useState(false);
 
   const [errorMsg, setErrorMsg] = useState("");
@@ -68,7 +68,7 @@ export default function WaybillLabelPage() {
 
     const count = Number(repeatCount);
     if (!Number.isInteger(count) || count < 1 || count > 99) {
-      setErrorMsg("Kopya sayısı 1 ile 99 arasında olmalıdır.");
+      setErrorMsg("Kopya sayısı en az 1 olmalıdır (1-99 arası).");
       return;
     }
 
@@ -82,7 +82,7 @@ export default function WaybillLabelPage() {
         const res = await api.printContainer({
           company: "01",
           plant: "100",
-          warehouse: settings.warehouse || "D1",
+          warehouse: settings.warehouse || "10",
           container: waybill.id,
           repeat: count,
         });
@@ -117,7 +117,7 @@ export default function WaybillLabelPage() {
       {/* Top Header with Short Search, Kopya Input, & Print Button */}
       <PageHeader
         title="İrsaliye Etiketi Yazdırma"
-        subtitle="Sevkiyat evrakları ve irsaliyeleri seçip yazdırın"
+        subtitle="İrsaliyeleri seçip yazdırın"
         backTo="/label-printing"
         right={
           <div className="hidden sm:flex items-center gap-3">
@@ -137,12 +137,24 @@ export default function WaybillLabelPage() {
               <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
               <input
                 type="number"
-                min={1}
+                min={0}
                 max={99}
                 value={repeatCount}
                 onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+                  const val = e.target.value;
+                  if (val === "") {
+                    setRepeatCount("");
+                    return;
+                  }
+                  const v = parseInt(val, 10);
+                  if (!isNaN(v)) {
+                    setRepeatCount(Math.min(99, Math.max(0, v)));
+                  }
+                }}
+                onBlur={() => {
+                  if (repeatCount === "") {
+                    setRepeatCount(0);
+                  }
                 }}
                 className="field-input w-16 py-1.5 px-2 text-center text-xs font-bold"
               />
@@ -188,12 +200,24 @@ export default function WaybillLabelPage() {
             <span className="text-xs font-bold text-fg">Kopya Sayısı:</span>
             <input
               type="number"
-              min={1}
+              min={0}
               max={99}
               value={repeatCount}
               onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+                const val = e.target.value;
+                if (val === "") {
+                  setRepeatCount("");
+                  return;
+                }
+                const v = parseInt(val, 10);
+                if (!isNaN(v)) {
+                  setRepeatCount(Math.min(99, Math.max(0, v)));
+                }
+              }}
+              onBlur={() => {
+                if (repeatCount === "") {
+                  setRepeatCount(0);
+                }
               }}
               className="field-input w-20 py-1.5 px-2 text-center text-xs font-bold"
             />

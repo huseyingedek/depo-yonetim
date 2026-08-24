@@ -17,7 +17,6 @@ import {
   AlertCircle,
   Check,
   Calendar,
-  ExternalLink,
   ChevronDown,
   ImageIcon,
   GlassWater,
@@ -60,7 +59,9 @@ export interface ReceivedItem {
     height: number;
     volume: number;
     netWeight: number;
+    netWeightUnit?: string;
     brutWeight: number;
+    brutWeightUnit?: string;
   };
 }
 
@@ -428,7 +429,9 @@ export default function ReceivingDetailPage() {
       height: number;
       volume: number;
       netWeight: number;
+      netWeightUnit?: string;
       brutWeight: number;
+      brutWeightUnit?: string;
     };
   } | null>(null);
 

@@ -15,7 +15,7 @@ export default function ProductBarcodePage() {
   const [searchDone, setSearchDone] = useState(false);
   const [searchResults, setSearchResults] = useState<StockRow[]>([]);
   const [selectedMaterials, setSelectedMaterials] = useState<StockRow[]>([]);
-  const [repeatCount, setRepeatCount] = useState<number>(1);
+  const [repeatCount, setRepeatCount] = useState<number | string>(1);
 
   // Status & Printing State
   const [printing, setPrinting] = useState(false);
@@ -94,7 +94,7 @@ export default function ProductBarcodePage() {
 
     const count = Number(repeatCount);
     if (!Number.isInteger(count) || count < 1 || count > 99) {
-      setErrorMsg("Kopya sayısı 1 ile 99 arasında olmalıdır.");
+      setErrorMsg("Kopya sayısı en az 1 olmalıdır (1-99 arası).");
       return;
     }
 
@@ -127,24 +127,25 @@ export default function ProductBarcodePage() {
     setPrinting(false);
     setRepeatCount(1);
     if (failedCount === 0) {
-      setSuccessMsg(`Seçilen ${successCount} adet üründen ${count}'er kopya ürün barkodu yazdırıldı.`);
+      setSuccessMsg(`Seçilen ürün etiketi (${count} kopya) yazdırma isteği iletildi.`);
       setSelectedMaterials([]);
     } else {
       setErrorMsg(
-        `${successCount} etiket yazdırıldı, ${failedCount} adet etikette hata oluştu.${lastError ? ` (Detay: ${lastError})` : ""
+        `${successCount} etiket yazdırıldı, ${failedCount} adet etikette hata oluştu.${
+          lastError ? ` (Detay: ${lastError})` : ""
         }`
       );
     }
   };
 
-  const isPrintDisabled = printing || selectedMaterials.length === 0;
+  const isPrintDisabled = selectedMaterials.length === 0 || printing;
 
   return (
-    <div className="mx-auto max-w-6xl p-4 lg:p-8 space-y-6">
+    <div className="mx-auto max-w-6xl p-4 lg:p-8">
       {/* Top Header with Kopya Input & Green Print Button aligned right */}
       <PageHeader
         title="Ürün Barkodu Yazdırma"
-        subtitle="Malzeme kodu, barkod veya açıklama ile aratarak ürün barkod etiketi yazdırın"
+        subtitle="Ürünleri arayın, seçin ve etiket yazdırın"
         backTo="/label-printing"
         right={
           <div className="hidden sm:flex items-center gap-3">
@@ -152,12 +153,24 @@ export default function ProductBarcodePage() {
               <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
               <input
                 type="number"
-                min={1}
+                min={0}
                 max={99}
                 value={repeatCount}
                 onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+                  const val = e.target.value;
+                  if (val === "") {
+                    setRepeatCount("");
+                    return;
+                  }
+                  const v = parseInt(val, 10);
+                  if (!isNaN(v)) {
+                    setRepeatCount(Math.min(99, Math.max(0, v)));
+                  }
+                }}
+                onBlur={() => {
+                  if (repeatCount === "") {
+                    setRepeatCount(0);
+                  }
                 }}
                 className="field-input w-16 py-1.5 px-2 text-center text-xs font-bold"
               />
@@ -191,12 +204,24 @@ export default function ProductBarcodePage() {
           <span className="text-xs font-bold text-fg">Kopya:</span>
           <input
             type="number"
-            min={1}
+            min={0}
             max={99}
             value={repeatCount}
             onChange={(e) => {
-              const v = parseInt(e.target.value, 10);
-              setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+              const val = e.target.value;
+              if (val === "") {
+                setRepeatCount("");
+                return;
+              }
+              const v = parseInt(val, 10);
+              if (!isNaN(v)) {
+                setRepeatCount(Math.min(99, Math.max(0, v)));
+              }
+            }}
+            onBlur={() => {
+              if (repeatCount === "") {
+                setRepeatCount(0);
+              }
             }}
             className="field-input w-20 py-1.5 px-2 text-center text-xs font-bold"
           />

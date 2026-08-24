@@ -21,6 +21,7 @@ import type {
   PickSuggestion,
   StockBatch,
   StockRow,
+  StockTransferPayload,
 } from "../types";
 
 interface MzyResult {
@@ -987,6 +988,21 @@ export const api = {
   },
   async completeTransfer(_taskId: string): Promise<{ ok: true }> {
     return { ok: true };
+  },
+  // INVT00M1 - Stok Transferi (Serbest okutulan malzemelerin hedef lokasyona taşınması paketi)
+  async createStockTransfer(
+    payload: StockTransferPayload
+  ): Promise<{ ok: boolean; transferId: string; message: string }> {
+    console.log("📦 [CANIAS INVT00M1 TRANSFER PAYLOAD]", JSON.stringify(payload, null, 2));
+
+    // Backend servisi yazıldığında burada ilgili IAS servisi çağrılacaktır.
+    // Şimdilik transfer paketini konsola yazdırıp başarılı döner.
+    const mockTransferId = `TRF-${Date.now().toString().slice(-6)}`;
+    return {
+      ok: true,
+      transferId: mockTransferId,
+      message: "Transfer başarıyla oluşturuldu",
+    };
   },
   async getCountTasks(): Promise<CountTask[]> {
     return [];

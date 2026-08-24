@@ -19,7 +19,7 @@ export default function ShelfLocationPage() {
 
   // Multi-selection state
   const [selectedShelves, setSelectedShelves] = useState<RealShelf[]>([]);
-  const [repeatCount, setRepeatCount] = useState<number>(1);
+  const [repeatCount, setRepeatCount] = useState<number | string>(1);
   const [printing, setPrinting] = useState(false);
 
   const [errorMsg, setErrorMsg] = useState("");
@@ -105,7 +105,7 @@ export default function ShelfLocationPage() {
 
     const count = Number(repeatCount);
     if (!Number.isInteger(count) || count < 1 || count > 99) {
-      setErrorMsg("Kopya sayısı 1 ile 99 arasında olmalıdır.");
+      setErrorMsg("Kopya sayısı en az 1 olmalıdır (1-99 arası).");
       return;
     }
 
@@ -174,12 +174,24 @@ export default function ShelfLocationPage() {
               <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
               <input
                 type="number"
-                min={1}
+                min={0}
                 max={99}
                 value={repeatCount}
                 onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+                  const val = e.target.value;
+                  if (val === "") {
+                    setRepeatCount("");
+                    return;
+                  }
+                  const v = parseInt(val, 10);
+                  if (!isNaN(v)) {
+                    setRepeatCount(Math.min(99, Math.max(0, v)));
+                  }
+                }}
+                onBlur={() => {
+                  if (repeatCount === "") {
+                    setRepeatCount(0);
+                  }
                 }}
                 className="field-input w-16 py-1.5 px-2 text-center text-xs font-bold"
               />
@@ -225,12 +237,24 @@ export default function ShelfLocationPage() {
             <span className="text-xs font-bold text-fg">Kopya Sayısı:</span>
             <input
               type="number"
-              min={1}
+              min={0}
               max={99}
               value={repeatCount}
               onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+                const val = e.target.value;
+                if (val === "") {
+                  setRepeatCount("");
+                  return;
+                }
+                const v = parseInt(val, 10);
+                if (!isNaN(v)) {
+                  setRepeatCount(Math.min(99, Math.max(0, v)));
+                }
+              }}
+              onBlur={() => {
+                if (repeatCount === "") {
+                  setRepeatCount(0);
+                }
               }}
               className="field-input w-20 py-1.5 px-2 text-center text-xs font-bold"
             />

@@ -11,13 +11,14 @@ export default function ExpiryLabelPage() {
 
   // Form & Selection State
   const [directExpiryDate, setDirectExpiryDate] = useState("");
-  const [repeatCount, setRepeatCount] = useState<number>(1);
+  const [repeatCount, setRepeatCount] = useState<number | string>(1);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
   const [searchResults, setSearchResults] = useState<StockRow[]>([]);
   const [selectedMaterials, setSelectedMaterials] = useState<StockRow[]>([]);
+  const [searchType, setSearchType] = useState<"materialCode" | "barcode" | "description">("materialCode");
 
   // Status & Printing State
   const [printing, setPrinting] = useState(false);
@@ -38,7 +39,7 @@ export default function ExpiryLabelPage() {
     setSuccessMsg("");
   };
 
-  // Search Handler for Tab 2 (Auto search barcode & material code)
+  // Search Handler for Tab 2
   const handleSearchMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
@@ -55,9 +56,14 @@ export default function ExpiryLabelPage() {
     setSelectedMaterials([]);
 
     try {
-      let rows = await api.queryStock({ barcode: term });
-      if (!rows || rows.length === 0) {
+      let rows: StockRow[] = [];
+      if (searchType === "materialCode") {
         rows = await api.queryStock({ material: term });
+      } else if (searchType === "barcode") {
+        rows = await api.queryStock({ barcode: term });
+      } else if (searchType === "description") {
+        const all = await api.queryStock({});
+        rows = all.filter((r) => r.name.toLowerCase().includes(term.toLowerCase()));
       }
       setSearchResults(rows || []);
       setSearchDone(true);
@@ -89,7 +95,7 @@ export default function ExpiryLabelPage() {
 
     const count = Number(repeatCount);
     if (!Number.isInteger(count) || count < 1 || count > 99) {
-      setErrorMsg("Kopya sayısı 1 ile 99 arasında olmalıdır.");
+      setErrorMsg("Kopya sayısı en az 1 olmalıdır (1-99 arası).");
       return;
     }
 
@@ -132,7 +138,6 @@ export default function ExpiryLabelPage() {
         setPrinting(false);
       }
     } else {
-      // searchGrid tab
       if (selectedMaterials.length === 0) {
         setErrorMsg("Lütfen listeden en az bir ürün seçin.");
         return;
@@ -175,7 +180,6 @@ export default function ExpiryLabelPage() {
 
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8 space-y-6">
-      {/* Top Header with Kopya Input & Green Print Button aligned right */}
       <PageHeader
         title="SKT (Son Kullanma Tarihi) Etiketi Yazdırma"
         subtitle="Doğrudan SKT tarihi seçerek veya ürün aratarak etiket yazdırın"
@@ -186,12 +190,24 @@ export default function ExpiryLabelPage() {
               <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
               <input
                 type="number"
-                min={1}
+                min={0}
                 max={99}
                 value={repeatCount}
                 onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+                  const val = e.target.value;
+                  if (val === "") {
+                    setRepeatCount("");
+                    return;
+                  }
+                  const v = parseInt(val, 10);
+                  if (!isNaN(v)) {
+                    setRepeatCount(Math.min(99, Math.max(0, v)));
+                  }
+                }}
+                onBlur={() => {
+                  if (repeatCount === "") {
+                    setRepeatCount(0);
+                  }
                 }}
                 className="field-input w-16 py-1.5 px-2 text-center text-xs font-bold"
               />
@@ -221,18 +237,29 @@ export default function ExpiryLabelPage() {
         }
       />
 
-      {/* Mobile Action Bar */}
       <div className="flex items-center justify-between gap-3 sm:hidden mb-2">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-fg">Kopya:</span>
           <input
             type="number"
-            min={1}
+            min={0}
             max={99}
             value={repeatCount}
             onChange={(e) => {
-              const v = parseInt(e.target.value, 10);
-              setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+              const val = e.target.value;
+              if (val === "") {
+                setRepeatCount("");
+                return;
+              }
+              const v = parseInt(val, 10);
+              if (!isNaN(v)) {
+                setRepeatCount(Math.min(99, Math.max(0, v)));
+              }
+            }}
+            onBlur={() => {
+              if (repeatCount === "") {
+                setRepeatCount(0);
+              }
             }}
             className="field-input w-20 py-1.5 px-2 text-center text-xs font-bold"
           />

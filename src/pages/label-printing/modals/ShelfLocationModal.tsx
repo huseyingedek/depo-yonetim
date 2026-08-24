@@ -13,7 +13,7 @@ export default function ShelfLocationModal({ isOpen, onClose }: Props) {
 
   const [warehouseCode, setWarehouseCode] = useState(settings.warehouse || "D1");
   const [stockplaceCode, setStockplaceCode] = useState("");
-  const [repeatCount, setRepeatCount] = useState<number>(1);
+  const [repeatCount, setRepeatCount] = useState<number | string>(1);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
@@ -51,7 +51,7 @@ export default function ShelfLocationModal({ isOpen, onClose }: Props) {
 
     const count = Number(repeatCount);
     if (!Number.isInteger(count) || count < 1 || count > 99) {
-      setErrorMsg("Kopya (tekrar) sayısı 1 ile 99 arasında olmalıdır.");
+      setErrorMsg("Kopya (tekrar) sayısı en az 1 olmalıdır (1-99 arası).");
       return;
     }
 
@@ -155,13 +155,25 @@ export default function ShelfLocationModal({ isOpen, onClose }: Props) {
             </label>
             <input
               type="number"
-              min={1}
+              min={0}
               max={99}
               required
               value={repeatCount}
               onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                setRepeatCount(isNaN(v) ? 1 : Math.min(99, Math.max(1, v)));
+                const val = e.target.value;
+                if (val === "") {
+                  setRepeatCount("");
+                  return;
+                }
+                const v = parseInt(val, 10);
+                if (!isNaN(v)) {
+                  setRepeatCount(Math.min(99, Math.max(0, v)));
+                }
+              }}
+              onBlur={() => {
+                if (repeatCount === "") {
+                  setRepeatCount(0);
+                }
               }}
               className="field-input w-full"
             />

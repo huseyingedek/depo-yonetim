@@ -179,6 +179,45 @@ export interface TransferTask {
   movedQty: number;
 }
 
+export interface TransferItem {
+  id: string;
+  material: string;
+  name: string;
+  barcode: string;
+  quantity: number;
+  unit: string;
+  batchNum?: string; // lot
+  isSpecialStock?: boolean;
+  specialStock?: string;
+  sourceWarehouse: string;
+  sourceStockPlace: string;
+  availStock?: number;
+  timestamp: number;
+}
+
+export interface StockTransferPayload {
+  company: string;
+  plant: string;
+  sourceWarehouse: string;
+  sourceStockPlace: string;
+  targetWarehouse: string;
+  targetStockPlace: string;
+  transferDate: string;
+  items: {
+    material: string;
+    materialName: string;
+    barcode: string;
+    quantity: number;
+    unit: string;
+    batchNum?: string;
+    specialStock?: string;
+    sourceWarehouse: string;
+    sourceStockPlace: string;
+    targetWarehouse: string;
+    targetStockPlace: string;
+  }[];
+}
+
 export interface CountLine {
   id: string;
   product: ProductRef;

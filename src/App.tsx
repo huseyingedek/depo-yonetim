@@ -17,6 +17,7 @@ import ReceivingDimensionsPage from "./pages/receiving/ReceivingDimensionsPage";
 import ReceivingSummaryPage from "./pages/receiving/ReceivingSummaryPage";
 import PutawayListPage from "./pages/putaway/PutawayListPage";
 import PutawayItemPage from "./pages/putaway/PutawayItemPage";
+import StockTransferPage from "./pages/transfer/StockTransferPage";
 import TransferListPage from "./pages/transfer/TransferListPage";
 import TransferTaskPage from "./pages/transfer/TransferTaskPage";
 import CountListPage from "./pages/count/CountListPage";
@@ -69,8 +70,9 @@ export default function App() {
         <Route path="/putaway" element={<PutawayListPage />} />
         <Route path="/putaway/:id" element={<PutawayItemPage />} />
 
-        {}
-        <Route path="/transfer" element={<TransferListPage />} />
+        {/* Transfer (INVT00M1) */}
+        <Route path="/transfer" element={<StockTransferPage />} />
+        <Route path="/transfer/tasks" element={<TransferListPage />} />
         <Route path="/transfer/:id" element={<TransferTaskPage />} />
 
         {}
