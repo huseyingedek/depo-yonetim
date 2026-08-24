@@ -122,11 +122,11 @@ export const useTransferStore = create<TransferState>()(
             stockPlace: res.stockPlace,
           };
           set({ sourceShelf: shelf, lotPending: null });
-          return { ok: true, message: `Kaynak: ${shelf.warehouse} · ${shelf.stockPlace}` };
+          return { ok: true, message: `Raf: ${kod}` };
         } catch (e) {
           return {
             ok: false,
-            message: e instanceof Error ? e.message : "Kaynak raf okunurken hata oluştu",
+            message: e instanceof Error ? e.message : "Raf okunurken hata oluştu",
           };
         }
       },
@@ -142,7 +142,7 @@ export const useTransferStore = create<TransferState>()(
       scanProduct: async (barcode: string, adet = 1) => {
         const { sourceShelf, items } = get();
         if (!sourceShelf) {
-          return { ok: false, message: "Önce kaynak raf barkodunu okutun" };
+          return { ok: false, message: "Önce raf barkodunu okutun" };
         }
 
         const kod = barcode.trim().toUpperCase();
@@ -427,14 +427,19 @@ export const useTransferStore = create<TransferState>()(
           const res = await api.createStockTransfer(payload);
           if (res.ok) {
             set({
+              items: [],
+              sourceShelf: null,
+              targetShelf: null,
+              lotPending: null,
+              batchList: [],
+              batchError: null,
               completing: false,
               step: "success",
               completedResult: {
-                transferId: res.transferId,
                 payload,
               },
             });
-            return { ok: true, message: res.message, transferId: res.transferId };
+            return { ok: true, message: res.message || "Transfer başarıyla tamamlandı" };
           } else {
             set({ completing: false });
             return { ok: false, message: res.message || "Transfer gerçekleştirilemedi" };

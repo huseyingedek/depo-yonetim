@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next";
 import {
   MapPin,
-  Check,
-  CheckCircle2,
   AlertTriangle,
   Loader2,
   ArrowRight,
@@ -14,12 +11,6 @@ import {
   Plus,
   Minus,
   Send,
-  RotateCcw,
-  Code,
-  Copy,
-  ChevronDown,
-  ChevronUp,
-  Package,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import BarcodeScanner from "../../components/BarcodeScanner";
@@ -34,7 +25,6 @@ import { sesBasarili, sesHata } from "../../sound";
 type Toast = { kind: "ok" | "done" | "error"; text: string } | null;
 
 export default function StockTransferPage() {
-  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const sourceShelf = useTransferStore((s) => s.sourceShelf);
@@ -46,7 +36,6 @@ export default function StockTransferPage() {
   const batchLoading = useTransferStore((s) => s.batchLoading);
   const batchError = useTransferStore((s) => s.batchError);
   const completing = useTransferStore((s) => s.completing);
-  const completedResult = useTransferStore((s) => s.completedResult);
 
   const scanSourceShelf = useTransferStore((s) => s.scanSourceShelf);
   const clearSourceShelf = useTransferStore((s) => s.clearSourceShelf);
@@ -56,14 +45,11 @@ export default function StockTransferPage() {
   const cancelLot = useTransferStore((s) => s.cancelLot);
   const updateItemQty = useTransferStore((s) => s.updateItemQty);
   const removeItem = useTransferStore((s) => s.removeItem);
-  const clearItems = useTransferStore((s) => s.clearItems);
   const goToTargetStep = useTransferStore((s) => s.goToTargetStep);
   const backToCollectStep = useTransferStore((s) => s.backToCollectStep);
   const scanTargetShelf = useTransferStore((s) => s.scanTargetShelf);
-  const clearTargetShelf = useTransferStore((s) => s.clearTargetShelf);
   const setTargetShelf = useTransferStore((s) => s.setTargetShelf);
   const completeTransfer = useTransferStore((s) => s.completeTransfer);
-  const reset = useTransferStore((s) => s.reset);
 
   const [toast, setToast] = useState<Toast>(null);
   const [busy, setBusy] = useState(false);
@@ -71,10 +57,8 @@ export default function StockTransferPage() {
   const [okutmaAdedi, setOkutmaAdedi] = useState("");
   const [partiPrefill, setPartiPrefill] = useState("");
   const [redMesaji, setRedMesaji] = useState<string | null>(null);
-  const [jsonAcik, setJsonAcik] = useState(false);
-  const [kopyalandi, setKopyalandi] = useState(false);
 
-  // Manuel hedef raf seçimi için depolar ve stok yerleri
+  // Hedef depo ve stok yerleri
   const [warehouses, setWarehouses] = useState<{ code: string; name: string }[]>([]);
   const [stockPlaces, setStockPlaces] = useState<{ code: string; name: string }[]>([]);
   const [seciliTargetWh, setSeciliTargetWh] = useState("");
@@ -84,23 +68,46 @@ export default function StockTransferPage() {
     if (step === "target") {
       api.getWarehouses().then((w) => {
         setWarehouses(w);
-        if (w.length > 0 && !seciliTargetWh) {
-          setSeciliTargetWh(w[0].code);
-        }
-      });
-    }
-  }, [step, seciliTargetWh]);
+        const wh = targetShelf?.warehouse || seciliTargetWh || (w.length > 0 ? w[0].code : "01");
+        setSeciliTargetWh(wh);
 
-  useEffect(() => {
-    if (seciliTargetWh) {
-      api.getStockPlaces(seciliTargetWh).then((sp) => {
-        setStockPlaces(sp);
-        if (sp.length > 0 && !seciliTargetSp) {
-          setSeciliTargetSp(sp[0].code);
-        }
+        api.getStockPlaces(wh).then((sp) => {
+          setStockPlaces(sp);
+          const spCode = targetShelf?.stockPlace || seciliTargetSp || (sp.length > 0 ? sp[0].code : (sp[0]?.code || "A-01-01"));
+          setSeciliTargetSp(spCode);
+
+          setTargetShelf({
+            barcode: `${wh}-${spCode}`,
+            warehouse: wh,
+            stockPlace: spCode,
+          });
+        });
       });
     }
-  }, [seciliTargetWh, seciliTargetSp]);
+  }, [step]);
+
+  const handleWarehouseChange = async (wh: string) => {
+    setSeciliTargetWh(wh);
+    const spList = await api.getStockPlaces(wh);
+    setStockPlaces(spList);
+    const firstSp = spList.length > 0 ? spList[0].code : "A-01-01";
+    setSeciliTargetSp(firstSp);
+    setTargetShelf({
+      barcode: `${wh}-${firstSp}`,
+      warehouse: wh,
+      stockPlace: firstSp,
+    });
+  };
+
+  const handleStockPlaceChange = (spCode: string) => {
+    setSeciliTargetSp(spCode);
+    const wh = seciliTargetWh || targetShelf?.warehouse || "01";
+    setTargetShelf({
+      barcode: `${wh}-${spCode}`,
+      warehouse: wh,
+      stockPlace: spCode,
+    });
+  };
 
   const showToast = (tst: Toast) => {
     if (tst?.kind === "error") sesHata();
@@ -211,22 +218,6 @@ export default function StockTransferPage() {
     }
   };
 
-  const handleManualTargetApply = () => {
-    if (!seciliTargetWh || !seciliTargetSp) {
-      showToast({ kind: "error", text: "Hedef depo ve stok yeri seçin" });
-      return;
-    }
-    setTargetShelf({
-      barcode: `${seciliTargetWh}-${seciliTargetSp}`,
-      warehouse: seciliTargetWh,
-      stockPlace: seciliTargetSp,
-    });
-    showToast({
-      kind: "done",
-      text: `Hedef seçildi: ${seciliTargetWh} · ${seciliTargetSp}`,
-    });
-  };
-
   const handleCompleteTransfer = async () => {
     setBusy(true);
     setRedMesaji(null);
@@ -243,142 +234,7 @@ export default function StockTransferPage() {
     }
   };
 
-  const toplamKalem = items.length;
   const toplamAdet = items.reduce((sum, it) => sum + it.quantity, 0);
-
-  // ---------------------------------------------------------------------------
-  // 3. ADIM: BAŞARI EKRANI
-  // ---------------------------------------------------------------------------
-  if (step === "success" && completedResult) {
-    const payloadStr = JSON.stringify(completedResult.payload, null, 2);
-    return (
-      <div className="mx-auto max-w-2xl p-4 lg:p-8">
-        <div className="flex flex-col items-center text-center">
-          <div className="mb-4 flex h-20 w-20 animate-pop-in items-center justify-center rounded-full bg-emerald-100 shadow-soft">
-            <CheckCircle2 className="h-10 w-10 text-emerald-600" />
-          </div>
-
-          <h1 className="text-2xl font-extrabold text-fg">
-            {t("transfer.completed", "Transfer Başarıyla Tamamlandı!")}
-          </h1>
-          <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-emerald-600">
-            <Send className="h-4 w-4" />
-            <span>{t("transfer.sentToService", "Transfer paketi servise iletildi")}</span>
-          </p>
-
-          {/* Özet Kartı */}
-          <div className="mt-6 w-full rounded-2xl border border-line bg-surface p-5 text-left shadow-card">
-            <div className="flex items-center justify-between border-b border-line pb-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted">
-                Transfer No / Ref
-              </span>
-              <span className="font-mono text-base font-bold text-fg">
-                {completedResult.transferId}
-              </span>
-            </div>
-
-            <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-elevated p-3">
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-subtle">KAYNAK</p>
-                <p className="font-mono text-sm font-bold text-fg">
-                  Depo {completedResult.payload.sourceWarehouse} ·{" "}
-                  {completedResult.payload.sourceStockPlace}
-                </p>
-              </div>
-              <ArrowRight className="h-5 w-5 shrink-0 text-amber-500" />
-              <div className="min-w-0 text-right">
-                <p className="text-[11px] font-semibold text-subtle">HEDEF</p>
-                <p className="font-mono text-sm font-bold text-emerald-600">
-                  Depo {completedResult.payload.targetWarehouse} ·{" "}
-                  {completedResult.payload.targetStockPlace}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-3 text-center">
-              <div className="rounded-xl border border-line p-3">
-                <p className="text-xs text-subtle">Taşınan Kalem</p>
-                <p className="font-mono text-xl font-bold text-fg">
-                  {completedResult.payload.items.length}
-                </p>
-              </div>
-              <div className="rounded-xl border border-line p-3">
-                <p className="text-xs text-subtle">Toplam Miktar</p>
-                <p className="font-mono text-xl font-bold text-brand-600">
-                  {qtyRound(
-                    completedResult.payload.items.reduce((s, it) => s + it.quantity, 0)
-                  )}
-                </p>
-              </div>
-            </div>
-
-            {/* JSON Paketi Aç/Kapa */}
-            <div className="mt-4 border-t border-line pt-3">
-              <button
-                type="button"
-                onClick={() => setJsonAcik((v) => !v)}
-                className="flex w-full items-center justify-between text-xs font-semibold text-muted hover:text-fg"
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <Code className="h-4 w-4 text-brand-500" />
-                  Transfer JSON Paketi ({completedResult.payload.items.length} Kalem)
-                </span>
-                {jsonAcik ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </button>
-
-              {jsonAcik && (
-                <div className="relative mt-2">
-                  <pre className="max-h-56 overflow-auto rounded-xl bg-ink-950 p-3 font-mono text-[11px] text-emerald-400">
-                    {payloadStr}
-                  </pre>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(payloadStr);
-                      setKopyalandi(true);
-                      setTimeout(() => setKopyalandi(false), 2000);
-                    }}
-                    className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1 text-[11px] font-semibold text-white backdrop-blur hover:bg-white/20"
-                  >
-                    {kopyalandi ? (
-                      <>
-                        <Check className="h-3.5 w-3.5 text-emerald-400" /> Kopyalandı
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" /> JSON Kopyala
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-6 flex w-full flex-col gap-2.5 sm:flex-row">
-            <button
-              type="button"
-              onClick={reset}
-              className="btn-primary btn-lg flex-1 gap-2"
-            >
-              <RotateCcw className="h-5 w-5" />
-              {t("transfer.newTransfer", "Yeni Transfer Başlat")}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                reset();
-                navigate("/home");
-              }}
-              className="btn-ghost btn-lg flex-1"
-            >
-              {t("common.backToHome", "Ana Sayfaya Dön")}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // ---------------------------------------------------------------------------
   // ANA TRANSFER EKRANI (TOPLAMA & HEDEF ADIMLARI)
@@ -388,7 +244,7 @@ export default function StockTransferPage() {
     step === "target"
       ? "Hedef raf barkodunu okutun"
       : !sourceShelf
-      ? "Kaynak raf barkodunu okutun"
+      ? "Raf barkodunu okutun"
       : lotPending
       ? "Parti barkodunu okutun"
       : "Malzeme barkodunu okutun";
@@ -413,33 +269,25 @@ export default function StockTransferPage() {
         right={
           <div className="flex items-center gap-2">
             {step === "collect" ? (
-              <>
-                <span
-                  title="Okutulan toplam malzeme kalemi ve adedi"
-                  className="chip bg-brand-100 px-3 py-1 font-mono text-xs font-bold text-brand-700 sm:text-sm"
-                >
-                  {toplamKalem} kalem · {qtyRound(toplamAdet)} adet
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const r = goToTargetStep();
-                    if (!r.ok) {
-                      sesHata();
-                      setRedMesaji(r.message || "Hata");
-                      showToast({ kind: "error", text: r.message || "Hata" });
-                    } else {
-                      sesBasarili();
-                      setRedMesaji(null);
-                    }
-                  }}
-                  disabled={toplamKalem === 0}
-                  className="btn-primary inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-semibold sm:text-sm disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <span>Taşıma Yap</span>
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={() => {
+                  const r = goToTargetStep();
+                  if (!r.ok) {
+                    sesHata();
+                    setRedMesaji(r.message || "Hata");
+                    showToast({ kind: "error", text: r.message || "Hata" });
+                  } else {
+                    sesBasarili();
+                    setRedMesaji(null);
+                  }
+                }}
+                disabled={items.length === 0}
+                className="btn-primary inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-1.5 text-xs font-semibold sm:text-sm disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <span>Taşıma Yap</span>
+                <ArrowRight className="h-4 w-4" />
+              </button>
             ) : (
               <>
                 <button
@@ -447,7 +295,7 @@ export default function StockTransferPage() {
                   onClick={backToCollectStep}
                   className="btn-ghost inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-semibold sm:text-sm"
                 >
-                  ← Malzemelere Dön
+                  Malzemelere Dön
                 </button>
                 <button
                   type="button"
@@ -483,7 +331,7 @@ export default function StockTransferPage() {
               {step === "collect" ? (
                 (
                   [
-                    ["shelf", "Kaynak Raf"],
+                    ["shelf", "Raf"],
                     ["product", "Malzeme"],
                     ["lot", "Parti"],
                   ] as const
@@ -526,13 +374,11 @@ export default function StockTransferPage() {
               ) : (
                 (
                   [
-                    ["target", "Hedef Raf"],
+                    ["target", "Hedef Depo"],
                     ["confirm", "Onay"],
                   ] as const
                 ).map(([s, label], i) => {
-                  const active =
-                    (s === "target" && !targetShelf) ||
-                    (s === "confirm" && !!targetShelf);
+                  const active = s === "target";
                   const done = s === "target" && !!targetShelf;
 
                   return (
@@ -554,16 +400,16 @@ export default function StockTransferPage() {
               )}
             </div>
 
-            {/* ADIM 1 BİLGİ KARTLARI (Kaynak Raf veya Hedef Raf) */}
-            {step === "collect" ? (
+            {/* TOPLAMA ADIMI: Bulunulan Raf Kartı */}
+            {step === "collect" && (
               sourceShelf ? (
                 <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-emerald-50 px-3 py-2">
                   <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-emerald-800">
                     <MapPin className="h-4 w-4 shrink-0 text-emerald-600" />
                     <span className="truncate">
-                      Kaynak: <span className="font-mono font-bold">{sourceShelf.warehouse}</span>
+                      Depo: <span className="font-mono font-bold">{sourceShelf.warehouse}</span>
                       {" · "}
-                      <span className="font-mono font-bold">{sourceShelf.stockPlace}</span>
+                      Stok yeri: <span className="font-mono font-bold">{sourceShelf.stockPlace}</span>
                     </span>
                   </span>
                   <button
@@ -577,31 +423,64 @@ export default function StockTransferPage() {
                 </div>
               ) : (
                 <div className="mb-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
-                  Önce malzemeyi aldığınız kaynak raf barkodunu okutun
+                  Bulunduğunuz rafın barkodunu okutun
                 </div>
               )
-            ) : targetShelf ? (
-              <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-emerald-50 px-3 py-2">
-                <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-emerald-800">
-                  <MapPin className="h-4 w-4 shrink-0 text-emerald-600" />
-                  <span className="truncate">
-                    Hedef: <span className="font-mono font-bold">{targetShelf.warehouse}</span>
-                    {" · "}
-                    <span className="font-mono font-bold">{targetShelf.stockPlace}</span>
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  onClick={clearTargetShelf}
-                  className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline"
-                >
-                  <X className="h-3.5 w-3.5" />
-                  Değiştir
-                </button>
-              </div>
-            ) : (
-              <div className="mb-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
-                Malzemelerin taşınacağı hedef raf barkodunu okutun veya seçin
+            )}
+
+            {/* HEDEF ADIMI: Hedef Depo Seçimi */}
+            {step === "target" && (
+              <div className="mb-3 space-y-2.5 rounded-xl bg-elevated/70 p-3">
+                <div className="flex items-center gap-1.5">
+                  <MapPin className="h-4 w-4 text-brand-600" />
+                  <p className="text-xs font-bold text-fg">Hedef Depo Seçimi</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-subtle">
+                      Hedef Depo
+                    </label>
+                    <select
+                      value={seciliTargetWh}
+                      onChange={(e) => handleWarehouseChange(e.target.value)}
+                      className="h-8.5 w-full rounded-lg border border-line bg-surface px-2 font-mono text-xs font-semibold text-fg outline-none focus:border-brand-500"
+                    >
+                      {warehouses.map((w) => (
+                        <option key={w.code} value={w.code}>
+                          {w.code} - {w.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-subtle">
+                      Stok Yeri
+                    </label>
+                    <select
+                      value={seciliTargetSp}
+                      onChange={(e) => handleStockPlaceChange(e.target.value)}
+                      disabled={!stockPlaces.length}
+                      className="h-8.5 w-full rounded-lg border border-line bg-surface px-2 font-mono text-xs font-semibold text-fg outline-none focus:border-brand-500"
+                    >
+                      {stockPlaces.map((sp) => (
+                        <option key={sp.code} value={sp.code}>
+                          {sp.code}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {targetShelf && (
+                  <div className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs text-emerald-800">
+                    <span className="font-semibold">Seçilen Hedef:</span>
+                    <span className="font-mono font-bold">
+                      Depo {targetShelf.warehouse} · {targetShelf.stockPlace}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -705,63 +584,15 @@ export default function StockTransferPage() {
               </div>
             )}
 
-            {/* HEDEF SEÇİMİ İÇİN MANUEL DROPDOWN'LAR (Barkodsuz alternatif) */}
-            {step === "target" && (
-              <div className="mb-3 rounded-xl bg-elevated p-2.5 space-y-2">
-                <p className="text-[11px] font-semibold text-muted">Veya Listeden Seç:</p>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <select
-                    value={seciliTargetWh}
-                    onChange={(e) => {
-                      setSeciliTargetWh(e.target.value);
-                      setSeciliTargetSp("");
-                    }}
-                    className="h-8 rounded-lg border border-line bg-surface px-1.5 font-mono text-xs text-fg outline-none focus:border-brand-500"
-                  >
-                    <option value="" disabled>
-                      Hedef Depo
-                    </option>
-                    {warehouses.map((w) => (
-                      <option key={w.code} value={w.code}>
-                        {w.code} - {w.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={seciliTargetSp}
-                    onChange={(e) => setSeciliTargetSp(e.target.value)}
-                    disabled={!stockPlaces.length}
-                    className="h-8 rounded-lg border border-line bg-surface px-1.5 font-mono text-xs text-fg outline-none focus:border-brand-500"
-                  >
-                    <option value="" disabled>
-                      Stok Yeri
-                    </option>
-                    {stockPlaces.map((sp) => (
-                      <option key={sp.code} value={sp.code}>
-                        {sp.code}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleManualTargetApply}
-                  disabled={!seciliTargetWh || !seciliTargetSp}
-                  className="btn-ghost w-full py-1 text-xs font-semibold disabled:opacity-40"
-                >
-                  Seçimi Hedef Olarak Belirle
-                </button>
-              </div>
+            {/* BARKOD OKUYUCU (Sadece Toplama Adımında) */}
+            {step === "collect" && (
+              <BarcodeScanner
+                onDetected={handleDetected}
+                prompt={promptText}
+                prefill={lotPending ? partiPrefill : ""}
+                hideCardWrapper
+              />
             )}
-
-            {/* BARKOD OKUYUCU (ZXing kamera ve elle giriş) */}
-            <BarcodeScanner
-              onDetected={handleDetected}
-              prompt={promptText}
-              prefill={lotPending ? partiPrefill : ""}
-              hideCardWrapper
-            />
 
             {busy && (
               <p className="mt-2 flex items-center gap-1.5 text-xs text-subtle">
@@ -771,37 +602,10 @@ export default function StockTransferPage() {
           </div>
         </div>
 
-        {/* SAĞ KOLON: Taşınacak Malzemeler Sepeti ve Özet Tablo */}
+        {/* SAĞ KOLON: Okutulan Malzemeler ve Özet Tablo */}
         <div className="min-w-0 short:flex-1 short:overflow-y-auto short:pr-1">
           {step === "collect" ? (
             <div>
-              {/* Başlık ve Temizle Butonu */}
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Package className="h-5 w-5 text-brand-600" />
-                  <h2 className="text-base font-bold text-fg">
-                    Taşınacak Malzemeler
-                  </h2>
-                  <span className="chip bg-elevated font-mono text-xs text-subtle">
-                    {items.length} Kalem
-                  </span>
-                </div>
-                {items.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (confirm("Okutulan tüm malzemeleri temizlemek istiyor musunuz?")) {
-                        clearItems();
-                      }
-                    }}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-subtle hover:text-rose-600"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Tümünü Sil
-                  </button>
-                )}
-              </div>
-
               {/* Malzeme Kartları Listesi */}
               {items.length === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-surface/50 p-8 text-center">
@@ -812,7 +616,7 @@ export default function StockTransferPage() {
                     Henüz Malzeme Okutulmadı
                   </h3>
                   <p className="mt-1 max-w-sm text-xs leading-relaxed text-subtle">
-                    1. Sol panelden <strong>Kaynak Raf</strong> barkodunu okutun.
+                    1. Sol panelden <strong>Raf</strong> barkodunu okutun.
                     <br />
                     2. Taşınacak <strong>Malzeme Barkodunu</strong> okutun.
                     <br />
@@ -902,9 +706,6 @@ export default function StockTransferPage() {
             <div className="space-y-3">
               {/* Rota Özeti Kartı */}
               <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
-                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">
-                  Transfer Rotası
-                </p>
                 <div className="flex items-center justify-between gap-3 rounded-xl bg-elevated p-3">
                   <div className="min-w-0">
                     <p className="text-[11px] font-semibold text-subtle">ÇIKIŞ LOKASYONU</p>

@@ -30,7 +30,7 @@ describe("INVT00M1 Stok Transferi (Stock Transfer Store & Flow)", () => {
   it("2. Kaynak raf olmadan malzeme okutulmasını engeller", async () => {
     const res = await useTransferStore.getState().scanProduct("8690001001", 1);
     expect(res.ok).toBe(false);
-    expect(res.message).toContain("Önce kaynak raf");
+    expect(res.message).toContain("Önce raf");
   });
 
   it("3. Parti takipsiz malzeme okutulduğunda sepete doğrudan ekler ve tekrar okutulursa miktarı artırır", async () => {
@@ -190,7 +190,8 @@ describe("INVT00M1 Stok Transferi (Stock Transfer Store & Flow)", () => {
     expect(payload.items[0].quantity).toBe(10);
     expect(payload.items[0].batchNum).toBe("LOT99");
 
-    expect(useTransferStore.getState().step).toBe("success");
-    expect(useTransferStore.getState().completedResult?.transferId).toBeDefined();
+    expect(useTransferStore.getState().step).toBe("collect");
+    expect(useTransferStore.getState().items.length).toBe(0);
+    expect(useTransferStore.getState().sourceShelf).toBeNull();
   });
 });
