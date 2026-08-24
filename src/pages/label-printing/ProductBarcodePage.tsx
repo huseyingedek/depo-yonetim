@@ -51,17 +51,105 @@ export default function ProductBarcodePage() {
 
     try {
       let rows: StockRow[] = [];
+
+      // 1. Kullanıcının seçtiği sekmeye göre öncelikli arama
       if (activeTab === "materialCode") {
-        rows = await api.queryStock({ material: term });
+        try {
+          rows = await api.queryStock({ material: term });
+        } catch {
+          // Devam et
+        }
+        // Eğer malzeme kodu ile bulunamadıysa barkod olarak da dene
+        if (!rows || rows.length === 0) {
+          try {
+            rows = await api.queryStock({ barcode: term });
+          } catch {
+            // Devam et
+          }
+        }
       } else if (activeTab === "barcode") {
-        rows = await api.queryStock({ barcode: term });
+        try {
+          rows = await api.queryStock({ barcode: term });
+        } catch {
+          // Devam et
+        }
+        // Eğer barkod ile bulunamadıysa malzeme kodu olarak da dene
+        if (!rows || rows.length === 0) {
+          try {
+            rows = await api.queryStock({ material: term });
+          } catch {
+            // Devam et
+          }
+        }
       } else if (activeTab === "description") {
-        const all = await api.queryStock({});
-        rows = all.filter((r) => r.name.toLowerCase().includes(term.toLowerCase()));
+        try {
+          const all = await api.queryStock({});
+          const lower = term.toLowerCase();
+          rows = all.filter((r) => r.name && r.name.toLowerCase().includes(lower));
+        } catch {
+          // Devam et
+        }
+      }
+
+      // 2. MZYGetMaterial ile ana kart sorgulama (Stokta hiç olmasa bile malzeme master bilgisini getirir)
+      if (!rows || rows.length === 0) {
+        try {
+          const matDetail = await api.getMaterialDetail(term);
+          if (matDetail.ok && matDetail.matList && matDetail.matList.length > 0) {
+            const m = matDetail.matList[0];
+            const matCode = String(m.MATERIAL || m.MATCODE || term).trim();
+            const matName = String(m.STEXT || m.MTEXT || m.NAME1 || m.NAME || matCode).trim();
+            const unit = String(m.QUNIT || m.UNIT || m.IUNIT || "AD").trim();
+
+            let stockFound: StockRow[] = [];
+            try {
+              stockFound = await api.queryStock({ material: matCode });
+            } catch {
+              stockFound = [];
+            }
+
+            if (stockFound && stockFound.length > 0) {
+              rows = stockFound;
+            } else {
+              rows = [
+                {
+                  material: matCode,
+                  name: matName,
+                  warehouse: "10",
+                  stockPlace: "*",
+                  batchNum: "*",
+                  specialStock: "*",
+                  availStock: 0,
+                  unit: unit,
+                },
+              ];
+            }
+          }
+        } catch {
+          // Devam et
+        }
+      }
+
+      // 3. Açıklama / İsim filtresi fallback
+      if (!rows || rows.length === 0) {
+        try {
+          const all = await api.queryStock({});
+          const lower = term.toLowerCase();
+          rows = all.filter(
+            (r) =>
+              (r.name && r.name.toLowerCase().includes(lower)) ||
+              (r.material && r.material.toLowerCase().includes(lower))
+          );
+        } catch {
+          // Devam et
+        }
       }
 
       setSearchResults(rows || []);
       setSearchDone(true);
+      if (rows && rows.length > 0) {
+        setSelectedMaterials([rows[0]]);
+      }
     } catch (err: unknown) {
       setSearchResults([]);
       setSearchDone(true);
