@@ -11,6 +11,7 @@ import {
   Plus,
   Minus,
   Send,
+  RotateCcw,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import BarcodeScanner from "../../components/BarcodeScanner";
@@ -36,6 +37,7 @@ export default function StockTransferPage() {
   const batchLoading = useTransferStore((s) => s.batchLoading);
   const batchError = useTransferStore((s) => s.batchError);
   const completing = useTransferStore((s) => s.completing);
+  const completedResult = useTransferStore((s) => s.completedResult);
 
   const scanSourceShelf = useTransferStore((s) => s.scanSourceShelf);
   const clearSourceShelf = useTransferStore((s) => s.clearSourceShelf);
@@ -50,11 +52,11 @@ export default function StockTransferPage() {
   const scanTargetShelf = useTransferStore((s) => s.scanTargetShelf);
   const setTargetShelf = useTransferStore((s) => s.setTargetShelf);
   const completeTransfer = useTransferStore((s) => s.completeTransfer);
+  const reset = useTransferStore((s) => s.reset);
 
   const [toast, setToast] = useState<Toast>(null);
   const [busy, setBusy] = useState(false);
   const [flashId, setFlashId] = useState<string | null>(null);
-  const [okutmaAdedi, setOkutmaAdedi] = useState("");
   const [partiPrefill, setPartiPrefill] = useState("");
   const [redMesaji, setRedMesaji] = useState<string | null>(null);
 
@@ -169,16 +171,10 @@ export default function StockTransferPage() {
         }
 
         // C) Malzeme okutma
-        const adet = Number(okutmaAdedi) || 1;
-        const res = await scanProduct(barkod, adet);
+        const res = await scanProduct(barkod, 1);
         if (res.ok) {
           if (res.itemId) flash(res.itemId);
-          setOkutmaAdedi("");
-          if (res.needsBatch) {
-            showToast({ kind: "ok", text: res.message });
-          } else {
-            showToast({ kind: "ok", text: res.message });
-          }
+          showToast({ kind: "ok", text: res.message });
         } else {
           setRedMesaji(res.message);
           showToast({ kind: "error", text: res.message });
@@ -192,7 +188,6 @@ export default function StockTransferPage() {
       step,
       sourceShelf,
       lotPending,
-      okutmaAdedi,
       scanTargetShelf,
       scanSourceShelf,
       scanLot,
@@ -235,6 +230,104 @@ export default function StockTransferPage() {
   };
 
   const toplamAdet = items.reduce((sum, it) => sum + it.quantity, 0);
+
+  // ---------------------------------------------------------------------------
+  // 3. ADIM: ONAY BİLGİSİ EKRANI
+  // ---------------------------------------------------------------------------
+  if (step === "success" && completedResult) {
+    const p = completedResult.payload;
+    const toplamAdetOnay = p.items.reduce((s, it) => s + it.quantity, 0);
+
+    return (
+      <div className="mx-auto max-w-2xl p-3 md:p-4 lg:p-6 short:h-[100dvh] short:overflow-y-auto short:p-2">
+        <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+          <div className="mb-3 flex items-center justify-between border-b border-line pb-3">
+            <div>
+              <h2 className="text-base font-bold text-fg">Transfer Onaylandı</h2>
+              <p className="font-mono text-xs text-subtle">{p.transferDate}</p>
+            </div>
+            <span className="chip bg-emerald-50 font-mono text-xs font-bold text-emerald-700">
+              {p.items.length} Kalem · {qtyRound(toplamAdetOnay)} Adet
+            </span>
+          </div>
+
+          {/* Çıkış - Hedef Özeti */}
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl bg-elevated p-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-subtle">
+                ÇIKIŞ LOKASYONU
+              </p>
+              <p className="font-mono text-xs font-extrabold text-fg sm:text-sm">
+                Depo {p.sourceWarehouse} · {p.sourceStockPlace}
+              </p>
+            </div>
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+              <ArrowRight className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 text-right">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-subtle">
+                HEDEF LOKASYON
+              </p>
+              <p className="font-mono text-xs font-extrabold text-emerald-600 sm:text-sm">
+                Depo {p.targetWarehouse} · {p.targetStockPlace}
+              </p>
+            </div>
+          </div>
+
+          {/* Taşınan Kalemler Tablosu */}
+          <div className="mb-4 max-h-48 overflow-y-auto rounded-xl border border-line">
+            <table className="w-full text-left text-xs">
+              <thead className="sticky top-0 bg-elevated text-subtle">
+                <tr className="border-b border-line">
+                  <th className="px-3 py-2 font-semibold">Malzeme</th>
+                  <th className="px-3 py-2 font-semibold">Parti</th>
+                  <th className="px-3 py-2 text-right font-semibold">Miktar</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line bg-surface">
+                {p.items.map((it, idx) => (
+                  <tr key={`${it.material}-${idx}`}>
+                    <td className="px-3 py-2">
+                      <p className="font-semibold text-fg">{it.materialName || it.material}</p>
+                      <p className="font-mono text-[10px] text-subtle">{it.material}</p>
+                    </td>
+                    <td className="px-3 py-2 font-mono text-muted">
+                      {it.batchNum || "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono font-bold text-fg">
+                      {qtyRound(it.quantity)} {it.unit}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Eylemler */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={reset}
+              className="btn-primary inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold sm:text-sm"
+            >
+              <RotateCcw className="h-4 w-4" />
+              <span>Yeni Transfer Başlat</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                reset();
+                navigate("/home");
+              }}
+              className="btn-ghost inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold sm:text-sm"
+            >
+              <span>Ana Sayfaya Dön</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // ANA TRANSFER EKRANI (TOPLAMA & HEDEF ADIMLARI)
@@ -560,27 +653,6 @@ export default function StockTransferPage() {
                 >
                   Kapat
                 </button>
-              </div>
-            )}
-
-            {/* ADET / MİKTAR GİRİŞİ (Sadece toplama adımında kaynak raf varken) */}
-            {step === "collect" && sourceShelf && !lotPending && (
-              <div className="mb-3 flex items-center gap-2 rounded-xl bg-elevated px-3 py-1.5">
-                <span className="text-xs font-medium text-muted">Kaç adet?</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  value={okutmaAdedi}
-                  onChange={(e) =>
-                    setOkutmaAdedi(e.target.value.replace(/[^0-9]/g, "").replace(/^0+/, ""))
-                  }
-                  placeholder="1"
-                  className="h-8 w-16 rounded-lg border border-line bg-surface text-center font-mono text-sm font-bold text-fg outline-none focus:border-brand-500"
-                />
-                <span className="text-[11px] text-subtle">
-                  okutulan barkoddan taşınacak adet
-                </span>
               </div>
             )}
 

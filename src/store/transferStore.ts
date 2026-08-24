@@ -51,7 +51,7 @@ interface TransferState {
   loading: boolean;
   completing: boolean;
   completedResult: {
-    transferId: string;
+    transferId?: string;
     payload: StockTransferPayload;
   } | null;
 
