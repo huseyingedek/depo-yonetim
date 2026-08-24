@@ -44,9 +44,9 @@ export default function ReceivingDimensionsPage() {
     volume: stateData.dimensions?.volume || 0,
     vunit: "DS",
     netweight: stateData.dimensions?.netWeight || 0,
-    nwunit: "KG",
+    nwunit: stateData.dimensions?.netWeightUnit || stateData.matSizeForm?.nwunit || "KG",
     brutweight: stateData.dimensions?.brutWeight || 0,
-    bwunit: "KG",
+    bwunit: stateData.dimensions?.brutWeightUnit || stateData.matSizeForm?.bwunit || "KG",
     isexplos: Boolean(stateData.specialAttributes?.isexplos),
     isspoil: Boolean(stateData.specialAttributes?.isspoil),
     aklisbreakable: Boolean(stateData.specialAttributes?.aklisbreakable),
@@ -185,7 +185,9 @@ export default function ReceivingDimensionsPage() {
         height: form.pheight,
         volume: calcVol,
         netWeight,
+        netWeightUnit: form.nwunit || "KG",
         brutWeight,
+        brutWeightUnit: form.bwunit || "KG",
       };
 
       const updatedMaterial = {
@@ -329,11 +331,11 @@ export default function ReceivingDimensionsPage() {
               </div>
             </div>
 
-            {/* 2. Sıra: Net KG, Brüt KG, Hacim M³ */}
+            {/* 2. Sıra: Net, Brüt, Desi */}
             <div className="grid grid-cols-3 gap-2 border-t border-line/40 pt-2">
               <div>
                 <label className="text-[11px] font-black text-ink-700 dark:text-ink-200 block mb-0.5 text-center">
-                  Net (kg) <span className="text-rose-500 font-black">*</span>
+                  Net ({String(form.nwunit || "KG").toLowerCase()}) <span className="text-rose-500 font-black">*</span>
                 </label>
                 <input
                   type="number"
@@ -347,7 +349,7 @@ export default function ReceivingDimensionsPage() {
               </div>
               <div>
                 <label className="text-[11px] font-black text-ink-700 dark:text-ink-200 block mb-0.5 text-center">
-                  Brüt (kg) <span className="text-rose-500 font-black">*</span>
+                  Brüt ({String(form.bwunit || "KG").toLowerCase()}) <span className="text-rose-500 font-black">*</span>
                 </label>
                 <input
                   type="number"

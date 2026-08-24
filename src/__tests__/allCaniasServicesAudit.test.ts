@@ -238,7 +238,7 @@ describe("CANIAS WMS All 25 Services Exhaustive Audit & Parameter Validation", (
       expect(req?.params.PSPLANT).toBe("100");
       expect(req?.params.PSVENDOR).toBe("16660");
       expect(req?.params.PSEXTDELNUM).toBe("IRS-2026-99");
-      expect(req?.params.PSWAREHOUSE).toBe("00$*");
+      expect(req?.params.PSWAREHOUSE).toBe("00");
       expect(req?.params.PSSTOCKPLACE).toBe("*");
 
       const items = req?.params.PSIASPURITEMXML as Record<string, unknown>[];

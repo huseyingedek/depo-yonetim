@@ -1580,8 +1580,11 @@ export const api = {
     const startTimeStr = payload.startTime || nowStr;
     const compCode = String(payload.company || c.company || "01").trim();
     const plantCode = String(payload.plant || c.plant || "100").trim();
-    const whCode = String(payload.warehouse || payload.targetWarehouse || c.warehouse || "").trim();
-    const spCode = String(payload.stockPlace || "*").trim() || "*";
+    const rawWh = String(payload.warehouse || payload.targetWarehouse || c.warehouse || "00").trim();
+    const whCode = rawWh.includes("$") ? rawWh.split("$")[0].trim() : rawWh;
+    const spCode = payload.stockPlace && payload.stockPlace !== "*"
+      ? String(payload.stockPlace).trim()
+      : (rawWh.includes("$") ? rawWh.split("$")[1].trim() : "*");
     const userCode = String(payload.user || c.worker || "").trim();
     const waybill = String(payload.waybillNo || "").trim();
     const vendorCode = String(payload.vendor || "").trim();
@@ -1592,10 +1595,10 @@ export const api = {
       PSVENDOR: vendorCode,
       PSEXTDELNUM: waybill,
       PSWAYBILL: waybill, // Geriye dönük uyumluluk
-      PSWAREHOUSE: whCode,
-      PSTARGETWH: whCode, // Geriye dönük uyumluluk
+      PSWAREHOUSE: whCode || "00",
+      PSTARGETWH: whCode || "00", // Geriye dönük uyumluluk
       PSSOURCEWH: String(payload.sourceWarehouse || "").trim(),
-      PSSTOCKPLACE: spCode,
+      PSSTOCKPLACE: spCode || "*",
       PSUSER: userCode,
       PDTSTARTTIME: startTimeStr,
       PSIASPURITEMXML: formattedItems,

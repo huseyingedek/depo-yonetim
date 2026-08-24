@@ -379,7 +379,9 @@ export default function ReceivingSupplierSelectPage() {
     setTargetError("");
 
     try {
-      let confirmedWh = trimmedTarget;
+      let confirmedWh = trimmedTarget.includes("$") ? trimmedTarget.split("$")[0].trim() : trimmedTarget;
+      let confirmedSp = trimmedTarget.includes("$") ? trimmedTarget.split("$")[1].trim() : "*";
+
       const isPatternOrWildcard =
         trimmedTarget.includes("*") ||
         trimmedTarget.includes("&") ||
@@ -405,23 +407,25 @@ export default function ReceivingSupplierSelectPage() {
           return;
         }
 
-        confirmedWh = shelfRes.warehouse || trimmedTarget;
+        if (shelfRes.warehouse) confirmedWh = shelfRes.warehouse;
+        if (shelfRes.stockPlace) confirmedSp = shelfRes.stockPlace;
       }
 
       setIsModalOpen(false);
       setStepNotice({
         open: true,
-        message: `${selectedSupplier?.name} (${selectedSupplier?.poNumber}) — İrsaliye No: ${trimmedWaybill} [Depo: ${confirmedWh}] doğrulandı. Detay ekranına yönlendiriliyor...`,
+        message: `${selectedSupplier?.name} (${selectedSupplier?.poNumber}) — İrsaliye No: ${trimmedWaybill} [Depo: ${confirmedWh}, Stok Yeri: ${confirmedSp}] doğrulandı. Detay ekranına yönlendiriliyor...`,
       });
 
       setTimeout(() => {
         if (selectedSupplier) {
           navigate(
-            `/receiving/${encodeURIComponent(selectedSupplier.poNumber)}?waybill=${encodeURIComponent(trimmedWaybill)}&targetWH=${encodeURIComponent(confirmedWh)}&vendor=${encodeURIComponent(selectedSupplier.id)}&vendorName=${encodeURIComponent(selectedSupplier.name)}`,
+            `/receiving/${encodeURIComponent(selectedSupplier.poNumber)}?waybill=${encodeURIComponent(trimmedWaybill)}&targetWH=${encodeURIComponent(confirmedWh)}&targetSP=${encodeURIComponent(confirmedSp)}&vendor=${encodeURIComponent(selectedSupplier.id)}&vendorName=${encodeURIComponent(selectedSupplier.name)}`,
             {
               state: {
                 waybillNo: trimmedWaybill,
                 targetWarehouse: confirmedWh,
+                targetStockPlace: confirmedSp,
                 supplier: selectedSupplier,
               },
             }

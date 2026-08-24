@@ -108,10 +108,16 @@ export default function ReceivingRecordsPage() {
             </thead>
             <tbody>
               {items.map((item, i) => {
+                const rawWh = String(item.warehouse || targetWH || "00").trim();
+                const wh = rawWh.includes("$") ? rawWh.split("$")[0].trim() : rawWh;
+                const sp = item.stockPlace && item.stockPlace !== "*"
+                  ? String(item.stockPlace).trim()
+                  : (rawWh.includes("$") ? rawWh.split("$")[1].trim() : "*");
+
                 const rowData: Record<string, string | number> = {
                   MATERIAL: item.material || "—",
-                  WAREHOUSE: item.warehouse || targetWH || "—",
-                  STOCKPLACE: item.stockPlace || "*",
+                  WAREHOUSE: wh || "00",
+                  STOCKPLACE: sp || "*",
                   SPECIALSTOCK: item.specialStock || (item.isSpecialLot ? "Takipli" : "Serbest"),
                   BATCHNUM: item.batchNum || "—",
                   READPURQTY: item.purQty !== undefined ? item.purQty : (item.receivedQty || 0),

@@ -285,6 +285,46 @@ function extractDimensionValue(
   return 0;
 }
 
+// Helper: CANIAS ve farklı veri kaynaklarından birim değerini bulma (NWUNIT, BWUNIT, LUNIT, VUNIT vb.)
+function extractUnitValue(
+  sources: (Record<string, unknown> | undefined)[],
+  candidates: string[],
+  defaultUnit = "KG"
+): string {
+  for (const src of sources) {
+    if (!src || typeof src !== "object") continue;
+
+    for (const key of candidates) {
+      if (src[key] !== undefined && src[key] !== null && String(src[key]).trim() !== "") {
+        const u = String(src[key]).trim().toUpperCase();
+        if (u === "G" || u === "GR" || u === "GRAM") return "GR";
+        if (u === "KG" || u === "KILOGRAM") return "KG";
+        if (u === "MG") return "MG";
+        if (u === "TON" || u === "T") return "TON";
+        if (u === "CM" || u === "MM" || u === "M") return u;
+        if (u === "DS" || u === "DESI" || u === "M3") return u;
+        return u;
+      }
+    }
+
+    const srcEntries = Object.entries(src);
+    for (const cand of candidates) {
+      const normalizedCand = cand.toUpperCase().replace(/[_\-\s]/g, "");
+      for (const [k, v] of srcEntries) {
+        if (k.toUpperCase().replace(/[_\-\s]/g, "") === normalizedCand && v !== undefined && v !== null && String(v).trim() !== "") {
+          const u = String(v).trim().toUpperCase();
+          if (u === "G" || u === "GR" || u === "GRAM") return "GR";
+          if (u === "KG" || u === "KILOGRAM") return "KG";
+          if (u === "MG") return "MG";
+          if (u === "TON" || u === "T") return "TON";
+          return u;
+        }
+      }
+    }
+  }
+  return defaultUnit;
+}
+
 // Güvenlik & Özel Nitelik Değeri Ayıklayıcı (CANIAS Boolean/1/true uyumlu)
 function checkAttr(sources: (Record<string, unknown> | undefined)[], keys: string[]): boolean {
   for (const src of sources) {
@@ -336,7 +376,11 @@ export default function ReceivingDetailPage() {
   const vendorName = searchParams.get("vendorName") || supplierState?.name || location.state?.vendorName || "Tedarikçi";
 
   const waybillNo = searchParams.get("waybill") || location.state?.waybillNo || "";
-  const targetWH = searchParams.get("targetWH") || location.state?.targetWarehouse || "";
+  const rawTargetWH = searchParams.get("targetWH") || location.state?.targetWarehouse || "00";
+  const rawTargetSP = searchParams.get("targetSP") || location.state?.targetStockPlace || "*";
+
+  const targetWH = rawTargetWH.includes("$") ? rawTargetWH.split("$")[0].trim() : rawTargetWH.trim();
+  const targetSP = rawTargetWH.includes("$") ? rawTargetWH.split("$")[1].trim() : rawTargetSP.trim();
 
   const storageKey = `mzy_receiving_items_${vendorCode || id}_${waybillNo || "active"}`;
 
@@ -820,6 +864,18 @@ export default function ReceivingDetailPage() {
             /^(p_?)?(volume|hacim|vol|desi)$/i
           ) || (pwidth > 0 && plength > 0 && pheight > 0 ? Number(((pwidth * plength * pheight) / 3000).toFixed(2)) : 0);
 
+        const nwunit = extractUnitValue(
+          dimSources,
+          ["NWUNIT", "WUNIT", "WEIGHTUNIT", "NETWUNIT", "NETUNIT", "NUNIT", "P_NWUNIT", "UNIT_NET"],
+          String(matSizeRow.NWUNIT || nestedSizeRow.NWUNIT || "KG")
+        );
+
+        const bwunit = extractUnitValue(
+          dimSources,
+          ["BWUNIT", "WUNIT", "WEIGHTUNIT", "BRUTWUNIT", "BRUTUNIT", "BUNIT_WEIGHT", "P_BWUNIT", "UNIT_BRUT"],
+          String(matSizeRow.BWUNIT || nestedSizeRow.BWUNIT || "KG")
+        );
+
         const parsedMatSize = {
           pwidth,
           plength,
@@ -828,9 +884,9 @@ export default function ReceivingDetailPage() {
           volume,
           vunit: String(matSizeRow.VUNIT || nestedSizeRow.VUNIT || "DS"),
           netweight,
-          nwunit: String(matSizeRow.NWUNIT || nestedSizeRow.NWUNIT || "KG"),
+          nwunit,
           brutweight,
-          bwunit: String(matSizeRow.BWUNIT || nestedSizeRow.BWUNIT || "KG"),
+          bwunit,
           isexplos: Number(matSizeRow.ISEXPLOS ?? nestedSizeRow.ISEXPLOS) === 1,
           isspoil: Number(matSizeRow.ISSPOIL ?? nestedSizeRow.ISSPOIL) === 1,
           aklisbreakable: Number(matSizeRow.AKLISBREAKABLE ?? nestedSizeRow.AKLISBREAKABLE) === 1,
@@ -849,7 +905,7 @@ export default function ReceivingDetailPage() {
             if (Array.isArray(matCodeRes.barcodeList) && matCodeRes.barcodeList.length > rawBarcodeList.length) {
               rawBarcodeList = matCodeRes.barcodeList;
             }
-          } catch {}
+          } catch { }
         }
         const seenBarcodes = new Set<string>();
         const barcodes: Array<{ barcode: string; unit: string }> = [];
@@ -903,7 +959,7 @@ export default function ReceivingDetailPage() {
             if (extraMultiplier > 0) {
               unitMultipliers[nonAdBarcode.unit] = extraMultiplier;
             }
-          } catch {}
+          } catch { }
         }
 
         // 3. MZYGetOpenOrder ile açık siparişleri getir (Barkod, Malzeme Kodu ve Tedarikçi Fallback'li)
@@ -990,7 +1046,9 @@ export default function ReceivingDetailPage() {
             height: pheight,
             volume,
             netWeight: netweight,
+            netWeightUnit: nwunit,
             brutWeight: brutweight,
+            brutWeightUnit: bwunit,
           },
         };
 
@@ -1264,8 +1322,8 @@ export default function ReceivingDetailPage() {
             orderType: getOrderType(ord) || "OP",
             orderNum,
             itemNum,
-            warehouse: targetWH,
-            stockPlace: String(ord.STOCKPLACE || ord.BASESTOCKPLACE || "*").trim() || "*",
+            warehouse: targetWH || "00",
+            stockPlace: (ord.STOCKPLACE && ord.STOCKPLACE !== "*" ? String(ord.STOCKPLACE).trim() : targetSP) || "*",
             specialStock: currentMaterial.isSpecialLot ? "Takipli" : "Serbest",
             expectedQty: totalStockQty,
             receivedQty: alloc,
@@ -1293,8 +1351,8 @@ export default function ReceivingDetailPage() {
           orderType: openOrders[0] ? getOrderType(openOrders[0]) : "OP",
           orderNum: openOrders[0] ? getOrderNum(openOrders[0], 0) : "SERBEST",
           itemNum: openOrders[0] ? getOrderItemNum(openOrders[0], 0) : 1,
-          warehouse: targetWH,
-          stockPlace: "*",
+          warehouse: targetWH || "00",
+          stockPlace: targetSP || "*",
           specialStock: currentMaterial.isSpecialLot ? "Takipli" : "Serbest",
           expectedQty: remainingToDistribute,
           receivedQty: remainingToDistribute,
@@ -1320,8 +1378,8 @@ export default function ReceivingDetailPage() {
         orderType: "OP",
         orderNum: "SERBEST",
         itemNum: 1,
-        warehouse: targetWH,
-        stockPlace: "*",
+        warehouse: targetWH || "00",
+        stockPlace: targetSP || "*",
         specialStock: currentMaterial.isSpecialLot ? "Takipli" : "Serbest",
         expectedQty: totalReceivedStockQty,
         receivedQty: totalReceivedStockQty,
@@ -1409,8 +1467,9 @@ export default function ReceivingDetailPage() {
       const res = await api.saveReceipt({
         vendor: vendorCode,
         waybillNo,
-        warehouse: targetWH,
-        targetWarehouse: targetWH,
+        warehouse: targetWH || "00",
+        targetWarehouse: targetWH || "00",
+        stockPlace: targetSP || "*",
         items: itemsPayload,
       });
 
@@ -1491,8 +1550,8 @@ export default function ReceivingDetailPage() {
         {/* SOL ANA KART: 1 MALZEME · 2 MİKTAR ADIMLARI */}
         <div
           className={`col-span-1 sm:col-span-5 md:col-span-4 lg:col-span-4 xl:col-span-4 landscape:col-span-4 rounded-3xl border border-line bg-surface p-3 sm:p-3.5 shadow-card flex flex-col justify-between space-y-2.5 min-w-0 h-full ${currentMaterial?.isSpecialLot
-              ? "min-h-[290px] sm:min-h-[300px]"
-              : "min-h-[205px] sm:min-h-[215px]"
+            ? "min-h-[290px] sm:min-h-[300px]"
+            : "min-h-[205px] sm:min-h-[215px]"
             }`}
         >
           {/* 2 Eşit Büyüklükte Adım Butonu (1 Malzeme, 2 Miktar) */}
@@ -1740,8 +1799,8 @@ export default function ReceivingDetailPage() {
         {/* SAĞ ANA KART: MALZEME BİLGİ VE ÖLÇÜ KARTI */}
         <div
           className={`col-span-1 sm:col-span-7 md:col-span-8 lg:col-span-8 xl:col-span-8 landscape:col-span-8 rounded-3xl border border-line bg-surface pt-1.5 pb-1.5 px-3 sm:pt-1.5 sm:pb-2 sm:px-3.5 shadow-card flex flex-col justify-start min-w-0 h-full ${currentMaterial?.isSpecialLot
-              ? "min-h-[290px] sm:min-h-[300px]"
-              : "min-h-[205px] sm:min-h-[215px]"
+            ? "min-h-[290px] sm:min-h-[300px]"
+            : "min-h-[205px] sm:min-h-[215px]"
             }`}
         >
           {currentMaterial ? (
@@ -1833,7 +1892,7 @@ export default function ReceivingDetailPage() {
                     <div className="flex items-center gap-1 min-w-0">
                       <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Net:</span>
                       <span className="font-mono font-black text-fg text-xs sm:text-[12.5px] truncate">
-                        {currentMaterial.dimensions?.netWeight ?? 0} KG
+                        {currentMaterial.dimensions?.netWeight ?? 0} {currentMaterial.dimensions?.netWeightUnit || "KG"}
                       </span>
                     </div>
 
@@ -1857,7 +1916,7 @@ export default function ReceivingDetailPage() {
                     <div className="flex items-center gap-1 min-w-0">
                       <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Brüt:</span>
                       <span className="font-mono font-black text-fg text-xs sm:text-[12.5px] truncate">
-                        {currentMaterial.dimensions?.brutWeight ?? 0} KG
+                        {currentMaterial.dimensions?.brutWeight ?? 0} {currentMaterial.dimensions?.brutWeightUnit || "KG"}
                       </span>
                     </div>
                   </div>
@@ -1926,7 +1985,7 @@ export default function ReceivingDetailPage() {
                 navigate(
                   `/receiving/${encodeURIComponent(vendorCode)}/kayitlar?waybill=${encodeURIComponent(
                     waybillNo
-                  )}&targetWH=${encodeURIComponent(targetWH)}&vendor=${encodeURIComponent(
+                  )}&targetWH=${encodeURIComponent(targetWH)}&targetSP=${encodeURIComponent(targetSP)}&vendor=${encodeURIComponent(
                     vendorName
                   )}`,
                   {
@@ -1934,6 +1993,7 @@ export default function ReceivingDetailPage() {
                       items: receivedItems,
                       waybillNo,
                       targetWarehouse: targetWH,
+                      targetStockPlace: targetSP,
                       vendor: vendorCode,
                       vendorName,
                       currentMaterial,
@@ -1998,8 +2058,15 @@ export default function ReceivingDetailPage() {
                         )}
                       </div>
 
-                      {/* Sağ: 2 Satırlı Kaçta Kaçı Toplandı (1. Satır: Sipariş Birimi örn 3/20 KO, 2. Satır: Stok Birimi örn 18/120 AD) */}
-                      <div className="flex items-center gap-2.5 font-mono shrink-0 ml-auto mr-3 sm:mr-6 text-right">
+                      {/* Sağ: Çevrim Oranı + 2 Satırlı Kaçta Kaçı Toplandı (1. Satır: Sipariş Birimi örn 3/20 KO, 2. Satır: Stok Birimi örn 18/120 AD) */}
+                      <div className="flex items-center gap-2 sm:gap-2.5 font-mono shrink-0 ml-auto mr-2 sm:mr-4 text-right">
+                        {/* Çevrim Oranı (örn: (1 KO = 10 AD)) */}
+                        {al.purUnit !== al.stockUnit && al.factor > 1 && (
+                          <span className="text-[11px] font-bold text-subtle whitespace-nowrap">
+                            (1 {al.purUnit} = {al.factor} {al.stockUnit})
+                          </span>
+                        )}
+
                         <div className="flex flex-col items-end leading-tight gap-0.5">
                           {/* 1. Satır: Sipariş Birimi */}
                           <span className="font-black text-fg text-xs sm:text-[12px]">

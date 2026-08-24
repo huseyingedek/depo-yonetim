@@ -333,8 +333,8 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
   - `PSPLANT` (*STRING*): Tesis kodu (`"100"`).
   - `PSVENDOR` (*STRING*): Tedarikçi kodu (Örn: `"16660"`).
   - `PSEXTDELNUM` (*STRING*): İrsaliye numarası.
-  - `PSWAREHOUSE` (*STRING*): Mal Kabul yapılan depo (Örn: `"100"`).
-  - `PSSTOCKPLACE` (*STRING*): Mal Kabul yapılan stok yeri (Örn: `"*"`).
+  - `PSWAREHOUSE` (*STRING*): Mal Kabul yapılan depo kodu (Örn: `"00"` veya `"D1"`). Raf barkodu (`00$*`) girildiğinde depo ayrıştırılarak `"00"` gönderilir.
+  - `PSSTOCKPLACE` (*STRING*): Mal Kabul yapılan stok yeri (Örn: `"*"` veya `"R1"`).
   - `PSUSER` (*STRING*): Login olan kullanıcı adı.
   - `PDTSTARTTIME` (*DATETIME*): Mal kabule başlama zamanı.
   - `PSIASPURITEMXML` (*TABLE / XML*): Kabul edilen malzemeler listesi:
