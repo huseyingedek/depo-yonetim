@@ -98,7 +98,7 @@ export default function ReceivingRecordsPage() {
             <thead className="border-b border-line bg-elevated">
               <tr>
                 {KOLONLAR.map(([k, ad]) => (
-                  <th key={k} className="whitespace-nowrap px-1.5 py-2 font-semibold text-muted w-px">
+                  <th key={k} className="whitespace-nowrap px-2 py-2 font-bold text-subtle text-xs w-px">
                     {ad}
                   </th>
                 ))}
@@ -114,12 +114,20 @@ export default function ReceivingRecordsPage() {
                   ? String(item.stockPlace).trim()
                   : (rawWh.includes("$") ? rawWh.split("$")[1].trim() : "*");
 
+                const isPartili = Boolean(item.isSpecialLot) || item.specialStock === "1" || /takipli|partili/i.test(String(item.specialStock || ""));
+                const specialStockVal = item.specialStock && item.specialStock !== "Takipli" && item.specialStock !== "Serbest"
+                  ? item.specialStock
+                  : (isPartili ? "1" : "*");
+                const batchNumVal = isPartili && item.batchNum && item.batchNum !== "—" && item.batchNum !== "*"
+                  ? item.batchNum
+                  : "*";
+
                 const rowData: Record<string, string | number> = {
                   MATERIAL: item.material || "—",
                   WAREHOUSE: wh || "00",
                   STOCKPLACE: sp || "*",
-                  SPECIALSTOCK: item.specialStock || (item.isSpecialLot ? "Takipli" : "Serbest"),
-                  BATCHNUM: item.batchNum || "—",
+                  SPECIALSTOCK: specialStockVal,
+                  BATCHNUM: batchNumVal,
                   READPURQTY: item.purQty !== undefined ? item.purQty : (item.receivedQty || 0),
                   PURUNIT: item.purUnit || item.unit || "AD",
                   READQTY: item.receivedQty || 0,
@@ -140,7 +148,7 @@ export default function ReceivingRecordsPage() {
                             : item.name
                           : "";
                         return (
-                          <td key={k} className="px-1.5 py-1.5 font-mono text-fg font-black whitespace-nowrap w-px" title={item.name}>
+                          <td key={k} className="px-2 py-2 font-mono text-xs font-semibold text-fg whitespace-nowrap w-px" title={item.name}>
                             <div>{deger || "—"}</div>
                             {displayName && (
                               <div className="font-sans text-[11px] font-normal text-subtle truncate">
@@ -150,38 +158,10 @@ export default function ReceivingRecordsPage() {
                           </td>
                         );
                       }
-                      if (k === "READPURQTY") {
-                        return (
-                          <td key={k} className="whitespace-nowrap px-1.5 py-1.5 font-mono font-black text-fg w-px">
-                            {deger}
-                          </td>
-                        );
-                      }
-                      if (k === "PURUNIT") {
-                        return (
-                          <td key={k} className="whitespace-nowrap px-1.5 py-1.5 font-mono font-bold text-muted w-px">
-                            {deger}
-                          </td>
-                        );
-                      }
-                      if (k === "READQTY") {
-                        return (
-                          <td key={k} className="whitespace-nowrap px-1.5 py-1.5 font-mono font-black text-fg w-px">
-                            {deger}
-                          </td>
-                        );
-                      }
-                      if (k === "BATCHNUM" && item.batchNum) {
-                        return (
-                          <td key={k} className="whitespace-nowrap px-1.5 py-1.5 font-mono font-bold text-violet-600 dark:text-violet-400 w-px">
-                            {deger}
-                          </td>
-                        );
-                      }
                       return (
                         <td
                           key={k}
-                          className="whitespace-nowrap px-1.5 py-1.5 font-mono text-muted w-px"
+                          className="whitespace-nowrap px-2 py-2 font-mono text-xs font-semibold text-fg w-px"
                         >
                           {deger || "—"}
                         </td>

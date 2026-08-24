@@ -1552,11 +1552,11 @@ export const api = {
       const readQty = it.receivedQty ?? it.quantity ?? 1;
       const orderType = String(it.orderType || "OP").trim().toUpperCase();
       const rawSpecial = String(
-        it.specialStock || (it.isSpecialLot ? "1" : "0")
+        it.specialStock || (it.isSpecialLot ? "1" : "*")
       ).trim();
       const isPartili = rawSpecial === "1" || /takipli|partili/i.test(rawSpecial) || Boolean(it.isSpecialLot);
-      const specialStock = isPartili ? "1" : "0";
-      const batchNum = isPartili ? String(it.batchNum || "").trim() : "";
+      const specialStock = isPartili ? "1" : (rawSpecial !== "" && rawSpecial !== "0" && rawSpecial !== "Serbest" ? rawSpecial : "*");
+      const batchNum = isPartili && it.batchNum && it.batchNum !== "*" && it.batchNum !== "—" ? String(it.batchNum).trim() : "*";
 
       return {
         MATERIAL: String(it.material || "").trim(),
