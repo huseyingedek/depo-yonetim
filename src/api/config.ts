@@ -38,4 +38,7 @@ export const SERVICES = {
   setMatSize: "MZYSetMatSize", // Malzeme boyut, ağırlık ve güvenlik nitelikleri kaydı
   getCustomer: "MzyGetCustomer", // Tedarikçi / Müşteri arama servisi
   saveReceipt: "MZYSaveReceipt", // Mal kabul tamamlama ve saklama servisi
+
+  // Stok Transfer Servisleri
+  stockTransfer: "MZYStockTransfer", // Serbest depo ve raf stok transferi
 } as const;

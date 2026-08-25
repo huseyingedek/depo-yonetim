@@ -18,7 +18,6 @@ import BarcodeScanner from "../../components/BarcodeScanner";
 import {
   useTransferStore,
   qtyRound,
-  isoDateToBatch,
 } from "../../store/transferStore";
 import { api } from "../../api/client";
 import { sesBasarili, sesHata } from "../../sound";
@@ -32,19 +31,12 @@ export default function StockTransferPage() {
   const targetShelf = useTransferStore((s) => s.targetShelf);
   const items = useTransferStore((s) => s.items);
   const step = useTransferStore((s) => s.step);
-  const lotPending = useTransferStore((s) => s.lotPending);
-  const batchList = useTransferStore((s) => s.batchList);
-  const batchLoading = useTransferStore((s) => s.batchLoading);
-  const batchError = useTransferStore((s) => s.batchError);
   const completing = useTransferStore((s) => s.completing);
   const completedResult = useTransferStore((s) => s.completedResult);
 
   const scanSourceShelf = useTransferStore((s) => s.scanSourceShelf);
   const clearSourceShelf = useTransferStore((s) => s.clearSourceShelf);
-  const scanProduct = useTransferStore((s) => s.scanProduct);
-  const scanLot = useTransferStore((s) => s.scanLot);
-  const selectBatch = useTransferStore((s) => s.selectBatch);
-  const cancelLot = useTransferStore((s) => s.cancelLot);
+  const addItem = useTransferStore((s) => s.addItem);
   const updateItemQty = useTransferStore((s) => s.updateItemQty);
   const removeItem = useTransferStore((s) => s.removeItem);
   const goToTargetStep = useTransferStore((s) => s.goToTargetStep);
@@ -57,8 +49,30 @@ export default function StockTransferPage() {
   const [toast, setToast] = useState<Toast>(null);
   const [busy, setBusy] = useState(false);
   const [flashId, setFlashId] = useState<string | null>(null);
-  const [partiPrefill, setPartiPrefill] = useState("");
   const [redMesaji, setRedMesaji] = useState<string | null>(null);
+
+  // 3. Adım: Bekleyen Partili Malzeme (Depocunun sadece parti barkodunu okutması beklenir)
+  const [lotPendingItem, setLotPendingItem] = useState<{
+    material: string;
+    name: string;
+    barcode: string;
+    unit: string;
+    specialStock: string;
+    availStock?: number;
+  } | null>(null);
+
+  // 4. Adım: Miktarı girilecek / aktif okutulan malzeme (Mal Kabul ile birebir miktar paneli)
+  const [activeItem, setActiveItem] = useState<{
+    material: string;
+    name: string;
+    barcode: string;
+    quantity: number;
+    unit: string;
+    batchNum?: string;
+    specialStock?: string;
+    isSpecialStock?: boolean;
+    availStock?: number;
+  } | null>(null);
 
   // Hedef depo ve stok yerleri
   const [warehouses, setWarehouses] = useState<{ code: string; name: string }[]>([]);
@@ -123,6 +137,24 @@ export default function StockTransferPage() {
     setTimeout(() => setFlashId(null), 600);
   };
 
+  const handleCommitActiveItem = () => {
+    if (!activeItem || activeItem.quantity <= 0) {
+      sesHata();
+      showToast({ kind: "error", text: "Lütfen geçerli bir miktar girin" });
+      return;
+    }
+
+    const r = addItem(activeItem);
+    if (r.ok) {
+      if (r.itemId) flash(r.itemId);
+      showToast({ kind: "done", text: r.message });
+      setActiveItem(null);
+    } else {
+      sesHata();
+      showToast({ kind: "error", text: r.message });
+    }
+  };
+
   const handleDetected = useCallback(
     async (code: string) => {
       const barkod = code.trim().toUpperCase();
@@ -144,7 +176,7 @@ export default function StockTransferPage() {
         }
 
         // 2) TOPLAMA ADIMINDAYSAK:
-        // A) Kaynak raf bekleniyor
+        // A) Kaynak raf bekleniyor (Adım 1)
         if (!sourceShelf) {
           const r = await scanSourceShelf(barkod);
           if (r.ok) {
@@ -156,29 +188,87 @@ export default function StockTransferPage() {
           return;
         }
 
-        // B) Parti bekleniyor
-        if (lotPending) {
-          const r = await scanLot(barkod);
-          if (r.ok) {
-            if (r.itemId) flash(r.itemId);
-            setPartiPrefill("");
-            showToast({ kind: "done", text: r.message });
-          } else {
-            setRedMesaji(r.message);
-            showToast({ kind: "error", text: r.message });
-          }
+        // B) Parti bekleniyor (Adım 3)
+        if (lotPendingItem) {
+          // Depocu parti barkodunu okuttu -> Adım 4 (Miktar)'a geçir
+          setActiveItem({
+            material: lotPendingItem.material,
+            name: lotPendingItem.name,
+            barcode: lotPendingItem.barcode,
+            quantity: 1,
+            unit: lotPendingItem.unit,
+            batchNum: barkod,
+            specialStock: lotPendingItem.specialStock,
+            isSpecialStock: true,
+            availStock: lotPendingItem.availStock,
+          });
+          setLotPendingItem(null);
+          showToast({ kind: "ok", text: `Parti (${barkod}) okundu, miktarı belirleyin` });
           return;
         }
 
-        // C) Malzeme okutma
-        const res = await scanProduct(barkod, 1);
-        if (res.ok) {
-          if (res.itemId) flash(res.itemId);
-          showToast({ kind: "ok", text: res.message });
-        } else {
-          setRedMesaji(res.message);
-          showToast({ kind: "error", text: res.message });
+        // C) Miktar panelindeki aktif malzeme ile aynı barkod tekrar okutulduysa:
+        if (activeItem && activeItem.barcode === barkod) {
+          setActiveItem((prev) => (prev ? { ...prev, quantity: prev.quantity + 1 } : null));
+          showToast({ kind: "ok", text: `+1 eklendi (${activeItem.quantity + 1} ${activeItem.unit})` });
+          return;
         }
+
+        // D) Farklı bir malzeme okutuluyorsa ve aktif item varsa, önce mevcut item'ı sepete ekle
+        if (activeItem && activeItem.quantity > 0) {
+          addItem(activeItem);
+          setActiveItem(null);
+        }
+
+        // CANIAS barkod okuma servisi (Adım 2)
+        const res = await api.readBarcode(
+          barkod,
+          sourceShelf.warehouse,
+          sourceShelf.stockPlace,
+          1
+        );
+
+        if (!res.ok || !res.material) {
+          setRedMesaji(res.message || "Malzeme bulunamadı");
+          showToast({ kind: "error", text: res.message || "Malzeme bulunamadı" });
+          return;
+        }
+
+        const ozelStok = res.specialStock || "0";
+        const lotTracked = ozelStok === "1" || /takipli|partili/i.test(ozelStok) || (res.lot && res.lot !== "*");
+
+        // Eğer partili malzeme ise ve barkodda parti yoksa -> Adım 3 (Parti)
+        if (lotTracked && (!res.lot || res.lot === "*")) {
+          setLotPendingItem({
+            material: res.material,
+            name: res.name,
+            barcode: barkod,
+            unit: res.unit || "AD",
+            specialStock: ozelStok,
+            availStock: res.availStock,
+          });
+          showToast({ kind: "ok", text: `${res.name} — Parti barkodunu okutun` });
+          return;
+        }
+
+        // Partisiz malzeme (veya barkodda partisi olan) -> Adım 4 (Miktar)
+        const initialQty = res.quantity > 0 ? res.quantity : 1;
+        setActiveItem({
+          material: res.material,
+          name: res.name,
+          barcode: barkod,
+          quantity: initialQty,
+          unit: res.unit || "AD",
+          batchNum: res.lot && res.lot !== "*" ? res.lot : undefined,
+          specialStock: ozelStok,
+          isSpecialStock: Boolean(lotTracked),
+          availStock: res.availStock,
+        });
+        showToast({ kind: "ok", text: `${res.name} okundu, miktarı belirleyin` });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Okuma hatası";
+        setRedMesaji(msg);
+        showToast({ kind: "error", text: msg });
       } finally {
         setBusy(false);
       }
@@ -187,31 +277,13 @@ export default function StockTransferPage() {
       busy,
       step,
       sourceShelf,
-      lotPending,
+      lotPendingItem,
+      activeItem,
       scanTargetShelf,
       scanSourceShelf,
-      scanLot,
-      scanProduct,
+      addItem,
     ]
   );
-
-  const partiSec = async (batchNum: string) => {
-    if (!batchNum || busy) return;
-    setBusy(true);
-    try {
-      const r = await selectBatch(batchNum);
-      if (r.ok) {
-        setPartiPrefill("");
-        setRedMesaji(null);
-        showToast({ kind: "done", text: r.message });
-      } else {
-        setRedMesaji(r.message);
-        showToast({ kind: "error", text: r.message });
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const handleCompleteTransfer = async () => {
     setBusy(true);
@@ -338,8 +410,10 @@ export default function StockTransferPage() {
       ? "Hedef raf barkodunu okutun"
       : !sourceShelf
       ? "Raf barkodunu okutun"
-      : lotPending
+      : lotPendingItem
       ? "Parti barkodunu okutun"
+      : activeItem
+      ? "Miktarı girip 'Listeye Ekle'ye basın veya barkodu tekrar okutun"
       : "Malzeme barkodunu okutun";
 
   return (
@@ -365,6 +439,10 @@ export default function StockTransferPage() {
               <button
                 type="button"
                 onClick={() => {
+                  if (activeItem && activeItem.quantity > 0) {
+                    addItem(activeItem);
+                    setActiveItem(null);
+                  }
                   const r = goToTargetStep();
                   if (!r.ok) {
                     sesHata();
@@ -375,7 +453,7 @@ export default function StockTransferPage() {
                     setRedMesaji(null);
                   }
                 }}
-                disabled={items.length === 0}
+                disabled={items.length === 0 && !activeItem}
                 className="btn-primary inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-1.5 text-xs font-semibold sm:text-sm disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <span>Taşıma Yap</span>
@@ -419,29 +497,37 @@ export default function StockTransferPage() {
         {/* SOL KOLON: Tarayıcı, Lokasyon Kartları ve Miktar Paneli */}
         <div className="min-w-0 md:sticky md:top-3 md:self-start lg:static xl:sticky xl:top-4 short:!static short:w-[300px] short:shrink-0 short:self-stretch short:overflow-y-auto">
           <div className="card p-3.5 sm:p-4">
-            {/* Adım İndikatörleri (Picking ile aynı şablon) */}
+            {/* Adım İndikatörleri (4 Adım: 1 Raf · 2 Malzeme · 3 Parti · 4 Miktar) */}
             <div className="mb-3 flex items-center gap-1.5">
               {step === "collect" ? (
                 (
                   [
-                    ["shelf", "Raf"],
-                    ["product", "Malzeme"],
-                    ["lot", "Parti"],
+                    ["shelf", "1 Raf"],
+                    ["product", "2 Malzeme"],
+                    ["lot", "3 Parti"],
+                    ["qty", "4 Miktar"],
                   ] as const
                 ).map(([s, label], i) => {
                   const active =
                     (s === "shelf" && !sourceShelf) ||
-                    (s === "product" && !!sourceShelf && !lotPending) ||
-                    (s === "lot" && !!lotPending);
+                    (s === "product" && !!sourceShelf && !lotPendingItem && !activeItem) ||
+                    (s === "lot" && !!lotPendingItem) ||
+                    (s === "qty" && !!activeItem);
+
                   const done =
                     (s === "shelf" && !!sourceShelf) ||
-                    (s === "product" && !!lotPending);
+                    (s === "product" && (!!lotPendingItem || !!activeItem || items.length > 0)) ||
+                    (s === "lot" && (!lotPendingItem && (!!activeItem?.batchNum || items.some((it) => !!it.batchNum)))) ||
+                    (s === "qty" && !activeItem && items.length > 0);
 
                   const git = () => {
                     if (s === "shelf") {
                       clearSourceShelf();
-                    } else if (s === "lot" && lotPending) {
-                      // parti aktif
+                      setActiveItem(null);
+                      setLotPendingItem(null);
+                    } else if (s === "product") {
+                      setActiveItem(null);
+                      setLotPendingItem(null);
                     }
                   };
 
@@ -450,12 +536,12 @@ export default function StockTransferPage() {
                       key={s}
                       type="button"
                       onClick={git}
-                      disabled={s === "product" || (s === "lot" && !lotPending)}
+                      disabled={s === "lot" || s === "qty"}
                       className={`flex min-w-0 flex-1 items-center justify-center gap-1 truncate rounded-xl px-1.5 py-1.5 text-[11px] font-semibold transition-all duration-200 ease-soft ${
                         active
                           ? "bg-brand-600 text-white shadow-soft"
                           : done
-                          ? "bg-emerald-100 text-emerald-700"
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
                           : "bg-elevated text-subtle"
                       }`}
                     >
@@ -481,7 +567,7 @@ export default function StockTransferPage() {
                         active
                           ? "bg-brand-600 text-white shadow-soft"
                           : done
-                          ? "bg-emerald-100 text-emerald-700"
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
                           : "bg-elevated text-subtle"
                       }`}
                     >
@@ -496,9 +582,9 @@ export default function StockTransferPage() {
             {/* TOPLAMA ADIMI: Bulunulan Raf Kartı */}
             {step === "collect" && (
               sourceShelf ? (
-                <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-emerald-50 px-3 py-2">
-                  <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-emerald-800">
-                    <MapPin className="h-4 w-4 shrink-0 text-emerald-600" />
+                <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2">
+                  <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-emerald-800 dark:text-emerald-200">
+                    <MapPin className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                     <span className="truncate">
                       Depo: <span className="font-mono font-bold">{sourceShelf.warehouse}</span>
                       {" · "}
@@ -507,15 +593,19 @@ export default function StockTransferPage() {
                   </span>
                   <button
                     type="button"
-                    onClick={clearSourceShelf}
-                    className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline"
+                    onClick={() => {
+                      clearSourceShelf();
+                      setActiveItem(null);
+                      setLotPendingItem(null);
+                    }}
+                    className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline"
                   >
                     <X className="h-3.5 w-3.5" />
                     Değiştir
                   </button>
                 </div>
               ) : (
-                <div className="mb-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+                <div className="mb-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-300">
                   Bulunduğunuz rafın barkodunu okutun
                 </div>
               )
@@ -567,7 +657,7 @@ export default function StockTransferPage() {
                 </div>
 
                 {targetShelf && (
-                  <div className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs text-emerald-800">
+                  <div className="flex items-center gap-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1.5 text-xs text-emerald-800 dark:text-emerald-200">
                     <span className="font-semibold">Seçilen Hedef:</span>
                     <span className="font-mono font-bold">
                       Depo {targetShelf.warehouse} · {targetShelf.stockPlace}
@@ -577,64 +667,181 @@ export default function StockTransferPage() {
               </div>
             )}
 
-            {/* PARTİ BEKLEME KUTUSU (Toplama Adımı) */}
-            {step === "collect" && lotPending && (
-              <div className="mb-3 space-y-2 rounded-xl border border-amber-300 bg-amber-50/60 p-2.5">
+            {/* PARTİ BEKLEME KUTUSU (Adım 3) */}
+            {step === "collect" && lotPendingItem && (
+              <div className="mb-3 space-y-2 rounded-2xl border border-violet-500/30 bg-violet-500/10 p-3 animate-fade-in shadow-xs">
                 <div className="flex items-center justify-between">
-                  <span className="truncate text-xs font-bold text-amber-800">
-                    {lotPending.name}
+                  <span className="truncate text-xs font-bold text-violet-800 dark:text-violet-200">
+                    {lotPendingItem.name}
                   </span>
                   <button
                     type="button"
-                    onClick={cancelLot}
-                    className="shrink-0 text-xs font-semibold text-amber-700 hover:underline"
+                    onClick={() => {
+                      setLotPendingItem(null);
+                      setRedMesaji(null);
+                    }}
+                    className="shrink-0 text-xs font-semibold text-rose-600 hover:underline"
                   >
                     Vazgeç
                   </button>
                 </div>
-                <p className="text-[11px] font-medium text-amber-700">
-                  Parti barkodunu okutun veya stoktan seçin:
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-violet-700 dark:text-violet-300">
+                    <span className="inline-block h-2 w-2 rounded-full bg-violet-500 animate-pulse" />
+                    <span>Parti barkodunu okutun veya "1" yazın</span>
+                  </div>
 
-                {/* Stoktaki Partiler Dropdown */}
-                <div>
-                  <select
-                    defaultValue=""
-                    disabled={batchList.length === 0}
-                    onChange={(e) => e.target.value && partiSec(e.target.value)}
-                    className="h-8 w-full rounded-lg border border-line bg-surface px-2 font-mono text-xs text-fg outline-none focus:border-brand-500"
+                  {/* 1 / Mock Parti Hızlı Butonu */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveItem({
+                        material: lotPendingItem.material,
+                        name: lotPendingItem.name,
+                        barcode: lotPendingItem.barcode,
+                        quantity: 1,
+                        unit: lotPendingItem.unit,
+                        batchNum: "1",
+                        specialStock: lotPendingItem.specialStock,
+                        isSpecialStock: true,
+                        availStock: lotPendingItem.availStock,
+                      });
+                      setLotPendingItem(null);
+                      showToast({ kind: "ok", text: "Parti '1' olarak kabul edildi, miktarı belirleyin" });
+                    }}
+                    className="shrink-0 rounded-lg bg-violet-600 px-2 py-1 text-[11px] font-bold text-white shadow-xs hover:bg-violet-700 active:scale-95 transition"
+                    title="Partiyi '1' olarak ata"
                   >
-                    {batchList.length > 0 ? (
-                      <>
-                        <option value="" disabled>
-                          Stoktaki partiyi seçin…
-                        </option>
-                        {batchList.map((b) => (
-                          <option key={b.batchNum} value={b.batchNum}>
-                            {b.batchNum} — {qtyRound(b.availStock)} {b.unit}
-                          </option>
-                        ))}
-                      </>
-                    ) : (
-                      <option value="" disabled>
-                        {batchLoading
-                          ? "Partiler yükleniyor…"
-                          : batchError
-                          ? `Hata: ${batchError}`
-                          : "Kayıtlı parti bulunamadı"}
-                      </option>
-                    )}
-                  </select>
+                    Parti: 1 (Mock)
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ------------------------------------------------------------------- */}
+            {/* ADIM 4: MİKTAR GİRİŞİ (MAL KABUL İLE BİREBİR AYNI) */}
+            {/* ------------------------------------------------------------------- */}
+            {step === "collect" && activeItem && (
+              <div className="mb-3 space-y-2 rounded-2xl border border-emerald-500/30 bg-surface p-3 shadow-card animate-fade-in">
+                <div className="flex items-center justify-between border-b border-line/40 pb-2">
+                  <div className="min-w-0 flex-1">
+                    <h4 className="truncate text-xs font-black text-fg" title={activeItem.name}>
+                      {activeItem.name}
+                    </h4>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-subtle">
+                      <span className="font-semibold text-brand-600 dark:text-brand-400">{activeItem.material}</span>
+                      {activeItem.batchNum && (
+                        <span className="rounded bg-violet-100 dark:bg-violet-950/60 px-1 py-0.5 font-bold text-violet-700 dark:text-violet-300">
+                          Parti: {activeItem.batchNum}
+                        </span>
+                      )}
+                      {activeItem.availStock !== undefined && activeItem.availStock > 0 && (
+                        <span className="text-emerald-600 font-medium">
+                          (Mevcut: {qtyRound(activeItem.availStock)} {activeItem.unit || "AD"})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveItem(null)}
+                    className="shrink-0 text-xs font-semibold text-subtle hover:text-rose-600 hover:underline"
+                  >
+                    Vazgeç
+                  </button>
                 </div>
 
-                {/* Tarih Seçimi (Hızlı Parti Kodu) */}
-                <div className="flex items-center gap-1.5">
-                  <span className="shrink-0 text-[11px] text-muted">SKT:</span>
-                  <input
-                    type="date"
-                    onChange={(e) => setPartiPrefill(isoDateToBatch(e.target.value))}
-                    className="h-7 flex-1 rounded-lg border border-line bg-surface px-1.5 font-mono text-xs text-fg outline-none focus:border-brand-500"
-                  />
+                {/* Miktar Stepper Girişi */}
+                <div>
+                  <div className="mb-1">
+                    <label className="text-xs font-bold text-fg block">
+                      Taşınacak Miktar ({activeItem.unit || "AD"}) <span className="text-red-500">*</span>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setActiveItem((prev) => (prev ? { ...prev, quantity: Math.max(0, prev.quantity - 1) } : null))
+                      }
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-elevated text-subtle hover:bg-line transition active:scale-95 shrink-0"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={activeItem.quantity === 0 ? "" : activeItem.quantity}
+                      placeholder="0"
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === "") {
+                          setActiveItem((prev) => (prev ? { ...prev, quantity: 0 } : null));
+                          return;
+                        }
+                        const val = parseFloat(raw);
+                        setActiveItem((prev) => (prev ? { ...prev, quantity: isNaN(val) ? 0 : Math.max(0, val) } : null));
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleCommitActiveItem();
+                        }
+                      }}
+                      className="field-input flex-1 text-center font-mono text-base sm:text-lg font-extrabold text-emerald-600 dark:text-emerald-400 h-10 py-1"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setActiveItem((prev) => (prev ? { ...prev, quantity: prev.quantity + 1 } : null))
+                      }
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition active:scale-95 shadow-md shrink-0"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* Hızlı Butonlar ve Ekle Butonu (Sıfırla, +5, +10, Ekle) */}
+                  <div className="grid grid-cols-4 gap-1.5 pt-1.5">
+                    {/* 1. Sıfırla (Çöp Kutusu İkonu) */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveItem((prev) => (prev ? { ...prev, quantity: 0 } : null))}
+                      className="flex items-center justify-center rounded-xl border border-line bg-elevated/50 py-2 text-subtle hover:bg-red-500/20 hover:text-red-500 hover:border-red-500/30 transition active:scale-95 shadow-xs"
+                      title="Miktarı Sıfırla (0)"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+
+                    {/* 2. +5, 3. +10 */}
+                    {[5, 10].map((inc) => (
+                      <button
+                        key={inc}
+                        type="button"
+                        onClick={() =>
+                          setActiveItem((prev) => (prev ? { ...prev, quantity: prev.quantity + inc } : null))
+                        }
+                        className="rounded-xl border border-line bg-elevated/80 py-2 text-xs sm:text-sm font-black text-fg hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition active:scale-95 shadow-xs"
+                      >
+                        +{inc}
+                      </button>
+                    ))}
+
+                    {/* 4. Ekle Butonu */}
+                    <button
+                      type="button"
+                      onClick={handleCommitActiveItem}
+                      disabled={!activeItem || activeItem.quantity <= 0}
+                      className="flex flex-col items-center justify-center rounded-xl bg-emerald-600 py-1 text-[10px] sm:text-[11px] font-black leading-tight text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-35 disabled:cursor-not-allowed"
+                      title="Malzemeyi Listeye Ekle"
+                    >
+                      <span>Listeye</span>
+                      <span>Ekle</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -656,12 +863,11 @@ export default function StockTransferPage() {
               </div>
             )}
 
-            {/* BARKOD OKUYUCU (Sadece Toplama Adımında) */}
-            {step === "collect" && (
+            {/* BARKOD OKUYUCU (Toplama ve Hedef Adımlarında) */}
+            {step !== "success" && (
               <BarcodeScanner
                 onDetected={handleDetected}
                 prompt={promptText}
-                prefill={lotPending ? partiPrefill : ""}
                 hideCardWrapper
               />
             )}

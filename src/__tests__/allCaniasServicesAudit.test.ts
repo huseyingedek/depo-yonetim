@@ -473,4 +473,41 @@ describe("CANIAS WMS All 25 Services Exhaustive Audit & Parameter Validation", (
       expect(req?.params.PIISPICKWH).toBe(1);
     });
   });
+
+  // ===========================================================================
+  // 12. SERBEST STOK TRANSFERİ (MZYStockTransfer)
+  // ===========================================================================
+  describe("12. MZYStockTransfer - Serbest Stok Transferi", () => {
+    it("COMPANY, PLANT, USER, SRC/TAR WAREHOUSE/STOCKPLACE ve TRANSFERLIST parametrelerini eksiksiz iletmelidir", async () => {
+      await api.createStockTransfer({
+        company: "01",
+        plant: "100",
+        user: "depocu1",
+        sourceWarehouse: "01",
+        sourceStockPlace: "A-01-01",
+        targetWarehouse: "02",
+        targetStockPlace: "B-03-02",
+        items: [
+          {
+            material: "MLZ001",
+            quantity: 10,
+            unit: "AD",
+            batchNum: "LOT-99",
+            specialStock: "1",
+          },
+        ],
+      });
+
+      const req = capturedRequests.find((r) => r.service === SERVICES.stockTransfer || r.url.includes(SERVICES.stockTransfer));
+      expect(req).toBeDefined();
+      expect(req?.params.PSCOMPANY).toBe("01");
+      expect(req?.params.PSPLANT).toBe("100");
+      expect(req?.params.PSUSER).toBe("depocu1");
+      expect(req?.params.SRCWAREHOUSE).toBe("01");
+      expect(req?.params.SRCSTOCKPLACE).toBe("A-01-01");
+      expect(req?.params.TARWAREHOUSE).toBe("02");
+      expect(req?.params.TARSTOCKPLACE).toBe("B-03-02");
+      expect(req?.params.TRANSFERLIST).toBeDefined();
+    });
+  });
 });

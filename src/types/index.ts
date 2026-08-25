@@ -196,25 +196,26 @@ export interface TransferItem {
 }
 
 export interface StockTransferPayload {
-  company: string;
-  plant: string;
+  company?: string;
+  plant?: string;
+  user?: string;
   sourceWarehouse: string;
   sourceStockPlace: string;
   targetWarehouse: string;
   targetStockPlace: string;
-  transferDate: string;
+  transferDate?: string;
   items: {
     material: string;
-    materialName: string;
-    barcode: string;
+    materialName?: string;
+    barcode?: string;
     quantity: number;
-    unit: string;
+    unit?: string;
     batchNum?: string;
     specialStock?: string;
-    sourceWarehouse: string;
-    sourceStockPlace: string;
-    targetWarehouse: string;
-    targetStockPlace: string;
+    sourceWarehouse?: string;
+    sourceStockPlace?: string;
+    targetWarehouse?: string;
+    targetStockPlace?: string;
   }[];
 }
 

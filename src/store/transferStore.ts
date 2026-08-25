@@ -75,6 +75,18 @@ interface TransferState {
   selectBatch: (batchNum: string) => Promise<{ ok: boolean; message: string }>;
   cancelLot: () => void;
 
+  addItem: (item: {
+    material: string;
+    name: string;
+    barcode: string;
+    quantity: number;
+    unit: string;
+    batchNum?: string;
+    specialStock?: string;
+    isSpecialStock?: boolean;
+    availStock?: number;
+  }) => { ok: boolean; message: string; itemId?: string };
+
   updateItemQty: (id: string, qty: number) => void;
   removeItem: (id: string) => void;
   clearItems: () => void;
@@ -320,6 +332,61 @@ export const useTransferStore = create<TransferState>()(
         set({ lotPending: null, batchList: [], batchError: null });
       },
 
+      addItem: (item: {
+        material: string;
+        name: string;
+        barcode: string;
+        quantity: number;
+        unit: string;
+        batchNum?: string;
+        specialStock?: string;
+        isSpecialStock?: boolean;
+        availStock?: number;
+      }) => {
+        const { sourceShelf, items } = get();
+        if (!sourceShelf) return { ok: false, message: "Önce raf okutulmalı" };
+        const lot = item.batchNum && item.batchNum !== "*" ? item.batchNum : undefined;
+        const existingIndex = items.findIndex(
+          (it) =>
+            it.material === item.material &&
+            (it.batchNum ?? "") === (lot ?? "") &&
+            it.sourceWarehouse === sourceShelf.warehouse &&
+            it.sourceStockPlace === sourceShelf.stockPlace
+        );
+
+        let updatedItems: TransferItem[];
+        let targetItemId = "";
+        if (existingIndex >= 0) {
+          targetItemId = items[existingIndex].id;
+          updatedItems = items.map((it, idx) =>
+            idx === existingIndex
+              ? { ...it, quantity: qtyRound(it.quantity + item.quantity), timestamp: Date.now() }
+              : it
+          );
+        } else {
+          targetItemId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+          const newItem: TransferItem = {
+            id: targetItemId,
+            material: item.material,
+            name: item.name,
+            barcode: item.barcode,
+            quantity: qtyRound(item.quantity),
+            unit: item.unit || "AD",
+            batchNum: lot,
+            isSpecialStock: Boolean(item.isSpecialStock),
+            specialStock: item.specialStock || (lot ? "1" : "*"),
+            sourceWarehouse: sourceShelf.warehouse,
+            sourceStockPlace: sourceShelf.stockPlace,
+            availStock: item.availStock,
+            timestamp: Date.now(),
+          };
+          updatedItems = [newItem, ...items];
+        }
+
+        set({ items: updatedItems, lotPending: null });
+        return { ok: true, itemId: targetItemId, message: `${item.name} (${item.quantity} ${item.unit || "AD"}) eklendi` };
+      },
+
       updateItemQty: (id: string, qty: number) => {
         const { items } = get();
         if (qty <= 0) {
@@ -393,15 +460,18 @@ export const useTransferStore = create<TransferState>()(
           return { ok: false, message: "Hedef depo ve stok yerini belirleyin" };
         }
 
-        const currentSettings = useAppStore.getState().settings;
+        const appState = useAppStore.getState();
+        const currentSettings = appState.settings;
         const company = currentSettings?.company || "01";
         const plant = currentSettings?.facility || "100";
+        const user = appState.user?.username || "";
         const firstSourceWh = sourceShelf?.warehouse || items[0].sourceWarehouse;
         const firstSourceSp = sourceShelf?.stockPlace || items[0].sourceStockPlace;
 
         const payload: StockTransferPayload = {
           company,
           plant,
+          user,
           sourceWarehouse: firstSourceWh,
           sourceStockPlace: firstSourceSp,
           targetWarehouse: targetShelf.warehouse,
@@ -436,10 +506,11 @@ export const useTransferStore = create<TransferState>()(
               completing: false,
               step: "success",
               completedResult: {
+                transferId: res.transferId,
                 payload,
               },
             });
-            return { ok: true, message: res.message || "Transfer başarıyla tamamlandı" };
+            return { ok: true, message: res.message || "Transfer başarıyla tamamlandı", transferId: res.transferId };
           } else {
             set({ completing: false });
             return { ok: false, message: res.message || "Transfer gerçekleştirilemedi" };

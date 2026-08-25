@@ -382,3 +382,5 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 | **Malzeme Ölçü Kaydı** | `MzySetMatSize` | `api.setMatSize` | `src/api/client.ts` |
 | **Tedarikçi Arama** | `MzyGetCustomer` | `api.getCustomers` | `src/api/client.ts` |
 | **Mal Kabul Sakla / Bitir** | `MZYSAVEINVPURORDER` | `api.saveReceipt` | `src/api/client.ts` |
+| **Serbest Stok Transferi** | `MZYStockTransfer` | `api.createStockTransfer` | `src/api/client.ts` |
+

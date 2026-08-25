@@ -174,7 +174,11 @@ describe("INVT00M1 Stok Transferi (Stock Transfer Store & Flow)", () => {
     expect(useTransferStore.getState().targetShelf?.warehouse).toBe("02");
     expect(useTransferStore.getState().targetShelf?.stockPlace).toBe("B-03-02");
 
-    const spyCreate = vi.spyOn(api, "createStockTransfer");
+    const spyCreate = vi.spyOn(api, "createStockTransfer").mockResolvedValueOnce({
+      ok: true,
+      message: "Transfer başarıyla tamamlandı",
+      transferId: "TR-999",
+    });
 
     const completeRes = await useTransferStore.getState().completeTransfer();
     expect(completeRes.ok).toBe(true);
@@ -192,5 +196,123 @@ describe("INVT00M1 Stok Transferi (Stock Transfer Store & Flow)", () => {
 
     expect(useTransferStore.getState().step).toBe("success");
     expect(useTransferStore.getState().completedResult?.payload).toBeDefined();
+  });
+
+  it("7. api.createStockTransfer Bora Bey'in belirttiği MZYStockTransfer parametrelerini eksiksiz iletir", async () => {
+    let capturedBody: Record<string, unknown> = {};
+    let capturedUrl = "";
+
+    global.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      capturedUrl = String(url);
+      capturedBody = JSON.parse(String(init?.body || "{}"));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: 200,
+          data: {
+            TBLMESSAGE: [{ TYPE: "S", SYSTEMMSG: "Transfer 12345 nolu belge ile kaydedildi" }],
+            TRANSFERID: "12345",
+          },
+          messages: "",
+        }),
+      };
+    });
+
+    const res = await api.createStockTransfer({
+      company: "01",
+      plant: "100",
+      user: "depocu1",
+      sourceWarehouse: "01",
+      sourceStockPlace: "A-01-01",
+      targetWarehouse: "02",
+      targetStockPlace: "B-02-01",
+      items: [
+        {
+          material: "MLZ001",
+          materialName: "Koli Kalem",
+          barcode: "8690001001",
+          quantity: 25,
+          unit: "AD",
+          batchNum: "PARTI-01",
+          specialStock: "1",
+        },
+        {
+          material: "MLZ002",
+          materialName: "Partisiz Kalem",
+          barcode: "8690001002",
+          quantity: 10,
+          unit: "PK",
+        },
+      ],
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.transferId).toBe("12345");
+    expect(capturedUrl).toContain("MZYStockTransfer");
+
+    // Header parametreleri
+    expect(capturedBody.COMPANY).toBe("01");
+    expect(capturedBody.PSCOMPANY).toBe("01");
+    expect(capturedBody.PLANT).toBe("100");
+    expect(capturedBody.PSPLANT).toBe("100");
+    expect(capturedBody.USER).toBe("depocu1");
+    expect(capturedBody.PSUSER).toBe("depocu1");
+    expect(capturedBody.SRCWAREHOUSE).toBe("01");
+    expect(capturedBody.PSSRCWAREHOUSE).toBe("01");
+    expect(capturedBody.SRCSTOCKPLACE).toBe("A-01-01");
+    expect(capturedBody.PSSRCSTOCKPLACE).toBe("A-01-01");
+    expect(capturedBody.TARWAREHOUSE).toBe("02");
+    expect(capturedBody.PSTARWAREHOUSE).toBe("02");
+    expect(capturedBody.TARSTOCKPLACE).toBe("B-02-01");
+    expect(capturedBody.PSTARSTOCKPLACE).toBe("B-02-01");
+
+    // Transfer listesi alt tablosu (TRANSFERLIST)
+    const list = capturedBody.TRANSFERLIST as Array<Record<string, unknown>>;
+    expect(Array.isArray(list)).toBe(true);
+    expect(list.length).toBe(2);
+
+    expect(list[0]).toEqual({
+      MATERIAL: "MLZ001",
+      SPECIALSTOCK: "1",
+      BATCHNUM: "PARTI-01",
+      QUANTITY: 25,
+      QUNIT: "AD",
+    });
+
+    expect(list[1]).toEqual({
+      MATERIAL: "MLZ002",
+      SPECIALSTOCK: "*",
+      BATCHNUM: "*",
+      QUANTITY: 10,
+      QUNIT: "PK",
+    });
+  });
+
+  it("8. api.createStockTransfer servisten hata döndüğünde ok:false ve mesaj döner", async () => {
+    global.fetch = vi.fn().mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: 200,
+        data: {
+          TBLMESSAGE: [{ TYPE: "E", SYSTEMMSG: "Yetersiz stok miktarı: MLZ001 için mevcut stok 5" }],
+        },
+        messages: "ERROR: Yetersiz stok miktarı",
+      }),
+    }));
+
+    const res = await api.createStockTransfer({
+      company: "01",
+      plant: "100",
+      sourceWarehouse: "01",
+      sourceStockPlace: "A-01-01",
+      targetWarehouse: "02",
+      targetStockPlace: "B-02-01",
+      items: [{ material: "MLZ001", quantity: 50, unit: "AD" }],
+    });
+
+    expect(res.ok).toBe(false);
+    expect(res.message).toContain("Yetersiz stok");
   });
 });

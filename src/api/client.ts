@@ -1056,16 +1056,92 @@ export const api = {
   async completeTransfer(_taskId: string): Promise<{ ok: true }> {
     return { ok: true };
   },
-  // INVT00M1 - Stok Transferi (Serbest okutulan malzemelerin hedef lokasyona taşınması paketi)
+  // INVT00M1 / MZYStockTransfer - Serbest Stok Transferi (Kaynak -> Hedef Depo / Stok Yeri)
   async createStockTransfer(
     payload: StockTransferPayload
   ): Promise<{ ok: boolean; transferId?: string; message: string }> {
-    console.log("📦 [CANIAS INVT00M1 TRANSFER PAYLOAD]", JSON.stringify(payload, null, 2));
+    const c = ctx();
+    const compCode = String(payload.company || c.company || "01").trim();
+    const plantCode = String(payload.plant || c.plant || "100").trim();
+    const userCode = String(payload.user || c.worker || "").trim();
 
-    // Backend servisi yazıldığında burada ilgili IAS servisi çağrılacaktır.
+    const srcWh = String(payload.sourceWarehouse || "").trim();
+    const srcSp = String(payload.sourceStockPlace || "*").trim();
+    const tarWh = String(payload.targetWarehouse || "").trim();
+    const tarSp = String(payload.targetStockPlace || "*").trim();
+
+    const formattedItems = (payload.items || []).map((it) => {
+      const rawSpecial = String(it.specialStock || "").trim();
+      const isPartili =
+        rawSpecial === "1" ||
+        /takipli|partili/i.test(rawSpecial) ||
+        (Boolean(it.batchNum) && it.batchNum !== "*" && it.batchNum !== "—");
+      const specialStock = isPartili
+        ? "1"
+        : rawSpecial !== "" && rawSpecial !== "0" && rawSpecial !== "Serbest"
+        ? rawSpecial
+        : "*";
+      const batchNum =
+        it.batchNum && it.batchNum !== "*" && it.batchNum !== "—"
+          ? String(it.batchNum).trim()
+          : "*";
+
+      return {
+        MATERIAL: String(it.material || "").trim(),
+        SPECIALSTOCK: specialStock,
+        BATCHNUM: batchNum,
+        QUANTITY: Number(it.quantity || 1),
+        QUNIT: String(it.unit || "AD").trim().toUpperCase(),
+      };
+    });
+
+    console.log("📦 [CANIAS MZYStockTransfer PAYLOAD]", {
+      company: compCode,
+      plant: plantCode,
+      user: userCode,
+      sourceWarehouse: srcWh,
+      sourceStockPlace: srcSp,
+      targetWarehouse: tarWh,
+      targetStockPlace: tarSp,
+      items: formattedItems,
+    });
+
+    const r = await call(SERVICES.stockTransfer, {
+      COMPANY: compCode,
+      PSCOMPANY: compCode,
+      PLANT: plantCode,
+      PSPLANT: plantCode,
+      USER: userCode,
+      PSUSER: userCode,
+      SRCWAREHOUSE: srcWh,
+      PSSRCWAREHOUSE: srcWh,
+      SRCSTOCKPLACE: srcSp,
+      PSSRCSTOCKPLACE: srcSp,
+      TARWAREHOUSE: tarWh,
+      PSTARWAREHOUSE: tarWh,
+      TARSTOCKPLACE: tarSp,
+      PSTARSTOCKPLACE: tarSp,
+      TRANSFERLIST: formattedItems,
+      PSTRANSFERLIST: formattedItems,
+    });
+
+    const mesaj = serviceMessage(r);
+    if (mesaj && /error|fail|hata/i.test(mesaj)) {
+      return { ok: false, message: mesaj };
+    }
+
+    const rows = rowsOf(r, ["TBLTRANSFER", "TBLSTOCKTRANSFER", "TRANSFERLIST", "TBLDOC", "TBLRESULT"]);
+    const firstRow = rows[0] || (r.data as Row) || {};
+    const transferId =
+      pick(firstRow, ["TRANSFERID", "PSTRANSFERID", "ORDERNUM", "DOCNUM", "TRANSFERNO"]) ||
+      (r.data && typeof r.data === "object"
+        ? pick(r.data as Row, ["TRANSFERID", "PSTRANSFERID", "ORDERNUM", "DOCNUM", "TRANSFERNO"])
+        : "");
+
     return {
       ok: true,
-      message: "Transfer başarıyla tamamlandı",
+      transferId: transferId || undefined,
+      message: mesaj || "Transfer işlemi başarıyla tamamlandı.",
     };
   },
   async getCountTasks(): Promise<CountTask[]> {

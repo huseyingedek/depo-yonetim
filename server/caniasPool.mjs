@@ -15,7 +15,21 @@ const RECONCILE_MS = Number(process.env.POOL_RECONCILE_MS || 30000);  // CANIAS 
 const MZY_COMPANY = process.env.T_COMPANY || "01";
 const MZY_PLANT = process.env.T_PLANT || "100";
 
-const YAZAN_SERVIS = new Set(["MZYSavePick", "MZYCreateContainer"]);
+const YAZAN_SERVIS = new Set([
+  "MZYSavePick",
+  "MZYSavePlacement",
+  "MZYCreateContainer",
+  "MZYPrintContainer",
+  "MZYPrintWHSP",
+  "MZYPrintMaterial",
+  "MZYPrintBarcode",
+  "MzySetMatSize",
+  "MZYSetMatSize",
+  "MZYSaveReceipt",
+  "MZYSAVEINVPURORDER",
+  "MZYStockTransfer",
+  "MzyStockTransfer",
+]);
 
 function val(x) {
   if (x === null || x === undefined) return x;

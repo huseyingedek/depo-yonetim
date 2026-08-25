@@ -83,6 +83,10 @@ const ALLOWED = new Set([
   "MzyGetCustomer",
   "MZYSaveReceipt",
   "MZYSAVEINVPURORDER",
+
+  // Stok Transfer Servisleri
+  "MZYStockTransfer",
+  "MzyStockTransfer",
 ]);
 
 const app = express();
@@ -297,7 +301,9 @@ async function callServiceInner(serviceId, params, retry = true) {
     serviceId === "MzySetMatSize" ||
     serviceId === "MZYSetMatSize" ||
     serviceId === "MZYSaveReceipt" ||
-    serviceId === "MZYSAVEINVPURORDER";
+    serviceId === "MZYSAVEINVPURORDER" ||
+    serviceId === "MZYStockTransfer" ||
+    serviceId === "MzyStockTransfer";
   const bosYanit = !String(rawResponse ?? "").trim();
   const oturumHatasi = /session/i.test(String(sysError) + String(rawResponse));
   const oturumEski = session ? Date.now() - session.at > 3000 : true;
