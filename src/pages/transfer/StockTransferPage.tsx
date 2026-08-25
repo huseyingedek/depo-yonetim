@@ -968,26 +968,6 @@ export default function StockTransferPage() {
                   </div>
                 </div>
               </div>
-
-              {/* Tamamlama Butonu */}
-              <button
-                type="button"
-                onClick={handleCompleteTransfer}
-                disabled={!targetShelf || completing || busy}
-                className="btn-primary btn-lg w-full gap-2 shadow-soft disabled:opacity-40"
-              >
-                {completing ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    <span>Transfer Gönderiliyor…</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-5 w-5" />
-                    <span>Transferi Onayla ve Servise Gönder</span>
-                  </>
-                )}
-              </button>
             </div>
           )}
         </div>
