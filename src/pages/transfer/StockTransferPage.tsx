@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   MapPin,
@@ -7,7 +7,6 @@ import {
   ArrowRight,
   ArrowLeftRight,
   Trash2,
-  X,
   Plus,
   Minus,
   Send,
@@ -42,7 +41,6 @@ export default function StockTransferPage() {
   const goToTargetStep = useTransferStore((s) => s.goToTargetStep);
   const backToCollectStep = useTransferStore((s) => s.backToCollectStep);
   const scanTargetShelf = useTransferStore((s) => s.scanTargetShelf);
-  const setTargetShelf = useTransferStore((s) => s.setTargetShelf);
   const completeTransfer = useTransferStore((s) => s.completeTransfer);
   const reset = useTransferStore((s) => s.reset);
 
@@ -73,57 +71,6 @@ export default function StockTransferPage() {
     isSpecialStock?: boolean;
     availStock?: number;
   } | null>(null);
-
-  // Hedef depo ve stok yerleri
-  const [warehouses, setWarehouses] = useState<{ code: string; name: string }[]>([]);
-  const [stockPlaces, setStockPlaces] = useState<{ code: string; name: string }[]>([]);
-  const [seciliTargetWh, setSeciliTargetWh] = useState("");
-  const [seciliTargetSp, setSeciliTargetSp] = useState("");
-
-  useEffect(() => {
-    if (step === "target") {
-      api.getWarehouses().then((w) => {
-        setWarehouses(w);
-        const wh = targetShelf?.warehouse || seciliTargetWh || (w.length > 0 ? w[0].code : "01");
-        setSeciliTargetWh(wh);
-
-        api.getStockPlaces(wh).then((sp) => {
-          setStockPlaces(sp);
-          const spCode = targetShelf?.stockPlace || seciliTargetSp || (sp.length > 0 ? sp[0].code : (sp[0]?.code || "A-01-01"));
-          setSeciliTargetSp(spCode);
-
-          setTargetShelf({
-            barcode: `${wh}-${spCode}`,
-            warehouse: wh,
-            stockPlace: spCode,
-          });
-        });
-      });
-    }
-  }, [step]);
-
-  const handleWarehouseChange = async (wh: string) => {
-    setSeciliTargetWh(wh);
-    const spList = await api.getStockPlaces(wh);
-    setStockPlaces(spList);
-    const firstSp = spList.length > 0 ? spList[0].code : "A-01-01";
-    setSeciliTargetSp(firstSp);
-    setTargetShelf({
-      barcode: `${wh}-${firstSp}`,
-      warehouse: wh,
-      stockPlace: firstSp,
-    });
-  };
-
-  const handleStockPlaceChange = (spCode: string) => {
-    setSeciliTargetSp(spCode);
-    const wh = seciliTargetWh || targetShelf?.warehouse || "01";
-    setTargetShelf({
-      barcode: `${wh}-${spCode}`,
-      warehouse: wh,
-      stockPlace: spCode,
-    });
-  };
 
   const showToast = (tst: Toast) => {
     if (tst?.kind === "error") sesHata();
@@ -191,19 +138,20 @@ export default function StockTransferPage() {
         // B) Parti bekleniyor (Adım 3)
         if (lotPendingItem) {
           // Depocu parti barkodunu okuttu -> Adım 4 (Miktar)'a geçir
+          const lotVal = (barkod === "1" || barkod === "11") ? "11" : barkod;
           setActiveItem({
             material: lotPendingItem.material,
             name: lotPendingItem.name,
             barcode: lotPendingItem.barcode,
-            quantity: 1,
+            quantity: 11,
             unit: lotPendingItem.unit,
-            batchNum: barkod,
+            batchNum: lotVal,
             specialStock: lotPendingItem.specialStock,
             isSpecialStock: true,
-            availStock: lotPendingItem.availStock,
+            availStock: lotPendingItem.availStock ?? 11,
           });
           setLotPendingItem(null);
-          showToast({ kind: "ok", text: `Parti (${barkod}) okundu, miktarı belirleyin` });
+          showToast({ kind: "ok", text: `Parti (${lotVal}) okundu, miktarı belirleyin` });
           return;
         }
 
@@ -324,7 +272,7 @@ export default function StockTransferPage() {
           </div>
 
           {/* Çıkış - Hedef Özeti */}
-          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl bg-elevated p-3">
+          <div className="mb-4 flex items-center justify-between gap-3 border-b border-line pb-3">
             <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-subtle">
                 ÇIKIŞ LOKASYONU
@@ -333,14 +281,14 @@ export default function StockTransferPage() {
                 Depo {p.sourceWarehouse} · {p.sourceStockPlace}
               </p>
             </div>
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-50 dark:bg-brand-950/60 text-brand-600 dark:text-brand-400">
               <ArrowRight className="h-4 w-4" />
             </div>
             <div className="min-w-0 text-right">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-subtle">
                 HEDEF LOKASYON
               </p>
-              <p className="font-mono text-xs font-extrabold text-emerald-600 sm:text-sm">
+              <p className="font-mono text-xs font-extrabold text-emerald-600 dark:text-emerald-400 sm:text-sm">
                 Depo {p.targetWarehouse} · {p.targetStockPlace}
               </p>
             </div>
@@ -413,7 +361,7 @@ export default function StockTransferPage() {
       : lotPendingItem
       ? "Parti barkodunu okutun"
       : activeItem
-      ? "Miktarı girip 'Listeye Ekle'ye basın veya barkodu tekrar okutun"
+      ? ""
       : "Malzeme barkodunu okutun";
 
   return (
@@ -496,242 +444,104 @@ export default function StockTransferPage() {
       <div className="grid min-w-0 gap-4 md:gap-6 md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-3">
         {/* SOL KOLON: Tarayıcı, Lokasyon Kartları ve Miktar Paneli */}
         <div className="min-w-0 md:sticky md:top-3 md:self-start lg:static xl:sticky xl:top-4 short:!static short:w-[300px] short:shrink-0 short:self-stretch short:overflow-y-auto">
-          <div className="card p-3.5 sm:p-4">
-            {/* Adım İndikatörleri (4 Adım: 1 Raf · 2 Malzeme · 3 Parti · 4 Miktar) */}
-            <div className="mb-3 flex items-center gap-1.5">
+          <div className="card p-3 sm:p-3.5">
+            {/* Adım İndikatörleri (4 Eşit Boyutlu Kart: 1 Raf · 2 Malzeme · 3 Parti · 4 Miktar) */}
+            <div className="mb-3">
               {step === "collect" ? (
-                (
-                  [
-                    ["shelf", "1 Raf"],
-                    ["product", "2 Malzeme"],
-                    ["lot", "3 Parti"],
-                    ["qty", "4 Miktar"],
-                  ] as const
-                ).map(([s, label], i) => {
-                  const active =
-                    (s === "shelf" && !sourceShelf) ||
-                    (s === "product" && !!sourceShelf && !lotPendingItem && !activeItem) ||
-                    (s === "lot" && !!lotPendingItem) ||
-                    (s === "qty" && !!activeItem);
+                <div className="grid grid-cols-4 gap-1 w-full">
+                  {(
+                    [
+                      ["shelf", "1 Raf"],
+                      ["product", "2 Malzeme"],
+                      ["lot", "3 Parti"],
+                      ["qty", "4 Miktar"],
+                    ] as const
+                  ).map(([s, label]) => {
+                    const active =
+                      (s === "shelf" && !sourceShelf) ||
+                      (s === "product" && !!sourceShelf && !lotPendingItem && !activeItem) ||
+                      (s === "lot" && !!lotPendingItem) ||
+                      (s === "qty" && !!activeItem);
 
-                  const done =
-                    (s === "shelf" && !!sourceShelf) ||
-                    (s === "product" && (!!lotPendingItem || !!activeItem || items.length > 0)) ||
-                    (s === "lot" && (!lotPendingItem && (!!activeItem?.batchNum || items.some((it) => !!it.batchNum)))) ||
-                    (s === "qty" && !activeItem && items.length > 0);
+                    const git = () => {
+                      if (s === "shelf") {
+                        clearSourceShelf();
+                        setActiveItem(null);
+                        setLotPendingItem(null);
+                      } else if (s === "product") {
+                        setActiveItem(null);
+                        setLotPendingItem(null);
+                      }
+                    };
 
-                  const git = () => {
-                    if (s === "shelf") {
-                      clearSourceShelf();
-                      setActiveItem(null);
-                      setLotPendingItem(null);
-                    } else if (s === "product") {
-                      setActiveItem(null);
-                      setLotPendingItem(null);
-                    }
-                  };
-
-                  return (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={git}
-                      disabled={s === "lot" || s === "qty"}
-                      className={`flex min-w-0 flex-1 items-center justify-center gap-1 truncate rounded-xl px-1.5 py-1.5 text-[11px] font-semibold transition-all duration-200 ease-soft ${
-                        active
-                          ? "bg-brand-600 text-white shadow-soft"
-                          : done
-                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
-                          : "bg-elevated text-subtle"
-                      }`}
-                    >
-                      <span className="shrink-0 font-mono">{done ? "✓" : i + 1}</span>
-                      <span className="truncate">{label}</span>
-                    </button>
-                  );
-                })
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={git}
+                        disabled={s === "lot" || s === "qty"}
+                        className={`flex h-9 w-full items-center justify-center rounded-xl px-0.5 text-xs sm:text-[12.5px] font-bold tracking-tight transition-all duration-200 ease-soft ${
+                          active
+                            ? "bg-brand-600 text-white shadow-soft"
+                            : "bg-elevated text-subtle hover:text-fg"
+                        }`}
+                      >
+                        <span>{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               ) : (
-                (
-                  [
-                    ["target", "Hedef Depo"],
-                    ["confirm", "Onay"],
-                  ] as const
-                ).map(([s, label], i) => {
-                  const active = s === "target";
-                  const done = s === "target" && !!targetShelf;
+                <div className="grid grid-cols-2 gap-1 w-full">
+                  {(
+                    [
+                      ["target", "1 Hedef Depo"],
+                      ["confirm", "2 Onay"],
+                    ] as const
+                  ).map(([s, label]) => {
+                    const active = s === "target";
 
-                  return (
-                    <div
-                      key={s}
-                      className={`flex min-w-0 flex-1 items-center justify-center gap-1 truncate rounded-xl px-1.5 py-1.5 text-[11px] font-semibold transition-all duration-200 ease-soft ${
-                        active
-                          ? "bg-brand-600 text-white shadow-soft"
-                          : done
-                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
-                          : "bg-elevated text-subtle"
-                      }`}
-                    >
-                      <span className="shrink-0 font-mono">{done ? "✓" : i + 1}</span>
-                      <span className="truncate">{label}</span>
-                    </div>
-                  );
-                })
+                    return (
+                      <div
+                        key={s}
+                        className={`flex h-9 w-full items-center justify-center rounded-xl px-1 text-xs sm:text-[12.5px] font-bold tracking-tight transition-all duration-200 ease-soft ${
+                          active
+                            ? "bg-brand-600 text-white shadow-soft"
+                            : "bg-elevated text-subtle"
+                        }`}
+                      >
+                        <span>{label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
-            {/* TOPLAMA ADIMI: Bulunulan Raf Kartı */}
-            {step === "collect" && (
-              sourceShelf ? (
-                <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2">
-                  <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-emerald-800 dark:text-emerald-200">
-                    <MapPin className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                    <span className="truncate">
-                      Depo: <span className="font-mono font-bold">{sourceShelf.warehouse}</span>
-                      {" · "}
-                      Stok yeri: <span className="font-mono font-bold">{sourceShelf.stockPlace}</span>
-                    </span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      clearSourceShelf();
-                      setActiveItem(null);
-                      setLotPendingItem(null);
-                    }}
-                    className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                    Değiştir
-                  </button>
-                </div>
-              ) : (
-                <div className="mb-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-300">
-                  Bulunduğunuz rafın barkodunu okutun
-                </div>
-              )
-            )}
-
-            {/* HEDEF ADIMI: Hedef Depo Seçimi */}
-            {step === "target" && (
-              <div className="mb-3 space-y-2.5 rounded-xl bg-elevated/70 p-3">
-                <div className="flex items-center gap-1.5">
-                  <MapPin className="h-4 w-4 text-brand-600" />
-                  <p className="text-xs font-bold text-fg">Hedef Depo Seçimi</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-subtle">
-                      Hedef Depo
-                    </label>
-                    <select
-                      value={seciliTargetWh}
-                      onChange={(e) => handleWarehouseChange(e.target.value)}
-                      className="h-8.5 w-full rounded-lg border border-line bg-surface px-2 font-mono text-xs font-semibold text-fg outline-none focus:border-brand-500"
-                    >
-                      {warehouses.map((w) => (
-                        <option key={w.code} value={w.code}>
-                          {w.code} - {w.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-subtle">
-                      Stok Yeri
-                    </label>
-                    <select
-                      value={seciliTargetSp}
-                      onChange={(e) => handleStockPlaceChange(e.target.value)}
-                      disabled={!stockPlaces.length}
-                      className="h-8.5 w-full rounded-lg border border-line bg-surface px-2 font-mono text-xs font-semibold text-fg outline-none focus:border-brand-500"
-                    >
-                      {stockPlaces.map((sp) => (
-                        <option key={sp.code} value={sp.code}>
-                          {sp.code}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {targetShelf && (
-                  <div className="flex items-center gap-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1.5 text-xs text-emerald-800 dark:text-emerald-200">
-                    <span className="font-semibold">Seçilen Hedef:</span>
-                    <span className="font-mono font-bold">
-                      Depo {targetShelf.warehouse} · {targetShelf.stockPlace}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* PARTİ BEKLEME KUTUSU (Adım 3) */}
-            {step === "collect" && lotPendingItem && (
-              <div className="mb-3 space-y-2 rounded-2xl border border-violet-500/30 bg-violet-500/10 p-3 animate-fade-in shadow-xs">
-                <div className="flex items-center justify-between">
-                  <span className="truncate text-xs font-bold text-violet-800 dark:text-violet-200">
-                    {lotPendingItem.name}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLotPendingItem(null);
-                      setRedMesaji(null);
-                    }}
-                    className="shrink-0 text-xs font-semibold text-rose-600 hover:underline"
-                  >
-                    Vazgeç
-                  </button>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-violet-700 dark:text-violet-300">
-                    <span className="inline-block h-2 w-2 rounded-full bg-violet-500 animate-pulse" />
-                    <span>Parti barkodunu okutun veya "1" yazın</span>
-                  </div>
-
-                  {/* 1 / Mock Parti Hızlı Butonu */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveItem({
-                        material: lotPendingItem.material,
-                        name: lotPendingItem.name,
-                        barcode: lotPendingItem.barcode,
-                        quantity: 1,
-                        unit: lotPendingItem.unit,
-                        batchNum: "1",
-                        specialStock: lotPendingItem.specialStock,
-                        isSpecialStock: true,
-                        availStock: lotPendingItem.availStock,
-                      });
-                      setLotPendingItem(null);
-                      showToast({ kind: "ok", text: "Parti '1' olarak kabul edildi, miktarı belirleyin" });
-                    }}
-                    className="shrink-0 rounded-lg bg-violet-600 px-2 py-1 text-[11px] font-bold text-white shadow-xs hover:bg-violet-700 active:scale-95 transition"
-                    title="Partiyi '1' olarak ata"
-                  >
-                    Parti: 1 (Mock)
-                  </button>
-                </div>
+            {/* HEDEF ADIMI: Okunan Hedef Raf */}
+            {step === "target" && targetShelf && (
+              <div className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-50/70 dark:bg-emerald-950/40 p-2.5 text-xs text-emerald-800 dark:text-emerald-200">
+                <span className="font-semibold">Hedef Raf:</span>{" "}
+                <span className="font-mono font-bold">
+                  Depo {targetShelf.warehouse} · {targetShelf.stockPlace}
+                </span>
               </div>
             )}
 
             {/* ------------------------------------------------------------------- */}
-            {/* ADIM 4: MİKTAR GİRİŞİ (MAL KABUL İLE BİREBİR AYNI) */}
+            {/* ADIM 4: MİKTAR GİRİŞİ (TEK DÜZLEM PANEL) */}
             {/* ------------------------------------------------------------------- */}
             {step === "collect" && activeItem && (
-              <div className="mb-3 space-y-2 rounded-2xl border border-emerald-500/30 bg-surface p-3 shadow-card animate-fade-in">
-                <div className="flex items-center justify-between border-b border-line/40 pb-2">
+              <div className="mb-3 space-y-2.5 pt-0.5 animate-fade-in">
+                <div className="flex items-center justify-between border-b border-line pb-2">
                   <div className="min-w-0 flex-1">
-                    <h4 className="truncate text-xs font-black text-fg" title={activeItem.name}>
+                    <h4 className="truncate text-xs sm:text-sm font-black text-fg" title={activeItem.name}>
                       {activeItem.name}
                     </h4>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-subtle">
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] font-mono text-subtle">
                       <span className="font-semibold text-brand-600 dark:text-brand-400">{activeItem.material}</span>
                       {activeItem.batchNum && (
-                        <span className="rounded bg-violet-100 dark:bg-violet-950/60 px-1 py-0.5 font-bold text-violet-700 dark:text-violet-300">
+                        <span className="rounded bg-violet-100 dark:bg-violet-950/60 px-1.5 py-0.5 font-bold text-violet-700 dark:text-violet-300">
                           Parti: {activeItem.batchNum}
                         </span>
                       )}
@@ -864,7 +674,7 @@ export default function StockTransferPage() {
             )}
 
             {/* BARKOD OKUYUCU (Toplama ve Hedef Adımlarında) */}
-            {step !== "success" && (
+            {step !== "success" && !activeItem && (
               <BarcodeScanner
                 onDetected={handleDetected}
                 prompt={promptText}
@@ -980,70 +790,74 @@ export default function StockTransferPage() {
               )}
             </div>
           ) : (
-            /* HEDEF ADIMI: Transfer Paketi İnceleme ve Onay */
+            /* HEDEF ADIMI: Transfer Paketi İnceleme ve Onay (Tek Birleşik Beyaz Kart) */
             <div className="space-y-3">
-              {/* Rota Özeti Kartı */}
-              <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
-                <div className="flex items-center justify-between gap-3 rounded-xl bg-elevated p-3">
+              <div className="rounded-2xl border border-line bg-surface p-4 shadow-card space-y-4">
+                {/* ÇIKIŞ - HEDEF LOKASYONLARI (Doğrudan kart üzerinde) */}
+                <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
                   <div className="min-w-0">
-                    <p className="text-[11px] font-semibold text-subtle">ÇIKIŞ LOKASYONU</p>
-                    <p className="font-mono text-sm font-extrabold text-fg">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-subtle">
+                      ÇIKIŞ LOKASYONU
+                    </p>
+                    <p className="font-mono text-xs font-extrabold text-fg sm:text-sm">
                       Depo {sourceShelf?.warehouse || items[0]?.sourceWarehouse} ·{" "}
                       {sourceShelf?.stockPlace || items[0]?.sourceStockPlace}
                     </p>
                   </div>
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
-                    <ArrowRight className="h-5 w-5" />
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-50 dark:bg-brand-950/60 text-brand-600 dark:text-brand-400">
+                    <ArrowRight className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 text-right">
-                    <p className="text-[11px] font-semibold text-subtle">HEDEF LOKASYON</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-subtle">
+                      HEDEF LOKASYON
+                    </p>
                     {targetShelf ? (
-                      <p className="font-mono text-sm font-extrabold text-emerald-600">
+                      <p className="font-mono text-xs font-extrabold text-emerald-600 dark:text-emerald-400 sm:text-sm">
                         Depo {targetShelf.warehouse} · {targetShelf.stockPlace}
                       </p>
                     ) : (
-                      <p className="text-xs font-bold text-amber-600 animate-pulse">
-                        Hedef Bekleniyor…
+                      <p className="font-mono text-xs font-bold text-amber-600 animate-pulse">
+                        Hedef Raf Bekleniyor…
                       </p>
                     )}
                   </div>
                 </div>
-              </div>
 
-              {/* Transfer Edilecek Kalemler Tablosu */}
-              <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-fg">
-                    Paket İçeriği ({items.length} Kalem · {qtyRound(toplamAdet)} Adet)
-                  </h3>
-                </div>
+                {/* Transfer Edilecek Kalemler Tablosu (Aynı kartın içinde) */}
+                <div>
+                  <div className="mb-2.5 flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-fg">
+                      Paket İçeriği ({items.length} Kalem · {qtyRound(toplamAdet)} Adet)
+                    </h3>
+                  </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-line text-subtle">
-                        <th className="pb-2 font-semibold">Malzeme</th>
-                        <th className="pb-2 font-semibold">Parti</th>
-                        <th className="pb-2 text-right font-semibold">Miktar</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-line">
-                      {items.map((it) => (
-                        <tr key={it.id}>
-                          <td className="py-2.5">
-                            <p className="font-semibold text-fg">{it.name}</p>
-                            <p className="font-mono text-[11px] text-subtle">{it.material}</p>
-                          </td>
-                          <td className="py-2.5 font-mono text-muted">
-                            {it.batchNum || "—"}
-                          </td>
-                          <td className="py-2.5 text-right font-mono font-bold text-fg">
-                            {qtyRound(it.quantity)} {it.unit}
-                          </td>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-line text-subtle">
+                          <th className="pb-2 font-semibold">Malzeme</th>
+                          <th className="pb-2 font-semibold">Parti</th>
+                          <th className="pb-2 text-right font-semibold">Miktar</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-line">
+                        {items.map((it) => (
+                          <tr key={it.id}>
+                            <td className="py-2">
+                              <p className="font-semibold text-fg">{it.name}</p>
+                              <p className="font-mono text-[10px] text-subtle">{it.material}</p>
+                            </td>
+                            <td className="py-2 font-mono text-muted">
+                              {it.batchNum || "—"}
+                            </td>
+                            <td className="py-2 text-right font-mono font-bold text-fg">
+                              {qtyRound(it.quantity)} {it.unit}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
 
