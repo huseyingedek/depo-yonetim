@@ -493,6 +493,8 @@ export const useTransferStore = create<TransferState>()((set, get) => ({
             barcode: it.barcode,
             quantity: it.quantity,
             unit: it.unit,
+            skunit: it.skunit,
+            multiplier: it.multiplier,
             batchNum: it.batchNum,
             specialStock: it.specialStock,
             sourceWarehouse: it.sourceWarehouse,
@@ -514,7 +516,6 @@ export const useTransferStore = create<TransferState>()((set, get) => ({
               batchList: [],
               batchError: null,
               completing: false,
-              step: "success",
               completedResult: {
                 transferId: res.transferId,
                 payload,

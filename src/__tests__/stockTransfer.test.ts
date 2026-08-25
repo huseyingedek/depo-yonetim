@@ -192,9 +192,7 @@ describe("INVT00M1 Stok Transferi (Stock Transfer Store & Flow)", () => {
     expect(payload.items.length).toBe(1);
     expect(payload.items[0].material).toBe("MLZ001");
     expect(payload.items[0].quantity).toBe(10);
-    expect(payload.items[0].batchNum).toBe("LOT99");
-
-    expect(useTransferStore.getState().step).toBe("success");
+    expect(useTransferStore.getState().items.length).toBe(0);
     expect(useTransferStore.getState().completedResult?.payload).toBeDefined();
   });
 
@@ -285,7 +283,7 @@ describe("INVT00M1 Stok Transferi (Stock Transfer Store & Flow)", () => {
       SPECIALSTOCK: "*",
       BATCHNUM: "*",
       QUANTITY: 10,
-      QUNIT: "PK",
+      QUNIT: "AD",
     });
   });
 

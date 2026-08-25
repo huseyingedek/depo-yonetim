@@ -10,7 +10,7 @@ import {
   Plus,
   Minus,
   Send,
-  RotateCcw,
+  CheckCircle2,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import BarcodeScanner from "../../components/BarcodeScanner";
@@ -33,7 +33,6 @@ export default function StockTransferPage() {
   const items = useTransferStore((s) => s.items);
   const step = useTransferStore((s) => s.step);
   const completing = useTransferStore((s) => s.completing);
-  const completedResult = useTransferStore((s) => s.completedResult);
 
   const scanSourceShelf = useTransferStore((s) => s.scanSourceShelf);
   const clearSourceShelf = useTransferStore((s) => s.clearSourceShelf);
@@ -60,6 +59,7 @@ export default function StockTransferPage() {
   const [busy, setBusy] = useState(false);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [redMesaji, setRedMesaji] = useState<string | null>(null);
+  const [onayMesaji, setOnayMesaji] = useState<string | null>(null);
 
   // 3. Adım: Bekleyen Partili Malzeme (Depocunun sadece parti barkodunu okutması veya seçmesi beklenir)
   const [lotPendingItem, setLotPendingItem] = useState<{
@@ -245,6 +245,15 @@ export default function StockTransferPage() {
         const ozelStok = res.specialStock || "0";
         const lotTracked = ozelStok === "1" || /takipli|partili/i.test(ozelStok) || (res.lot && res.lot !== "*");
 
+        let resolvedMultiplier = res.multiplier && res.multiplier > 1 ? res.multiplier : 1;
+        if (resolvedMultiplier <= 1 && res.name) {
+          const m = /(?:^|\s)(\d+)\s*(?:'l[üiıu]|l[üiıu]|adet|ad)(?:\s|$)/i.exec(res.name);
+          if (m) {
+            const val = parseInt(m[1], 10);
+            if (val > 1 && val <= 10000) resolvedMultiplier = val;
+          }
+        }
+
         // Eğer partili malzeme ise ve barkodda parti yoksa:
         if (lotTracked && (!res.lot || res.lot === "*")) {
           // Durum A: Rafta tek bir parti varsa doğrudan seç ve Adım 4'e (Miktar) geç!
@@ -259,7 +268,7 @@ export default function StockTransferPage() {
               quantity: stockQty,
               unit: res.unit || tekParti.unit || "AD",
               skunit: res.skunit,
-              multiplier: res.multiplier,
+              multiplier: resolvedMultiplier,
               batchNum: tekParti.batchNum,
               specialStock: ozelStok,
               isSpecialStock: true,
@@ -278,7 +287,7 @@ export default function StockTransferPage() {
             barcode: barkod,
             unit: res.unit || "AD",
             skunit: res.skunit,
-            multiplier: res.multiplier,
+            multiplier: resolvedMultiplier,
             specialStock: ozelStok,
             availStock: totalShelfStock > 0 ? totalShelfStock : res.availStock,
             batches: validBatches,
@@ -302,7 +311,7 @@ export default function StockTransferPage() {
           quantity: initialQty,
           unit: res.unit || "AD",
           skunit: res.skunit,
-          multiplier: res.multiplier,
+          multiplier: resolvedMultiplier,
           batchNum: res.lot && res.lot !== "*" ? res.lot : undefined,
           specialStock: ozelStok,
           isSpecialStock: Boolean(lotTracked),
@@ -335,6 +344,7 @@ export default function StockTransferPage() {
   const handleCompleteTransfer = async () => {
     setBusy(true);
     setRedMesaji(null);
+    setOnayMesaji(null);
     try {
       const res = await completeTransfer();
       if (res.ok) {
@@ -342,8 +352,9 @@ export default function StockTransferPage() {
         const successText =
           res.message ||
           (res.transferId
-            ? `Transfer ${res.transferId} nolu belge ile başarıyla kaydedildi.`
+            ? `Transfer ${res.transferId} nolu belge ile başarıyla gerçekleşti.`
             : "İşlem başarıyla gerçekleşti.");
+        setOnayMesaji(successText);
         showToast({ kind: "done", text: successText });
         setTimeout(() => {
           reset();
@@ -364,113 +375,13 @@ export default function StockTransferPage() {
     }
   };
 
-  const toplamAdet = items.reduce((sum, it) => sum + it.quantity, 0);
-
-  // ---------------------------------------------------------------------------
-  // 3. ADIM: ONAY BİLGİSİ EKRANI
-  // ---------------------------------------------------------------------------
-  if (step === "success" && completedResult) {
-    const p = completedResult.payload;
-    const toplamAdetOnay = p.items.reduce((s, it) => s + it.quantity, 0);
-
-    return (
-      <div className="mx-auto max-w-2xl p-3 md:p-4 lg:p-6 short:h-[100dvh] short:overflow-y-auto short:p-2">
-        <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
-          <div className="mb-3 flex items-center justify-between border-b border-line pb-3">
-            <div>
-              <h2 className="text-base font-bold text-fg">Transfer Onaylandı</h2>
-              <p className="font-mono text-xs text-subtle">{p.transferDate}</p>
-            </div>
-            <span className="chip bg-emerald-50 font-mono text-xs font-bold text-emerald-700">
-              {p.items.length} Kalem · {qtyRound(toplamAdetOnay)} Adet
-            </span>
-          </div>
-
-          {/* Çıkış - Hedef Özeti */}
-          <div className="mb-4 flex items-center justify-between gap-3 border-b border-line pb-3">
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-subtle">
-                ÇIKIŞ LOKASYONU
-              </p>
-              <p className="font-mono text-xs font-extrabold text-fg sm:text-sm">
-                Depo {p.sourceWarehouse} · {p.sourceStockPlace}
-              </p>
-            </div>
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-50 dark:bg-brand-950/60 text-brand-600 dark:text-brand-400">
-              <ArrowRight className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 text-right">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-subtle">
-                HEDEF LOKASYON
-              </p>
-              <p className="font-mono text-xs font-extrabold text-emerald-600 dark:text-emerald-400 sm:text-sm">
-                Depo {p.targetWarehouse} · {p.targetStockPlace}
-              </p>
-            </div>
-          </div>
-
-          {/* Taşınan Kalemler Tablosu */}
-          <div className="mb-4 max-h-48 overflow-y-auto rounded-xl border border-line">
-            <table className="w-full text-left text-xs">
-              <thead className="sticky top-0 bg-elevated text-subtle">
-                <tr className="border-b border-line">
-                  <th className="px-3 py-2 font-semibold">Malzeme</th>
-                  <th className="px-3 py-2 font-semibold">Parti</th>
-                  <th className="px-3 py-2 text-right font-semibold">Miktar</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line bg-surface">
-                {p.items.map((it, idx) => (
-                  <tr key={`${it.material}-${idx}`}>
-                    <td className="px-3 py-2">
-                      <p className="font-semibold text-fg">{it.materialName || it.material}</p>
-                      <p className="font-mono text-[10px] text-subtle">{it.material}</p>
-                    </td>
-                    <td className="px-3 py-2 font-mono text-muted">
-                      {it.batchNum || "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono font-bold text-fg">
-                      {qtyRound(it.quantity)} {it.unit}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Eylemler */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={reset}
-              className="btn-primary inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold sm:text-sm"
-            >
-              <RotateCcw className="h-4 w-4" />
-              <span>Yeni Transfer Başlat</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                reset();
-                navigate("/home");
-              }}
-              className="btn-ghost inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold sm:text-sm"
-            >
-              <span>Ana Sayfaya Dön</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // ---------------------------------------------------------------------------
   // ANA TRANSFER EKRANI (TOPLAMA & HEDEF ADIMLARI)
   // Samsung A51/A71 (914x412 Yatay) Tam Uyumlu 2 Sütunlu Düzen
   // ---------------------------------------------------------------------------
   const promptText =
     step === "target"
-      ? "Hedef raf barkodunu okutun"
+      ? ""
       : !sourceShelf
         ? "Raf barkodunu okutun"
         : lotPendingItem
@@ -567,7 +478,7 @@ export default function StockTransferPage() {
                 <div className="grid grid-cols-4 gap-1 w-full">
                   {(
                     [
-                      ["shelf", sourceShelf ? `1 ${sourceShelf.warehouse} · ${sourceShelf.stockPlace}` : "1 Raf"],
+                      ["shelf", "1 Raf"],
                       ["product", "2 Malzeme"],
                       ["lot", "3 Parti"],
                       ["qty", "4 Miktar"],
@@ -616,7 +527,7 @@ export default function StockTransferPage() {
                 // 6. Kural: Transfer onayı verilen ekranda sol üstteki kartta onay kısmı olmasın
                 <div className="w-full">
                   <div className="flex h-10 w-full items-center justify-center rounded-xl px-2 text-xs sm:text-[13px] font-extrabold tracking-tight bg-brand-600 text-white shadow-soft">
-                    <span>1 Hedef Raf Okutun</span>
+                    <span>Hedef Raf Okutun</span>
                   </div>
                 </div>
               )}
@@ -667,10 +578,21 @@ export default function StockTransferPage() {
 
                 {/* Miktar Stepper Girişi */}
                 <div>
-                  <div className="mb-1">
+                  <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-bold text-fg block">
                       Taşınacak Miktar ({activeItem.unit || "AD"}) <span className="text-red-500">*</span>
                     </label>
+                    {(() => {
+                      const mult = activeItem.multiplier && activeItem.multiplier > 0 ? activeItem.multiplier : 1;
+                      const scannedUnit = (activeItem.unit || "AD").trim().toUpperCase();
+                      const equation = `1 ${scannedUnit} = ${mult} AD`;
+
+                      return (
+                        <span className="text-xs font-mono font-semibold text-subtle">
+                          {equation}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -718,24 +640,6 @@ export default function StockTransferPage() {
                     </button>
                   </div>
 
-                  {/* Birim Denklemi ve Toplam Adet Satırı */}
-                  {(() => {
-                    const mult = activeItem.multiplier && activeItem.multiplier > 0 ? activeItem.multiplier : 1;
-                    const baseUnit = (activeItem.skunit || "AD").trim().toUpperCase();
-                    const scannedUnit = (activeItem.unit || "AD").trim().toUpperCase();
-                    const totalBaseQty = qtyRound(activeItem.quantity * mult);
-                    const equation = `1 ${scannedUnit} = ${mult} ${baseUnit}`;
-
-                    return (
-                      <div className="flex items-center justify-between text-xs font-mono px-1 py-1 text-subtle">
-                        <span className="font-semibold">{equation}</span>
-                        <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
-                          Toplam {totalBaseQty} {baseUnit}
-                        </span>
-                      </div>
-                    );
-                  })()}
-
                   {/* Hızlı Butonlar ve Ekle Butonu (Sıfırla, +5, +10, Ekle) */}
                   <div className="grid grid-cols-4 gap-1.5 pt-1">
                     {/* 1. Sıfırla (Çöp Kutusu İkonu) */}
@@ -774,6 +678,16 @@ export default function StockTransferPage() {
                       <span>Ekle</span>
                     </button>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* BAŞARI / ONAY MESAJI */}
+            {onayMesaji && (
+              <div className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 animate-fade-in">
+                <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                  <span className="flex-1">{onayMesaji}</span>
                 </div>
               </div>
             )}
@@ -874,8 +788,17 @@ export default function StockTransferPage() {
                     onChange={(e) => {
                       const rawVal = e.target.value;
                       if (!rawVal) return;
+
+                      // Yıl yazılırken (örn: 0002, 0020, 0202 vb.) henüz 4 basamak tamamlanmadığı için kontrol etme:
+                      const parts = rawVal.split("-");
+                      if (parts.length < 3) return;
+                      const yearNum = parseInt(parts[0], 10);
+                      if (isNaN(yearNum) || yearNum < 2000) {
+                        return; // Kullanıcı yılı yazmaya devam ediyor, henüz hata verme!
+                      }
+
                       const b = isoDateToBatch(rawVal);
-                      if (!b) return;
+                      if (!b || b.length !== 8) return;
 
                       // 2. Kural: Girilen tarihi mevcut partilerle kıyasla, yoksa kabul etme!
                       const secilenBatch = lotPendingItem.batches?.find((item) => item.batchNum === b);
@@ -1026,13 +949,12 @@ export default function StockTransferPage() {
                               </button>
                             </div>
 
-                            {/* Alt Satır: Sol tarafta tam denklem (1 PK = 5 AD, 1 KO = 24 AD, 1 AD = 1 AD), sağ tarafta toplam miktar (Toplam 25 AD) */}
+                            {/* Alt Satır: Sol tarafta tam denklem (1 PK = 1 AD, 1 KO = 24 AD, 1 AD = 1 AD), sağ tarafta toplam miktar (Toplam 7 AD) */}
                             {(() => {
                               const mult = item.multiplier && item.multiplier > 0 ? item.multiplier : 1;
-                              const baseUnit = (item.skunit || "AD").trim().toUpperCase();
                               const scannedUnit = (item.unit || "AD").trim().toUpperCase();
                               const totalBaseQty = qtyRound(item.quantity * mult);
-                              const equation = `1 ${scannedUnit} = ${mult} ${baseUnit}`;
+                              const equation = `1 ${scannedUnit} = ${mult} AD`;
 
                               return (
                                 <div className="flex items-center justify-between gap-2 w-full font-mono text-[11px] pt-0.5 border-t border-line/40 mt-0.5">
@@ -1040,7 +962,7 @@ export default function StockTransferPage() {
                                     {equation}
                                   </span>
                                   <span className="font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                                    Toplam {totalBaseQty} {baseUnit}
+                                    Toplam {totalBaseQty} AD
                                   </span>
                                 </div>
                               );
@@ -1089,42 +1011,53 @@ export default function StockTransferPage() {
 
                 {/* Transfer Edilecek Kalemler Tablosu (Aynı kartın içinde) */}
                 <div>
-                  <div className="mb-2.5 flex items-center justify-between">
-                    <h3 className="text-xs font-bold text-fg">
-                      Paket İçeriği ({items.length} Kalem · {qtyRound(toplamAdet)} Adet)
-                    </h3>
-                  </div>
-
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
                       <thead>
                         <tr className="border-b border-line text-subtle">
-                          <th className="pb-2 font-semibold">Malzeme</th>
-                          <th className="pb-2 font-semibold">Parti</th>
+                          <th className="pb-2 font-semibold">Malzeme & Lokasyon</th>
                           <th className="pb-2 text-right font-semibold">Miktar</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-line">
-                        {items.map((it) => (
-                          <tr key={it.id}>
-                            <td className="py-2">
-                              <p className="font-semibold text-fg">{it.name}</p>
-                              <div className="flex items-center gap-1.5 font-mono text-[10px] text-subtle">
-                                <span>{it.material}</span>
-                                <span>·</span>
-                                <span className="font-semibold text-brand-600 dark:text-brand-400">
-                                  Depo {it.sourceWarehouse} · {it.sourceStockPlace}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="py-2 font-mono text-muted">
-                              {it.batchNum || "—"}
-                            </td>
-                            <td className="py-2 text-right font-mono font-bold text-fg">
-                              {qtyRound(it.quantity)} {it.unit}
-                            </td>
-                          </tr>
-                        ))}
+                        {items.map((it) => {
+                          const mult = it.multiplier && it.multiplier > 0 ? it.multiplier : 1;
+                          const scannedUnit = (it.unit || "AD").trim().toUpperCase();
+                          const totalBaseQty = qtyRound(it.quantity * mult);
+
+                          return (
+                            <tr key={it.id}>
+                              <td className="py-2">
+                                <p className="font-semibold text-fg">{it.name}</p>
+                                <div className="flex flex-wrap items-center gap-1.5 font-mono text-[10px] text-subtle mt-0.5">
+                                  <span className="font-bold text-fg">{it.material}</span>
+                                  <span>·</span>
+                                  <span className="font-semibold text-brand-600 dark:text-brand-400">
+                                    Depo {it.sourceWarehouse} · {it.sourceStockPlace}
+                                  </span>
+                                  {it.batchNum && (
+                                    <>
+                                      <span>·</span>
+                                      <span className="rounded bg-violet-100 dark:bg-violet-950/60 px-1 py-0.2 font-bold text-violet-700 dark:text-violet-300">
+                                        Parti: {it.batchNum}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-2 text-right">
+                                <p className="font-mono text-xs font-bold text-fg">
+                                  {qtyRound(it.quantity)} {it.unit}
+                                </p>
+                                {(scannedUnit !== "AD" || mult > 1) && (
+                                  <p className="font-mono text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400">
+                                    {totalBaseQty} AD
+                                  </p>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
