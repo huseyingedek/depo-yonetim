@@ -594,15 +594,7 @@ export const api = {
         return true;
       });
 
-    if (list.length > 0) return list;
-
-    // Mock fallback: Backend olmadan test ve ekran geçişi için örnek partiler
-    if (material) {
-      return [
-        { batchNum: "11", availStock: 11, unit: "AD" },
-      ];
-    }
-    return [];
+    return list;
   },
 
   // Ürün Sorgulama — Raf ve Ürün BAĞIMSIZ (Bora, 05.08: "ikisi için de getstock").
@@ -797,26 +789,6 @@ export const api = {
 
     const satir = rows.find((row) => pick(row, ["MATERIAL"]) !== "");
     if (!satir) {
-      const trimmed = (barcode ?? "").trim();
-      // Mock fallback: Backend henüz olmadığı için test ve ekran geçişlerinde malzeme simülasyonu
-      if (trimmed) {
-        const isLotTracked = true; // Her zaman parti sorması için takipli
-        const matCode = (trimmed === "11" || trimmed === "1") ? "11" : (trimmed.toUpperCase().startsWith("MLZ") ? trimmed.toUpperCase() : `MLZ-${trimmed.toUpperCase()}`);
-        const matName = (trimmed === "11" || trimmed === "1") ? "11" : `Malzeme ${trimmed.toUpperCase()}`;
-        return {
-          ok: true,
-          material: matCode,
-          name: matName,
-          unit: "AD",
-          quantity: quantity > 0 ? quantity : 11,
-          availStock: 11,
-          specialStock: isLotTracked ? "1" : "0",
-          lot: batchNum || undefined,
-          fields: anahtarDeger,
-          message: "",
-        };
-      }
-
       return {
         ok: false,
         material: "",
@@ -869,37 +841,6 @@ export const api = {
           stockPlace: restored[0].stockPlace,
           message: "",
           restored,
-        };
-      }
-
-      const trimmed = (barcode ?? "").trim();
-      // Mock fallback: Backend henüz olmadığı için test ve ekran geçişlerinde raf simülasyonu
-      if (trimmed) {
-        if (trimmed === "11" || trimmed === "1") {
-          return {
-            ok: true,
-            warehouse: "11",
-            stockPlace: "11",
-            message: "",
-          };
-        }
-        if (trimmed.includes("$")) {
-          const parts = trimmed.split("$");
-          return {
-            ok: true,
-            warehouse: parts[0].trim().toUpperCase() || (c.warehouse || "01"),
-            stockPlace: parts.slice(1).join("$").trim().toUpperCase() || "*",
-            message: "",
-          };
-        }
-        const parts = trimmed.split(/[-_/\s]+/);
-        const wh = parts.length > 1 ? parts[0].toUpperCase() : (c.warehouse || "11");
-        const sp = parts.length > 1 ? parts.slice(1).join("-").toUpperCase() : trimmed.toUpperCase();
-        return {
-          ok: true,
-          warehouse: wh,
-          stockPlace: sp,
-          message: "",
         };
       }
 
@@ -1124,34 +1065,28 @@ export const api = {
 
     try {
       const r = await call(SERVICES.stockTransfer, {
-        COMPANY: compCode,
         PSCOMPANY: compCode,
-        PLANT: plantCode,
+        COMPANY: compCode,
         PSPLANT: plantCode,
-        USER: userCode,
+        PLANT: plantCode,
         PSUSER: userCode,
-        SRCWAREHOUSE: srcWh,
+        USER: userCode,
         PSSRCWAREHOUSE: srcWh,
-        SRCSTOCKPLACE: srcSp,
+        SRCWAREHOUSE: srcWh,
         PSSRCSTOCKPLACE: srcSp,
-        TARWAREHOUSE: tarWh,
+        SRCSTOCKPLACE: srcSp,
         PSTARWAREHOUSE: tarWh,
-        TARSTOCKPLACE: tarSp,
+        TARWAREHOUSE: tarWh,
         PSTARSTOCKPLACE: tarSp,
-        TRANSFERLIST: formattedItems,
+        TARSTOCKPLACE: tarSp,
+        PSTRANSFERTABLEXML: formattedItems,
+        TRANSFERTABLEXML: formattedItems,
         PSTRANSFERLIST: formattedItems,
+        TRANSFERLIST: formattedItems,
       });
 
       const mesaj = serviceMessage(r);
-      if (mesaj && /error|fail|hata|bilinmeyen servis|unknown service/i.test(mesaj)) {
-        if (/bilinmeyen servis|unknown service|not found/i.test(mesaj)) {
-          // Canias tarafında servis henüz yüklenmemişse test amaçlı simülasyon başarısı döner
-          return {
-            ok: true,
-            transferId: "11",
-            message: "Transfer başarıyla kaydedildi (11)",
-          };
-        }
+      if (mesaj && /error|fail|hata/i.test(mesaj)) {
         return { ok: false, message: mesaj };
       }
 
@@ -1165,18 +1100,11 @@ export const api = {
 
       return {
         ok: true,
-        transferId: transferId || "11",
+        transferId: transferId || undefined,
         message: mesaj || "Transfer işlemi başarıyla tamamlandı.",
       };
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      if (/bilinmeyen servis|unknown service|not found/i.test(errMsg)) {
-        return {
-          ok: true,
-          transferId: "11",
-          message: "Transfer başarıyla kaydedildi (11)",
-        };
-      }
       return { ok: false, message: errMsg };
     }
   },

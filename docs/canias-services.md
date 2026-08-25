@@ -350,7 +350,30 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 
 ---
 
-## 6. Özet Tablo: Servis İsimleri ve Kullanım Yerleri
+## 6. Stok Transfer Servisleri (Stock Transfer)
+
+### 6.1. `MZYStockTransfer` — Malzemeleri Transfer Etme
+- **Açıklama**: Kaynak depo ve stok yerinden hedef depo ve stok yerine malzeme/parti transferi gerçekleştirir.
+- **Parametreler**:
+  - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
+  - `PSPLANT` (*STRING*): Tesis kodu (`"100"`).
+  - `PSSRCWAREHOUSE` (*STRING*): Transfer edilen malzemenin alındığı depo.
+  - `PSSRCSTOCKPLACE` (*STRING*): Transfer edilen malzemenin alındığı stok yeri / raf.
+  - `PSUSER` (*STRING*): Login olan kullanıcı kodu.
+  - `PSTARWAREHOUSE` (*STRING*): Transfer edilen malzemenin konulduğu yeni depo.
+  - `PSTARSTOCKPLACE` (*STRING*): Transfer edilen malzemenin konulduğu yeni stok yeri / raf.
+  - `PSTRANSFERTABLEXML` (*TABLE / XML*): Transfer edilen malzemelerin bilgileri:
+    - `MATERIAL` (*STRING*): Malzeme Kodu.
+    - `SPECIALSTOCK` (*STRING*): Özel Stok Tipi (`"1"` = Partili, `"*"` = Partisiz).
+    - `BATCHNUM` (*STRING*): Parti No (Partisiz ise `"*"`).
+    - `QUANTITY` (*DECIMAL*): Transfer Edilen Miktar (Stok Birimi bazında).
+    - `QUNIT` (*STRING*): Birim (Stok Birimi bazında, örn: `"AD"`).
+- **Dönen Değer**: `TRANSFERID` / `DOCNUM` (Transfer Belge Numarası) ve `SYSTEMMSG`.
+- **WMS İstemci Karşılığı**: `api.createStockTransfer(payload)`
+
+---
+
+## 7. Özet Tablo: Servis İsimleri ve Kullanım Yerleri
 
 | Servis Adı | CANIAS Servisi | İstemci Metodu | Dosya Konumu |
 | :--- | :--- | :--- | :--- |

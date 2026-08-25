@@ -267,8 +267,8 @@ describe("INVT00M1 Stok Transferi (Stock Transfer Store & Flow)", () => {
     expect(capturedBody.TARSTOCKPLACE).toBe("B-02-01");
     expect(capturedBody.PSTARSTOCKPLACE).toBe("B-02-01");
 
-    // Transfer listesi alt tablosu (TRANSFERLIST)
-    const list = capturedBody.TRANSFERLIST as Array<Record<string, unknown>>;
+    // Transfer listesi alt tablosu (PSTRANSFERTABLEXML / TRANSFERLIST)
+    const list = (capturedBody.PSTRANSFERTABLEXML || capturedBody.TRANSFERLIST) as Array<Record<string, unknown>>;
     expect(Array.isArray(list)).toBe(true);
     expect(list.length).toBe(2);
 

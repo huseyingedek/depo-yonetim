@@ -138,17 +138,17 @@ export default function StockTransferPage() {
         // B) Parti bekleniyor (Adım 3)
         if (lotPendingItem) {
           // Depocu parti barkodunu okuttu -> Adım 4 (Miktar)'a geçir
-          const lotVal = (barkod === "1" || barkod === "11") ? "11" : barkod;
+          const lotVal = barkod.trim();
           setActiveItem({
             material: lotPendingItem.material,
             name: lotPendingItem.name,
             barcode: lotPendingItem.barcode,
-            quantity: 11,
+            quantity: 1,
             unit: lotPendingItem.unit,
             batchNum: lotVal,
             specialStock: lotPendingItem.specialStock,
             isSpecialStock: true,
-            availStock: lotPendingItem.availStock ?? 11,
+            availStock: lotPendingItem.availStock,
           });
           setLotPendingItem(null);
           showToast({ kind: "ok", text: `Parti (${lotVal}) okundu, miktarı belirleyin` });
