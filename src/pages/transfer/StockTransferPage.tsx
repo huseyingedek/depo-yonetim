@@ -20,6 +20,7 @@ import {
 } from "../../store/transferStore";
 import { api } from "../../api/client";
 import { sesBasarili, sesHata } from "../../sound";
+import type { StockBatch } from "../../types";
 
 type Toast = { kind: "ok" | "done" | "error"; text: string } | null;
 
@@ -58,7 +59,7 @@ export default function StockTransferPage() {
   const [flashId, setFlashId] = useState<string | null>(null);
   const [redMesaji, setRedMesaji] = useState<string | null>(null);
 
-  // 3. Adım: Bekleyen Partili Malzeme (Depocunun sadece parti barkodunu okutması beklenir)
+  // 3. Adım: Bekleyen Partili Malzeme (Depocunun sadece parti barkodunu okutması veya seçmesi beklenir)
   const [lotPendingItem, setLotPendingItem] = useState<{
     material: string;
     name: string;
@@ -66,6 +67,7 @@ export default function StockTransferPage() {
     unit: string;
     specialStock: string;
     availStock?: number;
+    batches?: StockBatch[];
   } | null>(null);
 
   // 4. Adım: Miktarı girilecek / aktif okutulan malzeme (Mal Kabul ile birebir miktar paneli)
@@ -194,8 +196,41 @@ export default function StockTransferPage() {
         const ozelStok = res.specialStock || "0";
         const lotTracked = ozelStok === "1" || /takipli|partili/i.test(ozelStok) || (res.lot && res.lot !== "*");
 
-        // Eğer partili malzeme ise ve barkodda parti yoksa -> Adım 3 (Parti)
+        // Eğer partili malzeme ise ve barkodda parti yoksa:
         if (lotTracked && (!res.lot || res.lot === "*")) {
+          let batches: StockBatch[] = [];
+          try {
+            batches = await api.getStock(
+              res.material,
+              sourceShelf.warehouse,
+              sourceShelf.stockPlace
+            );
+          } catch {
+            // ignore
+          }
+
+          const validBatches = batches.filter((b) => b.batchNum && b.batchNum !== "*");
+
+          // Durum A: Rafta tek bir parti varsa doğrudan seç ve Adım 4'e (Miktar) geç!
+          if (validBatches.length === 1) {
+            const tekParti = validBatches[0];
+            const initialQty = res.quantity > 0 ? res.quantity : 1;
+            setActiveItem({
+              material: res.material,
+              name: res.name,
+              barcode: barkod,
+              quantity: initialQty,
+              unit: res.unit || tekParti.unit || "AD",
+              batchNum: tekParti.batchNum,
+              specialStock: ozelStok,
+              isSpecialStock: true,
+              availStock: tekParti.availStock ?? res.availStock,
+            });
+            showToast({ kind: "ok", text: `${res.name} (Parti: ${tekParti.batchNum}) seçildi, miktarı belirleyin` });
+            return;
+          }
+
+          // Durum B: Rafta birden fazla parti varsa veya parti bilinmiyorsa Adım 3 (Parti)
           setLotPendingItem({
             material: res.material,
             name: res.name,
@@ -203,8 +238,14 @@ export default function StockTransferPage() {
             unit: res.unit || "AD",
             specialStock: ozelStok,
             availStock: res.availStock,
+            batches: validBatches,
           });
-          showToast({ kind: "ok", text: `${res.name} — Parti barkodunu okutun` });
+          showToast({
+            kind: "ok",
+            text: validBatches.length > 1
+              ? `${res.name} — ${validBatches.length} farklı parti bulundu, birini seçin`
+              : `${res.name} — Parti barkodunu okutun`,
+          });
           return;
         }
 
@@ -680,6 +721,64 @@ export default function StockTransferPage() {
                 >
                   Kapat
                 </button>
+              </div>
+            )}
+
+            {/* ADIM 3: PARTİ SEÇİM PANELİ & RAFTAKİ MEVCUT PARTİLER */}
+            {step === "collect" && lotPendingItem && (
+              <div className="mb-3 rounded-xl border border-violet-500/30 bg-violet-500/5 p-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-bold text-fg">{lotPendingItem.name}</p>
+                    <p className="text-[11px] font-mono text-violet-600 dark:text-violet-400">
+                      {lotPendingItem.material} · Parti Seçin veya Okutun
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setLotPendingItem(null)}
+                    className="text-xs text-subtle hover:text-rose-600 hover:underline shrink-0"
+                  >
+                    Vazgeç
+                  </button>
+                </div>
+
+                {lotPendingItem.batches && lotPendingItem.batches.length > 0 && (
+                  <div className="mt-2.5 pt-2 border-t border-violet-500/20">
+                    <p className="text-[11px] font-semibold text-subtle mb-1.5">
+                      Raftaki Mevcut Partiler (Dokunarak Seçin):
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {lotPendingItem.batches.map((b) => (
+                        <button
+                          key={b.batchNum}
+                          type="button"
+                          onClick={() => {
+                            setActiveItem({
+                              material: lotPendingItem.material,
+                              name: lotPendingItem.name,
+                              barcode: lotPendingItem.barcode,
+                              quantity: 1,
+                              unit: lotPendingItem.unit,
+                              batchNum: b.batchNum,
+                              specialStock: lotPendingItem.specialStock,
+                              isSpecialStock: true,
+                              availStock: b.availStock ?? lotPendingItem.availStock,
+                            });
+                            setLotPendingItem(null);
+                            showToast({ kind: "ok", text: `Parti (${b.batchNum}) seçildi, miktarı belirleyin` });
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg border border-violet-500/40 bg-surface px-2.5 py-1 text-xs font-bold text-violet-700 dark:text-violet-300 hover:bg-violet-600 hover:text-white transition active:scale-95 shadow-2xs"
+                        >
+                          <span>{b.batchNum}</span>
+                          <span className="text-[10px] opacity-75">
+                            ({qtyRound(b.availStock)} {lotPendingItem.unit})
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
