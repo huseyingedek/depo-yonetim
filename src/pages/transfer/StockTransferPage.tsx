@@ -17,6 +17,7 @@ import BarcodeScanner from "../../components/BarcodeScanner";
 import {
   useTransferStore,
   qtyRound,
+  isoDateToBatch,
 } from "../../store/transferStore";
 import { api } from "../../api/client";
 import { sesBasarili, sesHata } from "../../sound";
@@ -35,6 +36,7 @@ export default function StockTransferPage() {
   const completedResult = useTransferStore((s) => s.completedResult);
 
   const scanSourceShelf = useTransferStore((s) => s.scanSourceShelf);
+  const clearSourceShelf = useTransferStore((s) => s.clearSourceShelf);
   const addItem = useTransferStore((s) => s.addItem);
   const updateItemQty = useTransferStore((s) => s.updateItemQty);
   const removeItem = useTransferStore((s) => s.removeItem);
@@ -65,6 +67,8 @@ export default function StockTransferPage() {
     name: string;
     barcode: string;
     unit: string;
+    skunit?: string;
+    multiplier?: number;
     specialStock: string;
     availStock?: number;
     batches?: StockBatch[];
@@ -77,17 +81,21 @@ export default function StockTransferPage() {
     barcode: string;
     quantity: number;
     unit: string;
+    skunit?: string;
+    multiplier?: number;
     batchNum?: string;
     specialStock?: string;
     isSpecialStock?: boolean;
     availStock?: number;
+    sourceWarehouse?: string;
+    sourceStockPlace?: string;
   } | null>(null);
 
   const showToast = (tst: Toast) => {
     if (tst?.kind === "error") sesHata();
     else if (tst) sesBasarili();
     setToast(tst);
-    setTimeout(() => setToast(null), 2400);
+    setTimeout(() => setToast(null), 2500);
   };
 
   const flash = (id: string) => {
@@ -148,21 +156,39 @@ export default function StockTransferPage() {
 
         // B) Parti bekleniyor (Adım 3)
         if (lotPendingItem) {
-          // Depocu parti barkodunu okuttu -> Adım 4 (Miktar)'a geçir
           const lotVal = barkod.trim();
+          const secilenBatch = lotPendingItem.batches?.find((b) => b.batchNum === lotVal);
+
+          // 2. Kural: Rafta mevcut partilerle kıyasla, yoksa kabul etme!
+          if (lotPendingItem.batches && lotPendingItem.batches.length > 0 && !secilenBatch) {
+            const errText = `Okutulan parti (${lotVal}) raftaki mevcut partiler arasında bulunamadı!`;
+            sesHata();
+            setRedMesaji(errText);
+            showToast({ kind: "error", text: errText });
+            return;
+          }
+
+          const lotStockQty = (secilenBatch && secilenBatch.availStock > 0)
+            ? secilenBatch.availStock
+            : 1;
+
           setActiveItem({
             material: lotPendingItem.material,
             name: lotPendingItem.name,
             barcode: lotPendingItem.barcode,
-            quantity: 1,
+            quantity: lotStockQty,
             unit: lotPendingItem.unit,
+            skunit: lotPendingItem.skunit,
+            multiplier: lotPendingItem.multiplier,
             batchNum: lotVal,
             specialStock: lotPendingItem.specialStock,
             isSpecialStock: true,
-            availStock: lotPendingItem.availStock,
+            availStock: secilenBatch?.availStock ?? lotPendingItem.availStock,
+            sourceWarehouse: sourceShelf.warehouse,
+            sourceStockPlace: sourceShelf.stockPlace,
           });
           setLotPendingItem(null);
-          showToast({ kind: "ok", text: `Parti (${lotVal}) okundu, miktarı belirleyin` });
+          showToast({ kind: "ok", text: `Parti (${lotVal}) seçildi, miktar: ${lotStockQty}` });
           return;
         }
 
@@ -193,76 +219,98 @@ export default function StockTransferPage() {
           return;
         }
 
+        // 1. Kural: Malzemenin o rafta olup olmadığını stok servisiyle kontrol et
+        let batches: StockBatch[] = [];
+        try {
+          batches = await api.getStock(
+            res.material,
+            sourceShelf.warehouse,
+            sourceShelf.stockPlace
+          );
+        } catch {
+          // ignore
+        }
+
+        const validBatches = batches.filter((b) => b.batchNum && b.batchNum !== "*");
+        const totalShelfStock = batches.reduce((sum, b) => sum + (b.availStock || 0), 0);
+
+        // Eğer rafta stok bulunamadıysa ve readBarcode'dan da stok 0 geldiyse uyar:
+        if (batches.length === 0 && res.availStock <= 0) {
+          const errText = `Bu malzeme (${res.name || res.material}) seçili rafta (Depo ${sourceShelf.warehouse} · ${sourceShelf.stockPlace}) bulunamadı veya stok yok!`;
+          setRedMesaji(errText);
+          showToast({ kind: "error", text: errText });
+          return;
+        }
+
         const ozelStok = res.specialStock || "0";
         const lotTracked = ozelStok === "1" || /takipli|partili/i.test(ozelStok) || (res.lot && res.lot !== "*");
 
         // Eğer partili malzeme ise ve barkodda parti yoksa:
         if (lotTracked && (!res.lot || res.lot === "*")) {
-          let batches: StockBatch[] = [];
-          try {
-            batches = await api.getStock(
-              res.material,
-              sourceShelf.warehouse,
-              sourceShelf.stockPlace
-            );
-          } catch {
-            // ignore
-          }
-
-          const validBatches = batches.filter((b) => b.batchNum && b.batchNum !== "*");
-
           // Durum A: Rafta tek bir parti varsa doğrudan seç ve Adım 4'e (Miktar) geç!
+          // 4. Kural: Partili ürün seçildiyse stoktaki miktar otomatik yazılacak
           if (validBatches.length === 1) {
             const tekParti = validBatches[0];
-            const initialQty = res.quantity > 0 ? res.quantity : 1;
+            const stockQty = tekParti.availStock > 0 ? tekParti.availStock : (res.quantity > 0 ? res.quantity : 1);
             setActiveItem({
               material: res.material,
               name: res.name,
               barcode: barkod,
-              quantity: initialQty,
+              quantity: stockQty,
               unit: res.unit || tekParti.unit || "AD",
+              skunit: res.skunit,
+              multiplier: res.multiplier,
               batchNum: tekParti.batchNum,
               specialStock: ozelStok,
               isSpecialStock: true,
               availStock: tekParti.availStock ?? res.availStock,
+              sourceWarehouse: sourceShelf.warehouse,
+              sourceStockPlace: sourceShelf.stockPlace,
             });
-            showToast({ kind: "ok", text: `${res.name} (Parti: ${tekParti.batchNum}) seçildi, miktarı belirleyin` });
+            showToast({ kind: "ok", text: `${res.name} (Parti: ${tekParti.batchNum}) seçildi, miktar: ${stockQty}` });
             return;
           }
 
-          // Durum B: Rafta birden fazla parti varsa veya parti bilinmiyorsa Adım 3 (Parti)
+          // Durum B: Rafta birden fazla parti varsa veya parti seçilecekse -> Adım 3 (Parti)
           setLotPendingItem({
             material: res.material,
             name: res.name,
             barcode: barkod,
             unit: res.unit || "AD",
+            skunit: res.skunit,
+            multiplier: res.multiplier,
             specialStock: ozelStok,
-            availStock: res.availStock,
+            availStock: totalShelfStock > 0 ? totalShelfStock : res.availStock,
             batches: validBatches,
           });
           showToast({
             kind: "ok",
             text: validBatches.length > 1
-              ? `${res.name} — ${validBatches.length} farklı parti bulundu, birini seçin`
-              : `${res.name} — Parti barkodunu okutun`,
+              ? `${res.name} — ${validBatches.length} farklı parti bulundu, listeden seçin`
+              : `${res.name} — Parti seçin`,
           });
           return;
         }
 
         // Partisiz malzeme (veya barkodda partisi olan) -> Adım 4 (Miktar)
-        const initialQty = res.quantity > 0 ? res.quantity : 1;
+        // 4. Kural: Stoktaki miktar otomatik olarak yazılı olacak
+        const initialQty = (res.availStock > 0) ? res.availStock : (res.quantity > 0 ? res.quantity : 1);
         setActiveItem({
           material: res.material,
           name: res.name,
           barcode: barkod,
           quantity: initialQty,
           unit: res.unit || "AD",
+          skunit: res.skunit,
+          multiplier: res.multiplier,
           batchNum: res.lot && res.lot !== "*" ? res.lot : undefined,
           specialStock: ozelStok,
           isSpecialStock: Boolean(lotTracked),
           availStock: res.availStock,
+          sourceWarehouse: sourceShelf.warehouse,
+          sourceStockPlace: sourceShelf.stockPlace,
         });
-        showToast({ kind: "ok", text: `${res.name} okundu, miktarı belirleyin` });
+        showToast({ kind: "ok", text: `${res.name} okundu, miktar: ${initialQty}` });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Okuma hatası";
         setRedMesaji(msg);
@@ -283,6 +331,7 @@ export default function StockTransferPage() {
     ]
   );
 
+  // 6. Kural: Transfer onayı başarılı olunca yukarıda mesaj göster ve 2 saniye sonra ana ekrana at
   const handleCompleteTransfer = async () => {
     setBusy(true);
     setRedMesaji(null);
@@ -290,10 +339,26 @@ export default function StockTransferPage() {
       const res = await completeTransfer();
       if (res.ok) {
         sesBasarili();
+        const successText =
+          res.message ||
+          (res.transferId
+            ? `Transfer ${res.transferId} nolu belge ile başarıyla kaydedildi.`
+            : "İşlem başarıyla gerçekleşti.");
+        showToast({ kind: "done", text: successText });
+        setTimeout(() => {
+          reset();
+          navigate("/home");
+        }, 2000);
       } else {
         sesHata();
         setRedMesaji(res.message);
+        showToast({ kind: "error", text: res.message });
       }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Transfer sırasında hata oluştu";
+      sesHata();
+      setRedMesaji(msg);
+      showToast({ kind: "error", text: msg });
     } finally {
       setBusy(false);
     }
@@ -409,7 +474,7 @@ export default function StockTransferPage() {
       : !sourceShelf
         ? "Raf barkodunu okutun"
         : lotPendingItem
-          ? "Parti barkodunu okutun"
+          ? ""
           : activeItem
             ? ""
             : "Malzeme barkodunu okutun";
@@ -502,7 +567,7 @@ export default function StockTransferPage() {
                 <div className="grid grid-cols-4 gap-1 w-full">
                   {(
                     [
-                      ["shelf", "1 Raf"],
+                      ["shelf", sourceShelf ? `1 ${sourceShelf.warehouse} · ${sourceShelf.stockPlace}` : "1 Raf"],
                       ["product", "2 Malzeme"],
                       ["lot", "3 Parti"],
                       ["qty", "4 Miktar"],
@@ -514,10 +579,15 @@ export default function StockTransferPage() {
                       (s === "lot" && !!lotPendingItem) ||
                       (s === "qty" && !!activeItem);
 
-                    const isClickable = s === "product" && (!!lotPendingItem || !!activeItem);
+                    // 5. Kural: Malzeme okuttuktan sonra raf tabına tıklayıp farklı rafa gidebilsin
+                    const isClickable = s === "shelf" || (s === "product" && (!!lotPendingItem || !!activeItem));
 
                     const git = () => {
-                      if (isClickable) {
+                      if (s === "shelf") {
+                        clearSourceShelf();
+                        setActiveItem(null);
+                        setLotPendingItem(null);
+                      } else if (s === "product") {
                         setActiveItem(null);
                         setLotPendingItem(null);
                       }
@@ -537,34 +607,17 @@ export default function StockTransferPage() {
                             : "bg-elevated/60 text-subtle/60 cursor-default opacity-85"
                         }`}
                       >
-                        <span>{label}</span>
+                        <span className="truncate">{label}</span>
                       </button>
                     );
                   })}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-1 w-full">
-                  {(
-                    [
-                      ["target", "1 Hedef Depo"],
-                      ["confirm", "2 Onay"],
-                    ] as const
-                  ).map(([s, label]) => {
-                    const active = s === "target";
-
-                    return (
-                      <div
-                        key={s}
-                        className={`flex h-10 w-full items-center justify-center rounded-xl px-1 text-xs sm:text-[13px] font-bold tracking-tight transition-all duration-200 ease-soft ${
-                          active
-                            ? "bg-brand-600 text-white shadow-soft font-extrabold"
-                            : "bg-elevated text-subtle"
-                        }`}
-                      >
-                        <span>{label}</span>
-                      </div>
-                    );
-                  })}
+                // 6. Kural: Transfer onayı verilen ekranda sol üstteki kartta onay kısmı olmasın
+                <div className="w-full">
+                  <div className="flex h-10 w-full items-center justify-center rounded-xl px-2 text-xs sm:text-[13px] font-extrabold tracking-tight bg-brand-600 text-white shadow-soft">
+                    <span>1 Hedef Raf Okutun</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -665,8 +718,26 @@ export default function StockTransferPage() {
                     </button>
                   </div>
 
+                  {/* Birim Denklemi ve Toplam Adet Satırı */}
+                  {(() => {
+                    const mult = activeItem.multiplier && activeItem.multiplier > 0 ? activeItem.multiplier : 1;
+                    const baseUnit = (activeItem.skunit || "AD").trim().toUpperCase();
+                    const scannedUnit = (activeItem.unit || "AD").trim().toUpperCase();
+                    const totalBaseQty = qtyRound(activeItem.quantity * mult);
+                    const equation = `1 ${scannedUnit} = ${mult} ${baseUnit}`;
+
+                    return (
+                      <div className="flex items-center justify-between text-xs font-mono px-1 py-1 text-subtle">
+                        <span className="font-semibold">{equation}</span>
+                        <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
+                          Toplam {totalBaseQty} {baseUnit}
+                        </span>
+                      </div>
+                    );
+                  })()}
+
                   {/* Hızlı Butonlar ve Ekle Butonu (Sıfırla, +5, +10, Ekle) */}
-                  <div className="grid grid-cols-4 gap-1.5 pt-1.5">
+                  <div className="grid grid-cols-4 gap-1.5 pt-1">
                     {/* 1. Sıfırla (Çöp Kutusu İkonu) */}
                     <button
                       type="button"
@@ -724,61 +795,124 @@ export default function StockTransferPage() {
               </div>
             )}
 
-            {/* ADIM 3: PARTİ SEÇİM PANELİ & RAFTAKİ MEVCUT PARTİLER */}
+            {/* 3. KURAL: TOPLAMA EKRANININ BİREBİR AYNISI PARTİ PANELİ (Combobox + Tarih Seçici + Barkod Okutma) */}
             {step === "collect" && lotPendingItem && (
-              <div className="mb-3 rounded-xl border border-violet-500/30 bg-violet-500/5 p-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-bold text-fg">{lotPendingItem.name}</p>
-                    <p className="text-[11px] font-mono text-violet-600 dark:text-violet-400">
-                      {lotPendingItem.material} · Parti Seçin veya Okutun
-                    </p>
-                  </div>
+              <div className="mb-3 space-y-2.5 animate-fade-in">
+                <div className="flex items-center justify-between rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                  <span className="min-w-0 truncate">
+                    Parti Seçimi ({lotPendingItem.name})
+                  </span>
                   <button
                     type="button"
                     onClick={() => setLotPendingItem(null)}
-                    className="text-xs text-subtle hover:text-rose-600 hover:underline shrink-0"
+                    className="shrink-0 text-xs font-semibold text-amber-700 hover:underline"
                   >
                     Vazgeç
                   </button>
                 </div>
 
-                {lotPendingItem.batches && lotPendingItem.batches.length > 0 && (
-                  <div className="mt-2.5 pt-2 border-t border-violet-500/20">
-                    <p className="text-[11px] font-semibold text-subtle mb-1.5">
-                      Raftaki Mevcut Partiler (Dokunarak Seçin):
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {lotPendingItem.batches.map((b) => (
-                        <button
-                          key={b.batchNum}
-                          type="button"
-                          onClick={() => {
-                            setActiveItem({
-                              material: lotPendingItem.material,
-                              name: lotPendingItem.name,
-                              barcode: lotPendingItem.barcode,
-                              quantity: 1,
-                              unit: lotPendingItem.unit,
-                              batchNum: b.batchNum,
-                              specialStock: lotPendingItem.specialStock,
-                              isSpecialStock: true,
-                              availStock: b.availStock ?? lotPendingItem.availStock,
-                            });
-                            setLotPendingItem(null);
-                            showToast({ kind: "ok", text: `Parti (${b.batchNum}) seçildi, miktarı belirleyin` });
-                          }}
-                          className="inline-flex items-center gap-1 rounded-lg border border-violet-500/40 bg-surface px-2.5 py-1 text-xs font-bold text-violet-700 dark:text-violet-300 hover:bg-violet-600 hover:text-white transition active:scale-95 shadow-2xs"
-                        >
-                          <span>{b.batchNum}</span>
-                          <span className="text-[10px] opacity-75">
-                            ({qtyRound(b.availStock)} {lotPendingItem.unit})
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Parti seç (stoktakiler) combobox */}
+                <div className="rounded-xl bg-elevated px-3 py-2">
+                  <span className="mb-1 block text-xs font-medium text-muted">
+                    Parti seç (stoktakiler)
+                  </span>
+                  <select
+                    defaultValue=""
+                    disabled={!lotPendingItem.batches || lotPendingItem.batches.length === 0}
+                    onChange={(e) => {
+                      const lotVal = e.target.value;
+                      if (!lotVal) return;
+                      const secilenBatch = lotPendingItem.batches?.find((b) => b.batchNum === lotVal);
+                      const lotStockQty = (secilenBatch && secilenBatch.availStock > 0)
+                        ? secilenBatch.availStock
+                        : 1;
+
+                      setActiveItem({
+                        material: lotPendingItem.material,
+                        name: lotPendingItem.name,
+                        barcode: lotPendingItem.barcode,
+                        quantity: lotStockQty,
+                        unit: lotPendingItem.unit,
+                        skunit: lotPendingItem.skunit,
+                        multiplier: lotPendingItem.multiplier,
+                        batchNum: lotVal,
+                        specialStock: lotPendingItem.specialStock,
+                        isSpecialStock: true,
+                        availStock: secilenBatch?.availStock ?? lotPendingItem.availStock,
+                        sourceWarehouse: sourceShelf?.warehouse || "",
+                        sourceStockPlace: sourceShelf?.stockPlace || "",
+                      });
+                      setLotPendingItem(null);
+                      showToast({ kind: "ok", text: `Parti (${lotVal}) seçildi, miktar: ${lotStockQty}` });
+                    }}
+                    className="h-9 w-full rounded-lg border border-line bg-surface px-2 font-mono text-sm text-fg outline-none focus:border-brand-500 disabled:opacity-70"
+                  >
+                    {lotPendingItem.batches && lotPendingItem.batches.length > 0 ? (
+                      <>
+                        <option value="" disabled>
+                          Parti seçin…
+                        </option>
+                        {lotPendingItem.batches.map((b) => (
+                          <option key={b.batchNum} value={b.batchNum}>
+                            {b.batchNum} — {qtyRound(b.availStock)} {b.unit || lotPendingItem.unit}
+                          </option>
+                        ))}
+                      </>
+                    ) : (
+                      <option value="" disabled>
+                        Rafta kayıtlı parti bulunamadı
+                      </option>
+                    )}
+                  </select>
+                </div>
+
+                {/* Tarih seç */}
+                <div className="flex items-center gap-2 rounded-xl bg-elevated px-3 py-2">
+                  <span className="shrink-0 text-xs font-medium text-muted">Tarih seç</span>
+                  <input
+                    type="date"
+                    onChange={(e) => {
+                      const rawVal = e.target.value;
+                      if (!rawVal) return;
+                      const b = isoDateToBatch(rawVal);
+                      if (!b) return;
+
+                      // 2. Kural: Girilen tarihi mevcut partilerle kıyasla, yoksa kabul etme!
+                      const secilenBatch = lotPendingItem.batches?.find((item) => item.batchNum === b);
+                      if (lotPendingItem.batches && lotPendingItem.batches.length > 0 && !secilenBatch) {
+                        e.target.value = "";
+                        const errText = `Girilen parti tarihi (${b}) raftaki mevcut partiler arasında bulunamadı!`;
+                        sesHata();
+                        setRedMesaji(errText);
+                        showToast({ kind: "error", text: "Girilen tarih rafta mevcut değil!" });
+                        return;
+                      }
+
+                      const lotStockQty = (secilenBatch && secilenBatch.availStock > 0)
+                        ? secilenBatch.availStock
+                        : 1;
+
+                      setActiveItem({
+                        material: lotPendingItem.material,
+                        name: lotPendingItem.name,
+                        barcode: lotPendingItem.barcode,
+                        quantity: lotStockQty,
+                        unit: lotPendingItem.unit,
+                        skunit: lotPendingItem.skunit,
+                        multiplier: lotPendingItem.multiplier,
+                        batchNum: b,
+                        specialStock: lotPendingItem.specialStock,
+                        isSpecialStock: true,
+                        availStock: secilenBatch?.availStock ?? lotPendingItem.availStock,
+                        sourceWarehouse: sourceShelf?.warehouse || "",
+                        sourceStockPlace: sourceShelf?.stockPlace || "",
+                      });
+                      setLotPendingItem(null);
+                      showToast({ kind: "ok", text: `Parti (${b}) seçildi, miktar: ${lotStockQty}` });
+                    }}
+                    className="h-8 flex-1 rounded-lg border border-line bg-surface px-2 font-mono text-sm text-fg outline-none focus:border-brand-500"
+                  />
+                </div>
               </div>
             )}
 
@@ -858,37 +992,59 @@ export default function StockTransferPage() {
                           </div>
 
                           {/* Miktar Arttır / Azalt / Sil Kontrolleri */}
-                          <div className="flex shrink-0 items-center gap-1.5">
-                            <div className="flex items-center rounded-xl border border-line bg-elevated p-0.5">
-                              <button
-                                type="button"
-                                onClick={() => updateItemQty(item.id, item.quantity - 1)}
-                                className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface text-muted shadow-xs transition hover:bg-line active:scale-95"
-                              >
-                                <Minus className="h-3.5 w-3.5" />
-                              </button>
-                              <span className="min-w-10 text-center font-mono text-sm font-bold text-fg">
-                                {qtyRound(item.quantity)}
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <div className="flex items-center gap-1.5">
+                              <div className="flex items-center rounded-xl border border-line bg-elevated p-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => updateItemQty(item.id, item.quantity - 1)}
+                                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface text-muted shadow-xs transition hover:bg-line active:scale-95"
+                                >
+                                  <Minus className="h-3.5 w-3.5" />
+                                </button>
+                                <span className="min-w-10 text-center font-mono text-sm font-bold text-fg">
+                                  {qtyRound(item.quantity)}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => updateItemQty(item.id, item.quantity + 1)}
+                                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface text-muted shadow-xs transition hover:bg-line active:scale-95"
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                              <span className="text-xs font-semibold text-subtle">
+                                {item.unit}
                               </span>
                               <button
                                 type="button"
-                                onClick={() => updateItemQty(item.id, item.quantity + 1)}
-                                className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface text-muted shadow-xs transition hover:bg-line active:scale-95"
+                                onClick={() => removeItem(item.id)}
+                                className="ml-1 flex h-8 w-8 items-center justify-center rounded-xl text-subtle transition hover:bg-rose-50 hover:text-rose-600"
+                                title="Sil"
                               >
-                                <Plus className="h-3.5 w-3.5" />
+                                <Trash2 className="h-4 w-4" />
                               </button>
                             </div>
-                            <span className="text-xs font-semibold text-subtle">
-                              {item.unit}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => removeItem(item.id)}
-                              className="ml-1 flex h-8 w-8 items-center justify-center rounded-xl text-subtle transition hover:bg-rose-50 hover:text-rose-600"
-                              title="Sil"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+
+                            {/* Alt Satır: Sol tarafta tam denklem (1 PK = 5 AD, 1 KO = 24 AD, 1 AD = 1 AD), sağ tarafta toplam miktar (Toplam 25 AD) */}
+                            {(() => {
+                              const mult = item.multiplier && item.multiplier > 0 ? item.multiplier : 1;
+                              const baseUnit = (item.skunit || "AD").trim().toUpperCase();
+                              const scannedUnit = (item.unit || "AD").trim().toUpperCase();
+                              const totalBaseQty = qtyRound(item.quantity * mult);
+                              const equation = `1 ${scannedUnit} = ${mult} ${baseUnit}`;
+
+                              return (
+                                <div className="flex items-center justify-between gap-2 w-full font-mono text-[11px] pt-0.5 border-t border-line/40 mt-0.5">
+                                  <span className="font-semibold text-subtle">
+                                    {equation}
+                                  </span>
+                                  <span className="font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                                    Toplam {totalBaseQty} {baseUnit}
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -953,7 +1109,13 @@ export default function StockTransferPage() {
                           <tr key={it.id}>
                             <td className="py-2">
                               <p className="font-semibold text-fg">{it.name}</p>
-                              <p className="font-mono text-[10px] text-subtle">{it.material}</p>
+                              <div className="flex items-center gap-1.5 font-mono text-[10px] text-subtle">
+                                <span>{it.material}</span>
+                                <span>·</span>
+                                <span className="font-semibold text-brand-600 dark:text-brand-400">
+                                  Depo {it.sourceWarehouse} · {it.sourceStockPlace}
+                                </span>
+                              </div>
                             </td>
                             <td className="py-2 font-mono text-muted">
                               {it.batchNum || "—"}

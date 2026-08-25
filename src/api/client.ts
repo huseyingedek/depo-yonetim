@@ -803,13 +803,17 @@ export const api = {
     }
 
     const lot = pick(satir, ["BATCHNUM"]);
+    const rawQty = num(satir, ["QUANTITY"], 0);
+    const skunit = pick(satir, ["SKUNIT"]) || pick(satir, ["IUNIT", "UNIT"]) || "AD";
     return {
       ok: true,
       material: pick(satir, ["MATERIAL"]),
       name: pick(satir, ["MTEXT"]).trim(),
       unit: pick(satir, ["IUNIT", "UNIT"]),
+      skunit,
+      multiplier: rawQty > 0 ? rawQty : 1,
       lot: yok(lot) ? undefined : lot,
-      quantity: num(satir, ["QUANTITY"], 0),
+      quantity: rawQty,
       availStock: num(satir, ["AVAILSTOCK"], 0),
 
       specialStock: pick(satir, ["SPECIALSTOCK"]),
@@ -1043,12 +1047,17 @@ export const api = {
           ? String(it.batchNum).trim()
           : "*";
 
+      // Stok birimi (adet) bazında miktar hesaplama (Örn: KO/PK ise çarpan ile adet'e çevir)
+      const multiplier = it.multiplier && it.multiplier > 1 ? it.multiplier : 1;
+      const baseStockQty = Number(it.quantity || 1) * multiplier;
+      const baseStockUnit = String(it.skunit || it.unit || "AD").trim().toUpperCase();
+
       return {
         MATERIAL: String(it.material || "").trim(),
         SPECIALSTOCK: specialStock,
         BATCHNUM: batchNum,
-        QUANTITY: Number(it.quantity || 1),
-        QUNIT: String(it.unit || "AD").trim().toUpperCase(),
+        QUANTITY: baseStockQty,
+        QUNIT: baseStockUnit,
       };
     });
 

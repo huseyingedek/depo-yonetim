@@ -47,25 +47,17 @@ export interface PickRecord {
 }
 
 export interface BarcodeResult {
-
   ok: boolean;
-
   material: string;
-
   name: string;
-
   unit: string;
-
+  skunit?: string;
+  multiplier?: number;
   lot?: string;
-
   specialStock: string;
-
   quantity: number;
-
   availStock: number;
-
   fields: Record<string, string>;
-
   message: string;
 }
 
@@ -186,6 +178,8 @@ export interface TransferItem {
   barcode: string;
   quantity: number;
   unit: string;
+  skunit?: string; // Stok Birimi (Örn: AD)
+  multiplier?: number; // Çarpan (Örn: 24)
   batchNum?: string; // lot
   isSpecialStock?: boolean;
   specialStock?: string;
@@ -210,6 +204,8 @@ export interface StockTransferPayload {
     barcode?: string;
     quantity: number;
     unit?: string;
+    skunit?: string;
+    multiplier?: number;
     batchNum?: string;
     specialStock?: string;
     sourceWarehouse?: string;

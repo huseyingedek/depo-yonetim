@@ -80,10 +80,14 @@ interface TransferState {
     barcode: string;
     quantity: number;
     unit: string;
+    skunit?: string;
+    multiplier?: number;
     batchNum?: string;
     specialStock?: string;
     isSpecialStock?: boolean;
     availStock?: number;
+    sourceWarehouse?: string;
+    sourceStockPlace?: string;
   }) => { ok: boolean; message: string; itemId?: string };
 
   updateItemQty: (id: string, qty: number) => void;
@@ -335,20 +339,27 @@ export const useTransferStore = create<TransferState>()((set, get) => ({
         barcode: string;
         quantity: number;
         unit: string;
+        skunit?: string;
+        multiplier?: number;
         batchNum?: string;
         specialStock?: string;
         isSpecialStock?: boolean;
         availStock?: number;
+        sourceWarehouse?: string;
+        sourceStockPlace?: string;
       }) => {
         const { sourceShelf, items } = get();
-        if (!sourceShelf) return { ok: false, message: "Önce raf okutulmalı" };
+        const srcWh = item.sourceWarehouse || sourceShelf?.warehouse || "";
+        const srcSp = item.sourceStockPlace || sourceShelf?.stockPlace || "";
+        if (!srcWh && !sourceShelf) return { ok: false, message: "Önce raf okutulmalı" };
+
         const lot = item.batchNum && item.batchNum !== "*" ? item.batchNum : undefined;
         const existingIndex = items.findIndex(
           (it) =>
             it.material === item.material &&
             (it.batchNum ?? "") === (lot ?? "") &&
-            it.sourceWarehouse === sourceShelf.warehouse &&
-            it.sourceStockPlace === sourceShelf.stockPlace
+            it.sourceWarehouse === srcWh &&
+            it.sourceStockPlace === srcSp
         );
 
         let updatedItems: TransferItem[];
@@ -369,11 +380,13 @@ export const useTransferStore = create<TransferState>()((set, get) => ({
             barcode: item.barcode,
             quantity: qtyRound(item.quantity),
             unit: item.unit || "AD",
+            skunit: item.skunit,
+            multiplier: item.multiplier,
             batchNum: lot,
             isSpecialStock: Boolean(item.isSpecialStock),
             specialStock: item.specialStock || (lot ? "1" : "*"),
-            sourceWarehouse: sourceShelf.warehouse,
-            sourceStockPlace: sourceShelf.stockPlace,
+            sourceWarehouse: srcWh,
+            sourceStockPlace: srcSp,
             availStock: item.availStock,
             timestamp: Date.now(),
           };

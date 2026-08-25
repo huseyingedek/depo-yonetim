@@ -315,4 +315,87 @@ describe("INVT00M1 Stok Transferi (Stock Transfer Store & Flow)", () => {
     expect(res.ok).toBe(false);
     expect(res.message).toContain("Yetersiz stok");
   });
+
+  it("9. Koli / Paket okutulduğunda stok birimi (AD) ve çarpan dönüşümü doğru yapılır", async () => {
+    let capturedBody: any = null;
+
+    global.fetch = vi.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.body) capturedBody = JSON.parse(init.body as string);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: 200,
+          data: { TBLTRANSFER: [{ TRANSFERID: "TR-999" }] },
+          messages: "Transfer başarılı",
+        }),
+      };
+    });
+
+    const res = await api.createStockTransfer({
+      company: "01",
+      plant: "100",
+      sourceWarehouse: "01",
+      sourceStockPlace: "A-01-01",
+      targetWarehouse: "02",
+      targetStockPlace: "B-02-01",
+      items: [
+        {
+          material: "CC021",
+          quantity: 2, // 2 koli
+          unit: "KO",
+          skunit: "AD",
+          multiplier: 24, // 2 x 24 = 48 Adet
+        },
+      ],
+    });
+
+    expect(res.ok).toBe(true);
+    const list = (capturedBody.PSTRANSFERTABLEXML || capturedBody.TRANSFERLIST) as Array<Record<string, unknown>>;
+    expect(list[0].QUANTITY).toBe(48);
+    expect(list[0].QUNIT).toBe("AD");
+  });
+
+  it("10. Sepette farklı raflardan toplanan malzemeler kendi kaynak lokasyonlarıyla saklanır", () => {
+    useTransferStore.getState().reset();
+    useTransferStore.getState().setSourceShelf({
+      barcode: "00$*",
+      warehouse: "00",
+      stockPlace: "*",
+    });
+
+    useTransferStore.getState().addItem({
+      material: "CC021",
+      name: "Cola",
+      barcode: "5000112664867",
+      quantity: 5,
+      unit: "AD",
+      sourceWarehouse: "00",
+      sourceStockPlace: "*",
+    });
+
+    // 2. Rafa geçiş
+    useTransferStore.getState().clearSourceShelf();
+    useTransferStore.getState().setSourceShelf({
+      barcode: "10$*",
+      warehouse: "10",
+      stockPlace: "*",
+    });
+
+    useTransferStore.getState().addItem({
+      material: "SLP08",
+      name: "Sleepy",
+      barcode: "8682241212880",
+      quantity: 10,
+      unit: "PK",
+      sourceWarehouse: "10",
+      sourceStockPlace: "*",
+    });
+
+    const items = useTransferStore.getState().items;
+    expect(items.length).toBe(2);
+    expect(items.find((i) => i.material === "CC021")?.sourceWarehouse).toBe("00");
+    expect(items.find((i) => i.material === "SLP08")?.sourceWarehouse).toBe("10");
+  });
 });
+
