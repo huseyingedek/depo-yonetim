@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   MapPin,
@@ -34,7 +34,6 @@ export default function StockTransferPage() {
   const completedResult = useTransferStore((s) => s.completedResult);
 
   const scanSourceShelf = useTransferStore((s) => s.scanSourceShelf);
-  const clearSourceShelf = useTransferStore((s) => s.clearSourceShelf);
   const addItem = useTransferStore((s) => s.addItem);
   const updateItemQty = useTransferStore((s) => s.updateItemQty);
   const removeItem = useTransferStore((s) => s.removeItem);
@@ -43,6 +42,16 @@ export default function StockTransferPage() {
   const scanTargetShelf = useTransferStore((s) => s.scanTargetShelf);
   const completeTransfer = useTransferStore((s) => s.completeTransfer);
   const reset = useTransferStore((s) => s.reset);
+
+  // Ekrana her girişte ve çıkışta transfer oturumunu tertemiz sıfırla
+  useEffect(() => {
+    try {
+      localStorage.removeItem("wms-stock-transfer-store");
+    } catch {
+      // ignore
+    }
+    reset();
+  }, [reset]);
 
   const [toast, setToast] = useState<Toast>(null);
   const [busy, setBusy] = useState(false);
@@ -357,12 +366,12 @@ export default function StockTransferPage() {
     step === "target"
       ? "Hedef raf barkodunu okutun"
       : !sourceShelf
-      ? "Raf barkodunu okutun"
-      : lotPendingItem
-      ? "Parti barkodunu okutun"
-      : activeItem
-      ? ""
-      : "Malzeme barkodunu okutun";
+        ? "Raf barkodunu okutun"
+        : lotPendingItem
+          ? "Parti barkodunu okutun"
+          : activeItem
+            ? ""
+            : "Malzeme barkodunu okutun";
 
   return (
     <div className="mx-auto max-w-6xl p-3 md:p-4 lg:p-8 short:h-[100dvh] short:max-w-none short:flex short:flex-col short:overflow-hidden short:p-2">
@@ -378,6 +387,7 @@ export default function StockTransferPage() {
           if (step === "target") {
             backToCollectStep();
           } else {
+            reset();
             navigate("/home");
           }
         }}
@@ -441,12 +451,12 @@ export default function StockTransferPage() {
       />
 
       {/* İki Sütunlu Grid Düzen (Yatay Telefonda Yan Yana) */}
-      <div className="grid min-w-0 gap-4 md:gap-6 md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-3">
+      <div className="grid min-w-0 gap-3 md:gap-5 md:grid-cols-[350px_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[380px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-3">
         {/* SOL KOLON: Tarayıcı, Lokasyon Kartları ve Miktar Paneli */}
-        <div className="min-w-0 md:sticky md:top-3 md:self-start lg:static xl:sticky xl:top-4 short:!static short:w-[300px] short:shrink-0 short:self-stretch short:overflow-y-auto">
-          <div className="card p-3 sm:p-3.5">
-            {/* Adım İndikatörleri (4 Eşit Boyutlu Kart: 1 Raf · 2 Malzeme · 3 Parti · 4 Miktar) */}
-            <div className="mb-3">
+        <div className="min-w-0 md:sticky md:top-3 md:self-start lg:static xl:sticky xl:top-4 short:!static short:w-[350px] short:shrink-0 short:self-stretch short:overflow-y-auto">
+          <div className="card p-2 sm:p-2.5">
+            {/* Adım İndikatörleri (Oval Kartlar: Kartın sağ ve sol kenarlarına yakın, yatayda geniş) */}
+            <div className="mb-2.5">
               {step === "collect" ? (
                 <div className="grid grid-cols-4 gap-1 w-full">
                   {(
@@ -463,12 +473,10 @@ export default function StockTransferPage() {
                       (s === "lot" && !!lotPendingItem) ||
                       (s === "qty" && !!activeItem);
 
+                    const isClickable = s === "product" && (!!lotPendingItem || !!activeItem);
+
                     const git = () => {
-                      if (s === "shelf") {
-                        clearSourceShelf();
-                        setActiveItem(null);
-                        setLotPendingItem(null);
-                      } else if (s === "product") {
+                      if (isClickable) {
                         setActiveItem(null);
                         setLotPendingItem(null);
                       }
@@ -479,11 +487,13 @@ export default function StockTransferPage() {
                         key={s}
                         type="button"
                         onClick={git}
-                        disabled={s === "lot" || s === "qty"}
-                        className={`flex h-9 w-full items-center justify-center rounded-xl px-0.5 text-xs sm:text-[12.5px] font-bold tracking-tight transition-all duration-200 ease-soft ${
+                        disabled={!isClickable}
+                        className={`flex h-10 w-full items-center justify-center rounded-xl px-0.5 text-xs sm:text-[13px] font-bold tracking-tight transition-all duration-200 ease-soft ${
                           active
-                            ? "bg-brand-600 text-white shadow-soft"
-                            : "bg-elevated text-subtle hover:text-fg"
+                            ? "bg-brand-600 text-white shadow-soft font-extrabold cursor-default"
+                            : isClickable
+                            ? "bg-elevated text-subtle hover:text-fg hover:bg-line cursor-pointer"
+                            : "bg-elevated/60 text-subtle/60 cursor-default opacity-85"
                         }`}
                       >
                         <span>{label}</span>
@@ -504,9 +514,9 @@ export default function StockTransferPage() {
                     return (
                       <div
                         key={s}
-                        className={`flex h-9 w-full items-center justify-center rounded-xl px-1 text-xs sm:text-[12.5px] font-bold tracking-tight transition-all duration-200 ease-soft ${
+                        className={`flex h-10 w-full items-center justify-center rounded-xl px-1 text-xs sm:text-[13px] font-bold tracking-tight transition-all duration-200 ease-soft ${
                           active
-                            ? "bg-brand-600 text-white shadow-soft"
+                            ? "bg-brand-600 text-white shadow-soft font-extrabold"
                             : "bg-elevated text-subtle"
                         }`}
                       >
@@ -718,9 +728,8 @@ export default function StockTransferPage() {
                     return (
                       <div
                         key={item.id}
-                        className={`rounded-2xl border bg-surface p-3.5 shadow-card transition-all duration-300 ease-soft ${
-                          flashing ? "border-brand-400 ring-2 ring-brand-200" : "border-line"
-                        }`}
+                        className={`rounded-2xl border bg-surface p-3.5 shadow-card transition-all duration-300 ease-soft ${flashing ? "border-brand-400 ring-2 ring-brand-200" : "border-line"
+                          }`}
                       >
                         <div className="flex items-start gap-3">
                           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 font-mono text-xs font-bold text-brand-700">

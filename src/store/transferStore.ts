@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import type { StockBatch, StockTransferPayload, TransferItem } from "../types";
 import { api } from "../api/client";
 import { useAppStore } from "./appStore";
@@ -102,22 +101,20 @@ interface TransferState {
   reset: () => void;
 }
 
-export const useTransferStore = create<TransferState>()(
-  persist(
-    (set, get) => ({
-      sourceShelf: null,
-      targetShelf: null,
-      items: [],
-      step: "collect",
+export const useTransferStore = create<TransferState>()((set, get) => ({
+  sourceShelf: null,
+  targetShelf: null,
+  items: [],
+  step: "collect",
 
-      lotPending: null,
-      batchList: [],
-      batchLoading: false,
-      batchError: null,
+  lotPending: null,
+  batchList: [],
+  batchLoading: false,
+  batchError: null,
 
-      loading: false,
-      completing: false,
-      completedResult: null,
+  loading: false,
+  completing: false,
+  completedResult: null,
 
       scanSourceShelf: async (barcode: string) => {
         const kod = barcode.trim().toUpperCase();
@@ -538,15 +535,4 @@ export const useTransferStore = create<TransferState>()(
           completedResult: null,
         });
       },
-    }),
-    {
-      name: "wms-stock-transfer-store",
-      partialize: (state) => ({
-        sourceShelf: state.sourceShelf,
-        targetShelf: state.targetShelf,
-        items: state.items,
-        step: state.step,
-      }),
-    }
-  )
-);
+    }));
