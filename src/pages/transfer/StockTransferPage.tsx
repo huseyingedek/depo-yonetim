@@ -11,6 +11,7 @@ import {
   Minus,
   Send,
   CheckCircle2,
+  X,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import BarcodeScanner from "../../components/BarcodeScanner";
@@ -388,7 +389,7 @@ export default function StockTransferPage() {
           ? ""
           : activeItem
             ? ""
-            : "Malzeme barkodunu okutun";
+            : `Malzeme barkodunu okutun (Raf: ${sourceShelf.stockPlace})`;
 
   return (
     <div className="mx-auto max-w-6xl p-3 md:p-4 lg:p-8 short:h-[100dvh] short:max-w-none short:flex short:flex-col short:overflow-hidden short:p-2">
@@ -478,7 +479,7 @@ export default function StockTransferPage() {
                 <div className="grid grid-cols-4 gap-1 w-full">
                   {(
                     [
-                      ["shelf", "1 Raf"],
+                      ["shelf", sourceShelf ? `1 Raf (${sourceShelf.stockPlace})` : "1 Raf"],
                       ["product", "2 Malzeme"],
                       ["lot", "3 Parti"],
                       ["qty", "4 Miktar"],
@@ -510,6 +511,7 @@ export default function StockTransferPage() {
                         type="button"
                         onClick={git}
                         disabled={!isClickable}
+                        title={typeof label === "string" ? label : ""}
                         className={`flex h-10 w-full items-center justify-center rounded-xl px-0.5 text-xs sm:text-[13px] font-bold tracking-tight transition-all duration-200 ease-soft ${
                           active
                             ? "bg-brand-600 text-white shadow-soft font-extrabold cursor-default"
@@ -532,6 +534,32 @@ export default function StockTransferPage() {
                 </div>
               )}
             </div>
+
+            {/* KAYNAK ADIMI: Okutulan Kaynak Raf Bilgisi (Toplama ekranı ile birebir aynı yeşil kart) */}
+            {step === "collect" && sourceShelf && (
+              <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2">
+                <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-emerald-800 dark:text-emerald-200">
+                  <MapPin className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <span className="truncate">
+                    Depo: <span className="font-mono font-bold">{sourceShelf.warehouse}</span>
+                    {" · "}
+                    Stok yeri: <span className="font-mono font-bold">{sourceShelf.stockPlace}</span>
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearSourceShelf();
+                    setActiveItem(null);
+                    setLotPendingItem(null);
+                  }}
+                  className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:underline cursor-pointer"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Rafı değiştir
+                </button>
+              </div>
+            )}
 
             {/* HEDEF ADIMI: Okunan Hedef Raf */}
             {step === "target" && targetShelf && (

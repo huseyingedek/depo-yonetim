@@ -1093,23 +1093,13 @@ export const api = {
     try {
       const r = await call(SERVICES.stockTransfer, {
         PSCOMPANY: compCode,
-        COMPANY: compCode,
         PSPLANT: plantCode,
-        PLANT: plantCode,
         PSUSER: userCode,
-        USER: userCode,
         PSSRCWAREHOUSE: srcWh,
-        SRCWAREHOUSE: srcWh,
         PSSRCSTOCKPLACE: srcSp,
-        SRCSTOCKPLACE: srcSp,
         PSTARWAREHOUSE: tarWh,
-        TARWAREHOUSE: tarWh,
         PSTARSTOCKPLACE: tarSp,
-        TARSTOCKPLACE: tarSp,
         PSTRANSFERTABLEXML: formattedItems,
-        TRANSFERTABLEXML: formattedItems,
-        PSTRANSFERLIST: formattedItems,
-        TRANSFERLIST: formattedItems,
       });
 
       const mesaj = serviceMessage(r);

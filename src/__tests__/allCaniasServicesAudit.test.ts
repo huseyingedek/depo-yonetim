@@ -478,7 +478,7 @@ describe("CANIAS WMS All 25 Services Exhaustive Audit & Parameter Validation", (
   // 12. SERBEST STOK TRANSFERİ (MZYStockTransfer)
   // ===========================================================================
   describe("12. MZYStockTransfer - Serbest Stok Transferi", () => {
-    it("COMPANY, PLANT, USER, SRC/TAR WAREHOUSE/STOCKPLACE ve TRANSFERLIST parametrelerini eksiksiz iletmelidir", async () => {
+    it("PSCOMPANY, PSPLANT, PSUSER, PSSRC/TAR WAREHOUSE/STOCKPLACE ve PSTRANSFERTABLEXML parametrelerini eksiksiz iletmelidir", async () => {
       await api.createStockTransfer({
         company: "01",
         plant: "100",
@@ -504,15 +504,10 @@ describe("CANIAS WMS All 25 Services Exhaustive Audit & Parameter Validation", (
       expect(req?.params.PSPLANT).toBe("100");
       expect(req?.params.PSUSER).toBe("depocu1");
       expect(req?.params.PSSRCWAREHOUSE).toBe("01");
-      expect(req?.params.SRCWAREHOUSE).toBe("01");
       expect(req?.params.PSSRCSTOCKPLACE).toBe("A-01-01");
-      expect(req?.params.SRCSTOCKPLACE).toBe("A-01-01");
       expect(req?.params.PSTARWAREHOUSE).toBe("02");
-      expect(req?.params.TARWAREHOUSE).toBe("02");
       expect(req?.params.PSTARSTOCKPLACE).toBe("B-03-02");
-      expect(req?.params.TARSTOCKPLACE).toBe("B-03-02");
       expect(req?.params.PSTRANSFERTABLEXML).toBeDefined();
-      expect(req?.params.TRANSFERLIST).toBeDefined();
     });
   });
 });

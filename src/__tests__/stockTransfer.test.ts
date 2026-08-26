@@ -250,23 +250,16 @@ describe("INVT00M1 Stok Transferi (Stock Transfer Store & Flow)", () => {
     expect(capturedUrl).toContain("MZYStockTransfer");
 
     // Header parametreleri
-    expect(capturedBody.COMPANY).toBe("01");
     expect(capturedBody.PSCOMPANY).toBe("01");
-    expect(capturedBody.PLANT).toBe("100");
     expect(capturedBody.PSPLANT).toBe("100");
-    expect(capturedBody.USER).toBe("depocu1");
     expect(capturedBody.PSUSER).toBe("depocu1");
-    expect(capturedBody.SRCWAREHOUSE).toBe("01");
     expect(capturedBody.PSSRCWAREHOUSE).toBe("01");
-    expect(capturedBody.SRCSTOCKPLACE).toBe("A-01-01");
     expect(capturedBody.PSSRCSTOCKPLACE).toBe("A-01-01");
-    expect(capturedBody.TARWAREHOUSE).toBe("02");
     expect(capturedBody.PSTARWAREHOUSE).toBe("02");
-    expect(capturedBody.TARSTOCKPLACE).toBe("B-02-01");
     expect(capturedBody.PSTARSTOCKPLACE).toBe("B-02-01");
 
-    // Transfer listesi alt tablosu (PSTRANSFERTABLEXML / TRANSFERLIST)
-    const list = (capturedBody.PSTRANSFERTABLEXML || capturedBody.TRANSFERLIST) as Array<Record<string, unknown>>;
+    // Transfer listesi alt tablosu (PSTRANSFERTABLEXML)
+    const list = capturedBody.PSTRANSFERTABLEXML as Array<Record<string, unknown>>;
     expect(Array.isArray(list)).toBe(true);
     expect(list.length).toBe(2);
 
