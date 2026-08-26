@@ -169,9 +169,10 @@ export default function StockTransferPage() {
             return;
           }
 
-          const lotStockQty = (secilenBatch && secilenBatch.availStock > 0)
-            ? secilenBatch.availStock
-            : 1;
+          const isSameUnit = (lotPendingItem.unit || "").trim().toUpperCase() === (lotPendingItem.skunit || lotPendingItem.unit || "").trim().toUpperCase();
+          const lotStockQty = isSameUnit
+            ? ((secilenBatch && secilenBatch.availStock > 0) ? secilenBatch.availStock : 1)
+            : 0;
 
           setActiveItem({
             material: lotPendingItem.material,
@@ -189,7 +190,12 @@ export default function StockTransferPage() {
             sourceStockPlace: sourceShelf.stockPlace,
           });
           setLotPendingItem(null);
-          showToast({ kind: "ok", text: `Parti (${lotVal}) seçildi, miktar: ${lotStockQty}` });
+          showToast({
+            kind: "ok",
+            text: isSameUnit
+              ? `Parti (${lotVal}) seçildi, miktar: ${lotStockQty}`
+              : `Parti (${lotVal}) seçildi, miktar girin`,
+          });
           return;
         }
 
@@ -246,22 +252,18 @@ export default function StockTransferPage() {
         const ozelStok = res.specialStock || "0";
         const lotTracked = ozelStok === "1" || /takipli|partili/i.test(ozelStok) || (res.lot && res.lot !== "*");
 
-        let resolvedMultiplier = res.multiplier && res.multiplier > 1 ? res.multiplier : 1;
-        if (resolvedMultiplier <= 1 && res.name) {
-          const m = /(?:^|\s)(\d+)\s*(?:'l[üiıu]|l[üiıu]|adet|ad)(?:\s|$)/i.exec(res.name);
-          if (m) {
-            const val = parseInt(m[1], 10);
-            if (val > 1 && val <= 10000) resolvedMultiplier = val;
-          }
-        }
+        const resolvedMultiplier = res.multiplier && res.multiplier > 1 ? res.multiplier : 1;
+        const isSameUnit = (res.unit || "").trim().toUpperCase() === (res.skunit || res.unit || "").trim().toUpperCase();
 
         // Eğer partili malzeme ise ve barkodda parti yoksa:
         if (lotTracked && (!res.lot || res.lot === "*")) {
           // Durum A: Rafta tek bir parti varsa doğrudan seç ve Adım 4'e (Miktar) geç!
-          // 4. Kural: Partili ürün seçildiyse stoktaki miktar otomatik yazılacak
+          // 4. Kural: Partili ürün seçildiyse stoktaki miktar otomatik yazılacak (BUNIT === SKUNIT ise)
           if (validBatches.length === 1) {
             const tekParti = validBatches[0];
-            const stockQty = tekParti.availStock > 0 ? tekParti.availStock : (res.quantity > 0 ? res.quantity : 1);
+            const stockQty = isSameUnit
+              ? (tekParti.availStock > 0 ? tekParti.availStock : (res.quantity > 0 ? res.quantity : 1))
+              : 0;
             setActiveItem({
               material: res.material,
               name: res.name,
@@ -277,7 +279,12 @@ export default function StockTransferPage() {
               sourceWarehouse: sourceShelf.warehouse,
               sourceStockPlace: sourceShelf.stockPlace,
             });
-            showToast({ kind: "ok", text: `${res.name} (Parti: ${tekParti.batchNum}) seçildi, miktar: ${stockQty}` });
+            showToast({
+              kind: "ok",
+              text: isSameUnit
+                ? `${res.name} (Parti: ${tekParti.batchNum}) seçildi, miktar: ${stockQty}`
+                : `${res.name} (Parti: ${tekParti.batchNum}) seçildi, miktar girin`,
+            });
             return;
           }
 
@@ -303,8 +310,10 @@ export default function StockTransferPage() {
         }
 
         // Partisiz malzeme (veya barkodda partisi olan) -> Adım 4 (Miktar)
-        // 4. Kural: Stoktaki miktar otomatik olarak yazılı olacak
-        const initialQty = (res.availStock > 0) ? res.availStock : (res.quantity > 0 ? res.quantity : 1);
+        // 4. Kural: Stoktaki miktar otomatik olarak yazılı olacak (BUNIT === SKUNIT ise)
+        const initialQty = isSameUnit
+          ? ((res.availStock > 0) ? res.availStock : (res.quantity > 0 ? res.quantity : 1))
+          : 0;
         setActiveItem({
           material: res.material,
           name: res.name,
@@ -320,7 +329,12 @@ export default function StockTransferPage() {
           sourceWarehouse: sourceShelf.warehouse,
           sourceStockPlace: sourceShelf.stockPlace,
         });
-        showToast({ kind: "ok", text: `${res.name} okundu, miktar: ${initialQty}` });
+        showToast({
+          kind: "ok",
+          text: isSameUnit
+            ? `${res.name} okundu, miktar: ${initialQty}`
+            : `${res.name} okundu, taşınacak miktarı (${res.unit}) girin`,
+        });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Okuma hatası";
         setRedMesaji(msg);
@@ -765,10 +779,10 @@ export default function StockTransferPage() {
                     onChange={(e) => {
                       const lotVal = e.target.value;
                       if (!lotVal) return;
-                      const secilenBatch = lotPendingItem.batches?.find((b) => b.batchNum === lotVal);
-                      const lotStockQty = (secilenBatch && secilenBatch.availStock > 0)
-                        ? secilenBatch.availStock
-                        : 1;
+                      const isSameUnit = (lotPendingItem.unit || "").trim().toUpperCase() === (lotPendingItem.skunit || lotPendingItem.unit || "").trim().toUpperCase();
+                      const lotStockQty = isSameUnit
+                        ? ((secilenBatch && secilenBatch.availStock > 0) ? secilenBatch.availStock : 1)
+                        : 0;
 
                       setActiveItem({
                         material: lotPendingItem.material,
@@ -786,7 +800,12 @@ export default function StockTransferPage() {
                         sourceStockPlace: sourceShelf?.stockPlace || "",
                       });
                       setLotPendingItem(null);
-                      showToast({ kind: "ok", text: `Parti (${lotVal}) seçildi, miktar: ${lotStockQty}` });
+                      showToast({
+                        kind: "ok",
+                        text: isSameUnit
+                          ? `Parti (${lotVal}) seçildi, miktar: ${lotStockQty}`
+                          : `Parti (${lotVal}) seçildi, miktar girin`,
+                      });
                     }}
                     className="h-9 w-full rounded-lg border border-line bg-surface px-2 font-mono text-sm text-fg outline-none focus:border-brand-500 disabled:opacity-70"
                   >
@@ -840,9 +859,10 @@ export default function StockTransferPage() {
                         return;
                       }
 
-                      const lotStockQty = (secilenBatch && secilenBatch.availStock > 0)
-                        ? secilenBatch.availStock
-                        : 1;
+                      const isSameUnit = (lotPendingItem.unit || "").trim().toUpperCase() === (lotPendingItem.skunit || lotPendingItem.unit || "").trim().toUpperCase();
+                      const lotStockQty = isSameUnit
+                        ? ((secilenBatch && secilenBatch.availStock > 0) ? secilenBatch.availStock : 1)
+                        : 0;
 
                       setActiveItem({
                         material: lotPendingItem.material,
@@ -860,7 +880,12 @@ export default function StockTransferPage() {
                         sourceStockPlace: sourceShelf?.stockPlace || "",
                       });
                       setLotPendingItem(null);
-                      showToast({ kind: "ok", text: `Parti (${b}) seçildi, miktar: ${lotStockQty}` });
+                      showToast({
+                        kind: "ok",
+                        text: isSameUnit
+                          ? `Parti (${b}) seçildi, miktar: ${lotStockQty}`
+                          : `Parti (${b}) seçildi, miktar girin`,
+                      });
                     }}
                     className="h-8 flex-1 rounded-lg border border-line bg-surface px-2 font-mono text-sm text-fg outline-none focus:border-brand-500"
                   />

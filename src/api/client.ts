@@ -805,22 +805,16 @@ export const api = {
     const lot = pick(satir, ["BATCHNUM"]);
     const rawQty = num(satir, ["QUANTITY"], 0);
     const mText = pick(satir, ["MTEXT"]).trim();
-    const skunit = pick(satir, ["SKUNIT"]) || pick(satir, ["IUNIT", "UNIT"]) || "AD";
+    const bunit = pick(satir, ["BUNIT", "IUNIT", "UNIT"]) || "AD";
+    const skunit = pick(satir, ["SKUNIT"]) || pick(satir, ["IUNIT", "UNIT"]) || bunit || "AD";
 
-    let multiplier = rawQty > 0 ? rawQty : 1;
-    if (multiplier <= 1 && mText) {
-      const m = /(?:^|\s)(\d+)\s*(?:'l[üiıu]|l[üiıu]|adet|ad)(?:\s|$)/i.exec(mText);
-      if (m) {
-        const val = parseInt(m[1], 10);
-        if (val > 1 && val <= 10000) multiplier = val;
-      }
-    }
+    const multiplier = rawQty > 0 ? rawQty : 1;
 
     return {
       ok: true,
       material: pick(satir, ["MATERIAL"]),
       name: mText,
-      unit: pick(satir, ["IUNIT", "UNIT"]),
+      unit: bunit,
       skunit,
       multiplier,
       lot: yok(lot) ? undefined : lot,
@@ -1059,14 +1053,7 @@ export const api = {
           : "*";
 
       // Stok birimi (adet) bazında miktar hesaplama (Örn: KO/PK/KT ise çarpan ile adet'e çevir)
-      let multiplier = it.multiplier && it.multiplier > 1 ? it.multiplier : 1;
-      if (multiplier <= 1 && (it.materialName || "")) {
-        const m = /(?:^|\s)(\d+)\s*(?:'l[üiıu]|l[üiıu]|adet|ad)(?:\s|$)/i.exec(it.materialName || "");
-        if (m) {
-          const val = parseInt(m[1], 10);
-          if (val > 1 && val <= 10000) multiplier = val;
-        }
-      }
+      const multiplier = it.multiplier && it.multiplier > 1 ? it.multiplier : 1;
       const baseStockQty = Number(it.quantity || 1) * multiplier;
       const baseStockUnit = String(it.skunit || it.unit || "AD").trim().toUpperCase();
 
