@@ -1068,7 +1068,7 @@ export const api = {
         }
       }
       const baseStockQty = Number(it.quantity || 1) * multiplier;
-      const baseStockUnit = "AD";
+      const baseStockUnit = String(it.skunit || it.unit || "AD").trim().toUpperCase();
 
       return {
         MATERIAL: String(it.material || "").trim(),

@@ -360,7 +360,7 @@ export default function StockTransferPage() {
         setTimeout(() => {
           reset();
           navigate("/home");
-        }, 2000);
+        }, 5000);
       } else {
         sesHata();
         setRedMesaji(res.message);
@@ -613,7 +613,8 @@ export default function StockTransferPage() {
                     {(() => {
                       const mult = activeItem.multiplier && activeItem.multiplier > 0 ? activeItem.multiplier : 1;
                       const scannedUnit = (activeItem.unit || "AD").trim().toUpperCase();
-                      const equation = `1 ${scannedUnit} = ${mult} AD`;
+                      const targetUnit = (activeItem.skunit || activeItem.unit || "AD").trim().toUpperCase();
+                      const equation = `1 ${scannedUnit} = ${mult} ${targetUnit}`;
 
                       return (
                         <span className="text-xs font-mono font-semibold text-subtle">
@@ -977,12 +978,13 @@ export default function StockTransferPage() {
                               </button>
                             </div>
 
-                            {/* Alt Satır: Sol tarafta tam denklem (1 PK = 1 AD, 1 KO = 24 AD, 1 AD = 1 AD), sağ tarafta toplam miktar (Toplam 7 AD) */}
+                            {/* Alt Satır: Sol tarafta tam denklem (1 PK = 1 AD, 1 KO = 24 AD), sağ tarafta toplam miktar (Toplam X SKUNIT) */}
                             {(() => {
                               const mult = item.multiplier && item.multiplier > 0 ? item.multiplier : 1;
                               const scannedUnit = (item.unit || "AD").trim().toUpperCase();
+                              const targetUnit = (item.skunit || item.unit || "AD").trim().toUpperCase();
                               const totalBaseQty = qtyRound(item.quantity * mult);
-                              const equation = `1 ${scannedUnit} = ${mult} AD`;
+                              const equation = `1 ${scannedUnit} = ${mult} ${targetUnit}`;
 
                               return (
                                 <div className="flex items-center justify-between gap-2 w-full font-mono text-[11px] pt-0.5 border-t border-line/40 mt-0.5">
@@ -990,7 +992,7 @@ export default function StockTransferPage() {
                                     {equation}
                                   </span>
                                   <span className="font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                                    Toplam {totalBaseQty} AD
+                                    Toplam {totalBaseQty} {targetUnit}
                                   </span>
                                 </div>
                               );
@@ -1051,6 +1053,7 @@ export default function StockTransferPage() {
                         {items.map((it) => {
                           const mult = it.multiplier && it.multiplier > 0 ? it.multiplier : 1;
                           const scannedUnit = (it.unit || "AD").trim().toUpperCase();
+                          const targetUnit = (it.skunit || it.unit || "AD").trim().toUpperCase();
                           const totalBaseQty = qtyRound(it.quantity * mult);
 
                           return (
@@ -1077,9 +1080,9 @@ export default function StockTransferPage() {
                                 <p className="font-mono text-xs font-bold text-fg">
                                   {qtyRound(it.quantity)} {it.unit}
                                 </p>
-                                {(scannedUnit !== "AD" || mult > 1) && (
+                                {(scannedUnit !== targetUnit || mult > 1) && (
                                   <p className="font-mono text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400">
-                                    {totalBaseQty} AD
+                                    {totalBaseQty} {targetUnit}
                                   </p>
                                 )}
                               </td>

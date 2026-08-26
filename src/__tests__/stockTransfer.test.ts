@@ -241,6 +241,7 @@ describe("INVT00M1 Stok Transferi (Stock Transfer Store & Flow)", () => {
           barcode: "8690001002",
           quantity: 10,
           unit: "PK",
+          skunit: "AD",
         },
       ],
     });

@@ -1,20 +1,13 @@
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
 import { useAppStore } from "../store/appStore";
 import { OPERATIONS } from "../components/operations";
-import { api } from "../api/client";
 
 export default function HomePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const user = useAppStore((s) => s.user);
-  const [openCount, setOpenCount] = useState<number | null>(null);
-
-  useEffect(() => {
-    api.getPickOrders().then((o) => setOpenCount(o.length));
-  }, []);
 
   const today = new Date().toLocaleDateString(t("app.name") === "Warehouse Mgmt" ? "en-GB" : "tr-TR", {
     weekday: "long",
@@ -36,7 +29,6 @@ export default function HomePage() {
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
         {OPERATIONS.map((op, i) => {
           const Icon = op.icon;
-          const badge = op.type === "picking" ? openCount : null;
           return (
             <button
               key={op.type}
@@ -52,11 +44,7 @@ export default function HomePage() {
                 <p className="mt-0.5 text-sm leading-snug text-subtle">{t(`home.operationDesc.${op.type}`)}</p>
               </div>
               <div className="mt-1 flex w-full items-center justify-between">
-                {badge ? (
-                  <span className="chip bg-brand-100 text-brand-700">
-                    {badge} {t("home.openTasks")}
-                  </span>
-                ) : !op.ready ? (
+                {!op.ready ? (
                   <span className="chip bg-elevated text-subtle">yakında</span>
                 ) : (
                   <span />
