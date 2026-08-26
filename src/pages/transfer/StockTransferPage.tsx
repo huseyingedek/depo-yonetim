@@ -779,6 +779,7 @@ export default function StockTransferPage() {
                     onChange={(e) => {
                       const lotVal = e.target.value;
                       if (!lotVal) return;
+                      const secilenBatch = lotPendingItem.batches?.find((b) => b.batchNum === lotVal);
                       const isSameUnit = (lotPendingItem.unit || "").trim().toUpperCase() === (lotPendingItem.skunit || lotPendingItem.unit || "").trim().toUpperCase();
                       const lotStockQty = isSameUnit
                         ? ((secilenBatch && secilenBatch.availStock > 0) ? secilenBatch.availStock : 1)
