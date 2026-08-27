@@ -590,7 +590,7 @@ export default function StockTransferPage() {
                 <div className="grid grid-cols-4 gap-1 w-full">
                   {(
                     [
-                      ["shelf", sourceShelf ? `1 Raf (${sourceShelf.stockPlace})` : "1 Raf"],
+                      ["shelf", "1 Raf"],
                       ["product", "2 Malzeme"],
                       ["lot", "3 Parti"],
                       ["qty", "4 Miktar"],
@@ -687,29 +687,19 @@ export default function StockTransferPage() {
             {/* ------------------------------------------------------------------- */}
             {step === "collect" && activeItem && (
               <div className="mb-3 space-y-2.5 pt-0.5 animate-fade-in">
-                <div className="flex items-center justify-between border-b border-line pb-2">
+                <div className="flex items-center justify-between border-b border-line pb-1.5">
                   <div className="min-w-0 flex-1">
-                    <h4 className="truncate text-xs sm:text-sm font-black text-fg" title={activeItem.name}>
-                      {activeItem.name}
-                    </h4>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] font-mono text-subtle">
-                      <span className="font-semibold text-brand-600 dark:text-brand-400">{activeItem.material}</span>
-                      {activeItem.batchNum && (
-                        <span className="rounded bg-violet-100 dark:bg-violet-950/60 px-1.5 py-0.5 font-bold text-violet-700 dark:text-violet-300">
-                          Parti: {activeItem.batchNum}
+                    <span className="text-xs font-bold text-fg">Miktar Girişi</span>
+                    {activeItem.availStock !== undefined && activeItem.availStock > 0 && (() => {
+                      const mult = activeItem.multiplier && activeItem.multiplier > 0 ? activeItem.multiplier : 1;
+                      const maxQty = getMaxAllowedQty(activeItem.availStock, mult);
+                      return (
+                        <span className="ml-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                          (Kalan: {qtyRound(activeItem.availStock)} {activeItem.skunit || activeItem.unit || "AD"}
+                          {mult > 1 ? ` · Maks: ${maxQty} ${activeItem.unit}` : ""})
                         </span>
-                      )}
-                      {activeItem.availStock !== undefined && activeItem.availStock > 0 && (() => {
-                        const mult = activeItem.multiplier && activeItem.multiplier > 0 ? activeItem.multiplier : 1;
-                        const maxQty = getMaxAllowedQty(activeItem.availStock, mult);
-                        return (
-                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                            (Kalan: {qtyRound(activeItem.availStock)} {activeItem.skunit || activeItem.unit || "AD"}
-                            {mult > 1 ? ` · Maks: ${maxQty} ${activeItem.unit}` : ""})
-                          </span>
-                        );
-                      })()}
-                    </div>
+                      );
+                    })()}
                   </div>
                   <button
                     type="button"
@@ -1038,9 +1028,89 @@ export default function StockTransferPage() {
         {/* SAĞ KOLON: Okutulan Malzemeler ve Özet Tablo */}
         <div className="min-w-0 short:flex-1 short:overflow-y-auto short:pr-1">
           {step === "collect" ? (
-            <div>
+            <div className="space-y-2.5">
+              {/* Aktif İşlemdeki Malzeme Kartı (Önizleme - Sol panelde miktar/parti girilirken sağda görüntülenir) */}
+              {(activeItem || lotPendingItem) && (() => {
+                const currentPending = activeItem || lotPendingItem;
+                if (!currentPending) return null;
+                const matName = currentPending.name;
+                const matCode = currentPending.material;
+                const wh = activeItem?.sourceWarehouse || sourceShelf?.warehouse || "";
+                const sp = activeItem?.sourceStockPlace || sourceShelf?.stockPlace || "";
+                const batchNum = activeItem?.batchNum;
+                const qty = activeItem ? activeItem.quantity : 0;
+                const unit = (activeItem?.unit || lotPendingItem?.unit || "AD").trim().toUpperCase();
+                const skunit = (activeItem?.skunit || lotPendingItem?.skunit || unit).trim().toUpperCase();
+                const mult = currentPending.multiplier && currentPending.multiplier > 0 ? currentPending.multiplier : 1;
+                const totalBaseQty = qtyRound(qty * mult);
+                const equation = `1 ${unit} = ${mult} ${skunit}`;
+                const isDiffUnit = unit !== skunit || mult > 1;
+
+                return (
+                  <div className="rounded-2xl border border-line bg-surface p-3.5 shadow-card animate-fade-in">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold text-fg">
+                          {matName}
+                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-subtle">
+                          <span className="font-mono font-semibold text-fg">
+                            {matCode}
+                          </span>
+                          {(wh || sp) && (
+                            <>
+                              <span>·</span>
+                              <span className="inline-flex items-center gap-1 rounded bg-elevated px-1.5 py-0.5 text-[11px] font-medium text-muted">
+                                <MapPin className="h-3 w-3 text-subtle" />
+                                {wh} / {sp}
+                              </span>
+                            </>
+                          )}
+
+                          {batchNum ? (
+                            <span className="inline-flex items-center gap-1 rounded bg-violet-100 dark:bg-violet-950/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-violet-700 dark:text-violet-300">
+                              Parti: {batchNum}
+                            </span>
+                          ) : lotPendingItem ? (
+                            <span className="inline-flex items-center gap-1 rounded bg-amber-100 dark:bg-amber-950/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                              Parti Seçimi Bekleniyor
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {/* Alınan Miktar (Miktar ekle/azalt/çıkart butonları OLMAYACAK) */}
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex items-center rounded-xl border border-line bg-elevated px-2.5 py-1">
+                            <span className="min-w-8 text-center font-mono text-sm sm:text-base font-extrabold text-fg">
+                              {qtyRound(qty)}
+                            </span>
+                          </div>
+                          <span className="text-xs font-bold text-subtle">
+                            {unit}
+                          </span>
+                        </div>
+
+                        {/* Alt Satır: Eğer bunit ile skunit farklı ise 1 bunit = x skunit ve sağında toplam skunit */}
+                        {isDiffUnit && (
+                          <div className="flex items-center justify-between gap-2 w-full font-mono text-[11px] pt-0.5 border-t border-line/40 mt-0.5">
+                            <span className="font-semibold text-subtle">
+                              {equation}
+                            </span>
+                            <span className="font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                              Toplam {totalBaseQty} {skunit}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Malzeme Kartları Listesi */}
-              {items.length === 0 ? (
+              {items.length === 0 && !activeItem && !lotPendingItem ? (
                 <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-surface/50 p-8 text-center">
                   <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50">
                     <ArrowLeftRight className="h-7 w-7 text-amber-500" />
@@ -1057,102 +1127,78 @@ export default function StockTransferPage() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2.5">
-                  {items.map((item, idx) => {
-                    const flashing = flashId === item.id;
-                    return (
-                      <div
-                        key={item.id}
-                        className={`rounded-2xl border bg-surface p-3.5 shadow-card transition-all duration-300 ease-soft ${flashing ? "border-brand-400 ring-2 ring-brand-200" : "border-line"
-                          }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 font-mono text-xs font-bold text-brand-700">
-                            {idx + 1}
-                          </div>
+                items.map((item) => {
+                  const flashing = flashId === item.id;
+                  const mult = item.multiplier && item.multiplier > 0 ? item.multiplier : 1;
+                  const unit = (item.unit || "AD").trim().toUpperCase();
+                  const skunit = (item.skunit || item.unit || "AD").trim().toUpperCase();
+                  const totalBaseQty = qtyRound(item.quantity * mult);
+                  const equation = `1 ${unit} = ${mult} ${skunit}`;
+                  const isDiffUnit = unit !== skunit || mult > 1;
 
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-bold text-fg">
-                              {item.name}
-                            </p>
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-subtle">
-                              <span className="font-mono font-semibold text-fg">
-                                {item.material}
-                              </span>
-                              <span>·</span>
-                              <span className="inline-flex items-center gap-1 rounded bg-elevated px-1.5 py-0.5 text-[11px] font-medium text-muted">
-                                <MapPin className="h-3 w-3 text-subtle" />
-                                {item.sourceWarehouse} / {item.sourceStockPlace}
-                              </span>
-
-                              {item.batchNum && (
-                                <span className="inline-flex items-center gap-1 rounded bg-violet-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-violet-700">
-                                  Parti: {item.batchNum}
+                  return (
+                    <div
+                      key={item.id}
+                      className={`rounded-2xl border bg-surface p-3.5 shadow-card transition-all duration-300 ease-soft ${
+                        flashing ? "border-brand-400 ring-2 ring-brand-200" : "border-line"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-bold text-fg">
+                            {item.name}
+                          </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-subtle">
+                            <span className="font-mono font-semibold text-fg">
+                              {item.material}
+                            </span>
+                            {(item.sourceWarehouse || item.sourceStockPlace) && (
+                              <>
+                                <span>·</span>
+                                <span className="inline-flex items-center gap-1 rounded bg-elevated px-1.5 py-0.5 text-[11px] font-medium text-muted">
+                                  <MapPin className="h-3 w-3 text-subtle" />
+                                  {item.sourceWarehouse} / {item.sourceStockPlace}
                                 </span>
-                              )}
-                            </div>
-                          </div>
+                              </>
+                            )}
 
-                          {/* Miktar Arttır / Azalt / Sil Kontrolleri */}
-                          <div className="flex flex-col items-end gap-1 shrink-0">
-                            <div className="flex items-center gap-1.5">
-                              <div className="flex items-center rounded-xl border border-line bg-elevated p-0.5">
-                                <button
-                                  type="button"
-                                  onClick={() => updateItemQty(item.id, item.quantity - 1)}
-                                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface text-muted shadow-xs transition hover:bg-line active:scale-95"
-                                >
-                                  <Minus className="h-3.5 w-3.5" />
-                                </button>
-                                <span className="min-w-10 text-center font-mono text-sm font-bold text-fg">
-                                  {qtyRound(item.quantity)}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => updateItemQty(item.id, item.quantity + 1)}
-                                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface text-muted shadow-xs transition hover:bg-line active:scale-95"
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                              <span className="text-xs font-semibold text-subtle">
-                                {item.unit}
+                            {item.batchNum && (
+                              <span className="inline-flex items-center gap-1 rounded bg-violet-100 dark:bg-violet-950/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-violet-700 dark:text-violet-300">
+                                Parti: {item.batchNum}
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => removeItem(item.id)}
-                                className="ml-1 flex h-8 w-8 items-center justify-center rounded-xl text-subtle transition hover:bg-rose-50 hover:text-rose-600"
-                                title="Sil"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-
-                            {/* Alt Satır: Sol tarafta tam denklem (1 PK = 1 AD, 1 KO = 24 AD), sağ tarafta toplam miktar (Toplam X SKUNIT) */}
-                            {(() => {
-                              const mult = item.multiplier && item.multiplier > 0 ? item.multiplier : 1;
-                              const scannedUnit = (item.unit || "AD").trim().toUpperCase();
-                              const targetUnit = (item.skunit || item.unit || "AD").trim().toUpperCase();
-                              const totalBaseQty = qtyRound(item.quantity * mult);
-                              const equation = `1 ${scannedUnit} = ${mult} ${targetUnit}`;
-
-                              return (
-                                <div className="flex items-center justify-between gap-2 w-full font-mono text-[11px] pt-0.5 border-t border-line/40 mt-0.5">
-                                  <span className="font-semibold text-subtle">
-                                    {equation}
-                                  </span>
-                                  <span className="font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                                    Toplam {totalBaseQty} {targetUnit}
-                                  </span>
-                                </div>
-                              );
-                            })()}
+                            )}
                           </div>
                         </div>
+
+                        {/* Alınan Miktar */}
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex items-center rounded-xl border border-line bg-elevated px-2.5 py-1">
+                              <span className="min-w-8 text-center font-mono text-sm sm:text-base font-extrabold text-fg">
+                                {qtyRound(item.quantity)}
+                              </span>
+                            </div>
+                            <span className="text-xs font-bold text-subtle">
+                              {unit}
+                            </span>
+                          </div>
+
+                          {/* Alt Satır: Eğer bunit ile skunit farklı ise 1 bunit = x skunit ve sağında toplam skunit */}
+                          {isDiffUnit && (
+                            <div className="flex items-center justify-between gap-2 w-full font-mono text-[11px] pt-0.5 border-t border-line/40 mt-0.5">
+                              <span className="font-semibold text-subtle">
+                                {equation}
+                              </span>
+                              <span className="font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                                Toplam {totalBaseQty} {skunit}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  );
+                })
               )}
             </div>
           ) : (
