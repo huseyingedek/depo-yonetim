@@ -27,6 +27,8 @@ export const SERVICES = {
   getWarehouse: "GetWarehouse", // PSCOMPANY, PSPLANT
   getStockPlace: "GetStockPlace", // PSCOMPANY, PSPLANT, PSWAREHOUSE
 
+  getTransaction: "MZYGetTransaction", // Raporlama — PSCOMPANY, PSPLANT?, PSUSER?, PDSTARTDATE, PDENDDATE
+
   printContainer: "MZYPrintContainer", // Konteyner/paket etiket yazdırma
   printWHSP: "MZYPrintWHSP", // Raf / Konteyner / Parti etiket yazdırma
   printMaterial: "MZYPrintMaterial", // Ürün barkodu etiket yazdırma

@@ -5,7 +5,8 @@ export type OperationType =
   | "transfer" // Transfer
   | "count" // Sayım
   | "inquiry" // Ürün Sorgulama
-  | "label_printing"; // Etiket Yazdırma
+  | "label_printing" // Etiket Yazdırma
+  | "reporting"; // Raporlama
 
 export interface User {
   username: string;
@@ -255,6 +256,25 @@ export interface StockRow {
   specialStock: string; // SPECIALSTOCK — 1: parti/SKT takipli
   availStock: number; // AVAILSTOCK
   unit: string; // QUNIT
+}
+
+// Raporlama — MZYGetTransaction satırı (Bora, 27.08). Alan adları teyit bekliyor;
+// savunmacı okunuyor, ham alanlar da saklanır (şema netleşince eşlenir).
+export interface TransactionRow {
+  user: string; // NAME + SURNAME (depocu)
+  login: string; // CREATEDBY (sistem kullanıcı adı)
+  date: string; // DOCDATE — işlem tarihi
+  typeText: string; // HSTEXT — hareket tipi (Transfer Hareketleri vb.)
+  srcTypeText: string; // ISTEXT — kaynak tip (Yerleştirme/Toplama Emri vb.)
+  item: number; // ITEM — belgedeki kalem sayısı
+  weight: number; // WKG — ağırlık (kg, belge toplamı)
+  volume: number; // WDS — hacim (desi, belge toplamı)
+  docNum: string; // INVDOCNUM — envanter belge no
+  srcDocType: string; // SRCDOCTYPE — kaynak belge tipi (SO=sipariş, MR=rezervasyon)
+  order: string; // SRCDOCNUM — kaynak belge no (sipariş no)
+  plant: string; // PLANT — tesis
+  isSalesOrder: boolean; // SRCDOCTYPE === "SO"
+  raw: Record<string, string>; // ham alanlar (teyit için)
 }
 
 export interface PickSuggestion {

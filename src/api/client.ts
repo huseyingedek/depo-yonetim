@@ -21,6 +21,7 @@ import type {
   PickSuggestion,
   StockBatch,
   StockRow,
+  TransactionRow,
   StockTransferPayload,
 } from "../types";
 
@@ -878,6 +879,46 @@ export const api = {
       code: pick(x, ["PLANT"]),
       name: pick(x, ["NAME", "STEXT"]) || pick(x, ["PLANT"]),
     }));
+  },
+
+  // Raporlama (Bora, 27.08): MZYGetTransaction. PSPLANT ve PSUSER boş olabilir.
+  // Tarihler "GG.AA.YYYY" (gün iki haneli!). Alan adları teyit bekliyor → savunmacı.
+  async getTransaction(opts: {
+    plant?: string;
+    user?: string;
+    startDate: string; // "GG.AA.YYYY"
+    endDate: string; // "GG.AA.YYYY"
+  }): Promise<TransactionRow[]> {
+    const c = ctx();
+    const r = await call(SERVICES.getTransaction, {
+      PSCOMPANY: c.company,
+      PSPLANT: opts.plant ?? "",
+      PSUSER: opts.user ?? "",
+      PDSTARTDATE: opts.startDate,
+      PDENDDATE: opts.endDate,
+    });
+    return rowsOf(r, ["TBLSTOCKTRANSACTION", "TBLTRANSACTION", "TBLTRANS", "TBLGETTRANSACTION", "TBLLOG"]).map((row) => {
+      const name = pick(row, ["NAME"]).trim();
+      const surname = pick(row, ["SURNAME"]).trim();
+      const login = pick(row, ["CREATEDBY", "CHANGEDBY", "USER", "USERNAME"]).trim();
+      const srcDocType = pick(row, ["SRCDOCTYPE"]).trim();
+      return {
+        user: `${name} ${surname}`.trim() || login,
+        login,
+        date: pick(row, ["DOCDATE", "DATE", "TRANSDATE", "CREATEDAT"]).trim(),
+        typeText: pick(row, ["HSTEXT"]).trim(),
+        srcTypeText: pick(row, ["ISTEXT"]).trim(),
+        item: num(row, ["ITEM"], 0), // belgedeki kalem sayısı
+        weight: num(row, ["WKG", "WEIGHT", "TOTWEIGHT"], 0),
+        volume: num(row, ["WDS", "VOLUME", "TOTVOLUME"], 0),
+        docNum: pick(row, ["INVDOCNUM", "DOCNUM"]).trim(),
+        srcDocType,
+        order: pick(row, ["SRCDOCNUM", "ORDERNUM", "ORDER"]).trim(),
+        plant: pick(row, ["PLANT"]).trim(),
+        isSalesOrder: srcDocType === "SO",
+        raw: row as Record<string, string>,
+      };
+    });
   },
 
   async getWarehouses(): Promise<{ code: string; name: string }[]> {

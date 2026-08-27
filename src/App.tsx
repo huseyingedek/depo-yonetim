@@ -23,6 +23,7 @@ import TransferTaskPage from "./pages/transfer/TransferTaskPage";
 import CountListPage from "./pages/count/CountListPage";
 import CountDetailPage from "./pages/count/CountDetailPage";
 import InquiryPage from "./pages/inquiry/InquiryPage";
+import ReportingPage from "./pages/reporting/ReportingPage";
 import LabelPrintingPage from "./pages/label-printing/LabelPrintingPage";
 import PackagingLabelPage from "./pages/label-printing/PackagingLabelPage";
 import WaybillLabelPage from "./pages/label-printing/WaybillLabelPage";
@@ -81,6 +82,9 @@ export default function App() {
 
         {}
         <Route path="/inquiry" element={<InquiryPage />} />
+
+        {}
+        <Route path="/reporting" element={<ReportingPage />} />
 
         {}
         <Route path="/label-printing" element={<LabelPrintingPage />} />

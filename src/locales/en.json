@@ -26,7 +26,8 @@
       "transfer": "Transfer",
       "count": "Stock Count",
       "inquiry": "Product Inquiry",
-      "label_printing": "Label Printing"
+      "label_printing": "Label Printing",
+      "reporting": "Stock Transactions"
     },
     "operationDesc": {
       "receiving": "Receive incoming goods",

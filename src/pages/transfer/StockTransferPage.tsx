@@ -38,8 +38,9 @@ export default function StockTransferPage() {
   const scanSourceShelf = useTransferStore((s) => s.scanSourceShelf);
   const clearSourceShelf = useTransferStore((s) => s.clearSourceShelf);
   const addItem = useTransferStore((s) => s.addItem);
-  const updateItemQty = useTransferStore((s) => s.updateItemQty);
-  const removeItem = useTransferStore((s) => s.removeItem);
+  // İleride miktar düzenleme/silme UI'ı bağlanınca kullanılacak:
+  // const updateItemQty = useTransferStore((s) => s.updateItemQty);
+  // const removeItem = useTransferStore((s) => s.removeItem);
   const goToTargetStep = useTransferStore((s) => s.goToTargetStep);
   const backToCollectStep = useTransferStore((s) => s.backToCollectStep);
   const scanTargetShelf = useTransferStore((s) => s.scanTargetShelf);

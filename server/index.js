@@ -59,6 +59,7 @@ const ALLOWED = new Set([
   "MZYCrtSuggestListPickFromSP",
   "MZYSavePick",
   "MZYGetStock",
+  "MZYGetTransaction",
 
   "MZYListingPlacement",
   "MZYEnterPlacement",

@@ -26,7 +26,8 @@
       "transfer": "Transfer",
       "count": "Sayım",
       "inquiry": "Ürün Sorgulama",
-      "label_printing": "Etiket Yazdırma"
+      "label_printing": "Etiket Yazdırma",
+      "reporting": "Stok İşlemleri"
     },
     "operationDesc": {
       "receiving": "Gelen ürünleri kabul et",
