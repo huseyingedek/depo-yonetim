@@ -472,9 +472,9 @@ export const useTransferStore = create<TransferState>()((set, get) => ({
 
         const appState = useAppStore.getState();
         const currentSettings = appState.settings;
-        const company = currentSettings?.company || "01";
-        const plant = currentSettings?.facility || "100";
-        const user = appState.user?.username || "";
+        const company = currentSettings?.company?.trim() || "";
+        const plant = currentSettings?.facility?.trim() || "";
+        const user = appState.user?.username?.trim() || "";
         const firstSourceWh = sourceShelf?.warehouse || items[0].sourceWarehouse;
         const firstSourceSp = sourceShelf?.stockPlace || items[0].sourceStockPlace;
 
