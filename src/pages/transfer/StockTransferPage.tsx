@@ -38,7 +38,6 @@ export default function StockTransferPage() {
   const scanSourceShelf = useTransferStore((s) => s.scanSourceShelf);
   const clearSourceShelf = useTransferStore((s) => s.clearSourceShelf);
   const addItem = useTransferStore((s) => s.addItem);
-  const updateItemQty = useTransferStore((s) => s.updateItemQty);
   const removeItem = useTransferStore((s) => s.removeItem);
   const goToTargetStep = useTransferStore((s) => s.goToTargetStep);
   const backToCollectStep = useTransferStore((s) => s.backToCollectStep);
@@ -687,29 +686,6 @@ export default function StockTransferPage() {
             {/* ------------------------------------------------------------------- */}
             {step === "collect" && activeItem && (
               <div className="mb-3 space-y-2.5 pt-0.5 animate-fade-in">
-                <div className="flex items-center justify-between border-b border-line pb-1.5">
-                  <div className="min-w-0 flex-1">
-                    <span className="text-xs font-bold text-fg">Miktar Girişi</span>
-                    {activeItem.availStock !== undefined && activeItem.availStock > 0 && (() => {
-                      const mult = activeItem.multiplier && activeItem.multiplier > 0 ? activeItem.multiplier : 1;
-                      const maxQty = getMaxAllowedQty(activeItem.availStock, mult);
-                      return (
-                        <span className="ml-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                          (Kalan: {qtyRound(activeItem.availStock)} {activeItem.skunit || activeItem.unit || "AD"}
-                          {mult > 1 ? ` · Maks: ${maxQty} ${activeItem.unit}` : ""})
-                        </span>
-                      );
-                    })()}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveItem(null)}
-                    className="shrink-0 text-xs font-semibold text-subtle hover:text-rose-600 hover:underline"
-                  >
-                    Vazgeç
-                  </button>
-                </div>
-
                 {/* Miktar Stepper Girişi */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
@@ -847,19 +823,6 @@ export default function StockTransferPage() {
             {/* 3. KURAL: TOPLAMA EKRANININ BİREBİR AYNISI PARTİ PANELİ (Combobox + Tarih Seçici + Barkod Okutma) */}
             {step === "collect" && lotPendingItem && (
               <div className="mb-3 space-y-2.5 animate-fade-in">
-                <div className="flex items-center justify-between rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-                  <span className="min-w-0 truncate">
-                    Parti Seçimi ({lotPendingItem.name})
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setLotPendingItem(null)}
-                    className="shrink-0 text-xs font-semibold text-amber-700 hover:underline"
-                  >
-                    Vazgeç
-                  </button>
-                </div>
-
                 {/* Parti seç (stoktakiler) combobox */}
                 <div className="rounded-xl bg-elevated px-3 py-2">
                   <span className="mb-1 block text-xs font-medium text-muted">
@@ -1047,20 +1010,34 @@ export default function StockTransferPage() {
                 const isDiffUnit = unit !== skunit || mult > 1;
 
                 return (
-                  <div className="rounded-2xl border border-line bg-surface p-3.5 shadow-card animate-fade-in">
-                    <div className="flex items-start justify-between gap-3">
+                  <div className="rounded-2xl border border-line bg-surface p-3 sm:p-3.5 shadow-card animate-fade-in">
+                    {/* Üst Kısım: Çöp Kutusu + Malzeme Bilgileri + Miktar */}
+                    <div className="flex items-center gap-2.5 sm:gap-3">
+                      {/* Kartın En Solu: Çöp Kutusu (İptal) */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveItem(null);
+                          setLotPendingItem(null);
+                        }}
+                        className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl border border-line bg-elevated/40 text-subtle transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40"
+                        title="İptal Et"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-bold text-fg">
+                        <p className="truncate text-xs sm:text-sm font-bold text-fg">
                           {matName}
                         </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-subtle">
-                          <span className="font-mono font-semibold text-fg">
+                        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-subtle overflow-hidden whitespace-nowrap">
+                          <span className="font-mono font-semibold text-fg shrink-0">
                             {matCode}
                           </span>
                           {(wh || sp) && (
                             <>
-                              <span>·</span>
-                              <span className="inline-flex items-center gap-1 rounded bg-elevated px-1.5 py-0.5 text-[11px] font-medium text-muted">
+                              <span className="shrink-0">·</span>
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded bg-elevated px-1.5 py-0.5 text-[11px] font-medium text-muted">
                                 <MapPin className="h-3 w-3 text-subtle" />
                                 {wh} / {sp}
                               </span>
@@ -1068,42 +1045,48 @@ export default function StockTransferPage() {
                           )}
 
                           {batchNum ? (
-                            <span className="inline-flex items-center gap-1 rounded bg-violet-100 dark:bg-violet-950/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-violet-700 dark:text-violet-300">
-                              Parti: {batchNum}
-                            </span>
+                            <>
+                              <span className="shrink-0">·</span>
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded bg-violet-100 dark:bg-violet-950/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-violet-700 dark:text-violet-300">
+                                Parti: {batchNum}
+                              </span>
+                            </>
                           ) : lotPendingItem ? (
-                            <span className="inline-flex items-center gap-1 rounded bg-amber-100 dark:bg-amber-950/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-amber-700 dark:text-amber-300">
-                              Parti Seçimi Bekleniyor
-                            </span>
+                            <>
+                              <span className="shrink-0">·</span>
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded bg-amber-100 dark:bg-amber-950/60 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                                Parti Seçimi Bekleniyor
+                              </span>
+                            </>
                           ) : null}
                         </div>
                       </div>
 
-                      {/* Alınan Miktar (Miktar ekle/azalt/çıkart butonları OLMAYACAK) */}
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <div className="flex items-center gap-1.5">
-                          <div className="flex items-center rounded-xl border border-line bg-elevated px-2.5 py-1">
-                            <span className="min-w-8 text-center font-mono text-sm sm:text-base font-extrabold text-fg">
-                              {qtyRound(qty)}
-                            </span>
-                          </div>
-                          <span className="text-xs font-bold text-subtle">
-                            {unit}
+                      {/* Alınan Miktar */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex items-center rounded-xl border border-line bg-elevated px-2 sm:px-2.5 py-1">
+                          <span className="min-w-7 sm:min-w-8 text-center font-mono text-sm sm:text-base font-extrabold text-fg">
+                            {qtyRound(qty)}
                           </span>
                         </div>
-
-                        {/* Alt Satır: Eğer bunit ile skunit farklı ise 1 bunit = x skunit ve sağında toplam skunit */}
-                        {isDiffUnit && (
-                          <div className="flex items-center justify-between gap-2 w-full font-mono text-[11px] pt-0.5 border-t border-line/40 mt-0.5">
-                            <span className="font-semibold text-subtle">
-                              {equation}
-                            </span>
-                            <span className="font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                              Toplam {totalBaseQty} {skunit}
-                            </span>
-                          </div>
-                        )}
+                        <span className="text-xs font-bold text-subtle">
+                          {unit}
+                        </span>
                       </div>
+                    </div>
+
+                    {/* Alt Satır: Birim çevrim ve toplam temel miktar (Tüm kart genişliğinde) */}
+                    <div className="flex items-center justify-between gap-2 w-full font-mono text-[13px] pt-1.5 border-t border-line/40 mt-2">
+                      {isDiffUnit ? (
+                        <span className="font-semibold text-subtle truncate">
+                          {equation}
+                        </span>
+                      ) : (
+                        <span />
+                      )}
+                      <span className="text-[15px] font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                        {totalBaseQty} {skunit}
+                      </span>
                     </div>
                   </div>
                 );
@@ -1139,23 +1122,34 @@ export default function StockTransferPage() {
                   return (
                     <div
                       key={item.id}
-                      className={`rounded-2xl border bg-surface p-3.5 shadow-card transition-all duration-300 ease-soft ${
+                      className={`rounded-2xl border bg-surface p-3 sm:p-3.5 shadow-card transition-all duration-300 ease-soft ${
                         flashing ? "border-brand-400 ring-2 ring-brand-200" : "border-line"
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-3">
+                      {/* Üst Kısım: Çöp Kutusu + Malzeme Bilgileri + Miktar */}
+                      <div className="flex items-center gap-2.5 sm:gap-3">
+                        {/* Kartın En Solu: Çöp Kutusu */}
+                        <button
+                          type="button"
+                          onClick={() => removeItem(item.id)}
+                          className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl border border-line bg-elevated/40 text-subtle transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40"
+                          title="Sil"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-bold text-fg">
+                          <p className="truncate text-xs sm:text-sm font-bold text-fg">
                             {item.name}
                           </p>
-                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-subtle">
-                            <span className="font-mono font-semibold text-fg">
+                          <div className="mt-0.5 flex items-center gap-1.5 text-xs text-subtle overflow-hidden whitespace-nowrap">
+                            <span className="font-mono font-semibold text-fg shrink-0">
                               {item.material}
                             </span>
                             {(item.sourceWarehouse || item.sourceStockPlace) && (
                               <>
-                                <span>·</span>
-                                <span className="inline-flex items-center gap-1 rounded bg-elevated px-1.5 py-0.5 text-[11px] font-medium text-muted">
+                                <span className="shrink-0">·</span>
+                                <span className="inline-flex shrink-0 items-center gap-1 rounded bg-elevated px-1.5 py-0.5 text-[11px] font-medium text-muted">
                                   <MapPin className="h-3 w-3 text-subtle" />
                                   {item.sourceWarehouse} / {item.sourceStockPlace}
                                 </span>
@@ -1163,43 +1157,49 @@ export default function StockTransferPage() {
                             )}
 
                             {item.batchNum && (
-                              <span className="inline-flex items-center gap-1 rounded bg-violet-100 dark:bg-violet-950/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-violet-700 dark:text-violet-300">
-                                Parti: {item.batchNum}
-                              </span>
+                              <>
+                                <span className="shrink-0">·</span>
+                                <span className="inline-flex shrink-0 items-center gap-1 rounded bg-violet-100 dark:bg-violet-950/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-violet-700 dark:text-violet-300">
+                                  Parti: {item.batchNum}
+                                </span>
+                              </>
                             )}
                           </div>
                         </div>
 
                         {/* Alınan Miktar */}
-                        <div className="flex flex-col items-end gap-1 shrink-0">
-                          <div className="flex items-center gap-1.5">
-                            <div className="flex items-center rounded-xl border border-line bg-elevated px-2.5 py-1">
-                              <span className="min-w-8 text-center font-mono text-sm sm:text-base font-extrabold text-fg">
-                                {qtyRound(item.quantity)}
-                              </span>
-                            </div>
-                            <span className="text-xs font-bold text-subtle">
-                              {unit}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <div className="flex items-center rounded-xl border border-line bg-elevated px-2 sm:px-2.5 py-1">
+                            <span className="min-w-7 sm:min-w-8 text-center font-mono text-sm sm:text-base font-extrabold text-fg">
+                              {qtyRound(item.quantity)}
                             </span>
                           </div>
-
-                          {/* Alt Satır: Eğer bunit ile skunit farklı ise 1 bunit = x skunit ve sağında toplam skunit */}
-                          {isDiffUnit && (
-                            <div className="flex items-center justify-between gap-2 w-full font-mono text-[11px] pt-0.5 border-t border-line/40 mt-0.5">
-                              <span className="font-semibold text-subtle">
-                                {equation}
-                              </span>
-                              <span className="font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                                Toplam {totalBaseQty} {skunit}
-                              </span>
-                            </div>
-                          )}
+                          <span className="text-xs font-bold text-subtle">
+                            {unit}
+                          </span>
                         </div>
+                      </div>
+
+                      {/* Alt Satır: Birim çevrim ve toplam temel miktar (Tüm kart genişliğinde) */}
+                      <div className="flex items-center justify-between gap-2 w-full font-mono text-[13px] pt-1.5 border-t border-line/40 mt-2">
+                        {isDiffUnit ? (
+                          <span className="font-semibold text-subtle truncate">
+                            {equation}
+                          </span>
+                        ) : (
+                          <span />
+                        )}
+                        <span className="text-[15px] font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                          {totalBaseQty} {skunit}
+                        </span>
                       </div>
                     </div>
                   );
                 })
               )}
+
+
+
             </div>
           ) : (
             /* HEDEF ADIMI: Transfer Paketi İnceleme ve Onay (Tek Birleşik Beyaz Kart) */
