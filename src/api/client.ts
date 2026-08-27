@@ -884,8 +884,8 @@ export const api = {
     const c = ctx();
     try {
       const r = await call(SERVICES.getWarehouse, {
-        PSCOMPANY: String(c.company || "01").trim(),
-        PSPLANT: String(c.plant || "100").trim(),
+        PSCOMPANY: String(c.company || "").trim(),
+        PSPLANT: String(c.plant || "").trim(),
       });
       const res = rowsOf(r, ["TBLWAREHOUSE", "WAREHOUSELIST", "TABLE", "WAREHOUSE"]).map((x) => ({
         code: pick(x, ["WAREHOUSE", "CODE", "ID"]),
@@ -1027,9 +1027,9 @@ export const api = {
     payload: StockTransferPayload
   ): Promise<{ ok: boolean; transferId?: string; message: string }> {
     const c = ctx();
-    const compCode = String(payload.company || c.company || "01").trim();
-    const plantCode = String(payload.plant || c.plant || "100").trim();
-    const userCode = String(payload.user || c.worker || "").trim();
+    const compCode = String(payload.company ?? c.company ?? "").trim();
+    const plantCode = String(payload.plant ?? c.plant ?? "").trim();
+    const userCode = String(payload.user ?? c.worker ?? "").trim();
 
     const srcWh = String(payload.sourceWarehouse || "").trim();
     const srcSp = String(payload.sourceStockPlace || "*").trim();
@@ -1298,7 +1298,7 @@ export const api = {
   },
 
   // 1. MZYPrintContainer - Konteyner Etiketi Bas
-  // PARAMETRELER: PSCOMPANY ("01"), PSPLANT ("100"), PSCONTAINER, PIREPEAT, PSUSER
+  // PARAMETRELER: PSCOMPANY, PSPLANT, PSCONTAINER, PIREPEAT, PSUSER
   async printContainer(payload: {
     company?: string;
     plant?: string;
@@ -1318,8 +1318,8 @@ export const api = {
     }
 
     const r = await call(SERVICES.printContainer, {
-      PSCOMPANY: payload.company || c.company || "01",
-      PSPLANT: payload.plant || c.plant || "100",
+      PSCOMPANY: String(payload.company ?? c.company ?? "").trim(),
+      PSPLANT: String(payload.plant ?? c.plant ?? "").trim(),
       PSCONTAINER: containerStr,
       PIREPEAT: repeatNum,
       PSUSER: payload.user || c.worker,
@@ -1334,7 +1334,7 @@ export const api = {
   },
 
   // 2. MZYPrintWHSP - Raf Etiketi Bas
-  // PARAMETRELER: PSCOMPANY ("01"), PSPLANT ("100"), PSWAREHOUSE, PSSTOCKPLACE, PIREPEAT, PSUSER
+  // PARAMETRELER: PSCOMPANY, PSPLANT, PSWAREHOUSE, PSSTOCKPLACE, PIREPEAT, PSUSER
   async printWHSP(payload: {
     company?: string;
     plant?: string;
@@ -1350,8 +1350,8 @@ export const api = {
     }
 
     const r = await call(SERVICES.printWHSP, {
-      PSCOMPANY: payload.company || c.company || "01",
-      PSPLANT: payload.plant || c.plant || "100",
+      PSCOMPANY: String(payload.company ?? c.company ?? "").trim(),
+      PSPLANT: String(payload.plant ?? c.plant ?? "").trim(),
       PSWAREHOUSE: payload.warehouse || "",
       PSSTOCKPLACE: payload.stockPlace || "",
       PIREPEAT: repeatNum,
@@ -1367,7 +1367,7 @@ export const api = {
   },
 
   // 3. MZYPrintMaterial - Malzeme Barkodu Bas
-  // PARAMETRELER: PSCOMPANY ("01"), PSPLANT ("100"), PSBARCODE, PSUNIT, PIREPEAT, PSUSER
+  // PARAMETRELER: PSCOMPANY, PSPLANT, PSBARCODE, PSUNIT, PIREPEAT, PSUSER
   async printMaterial(payload: {
     company?: string;
     plant?: string;
@@ -1388,8 +1388,8 @@ export const api = {
     }
 
     const r = await call(SERVICES.printMaterial, {
-      PSCOMPANY: payload.company || c.company || "01",
-      PSPLANT: payload.plant || c.plant || "100",
+      PSCOMPANY: String(payload.company ?? c.company ?? "").trim(),
+      PSPLANT: String(payload.plant ?? c.plant ?? "").trim(),
       PSBARCODE: barcodeStr,
       PSUNIT: payload.unit || "",
       PIREPEAT: repeatNum,
@@ -1405,7 +1405,7 @@ export const api = {
   },
 
   // 4. MZYPrintBarcode - Barkodu Bas (SKT / Parti)
-  // PARAMETRELER: PSCOMPANY ("01"), PSPLANT ("100"), PSBARCODE, PIREPEAT, PSUSER
+  // PARAMETRELER: PSCOMPANY, PSPLANT, PSBARCODE, PIREPEAT, PSUSER
   async printBarcode(payload: {
     company?: string;
     plant?: string;
@@ -1425,8 +1425,8 @@ export const api = {
     }
 
     const r = await call(SERVICES.printBarcode, {
-      PSCOMPANY: payload.company || c.company || "01",
-      PSPLANT: payload.plant || c.plant || "100",
+      PSCOMPANY: String(payload.company ?? c.company ?? "").trim(),
+      PSPLANT: String(payload.plant ?? c.plant ?? "").trim(),
       PSBARCODE: barcodeStr,
       PIREPEAT: repeatNum,
       PSUSER: payload.user || c.worker,
@@ -1454,8 +1454,8 @@ export const api = {
   } = {}): Promise<{ ok: boolean; message: string; orders: Record<string, unknown>[] }> {
     const c = ctx();
     const params: Record<string, unknown> = {
-      PSCOMPANY: payload.company || c.company || "01",
-      PSPLANT: payload.plant || c.plant || "100",
+      PSCOMPANY: String(payload.company ?? c.company ?? "").trim(),
+      PSPLANT: String(payload.plant ?? c.plant ?? "").trim(),
     };
 
     if (payload.barcode?.trim()) {
@@ -1496,8 +1496,8 @@ export const api = {
   }> {
     const c = ctx();
     const r = await call(SERVICES.getMaterialDetail, {
-      PSCOMPANY: company || c.company || "01",
-      PSPLANT: plant || c.plant || "100",
+      PSCOMPANY: String(company ?? c.company ?? "").trim(),
+      PSPLANT: String(plant ?? c.plant ?? "").trim(),
       PSBARCODE: (barcode || "").trim(),
     });
 
@@ -1579,7 +1579,7 @@ export const api = {
   }): Promise<{ ok: boolean; message: string }> {
     const c = ctx();
     const matCode = (payload.material || "").trim();
-    const compCode = payload.company || c.company || "01";
+    const compCode = String(payload.company ?? c.company ?? "").trim();
 
     const r = await call(SERVICES.setMatSize, {
       PSCOMPANY: compCode,
@@ -1612,7 +1612,7 @@ export const api = {
   },
 
   // 4. MzyGetCustomer - Tedarikçi / Müşteri Arama Servisi
-  // PARAMETRELER: PSCOMPANY ("01"), PSCUSTOMER (Tedarikçi Kodu), PSCUSNAME1 (Tedarikçi Adı), PICUSTYPE / PSCUSTYPE (1 = Tedarikçi)
+  // PARAMETRELER: PSCOMPANY, PSCUSTOMER (Tedarikçi Kodu), PSCUSNAME1 (Tedarikçi Adı), PICUSTYPE / PSCUSTYPE (1 = Tedarikçi)
   async getCustomers(payload: {
     customer?: string;
     name?: string;
@@ -1625,7 +1625,7 @@ export const api = {
     const namePattern = rawQuery ? (rawQuery.includes("%") ? rawQuery : `%${rawQuery}%`) : "";
 
     const params: Record<string, unknown> = {
-      PSCOMPANY: payload.company || c.company || "01",
+      PSCOMPANY: String(payload.company ?? c.company ?? "").trim(),
       PSCUSTOMER: isCode ? rawQuery : (payload.customer || "").trim(),
       PSCUSNAME1: isCode ? "" : namePattern,
       PICUSTYPE: payload.customerType ?? 1,
@@ -1702,8 +1702,8 @@ export const api = {
 
     const nowStr = new Date().toLocaleString("tr-TR", { hour12: false });
     const startTimeStr = payload.startTime || nowStr;
-    const compCode = String(payload.company || c.company || "01").trim();
-    const plantCode = String(payload.plant || c.plant || "100").trim();
+    const compCode = String(payload.company ?? c.company ?? "").trim();
+    const plantCode = String(payload.plant ?? c.plant ?? "").trim();
     const rawWh = String(payload.warehouse || payload.targetWarehouse || c.warehouse || "00").trim();
     const whCode = rawWh.includes("$") ? rawWh.split("$")[0].trim() : rawWh;
     const spCode = payload.stockPlace && payload.stockPlace !== "*"

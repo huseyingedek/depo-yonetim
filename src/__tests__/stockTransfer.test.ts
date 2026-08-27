@@ -407,5 +407,48 @@ describe("INVT00M1 Stok Transferi (Stock Transfer Store & Flow)", () => {
     const remainingKoAllowed = Math.floor(remainingStockBase / multiplier);
     expect(remainingKoAllowed).toBe(0); // 2 PK ile 1 KO doldurulamaz
   });
+
+  it("12. Farklı firma ('05') ve tesis ('300') girildiğinde servise sabit 01/100 yerine kullanıcının girdiği 05/300 gönderilir", async () => {
+    let capturedBody: Record<string, unknown> = {};
+
+    global.fetch = vi.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body || "{}"));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: 200,
+          data: {
+            TBLMESSAGE: [{ TYPE: "S", SYSTEMMSG: "Transfer başarılı" }],
+            TRANSFERID: "TR-999",
+          },
+          messages: "",
+        }),
+      };
+    });
+
+    const res = await api.createStockTransfer({
+      company: "05",
+      plant: "300",
+      user: "depocu_ozel",
+      sourceWarehouse: "03",
+      sourceStockPlace: "R-01",
+      targetWarehouse: "04",
+      targetStockPlace: "R-02",
+      items: [
+        {
+          material: "MLZ999",
+          quantity: 10,
+          unit: "AD",
+        },
+      ],
+    });
+
+    expect(res.ok).toBe(true);
+    expect(capturedBody.PSCOMPANY).toBe("05");
+    expect(capturedBody.PSPLANT).toBe("300");
+    expect(capturedBody.PSUSER).toBe("depocu_ozel");
+  });
 });
+
 
