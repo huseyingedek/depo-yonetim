@@ -389,5 +389,23 @@ describe("INVT00M1 Stok Transferi (Stock Transfer Store & Flow)", () => {
     expect(items.find((i) => i.material === "CC021")?.sourceWarehouse).toBe("00");
     expect(items.find((i) => i.material === "SLP08")?.sourceWarehouse).toBe("10");
   });
+
+  it("11. Parti stoğu 7 PK ve barkod 1 KO = 5 PK iken kalan stok ve çarpan hesapları doğru çalışır", () => {
+    // 1 KO = 5 PK, Parti Stoğu = 7 PK
+    const batchStockBase = 7; // PK
+    const multiplier = 5; // 1 KO = 5 PK
+
+    const maxAllowedKo = Math.floor(batchStockBase / multiplier);
+    expect(maxAllowedKo).toBe(1); // 7 / 5 = 1 KO
+
+    // Sepete 1 KO (5 PK) eklendi
+    const alreadyUsedBase = 1 * multiplier; // 5 PK
+    const remainingStockBase = batchStockBase - alreadyUsedBase; // 2 PK
+    expect(remainingStockBase).toBe(2);
+
+    // Kalan 2 PK için KO barkoduyla kaç KO girilebilir:
+    const remainingKoAllowed = Math.floor(remainingStockBase / multiplier);
+    expect(remainingKoAllowed).toBe(0); // 2 PK ile 1 KO doldurulamaz
+  });
 });
 

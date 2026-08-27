@@ -96,18 +96,82 @@ export default function StockTransferPage() {
     if (tst?.kind === "error") sesHata();
     else if (tst) sesBasarili();
     setToast(tst);
-    setTimeout(() => setToast(null), 2500);
+    setTimeout(() => setToast(null), 3000);
   };
+
+  const showError = useCallback((msg: string) => {
+    sesHata();
+    setRedMesaji(msg);
+    setToast({ kind: "error", text: msg });
+    setTimeout(() => {
+      setToast(null);
+      setRedMesaji((prev) => (prev === msg ? null : prev));
+    }, 3000);
+  }, []);
 
   const flash = (id: string) => {
     setFlashId(id);
     setTimeout(() => setFlashId(null), 600);
   };
 
+  // Sepetteki aynı malzeme + parti + kaynak raftaki toplam rezerve edilmiş miktar (SKUNIT / Base Unit cinsinden)
+  const getCartBaseQtyForBatch = useCallback(
+    (mat: string, batch: string | undefined, wh: string, sp: string) => {
+      const targetBatch = batch && batch !== "*" ? batch.trim().toUpperCase() : "*";
+      return items
+        .filter(
+          (it) =>
+            it.material === mat &&
+            it.sourceWarehouse === wh &&
+            it.sourceStockPlace === sp &&
+            ((it.batchNum && it.batchNum !== "*" ? it.batchNum.trim().toUpperCase() : "*") === targetBatch)
+        )
+        .reduce(
+          (sum, it) =>
+            sum + it.quantity * (it.multiplier && it.multiplier > 0 ? it.multiplier : 1),
+          0
+        );
+    },
+    [items]
+  );
+
+  // Partinin raftaki toplam stoğundan sepettekiler düşüldükten sonra kalan transfer edilebilir miktar (SKUNIT)
+  const getBatchRemainingStock = useCallback(
+    (mat: string, batchNum: string | undefined, totalBatchStock: number, wh: string, sp: string) => {
+      const alreadyUsed = getCartBaseQtyForBatch(mat, batchNum, wh, sp);
+      return Math.max(0, qtyRound(totalBatchStock - alreadyUsed));
+    },
+    [getCartBaseQtyForBatch]
+  );
+
+  // Kalan stok (SKUNIT) ve barkod çarpanına (multiplier) göre depocunun girebileceği maksimum miktar
+  const getMaxAllowedQty = useCallback((availStockBase: number, multiplier: number = 1) => {
+    const mult = multiplier > 0 ? multiplier : 1;
+    if (mult > 1) {
+      return Math.floor(availStockBase / mult);
+    }
+    return availStockBase;
+  }, []);
+
   const handleCommitActiveItem = () => {
     if (!activeItem || activeItem.quantity <= 0) {
-      sesHata();
-      showToast({ kind: "error", text: "Lütfen geçerli bir miktar girin" });
+      showError("Lütfen geçerli bir miktar girin");
+      return;
+    }
+
+    const mult = activeItem.multiplier && activeItem.multiplier > 0 ? activeItem.multiplier : 1;
+    const availStockBase = activeItem.availStock ?? 0;
+    const maxQty = getMaxAllowedQty(availStockBase, mult);
+
+    // Kural 1: Eğer partinin kalan stoğu hiç kalmamışsa
+    if (availStockBase <= 0) {
+      showError("Bu partiden başka ürün kalmadı!");
+      return;
+    }
+
+    // Kural 2: Eğer girilen miktar partide kalan stoktan fazlaysa
+    if (activeItem.quantity > maxQty) {
+      showError("Fazla değer girdiniz!");
       return;
     }
 
@@ -117,8 +181,7 @@ export default function StockTransferPage() {
       showToast({ kind: "done", text: r.message });
       setActiveItem(null);
     } else {
-      sesHata();
-      showToast({ kind: "error", text: r.message });
+      showError(r.message);
     }
   };
 
@@ -136,8 +199,7 @@ export default function StockTransferPage() {
           if (r.ok) {
             showToast({ kind: "done", text: r.message });
           } else {
-            setRedMesaji(r.message);
-            showToast({ kind: "error", text: r.message });
+            showError(r.message);
           }
           return;
         }
@@ -149,8 +211,7 @@ export default function StockTransferPage() {
           if (r.ok) {
             showToast({ kind: "ok", text: r.message });
           } else {
-            setRedMesaji(r.message);
-            showToast({ kind: "error", text: r.message });
+            showError(r.message);
           }
           return;
         }
@@ -163,16 +224,25 @@ export default function StockTransferPage() {
           // 2. Kural: Rafta mevcut partilerle kıyasla, yoksa kabul etme!
           if (lotPendingItem.batches && lotPendingItem.batches.length > 0 && !secilenBatch) {
             const errText = `Okutulan parti (${lotVal}) raftaki mevcut partiler arasında bulunamadı!`;
-            sesHata();
-            setRedMesaji(errText);
-            showToast({ kind: "error", text: errText });
+            showError(errText);
             return;
           }
 
-          const isSameUnit = (lotPendingItem.unit || "").trim().toUpperCase() === (lotPendingItem.skunit || lotPendingItem.unit || "").trim().toUpperCase();
-          const lotStockQty = isSameUnit
-            ? ((secilenBatch && secilenBatch.availStock > 0) ? secilenBatch.availStock : 1)
-            : 0;
+          const totalBatchStock = secilenBatch?.availStock ?? lotPendingItem.availStock ?? 0;
+          const remainingStock = getBatchRemainingStock(
+            lotPendingItem.material,
+            lotVal,
+            totalBatchStock,
+            sourceShelf.warehouse,
+            sourceShelf.stockPlace
+          );
+
+          const mult = lotPendingItem.multiplier && lotPendingItem.multiplier > 0 ? lotPendingItem.multiplier : 1;
+          const maxQty = getMaxAllowedQty(remainingStock, mult);
+          const isSameUnit =
+            (lotPendingItem.unit || "").trim().toUpperCase() ===
+            (lotPendingItem.skunit || lotPendingItem.unit || "").trim().toUpperCase();
+          const lotStockQty = isSameUnit && remainingStock > 0 ? maxQty : 0;
 
           setActiveItem({
             material: lotPendingItem.material,
@@ -185,7 +255,7 @@ export default function StockTransferPage() {
             batchNum: lotVal,
             specialStock: lotPendingItem.specialStock,
             isSpecialStock: true,
-            availStock: secilenBatch?.availStock ?? lotPendingItem.availStock,
+            availStock: remainingStock,
             sourceWarehouse: sourceShelf.warehouse,
             sourceStockPlace: sourceShelf.stockPlace,
           });
@@ -201,6 +271,16 @@ export default function StockTransferPage() {
 
         // C) Miktar panelindeki aktif malzeme ile aynı barkod tekrar okutulduysa:
         if (activeItem && activeItem.barcode === barkod) {
+          const mult = activeItem.multiplier && activeItem.multiplier > 0 ? activeItem.multiplier : 1;
+          const maxQty = getMaxAllowedQty(activeItem.availStock ?? 0, mult);
+          if (activeItem.availStock !== undefined && activeItem.availStock <= 0) {
+            showError("Bu partiden başka ürün kalmadı!");
+            return;
+          }
+          if (activeItem.quantity + 1 > maxQty) {
+            showError("Fazla değer girdiniz!");
+            return;
+          }
           setActiveItem((prev) => (prev ? { ...prev, quantity: prev.quantity + 1 } : null));
           showToast({ kind: "ok", text: `+1 eklendi (${activeItem.quantity + 1} ${activeItem.unit})` });
           return;
@@ -221,8 +301,7 @@ export default function StockTransferPage() {
         );
 
         if (!res.ok || !res.material) {
-          setRedMesaji(res.message || "Malzeme bulunamadı");
-          showToast({ kind: "error", text: res.message || "Malzeme bulunamadı" });
+          showError(res.message || "Malzeme bulunamadı");
           return;
         }
 
@@ -244,8 +323,7 @@ export default function StockTransferPage() {
         // Eğer rafta stok bulunamadıysa ve readBarcode'dan da stok 0 geldiyse uyar:
         if (batches.length === 0 && res.availStock <= 0) {
           const errText = `Bu malzeme (${res.name || res.material}) seçili rafta (Depo ${sourceShelf.warehouse} · ${sourceShelf.stockPlace}) bulunamadı veya stok yok!`;
-          setRedMesaji(errText);
-          showToast({ kind: "error", text: errText });
+          showError(errText);
           return;
         }
 
@@ -261,9 +339,16 @@ export default function StockTransferPage() {
           // 4. Kural: Partili ürün seçildiyse stoktaki miktar otomatik yazılacak (BUNIT === SKUNIT ise)
           if (validBatches.length === 1) {
             const tekParti = validBatches[0];
-            const stockQty = isSameUnit
-              ? (tekParti.availStock > 0 ? tekParti.availStock : (res.quantity > 0 ? res.quantity : 1))
-              : 0;
+            const remainingStock = getBatchRemainingStock(
+              res.material,
+              tekParti.batchNum,
+              tekParti.availStock,
+              sourceShelf.warehouse,
+              sourceShelf.stockPlace
+            );
+
+            const maxQty = getMaxAllowedQty(remainingStock, resolvedMultiplier);
+            const stockQty = isSameUnit && remainingStock > 0 ? maxQty : 0;
             setActiveItem({
               material: res.material,
               name: res.name,
@@ -275,7 +360,7 @@ export default function StockTransferPage() {
               batchNum: tekParti.batchNum,
               specialStock: ozelStok,
               isSpecialStock: true,
-              availStock: tekParti.availStock ?? res.availStock,
+              availStock: remainingStock,
               sourceWarehouse: sourceShelf.warehouse,
               sourceStockPlace: sourceShelf.stockPlace,
             });
@@ -311,9 +396,19 @@ export default function StockTransferPage() {
 
         // Partisiz malzeme (veya barkodda partisi olan) -> Adım 4 (Miktar)
         // 4. Kural: Stoktaki miktar otomatik olarak yazılı olacak (BUNIT === SKUNIT ise)
-        const initialQty = isSameUnit
-          ? ((res.availStock > 0) ? res.availStock : (res.quantity > 0 ? res.quantity : 1))
-          : 0;
+        const totalBaseStock = batches.length > 0
+          ? batches.reduce((sum, b) => sum + (b.availStock || 0), 0)
+          : (res.availStock > 0 ? res.availStock : (res.quantity > 0 ? res.quantity : 1));
+        const remainingStock = getBatchRemainingStock(
+          res.material,
+          res.lot && res.lot !== "*" ? res.lot : undefined,
+          totalBaseStock,
+          sourceShelf.warehouse,
+          sourceShelf.stockPlace
+        );
+
+        const maxQty = getMaxAllowedQty(remainingStock, resolvedMultiplier);
+        const initialQty = isSameUnit && remainingStock > 0 ? maxQty : 0;
         setActiveItem({
           material: res.material,
           name: res.name,
@@ -325,7 +420,7 @@ export default function StockTransferPage() {
           batchNum: res.lot && res.lot !== "*" ? res.lot : undefined,
           specialStock: ozelStok,
           isSpecialStock: Boolean(lotTracked),
-          availStock: res.availStock,
+          availStock: remainingStock,
           sourceWarehouse: sourceShelf.warehouse,
           sourceStockPlace: sourceShelf.stockPlace,
         });
@@ -337,8 +432,7 @@ export default function StockTransferPage() {
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Okuma hatası";
-        setRedMesaji(msg);
-        showToast({ kind: "error", text: msg });
+        showError(msg);
       } finally {
         setBusy(false);
       }
@@ -352,6 +446,9 @@ export default function StockTransferPage() {
       scanTargetShelf,
       scanSourceShelf,
       addItem,
+      getBatchRemainingStock,
+      getMaxAllowedQty,
+      showError,
     ]
   );
 
@@ -602,11 +699,16 @@ export default function StockTransferPage() {
                           Parti: {activeItem.batchNum}
                         </span>
                       )}
-                      {activeItem.availStock !== undefined && activeItem.availStock > 0 && (
-                        <span className="text-emerald-600 font-medium">
-                          (Mevcut: {qtyRound(activeItem.availStock)} {activeItem.unit || "AD"})
-                        </span>
-                      )}
+                      {activeItem.availStock !== undefined && activeItem.availStock > 0 && (() => {
+                        const mult = activeItem.multiplier && activeItem.multiplier > 0 ? activeItem.multiplier : 1;
+                        const maxQty = getMaxAllowedQty(activeItem.availStock, mult);
+                        return (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                            (Kalan: {qtyRound(activeItem.availStock)} {activeItem.skunit || activeItem.unit || "AD"}
+                            {mult > 1 ? ` · Maks: ${maxQty} ${activeItem.unit}` : ""})
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                   <button
@@ -674,9 +776,9 @@ export default function StockTransferPage() {
                     />
                     <button
                       type="button"
-                      onClick={() =>
-                        setActiveItem((prev) => (prev ? { ...prev, quantity: prev.quantity + 1 } : null))
-                      }
+                      onClick={() => {
+                        setActiveItem((prev) => (prev ? { ...prev, quantity: prev.quantity + 1 } : null));
+                      }}
                       className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition active:scale-95 shadow-md shrink-0"
                     >
                       <Plus className="h-4 w-4" />
@@ -700,9 +802,9 @@ export default function StockTransferPage() {
                       <button
                         key={inc}
                         type="button"
-                        onClick={() =>
-                          setActiveItem((prev) => (prev ? { ...prev, quantity: prev.quantity + inc } : null))
-                        }
+                        onClick={() => {
+                          setActiveItem((prev) => (prev ? { ...prev, quantity: prev.quantity + inc } : null));
+                        }}
                         className="rounded-xl border border-line bg-elevated/80 py-2 text-xs sm:text-sm font-black text-fg hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition active:scale-95 shadow-xs"
                       >
                         +{inc}
@@ -780,10 +882,23 @@ export default function StockTransferPage() {
                       const lotVal = e.target.value;
                       if (!lotVal) return;
                       const secilenBatch = lotPendingItem.batches?.find((b) => b.batchNum === lotVal);
-                      const isSameUnit = (lotPendingItem.unit || "").trim().toUpperCase() === (lotPendingItem.skunit || lotPendingItem.unit || "").trim().toUpperCase();
-                      const lotStockQty = isSameUnit
-                        ? ((secilenBatch && secilenBatch.availStock > 0) ? secilenBatch.availStock : 1)
-                        : 0;
+                      if (!secilenBatch) return;
+
+                      const totalBatchStock = secilenBatch.availStock;
+                      const remainingStock = getBatchRemainingStock(
+                        lotPendingItem.material,
+                        lotVal,
+                        totalBatchStock,
+                        sourceShelf?.warehouse || "",
+                        sourceShelf?.stockPlace || ""
+                      );
+
+                      const mult = lotPendingItem.multiplier && lotPendingItem.multiplier > 0 ? lotPendingItem.multiplier : 1;
+                      const maxQty = getMaxAllowedQty(remainingStock, mult);
+                      const isSameUnit =
+                        (lotPendingItem.unit || "").trim().toUpperCase() ===
+                        (lotPendingItem.skunit || lotPendingItem.unit || "").trim().toUpperCase();
+                      const lotStockQty = isSameUnit && remainingStock > 0 ? maxQty : 0;
 
                       setActiveItem({
                         material: lotPendingItem.material,
@@ -796,7 +911,7 @@ export default function StockTransferPage() {
                         batchNum: lotVal,
                         specialStock: lotPendingItem.specialStock,
                         isSpecialStock: true,
-                        availStock: secilenBatch?.availStock ?? lotPendingItem.availStock,
+                        availStock: remainingStock,
                         sourceWarehouse: sourceShelf?.warehouse || "",
                         sourceStockPlace: sourceShelf?.stockPlace || "",
                       });
@@ -854,16 +969,25 @@ export default function StockTransferPage() {
                       if (lotPendingItem.batches && lotPendingItem.batches.length > 0 && !secilenBatch) {
                         e.target.value = "";
                         const errText = `Girilen parti tarihi (${b}) raftaki mevcut partiler arasında bulunamadı!`;
-                        sesHata();
-                        setRedMesaji(errText);
-                        showToast({ kind: "error", text: "Girilen tarih rafta mevcut değil!" });
+                        showError(errText);
                         return;
                       }
 
-                      const isSameUnit = (lotPendingItem.unit || "").trim().toUpperCase() === (lotPendingItem.skunit || lotPendingItem.unit || "").trim().toUpperCase();
-                      const lotStockQty = isSameUnit
-                        ? ((secilenBatch && secilenBatch.availStock > 0) ? secilenBatch.availStock : 1)
-                        : 0;
+                      const totalBatchStock = secilenBatch ? secilenBatch.availStock : 0;
+                      const remainingStock = getBatchRemainingStock(
+                        lotPendingItem.material,
+                        b,
+                        totalBatchStock,
+                        sourceShelf?.warehouse || "",
+                        sourceShelf?.stockPlace || ""
+                      );
+
+                      const mult = lotPendingItem.multiplier && lotPendingItem.multiplier > 0 ? lotPendingItem.multiplier : 1;
+                      const maxQty = getMaxAllowedQty(remainingStock, mult);
+                      const isSameUnit =
+                        (lotPendingItem.unit || "").trim().toUpperCase() ===
+                        (lotPendingItem.skunit || lotPendingItem.unit || "").trim().toUpperCase();
+                      const lotStockQty = isSameUnit && remainingStock > 0 ? maxQty : 0;
 
                       setActiveItem({
                         material: lotPendingItem.material,
@@ -876,7 +1000,7 @@ export default function StockTransferPage() {
                         batchNum: b,
                         specialStock: lotPendingItem.specialStock,
                         isSpecialStock: true,
-                        availStock: secilenBatch?.availStock ?? lotPendingItem.availStock,
+                        availStock: remainingStock,
                         sourceWarehouse: sourceShelf?.warehouse || "",
                         sourceStockPlace: sourceShelf?.stockPlace || "",
                       });
