@@ -1116,8 +1116,8 @@ export const api = {
       const specialStock = isPartili
         ? "1"
         : rawSpecial !== "" && rawSpecial !== "0" && rawSpecial !== "Serbest"
-        ? rawSpecial
-        : "*";
+          ? rawSpecial
+          : "*";
       const batchNum =
         it.batchNum && it.batchNum !== "*" && it.batchNum !== "—"
           ? String(it.batchNum).trim()
@@ -1675,8 +1675,12 @@ export const api = {
     });
 
     const mesaj = serviceMessage(r);
-    if (mesaj && /error|fail|hata/i.test(mesaj)) {
-      return { ok: false, message: mesaj };
+    const dataObj = (r.data && typeof r.data === "object" ? r.data : {}) as Record<string, unknown>;
+    const statusVal = pick(dataObj, ["STATUS", "OK", "TYPE", "RESULT", "SYSSTATUS"]);
+    const isError = (mesaj && /error|fail|hata/i.test(mesaj)) || statusVal === "E" || statusVal === "0" || statusVal === "error";
+
+    if (isError) {
+      return { ok: false, message: mesaj || "Malzeme ölçüleri kaydedilirken hata oluştu." };
     }
 
     return { ok: true, message: mesaj || "Malzeme ölçü ve nitelik bilgileri başarıyla kaydedildi." };
