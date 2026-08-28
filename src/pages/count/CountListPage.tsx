@@ -254,7 +254,7 @@ export default function CountListPage() {
                   key={o.id}
                   onClick={() => emreGir(o)}
                   type="button"
-                  className="group flex flex-col justify-between gap-2.5 rounded-2xl border border-line bg-surface p-3.5 text-left shadow-card transition-all hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-soft active:scale-[0.99]"
+                  className="group flex flex-col justify-between gap-1.5 rounded-2xl border border-line bg-surface p-3 text-left shadow-card transition-all hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-soft active:scale-[0.99]"
                 >
                   {/* Üst Satır: Belge No / INVDOCNUM ve Durum Rozeti ("Aktif Sayım") */}
                   <div className="flex items-center justify-between gap-2">
@@ -288,38 +288,42 @@ export default function CountListPage() {
                     </p>
                   )}
 
-                  {/* Depo Bilgisi: Sadece depo emojisi/ikonu ve sağında depo/raf metni (örn: 🏢 01 / A-01-02) */}
-                  {depoRafMetni && (
-                    <div className="flex items-center gap-1.5 text-[15px] font-bold text-slate-800">
-                      <span className="text-[17px]">🏢</span>
-                      <span>{depoRafMetni}</span>
-                    </div>
-                  )}
+                  {/* Depo Bilgisi ve Tarih (AYNI HİZADA) */}
+                  <div className="flex items-center justify-between gap-2 text-[15px]">
+                    {depoRafMetni ? (
+                      <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                        <Warehouse className="h-4.5 w-4.5 text-brand-600 shrink-0" />
+                        <span>{depoRafMetni}</span>
+                      </div>
+                    ) : (
+                      <div />
+                    )}
 
-                  {/* Alt Satır: Kalem Sayısı / Personel / Tarih (Çizgi olmadan bütünleşik) */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-[15px] text-slate-600">
-                    <div className="flex items-center gap-3">
+                    {o.docDate && (
+                      <span className="inline-flex items-center gap-1 font-mono text-[15px] text-slate-500">
+                        <Calendar className="h-4 w-4 text-slate-400 shrink-0" />
+                        <span>{o.docDate}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Alt Satır: Kalem Sayısı / Personel */}
+                  {(o.itemCount !== undefined || o.worker) && (
+                    <div className="flex flex-wrap items-center gap-3 text-[15px] text-slate-600">
                       {o.itemCount !== undefined && (
                         <span className="inline-flex items-center gap-1 font-semibold text-brand-700">
-                          <Package className="h-4 w-4 text-brand-600" />
+                          <Package className="h-4 w-4 text-brand-600 shrink-0" />
                           <span>{o.itemCount} Kalem</span>
                         </span>
                       )}
                       {o.worker && (
                         <span className="inline-flex items-center gap-1 font-medium text-slate-700">
-                          <User className="h-4 w-4 text-slate-400" />
+                          <User className="h-4 w-4 text-slate-400 shrink-0" />
                           <span>{o.worker}</span>
                         </span>
                       )}
                     </div>
-
-                    {o.docDate && (
-                      <span className="inline-flex items-center gap-1 font-mono text-[15px] text-slate-500">
-                        <Calendar className="h-4 w-4 text-slate-400" />
-                        <span>{o.docDate}</span>
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </button>
               );
             })}

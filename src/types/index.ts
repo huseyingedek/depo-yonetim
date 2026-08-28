@@ -229,6 +229,23 @@ export interface AdjustmentOrder {
   description?: string; // STEXT, DESCRIPTION, TITLE — Belge Açıklaması
   itemCount?: number; // ITEMCOUNT, TOTALITEMS — Kalem Sayısı
   priority?: number; // Öncelik
+  lines?: AdjustmentLine[]; // Sayım Kalemleri
+}
+
+export interface AdjustmentLine {
+  id: string;
+  material: string;
+  name: string;
+  barcode?: string;
+  targetQty: number;
+  countedQty: number;
+  unit: string;
+  skunit?: string;
+  multiplier?: number;
+  batchNum?: string;
+  specialStock?: string;
+  warehouse?: string;
+  stockPlace?: string;
 }
 
 export interface CountLine {

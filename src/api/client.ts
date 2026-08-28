@@ -18,6 +18,7 @@ import type {
   TransferTask,
   CountTask,
   AdjustmentOrder,
+  AdjustmentLine,
   ProductStock,
   PickSuggestion,
   StockBatch,
@@ -381,6 +382,37 @@ function toAdjustmentOrder(row: Row): AdjustmentOrder {
     description: description || undefined,
     itemCount: itemCount > 0 ? itemCount : undefined,
     priority,
+  };
+}
+
+function toAdjustmentLine(row: Row, index: number): AdjustmentLine {
+  const material = pick(row, ["MATERIAL", "MATCODE", "ITEMCODE", "PSMATERIAL"]);
+  const name = pick(row, ["MTEXT", "STEXT", "TEXT", "MATNAME", "DESCRIPTION", "NAME"]);
+  const barcode = pick(row, ["BARCODE", "EAN", "BARCODENUM"]);
+  const targetQty = num(row, ["TARGETQTY", "SYSTEMQTY", "TOTALITEMS", "TOTALQTY", "QUANTITY", "REMAININGQTY", "QTY"], 0);
+  const countedQty = num(row, ["COUNTEDQTY", "READQUANTITY", "READQTY", "ACTUALQTY"], 0);
+  const unit = pick(row, ["BUNIT", "UNIT", "QUNIT", "PURUNIT"]) || "AD";
+  const skunit = pick(row, ["SKUNIT", "IUNIT", "STOCKUNIT"]) || unit || "AD";
+  const multiplier = num(row, ["MULTIPLIER", "FACTOR", "PACKAGEMULTIPLIER"], 1);
+  const batchNum = pick(row, ["BATCHNUM", "LOT", "LOTNUM"]);
+  const specialStock = pick(row, ["SPECIALSTOCK", "ISLOT"]);
+  const warehouse = pick(row, ["WAREHOUSE", "SRCWAREHOUSE", "WH"]);
+  const stockPlace = pick(row, ["STOCKPLACE", "SRCSTOCKPLACE", "LOCATION", "SHELF"]);
+
+  return {
+    id: pick(row, ["ITEMNUM", "LINENUM", "ID"]) || `${material || index + 1}`,
+    material: material || "MLZ",
+    name: name || material || "Malzeme",
+    barcode: barcode || undefined,
+    targetQty: targetQty > 0 ? targetQty : 1,
+    countedQty: countedQty >= 0 ? countedQty : 0,
+    unit: unit.toUpperCase(),
+    skunit: skunit.toUpperCase(),
+    multiplier: multiplier > 0 ? multiplier : 1,
+    batchNum: batchNum && batchNum !== "*" ? batchNum : undefined,
+    specialStock: specialStock || "*",
+    warehouse: warehouse && warehouse !== "*" ? warehouse : undefined,
+    stockPlace: stockPlace && stockPlace !== "*" ? stockPlace : undefined,
   };
 }
 
@@ -1893,11 +1925,16 @@ export const api = {
     if (!rows.length) return undefined;
     const head = rows[0];
     const order = toAdjustmentOrder(head);
+    const lines = rows
+      .filter((r) => pick(r, ["MATERIAL", "MATCODE", "ITEMCODE"]) !== "")
+      .map((r, i) => toAdjustmentLine(r, i));
+
     return {
       ...order,
       id: orderNum || order.id,
       docType: orderType || order.docType,
       warehouse: warehouse || order.warehouse,
+      lines: lines.length > 0 ? lines : undefined,
     };
   },
 };
