@@ -37,7 +37,8 @@ export default function CountDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
-  const orderType = searchParams.get("type") || "";
+  const orderType = searchParams.get("type") || searchParams.get("docType") || "";
+  const invDocNum = searchParams.get("invDocNum") || id || "";
 
   const [order, setOrder] = useState<AdjustmentOrder | null>(null);
   const [lines, setLines] = useState<AdjustmentLine[]>([]);
@@ -56,8 +57,10 @@ export default function CountDetailPage() {
     setError(null);
     try {
       const data = await api.getAdjustmentOrder({
-        orderNum: id,
+        orderNum: invDocNum,
         orderType,
+        invDocNum,
+        invDocType: orderType,
       });
 
       if (data) {

@@ -72,7 +72,9 @@ export default function CountListPage() {
   useEffect(() => pg.reset(), [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const emreGir = (o: AdjustmentOrder) => {
-    navigate(`/count/${o.id}?type=${encodeURIComponent(o.docType ?? "")}`);
+    const num = o.invDocNum || o.id;
+    const docType = o.docType || "";
+    navigate(`/count/${encodeURIComponent(num)}?type=${encodeURIComponent(docType)}&invDocNum=${encodeURIComponent(o.invDocNum ?? num)}&docType=${encodeURIComponent(docType)}`);
   };
 
   const barkodOkundu = (code: string) => {

@@ -102,9 +102,16 @@ describe("Sayım Servisleri — MZYListingAdjustment & MZYEnterAdjustment", () =
     expect(capturedBody).toEqual({
       PSCOMPANY: "01",
       PSPLANT: "100",
+      PSWAREHOUSE: "01",
       WAREHOUSE: "01",
+      PSINVDOCNUM: "SYM-2026-001",
+      PSINVDOCTYPE: "SYM",
+      INVDOCNUM: "SYM-2026-001",
+      INVDOCTYPE: "SYM",
       PSORDERNUM: "SYM-2026-001",
       PSORDERTYPE: "SYM",
+      PSDOCNUM: "SYM-2026-001",
+      PSDOCTYPE: "SYM",
       PSUSER: "depocu1",
       PITRACESTATUS: 0,
     });

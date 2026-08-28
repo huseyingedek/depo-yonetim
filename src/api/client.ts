@@ -358,9 +358,9 @@ function toPickOrder(row: Row): PickOrder {
 }
 
 function toAdjustmentOrder(row: Row): AdjustmentOrder {
-  const invDocNum = pick(row, ["INVDOCNUM", "INVDOCNO", "INVENTORYDOCNUM", "INVDOC"]);
-  const id = pick(row, ["DOCNUM", "INVDOCNUM", "ADJUSTMENTNUM", "ORDERNUM", "ID", "DOCNO", "COUNTNUM"]);
-  const docType = pick(row, ["DOCTYPE", "INVDOCNUMTYPE", "INVDOCNUMBERTYPE", "ADJUSTMENTTYPE", "ORDERTYPE", "TYPE"]);
+  const invDocNum = pick(row, ["INVDOCNUM", "INVDOCNO", "INVENTORYDOCNUM", "INVDOC", "DOCNUM", "ORDERNUM"]);
+  const id = pick(row, ["INVDOCNUM", "DOCNUM", "ADJUSTMENTNUM", "ORDERNUM", "ID", "DOCNO", "COUNTNUM"]);
+  const docType = pick(row, ["INVDOCTYPE", "DOCTYPE", "INVDOCNUMTYPE", "INVDOCNUMBERTYPE", "ADJUSTMENTTYPE", "ORDERTYPE", "TYPE"]);
   const warehouse = pick(row, ["WAREHOUSE", "SRCWAREHOUSE", "WH", "WAREHOUSEFA"]);
   const stockPlace = pick(row, ["STOCKPLACE", "SRCSTOCKPLACE", "LOCATION", "SHELF", "FRONTAREA"]);
   const worker = pick(row, ["WORKER", "USER", "ASSIGNEDUSER", "PERSONNEL"]);
@@ -372,7 +372,7 @@ function toAdjustmentOrder(row: Row): AdjustmentOrder {
 
   return {
     id: id || invDocNum || "SAYIM",
-    invDocNum: invDocNum || undefined,
+    invDocNum: invDocNum || id || undefined,
     docType: docType || undefined,
     docDate: docDate || undefined,
     warehouse: warehouse && warehouse !== "*" ? warehouse : undefined,
@@ -1888,6 +1888,8 @@ export const api = {
   async getAdjustmentOrder(payload: {
     orderNum: string;
     orderType?: string;
+    invDocNum?: string;
+    invDocType?: string;
     warehouse?: string;
     company?: string;
     plant?: string;
@@ -1895,38 +1897,77 @@ export const api = {
     traceStatus?: number;
   } | string): Promise<AdjustmentOrder | undefined> {
     const c = ctx();
-    const orderNum = typeof payload === "string" ? payload : payload.orderNum;
-    const orderType = typeof payload === "string" ? "" : (payload.orderType ?? "");
+    const orderNum = typeof payload === "string" ? payload : (payload.invDocNum || payload.orderNum);
+    const orderType = typeof payload === "string" ? "" : (payload.invDocType || payload.orderType || "");
     const warehouse = typeof payload === "string" ? (c.warehouse ?? "01") : (payload.warehouse ?? c.warehouse ?? "01");
     const compCode = typeof payload === "string" ? (c.company ?? "01") : (payload.company ?? c.company ?? "01");
     const plantCode = typeof payload === "string" ? (c.plant ?? "100") : (payload.plant ?? c.plant ?? "100");
     const userCode = typeof payload === "string" ? (c.worker ?? "") : (payload.user ?? c.worker ?? "");
     const traceStatus = typeof payload === "string" ? 0 : (payload.traceStatus ?? 0);
 
-    const r = await call(SERVICES.enterAdjustment, {
+    const params: Record<string, unknown> = {
       PSCOMPANY: String(compCode).trim(),
       PSPLANT: String(plantCode).trim(),
+      PSWAREHOUSE: String(warehouse).trim(),
       WAREHOUSE: String(warehouse).trim(),
+
+      // Bora Bey'in belirttiği invdoctype ve num parametreleri:
+      PSINVDOCNUM: String(orderNum).trim(),
+      PSINVDOCTYPE: String(orderType).trim(),
+      INVDOCNUM: String(orderNum).trim(),
+      INVDOCTYPE: String(orderType).trim(),
+
+      // Ekstra uyumluluk alias'ları:
       PSORDERNUM: String(orderNum).trim(),
       PSORDERTYPE: String(orderType).trim(),
+      PSDOCNUM: String(orderNum).trim(),
+      PSDOCTYPE: String(orderType).trim(),
+
       PSUSER: String(userCode).trim(),
       PITRACESTATUS: traceStatus,
-    });
+    };
 
-    const rows = rowsOf(r, [
+    console.info("📦 [MZYEnterAdjustment İSTEK PAYLOAD]", params);
+    const r = await call(SERVICES.enterAdjustment, params);
+    console.info("📥 [MZYEnterAdjustment GELEN YANIT]", r);
+
+    let rows = rowsOf(r, [
       "IASWMSADJITEM",
       "TBLADJUSTMENTITEM",
       "TBLADJDETAIL",
       "TBLWMSADJITEM",
       "IASWMSADJ",
       "TBLADJUSTMENT",
+      "TBLADJITEM",
+      "IASINVITEM",
+      "TBLINVITEM",
+      "TBLITEMS",
+      "TBLITEM",
+      "TBLMATLIST",
+      "IASWMSADJUSTMENT",
+      "TBLDETAIL",
+      "TBLDOCDETAIL",
+      "ROW",
     ]);
+
+    // Eğer belirtilen tablo adlarında bulunamadıysa r.data altındaki herhangi bir diziyi tara:
+    if (!rows.length && r.data && typeof r.data === "object") {
+      for (const [k, v] of Object.entries(r.data)) {
+        if (!/SYSTEMMSG|MESSAGETABLE|TBLMESSAGE/i.test(k)) {
+          const unwrapped = unwrapRows(v);
+          if (unwrapped.length > 0) {
+            rows = unwrapped;
+            break;
+          }
+        }
+      }
+    }
 
     if (!rows.length) return undefined;
     const head = rows[0];
     const order = toAdjustmentOrder(head);
     const lines = rows
-      .filter((r) => pick(r, ["MATERIAL", "MATCODE", "ITEMCODE"]) !== "")
+      .filter((r) => pick(r, ["MATERIAL", "MATCODE", "ITEMCODE", "PSMATERIAL"]) !== "")
       .map((r, i) => toAdjustmentLine(r, i));
 
     return {
