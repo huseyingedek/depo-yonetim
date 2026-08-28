@@ -1909,20 +1909,8 @@ export const api = {
       PSCOMPANY: String(compCode).trim(),
       PSPLANT: String(plantCode).trim(),
       PSWAREHOUSE: String(warehouse).trim(),
-      WAREHOUSE: String(warehouse).trim(),
-
-      // Bora Bey'in belirttiği invdoctype ve num parametreleri:
       PSINVDOCNUM: String(orderNum).trim(),
       PSINVDOCTYPE: String(orderType).trim(),
-      INVDOCNUM: String(orderNum).trim(),
-      INVDOCTYPE: String(orderType).trim(),
-
-      // Ekstra uyumluluk alias'ları:
-      PSORDERNUM: String(orderNum).trim(),
-      PSORDERTYPE: String(orderType).trim(),
-      PSDOCNUM: String(orderNum).trim(),
-      PSDOCTYPE: String(orderType).trim(),
-
       PSUSER: String(userCode).trim(),
       PITRACESTATUS: traceStatus,
     };
