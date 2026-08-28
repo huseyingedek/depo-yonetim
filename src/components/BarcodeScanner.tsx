@@ -9,6 +9,7 @@ interface Props {
   prefill?: string;
   placeholder?: string;
   hideCardWrapper?: boolean;
+  compact?: boolean;
 }
 
 const SCAN_COOLDOWN = 1200;
@@ -19,6 +20,7 @@ export default function BarcodeScanner({
   prefill,
   placeholder,
   hideCardWrapper,
+  compact,
 }: Props) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -76,8 +78,8 @@ export default function BarcodeScanner({
 
   const inputContent = (
     <>
-      {prompt !== "" && <label className="field-label">{prompt ?? t("picking.scanProduct")}</label>}
-      <div className="flex gap-2">
+      {Boolean(prompt) && <label className="field-label">{prompt}</label>}
+      <div className={`flex ${compact ? "gap-1" : "gap-2"}`}>
         <div className="relative min-w-0 flex-1">
           <input
             autoFocus
@@ -88,16 +90,20 @@ export default function BarcodeScanner({
             autoComplete="off"
             autoCapitalize="none"
             spellCheck={false}
-            className="field-input pr-11 font-mono tracking-wider"
+            className={`field-input font-mono tracking-wider ${
+              compact ? "h-8 py-0.5 pr-7 text-[12px] sm:text-[13px]" : "pr-11"
+            }`}
           />
           <button
             type="button"
             onClick={submit}
             disabled={!value.trim()}
             aria-label={t("picking.confirm")}
-            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-30"
+            className={`absolute top-1/2 -translate-y-1/2 flex items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-30 ${
+              compact ? "right-1 h-6 w-6" : "right-2 h-8 w-8"
+            }`}
           >
-            <CornerDownLeft className="h-5 w-5" />
+            <CornerDownLeft className={compact ? "h-3.5 w-3.5" : "h-5 w-5"} />
           </button>
         </div>
 
@@ -105,13 +111,19 @@ export default function BarcodeScanner({
           type="button"
           onClick={() => setCameraOpen((v) => !v)}
           aria-label={t("picking.camera")}
-          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition ${
+          className={`shrink-0 flex items-center justify-center border transition ${
+            compact ? "h-8 w-8 rounded-lg" : "h-12 w-12 rounded-xl"
+          } ${
             cameraOpen
               ? "border-brand-500 bg-brand-500 text-white"
               : "border-line bg-surface text-muted hover:bg-elevated"
           }`}
         >
-          {cameraOpen ? <X className="h-5 w-5" /> : <Camera className="h-5 w-5" />}
+          {cameraOpen ? (
+            <X className={compact ? "h-3.5 w-3.5" : "h-5 w-5"} />
+          ) : (
+            <Camera className={compact ? "h-3.5 w-3.5" : "h-5 w-5"} />
+          )}
         </button>
       </div>
     </>

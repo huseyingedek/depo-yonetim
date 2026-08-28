@@ -10,7 +10,6 @@ import {
   Plus,
   Minus,
   Check,
-  Search,
 } from "lucide-react";
 import BarcodeScanner from "../../components/BarcodeScanner";
 import ToastView, { useToast } from "../../components/Toast";
@@ -45,7 +44,6 @@ export default function CountDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [flashLineId, setFlashLineId] = useState<string | null>(null);
   const [activeItem, setActiveItem] = useState<ActiveCountItem | null>(null);
 
@@ -308,16 +306,7 @@ export default function CountDetailPage() {
   // 2. Altta: Tam olan (counted === target) kartlar.
   // ---------------------------------------------------------------------------
   const sortedLines = useMemo(() => {
-    const s = searchQuery.trim().toLowerCase();
-    const filtered = lines.filter(
-      (l) =>
-        !s ||
-        l.material.toLowerCase().includes(s) ||
-        l.name.toLowerCase().includes(s) ||
-        (l.barcode && l.barcode.toLowerCase().includes(s))
-    );
-
-    return [...filtered].sort((a, b) => {
+    return [...lines].sort((a, b) => {
       const aIsComplete = a.targetQty > 0 && a.countedQty === a.targetQty;
       const bIsComplete = b.targetQty > 0 && b.countedQty === b.targetQty;
 
@@ -328,7 +317,7 @@ export default function CountDetailPage() {
       // Kendi aralarında id sırası
       return a.id.localeCompare(b.id, undefined, { numeric: true });
     });
-  }, [lines, searchQuery]);
+  }, [lines]);
 
   // Özet Sayılar
   const totalCountedLines = lines.filter((l) => l.targetQty > 0 && l.countedQty === l.targetQty).length;
@@ -396,18 +385,18 @@ export default function CountDetailPage() {
         </div>
       )}
 
-      {/* İki Sütunlu Grid Düzen (Transfer Ekranıyla Birebir) */}
-      <div className="grid min-w-0 gap-3 md:gap-4 md:grid-cols-[340px_minmax(0,1fr)] lg:grid-cols-[350px_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-3">
+      {/* İki Sütunlu Grid Düzen (Sol Küçük, Sağ Geniş) */}
+      <div className="grid min-w-0 gap-2.5 md:gap-3.5 md:grid-cols-[265px_minmax(0,1fr)] lg:grid-cols-[275px_minmax(0,1fr)] xl:grid-cols-[285px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-2.5">
         {/* =================================================================== */}
         {/* SOL KOLON: Sol üstte küçük, az yer kaplayan okutma ve miktar alanı */}
         {/* =================================================================== */}
-        <div className="min-w-0 md:sticky md:top-2 md:self-start lg:sticky lg:top-2 xl:sticky xl:top-2 short:!static short:w-[340px] short:shrink-0 short:self-stretch short:overflow-y-auto">
-          <div className="card p-2 sm:p-2.5 space-y-2">
+        <div className="min-w-0 md:sticky md:top-2 md:self-start lg:sticky lg:top-2 xl:sticky xl:top-2 short:!static short:w-[265px] short:shrink-0 short:self-stretch short:overflow-y-auto">
+          <div className="card p-1.5 sm:p-2 space-y-1.5">
             {/* Depo & Raf Bilgisi Başlık Kartı */}
             {(order?.warehouse || order?.stockPlace) && (
-              <div className="flex items-center justify-between gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1.5 text-[14px]">
-                <span className="inline-flex min-w-0 items-center gap-1.5 font-bold text-emerald-800 dark:text-emerald-200">
-                  <MapPin className="h-4 w-4 shrink-0 text-emerald-600" />
+              <div className="flex items-center justify-between gap-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 text-[13px]">
+                <span className="inline-flex min-w-0 items-center gap-1 font-bold text-emerald-800 dark:text-emerald-200">
+                  <MapPin className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
                   <span className="truncate">
                     Depo: <span className="font-mono">{order.warehouse}</span>
                     {order.stockPlace ? ` · Raf: ${order.stockPlace}` : ""}
@@ -418,17 +407,18 @@ export default function CountDetailPage() {
 
             {/* Barkod Okuyucu (Küçük ve Kompakt) */}
             {!activeItem && (
-              <div className="space-y-1.5">
-                <span className="block text-[14px] font-bold text-fg">
+              <div className="space-y-1">
+                <span className="block text-[13.5px] font-bold text-fg">
                   Barkod Okut
                 </span>
                 <BarcodeScanner
                   onDetected={handleDetected}
-                  placeholder=""
+                  placeholder="Barkod okut"
                   hideCardWrapper
+                  compact
                 />
                 {busy && (
-                  <p className="mt-1 flex items-center gap-1.5 text-[14px] font-semibold text-brand-600">
+                  <p className="mt-1 flex items-center gap-1.5 text-[13px] font-semibold text-brand-600">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" /> CANIAS sorgulanıyor…
                   </p>
                 )}
@@ -437,14 +427,14 @@ export default function CountDetailPage() {
 
             {/* Aktif Malzeme Miktar Paneli (Transfer Ekranıyla Birebir Kompakt Stepper) */}
             {activeItem && (
-              <div className="space-y-2 pt-0.5 animate-fade-in">
+              <div className="space-y-1.5 pt-0.5 animate-fade-in">
                 {/* Malzeme Başlığı & İptal */}
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-1.5">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[14px] font-bold text-fg">
+                    <p className="truncate text-[13.5px] font-bold text-fg">
                       {activeItem.name}
                     </p>
-                    <div className="flex items-center gap-1.5 font-mono text-[13px] text-slate-500">
+                    <div className="flex items-center gap-1.5 font-mono text-[12px] text-slate-500">
                       <span className="font-bold text-brand-600">{activeItem.material}</span>
                       {activeItem.barcode && <span>· {activeItem.barcode}</span>}
                     </div>
@@ -452,7 +442,7 @@ export default function CountDetailPage() {
                   <button
                     type="button"
                     onClick={() => setActiveItem(null)}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-elevated/40 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                    className="flex h-6 w-6 items-center justify-center rounded-lg border border-line bg-elevated/40 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
                     title="İptal"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -461,14 +451,14 @@ export default function CountDetailPage() {
 
                 {/* Birim Eşitliği (örn: 1 KO = 5 PK) */}
                 {activeItem.multiplier > 1 || activeItem.unit !== activeItem.skunit ? (
-                  <div className="rounded-lg bg-amber-50 border border-amber-200/60 px-2 py-0.5 font-mono text-[13px] font-bold text-amber-800">
+                  <div className="rounded-md bg-amber-50 border border-amber-200/60 px-1.5 py-0.5 font-mono text-[12px] font-bold text-amber-800">
                     1 {activeItem.unit} = {activeItem.multiplier} {activeItem.skunit}
                   </div>
                 ) : null}
 
                 {/* Miktar Stepper Girişi */}
                 <div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     <button
                       type="button"
                       onClick={() =>
@@ -476,9 +466,9 @@ export default function CountDetailPage() {
                           prev ? { ...prev, quantity: Math.max(0, prev.quantity - 1) } : null
                         )
                       }
-                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-elevated text-subtle hover:bg-line active:scale-95 transition shrink-0"
+                      className="flex h-8.5 w-8.5 items-center justify-center rounded-lg bg-elevated text-subtle hover:bg-line active:scale-95 transition shrink-0"
                     >
-                      <Minus className="h-4 w-4" />
+                      <Minus className="h-3.5 w-3.5" />
                     </button>
 
                     <div className="relative flex-1">
@@ -505,10 +495,10 @@ export default function CountDetailPage() {
                             handleCommitActiveItem();
                           }
                         }}
-                        className="field-input w-full text-center font-mono text-[17px] font-extrabold text-emerald-600 h-10 py-1"
+                        className="field-input w-full text-center font-mono text-[15px] font-extrabold text-emerald-600 h-8.5 py-0.5"
                         autoFocus
                       />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[13px] font-bold text-slate-500">
+                      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 font-mono text-[12px] font-bold text-slate-500">
                         {activeItem.unit}
                       </span>
                     </div>
@@ -520,23 +510,23 @@ export default function CountDetailPage() {
                           prev ? { ...prev, quantity: prev.quantity + 1 } : null
                         )
                       }
-                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition shadow-md shrink-0"
+                      className="flex h-8.5 w-8.5 items-center justify-center rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition shadow-sm shrink-0"
                     >
-                      <Plus className="h-4 w-4" />
+                      <Plus className="h-3.5 w-3.5" />
                     </button>
                   </div>
 
                   {/* Hızlı Butonlar ve Ekle Butonu */}
-                  <div className="grid grid-cols-4 gap-1.5 pt-1.5">
+                  <div className="grid grid-cols-4 gap-1 pt-1">
                     <button
                       type="button"
                       onClick={() =>
                         setActiveItem((prev) => (prev ? { ...prev, quantity: 0 } : null))
                       }
-                      className="flex items-center justify-center rounded-xl border border-line bg-elevated/50 py-2 text-subtle hover:bg-rose-50 hover:text-rose-600 transition active:scale-95"
+                      className="flex items-center justify-center rounded-lg border border-line bg-elevated/50 py-1.5 text-subtle hover:bg-rose-50 hover:text-rose-600 transition active:scale-95"
                       title="Sıfırla"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
 
                     {[1, 5, 10].map((inc) => (
@@ -548,7 +538,7 @@ export default function CountDetailPage() {
                             prev ? { ...prev, quantity: prev.quantity + inc } : null
                           )
                         }
-                        className="rounded-xl border border-line bg-elevated/80 py-2 font-mono text-[13px] font-black text-fg hover:bg-brand-600 hover:text-white transition active:scale-95"
+                        className="rounded-lg border border-line bg-elevated/80 py-1.5 font-mono text-[12px] font-black text-fg hover:bg-brand-600 hover:text-white transition active:scale-95"
                       >
                         +{inc}
                       </button>
@@ -559,10 +549,10 @@ export default function CountDetailPage() {
                   <button
                     type="button"
                     onClick={handleCommitActiveItem}
-                    className="mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 text-[14px] font-extrabold text-white shadow-md hover:bg-emerald-700 active:scale-95 transition"
+                    className="mt-1.5 flex h-8.5 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 text-[13px] font-extrabold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition"
                   >
-                    <Check className="h-4 w-4" />
-                    <span>Sayımı Kaydet ({activeItem.quantity * activeItem.multiplier} {activeItem.skunit})</span>
+                    <Check className="h-3.5 w-3.5" />
+                    <span>Kaydet ({activeItem.quantity * activeItem.multiplier} {activeItem.skunit})</span>
                   </button>
                 </div>
               </div>
@@ -574,17 +564,6 @@ export default function CountDetailPage() {
         {/* SAĞ KOLON: Okutulacak Mallar (Aşağı doğru biriken kartlar)         */}
         {/* =================================================================== */}
         <div className="min-w-0 short:flex-1 short:overflow-y-auto short:pr-1 space-y-2">
-          {/* Liste Arama Çubuğu */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Malzeme veya barkod ara..."
-              className="field-input pl-9 text-[14px] h-9"
-            />
-          </div>
-
           {/* Yükleniyor Durumu */}
           {loading ? (
             <div className="space-y-2">
@@ -596,7 +575,7 @@ export default function CountDetailPage() {
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-surface/50 py-8 text-center text-subtle">
               <Package className="mb-2 h-7 w-7 text-slate-400" />
               <p className="text-[15px] font-bold text-fg">
-                {searchQuery ? "Aramaya uygun malzeme bulunamadı" : "Sayılacak malzeme bulunamadı"}
+                Sayılacak malzeme bulunamadı
               </p>
             </div>
           ) : (
