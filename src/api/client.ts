@@ -357,8 +357,9 @@ function toPickOrder(row: Row): PickOrder {
 }
 
 function toAdjustmentOrder(row: Row): AdjustmentOrder {
-  const id = pick(row, ["DOCNUM", "ADJUSTMENTNUM", "ORDERNUM", "ID", "DOCNO", "COUNTNUM"]);
-  const docType = pick(row, ["DOCTYPE", "ADJUSTMENTTYPE", "ORDERTYPE", "TYPE"]);
+  const invDocNum = pick(row, ["INVDOCNUM", "INVDOCNO", "INVENTORYDOCNUM", "INVDOC"]);
+  const id = pick(row, ["DOCNUM", "INVDOCNUM", "ADJUSTMENTNUM", "ORDERNUM", "ID", "DOCNO", "COUNTNUM"]);
+  const docType = pick(row, ["DOCTYPE", "INVDOCNUMTYPE", "INVDOCNUMBERTYPE", "ADJUSTMENTTYPE", "ORDERTYPE", "TYPE"]);
   const warehouse = pick(row, ["WAREHOUSE", "SRCWAREHOUSE", "WH", "WAREHOUSEFA"]);
   const stockPlace = pick(row, ["STOCKPLACE", "SRCSTOCKPLACE", "LOCATION", "SHELF", "FRONTAREA"]);
   const worker = pick(row, ["WORKER", "USER", "ASSIGNEDUSER", "PERSONNEL"]);
@@ -369,7 +370,8 @@ function toAdjustmentOrder(row: Row): AdjustmentOrder {
   const priority = pick(row, ["PRIORITY"]) === "" ? undefined : num(row, ["PRIORITY"], 0);
 
   return {
-    id: id || "SAYIM",
+    id: id || invDocNum || "SAYIM",
+    invDocNum: invDocNum || undefined,
     docType: docType || undefined,
     docDate: docDate || undefined,
     warehouse: warehouse && warehouse !== "*" ? warehouse : undefined,

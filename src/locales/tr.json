@@ -170,9 +170,15 @@
     "items": "işlem"
   },
   "count": {
-    "title": "Sayım",
+    "title": "Stok Sayımı",
+    "openOrders": "Sayımlar",
+    "searchOrder": "Belge no, depo veya raf ara...",
+    "scanOrder": "Sayım Belgesi / Raf Barkodu Okut",
+    "warehouse": "Depo",
+    "shelf": "Raf",
+    "itemCount": "Kalem",
     "tasks": "Sayım İşleri",
-    "search": "Lokasyon, ürün ara...",
+    "search": "Belge no, depo veya raf ara...",
     "location": "Lokasyon",
     "systemQty": "Sistem Miktarı",
     "countedQty": "Sayılan Miktar",
@@ -185,8 +191,13 @@
     "completed": "Sayım Tamamlandı",
     "totalDiff": "Toplam Fark",
     "countedLines": "Sayılan Kalem",
-    "items": "ürün",
-    "notCounted": "Sayılmadı"
+    "items": "belge",
+    "notCounted": "Sayılmadı",
+    "status": {
+      "open": "Aktif Sayım",
+      "inProgress": "Devam Ediyor",
+      "completed": "Tamamlandı"
+    }
   },
   "inquiry": {
     "title": "Ürün Sorgulama",

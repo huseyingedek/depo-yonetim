@@ -21,6 +21,7 @@ describe("Sayım Servisleri — MZYListingAdjustment & MZYEnterAdjustment", () =
             TBLADJUSTMENT: {
               ROW: [
                 {
+                  INVDOCNUM: "SYM-2026-001",
                   DOCNUM: "SYM-2026-001",
                   DOCTYPE: "SYM",
                   WAREHOUSE: "01",
@@ -51,6 +52,7 @@ describe("Sayım Servisleri — MZYListingAdjustment & MZYEnterAdjustment", () =
 
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe("SYM-2026-001");
+    expect(result[0].invDocNum).toBe("SYM-2026-001");
     expect(result[0].docType).toBe("SYM");
     expect(result[0].warehouse).toBe("01");
     expect(result[0].stockPlace).toBe("A-01-02");

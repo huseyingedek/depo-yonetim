@@ -217,7 +217,8 @@ export interface StockTransferPayload {
 }
 
 export interface AdjustmentOrder {
-  id: string; // DOCNUM, ADJUSTMENTNUM, ORDERNUM — Belge Numarası
+  id: string; // DOCNUM, INVDOCNUM, ADJUSTMENTNUM, ORDERNUM — Belge Numarası
+  invDocNum?: string; // INVDOCNUM — Sayım Belge Numarası
   docType?: string; // DOCTYPE, ORDERTYPE — Belge Tipi
   docDate?: string; // DOCDATE, CREATEDAT — Belge Tarihi
   warehouse?: string; // WAREHOUSE — Depo Kodu
