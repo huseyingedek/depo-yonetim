@@ -373,7 +373,33 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 
 ---
 
-## 7. Özet Tablo: Servis İsimleri ve Kullanım Yerleri
+## 7. Sayım Servisleri (Stock Count / Adjustment)
+
+### 7.1. `MZYListingAdjustment` — Sayım Belgelerini Listele
+- **Açıklama**: Açık sayım belgelerini listeler.
+- **Parametreler**:
+  - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
+  - `PSPLANT` (*STRING*): Tesis kodu (`"100"`).
+  - `PDSTARTDATE` (*DATETIME / DATE*): Başlangıç Tarihi.
+  - `PDENDDATE` (*DATETIME / DATE*): Bitiş Tarihi.
+  - `PITRACESTATUS` (*INTEGER*): Trace Durumu (Öndeğer `0` gönderilecek).
+- **WMS İstemci Karşılığı**: `api.getAdjustmentList(params?)`
+
+### 7.2. `MZYEnterAdjustment` — Sayım Emrine Gir
+- **Açıklama**: Seçilen sayım emrinin detaylarını ve sayılacak kalemlerini getirir.
+- **Parametreler**:
+  - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
+  - `PSPLANT` (*STRING*): Tesis kodu (`"100"`).
+  - `WAREHOUSE` (*STRING*): Depo kodu.
+  - `PSORDERNUM` (*STRING*): Sipariş / Sayım Belge Numarası.
+  - `PSORDERTYPE` (*STRING*): Sipariş / Sayım Belge Tipi.
+  - `PSUSER` (*STRING*): Giriş yapan kullanıcı adı.
+  - `PITRACESTATUS` (*INTEGER*): Trace Durumu (Öndeğer `0` gönderilecek).
+- **WMS İstemci Karşılığı**: `api.getAdjustmentOrder(orderNum, orderType, warehouse)`
+
+---
+
+## 8. Özet Tablo: Servis İsimleri ve Kullanım Yerleri
 
 | Servis Adı | CANIAS Servisi | İstemci Metodu | Dosya Konumu |
 | :--- | :--- | :--- | :--- |
@@ -406,4 +432,5 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 | **Tedarikçi Arama** | `MzyGetCustomer` | `api.getCustomers` | `src/api/client.ts` |
 | **Mal Kabul Sakla / Bitir** | `MZYSAVEINVPURORDER` | `api.saveReceipt` | `src/api/client.ts` |
 | **Serbest Stok Transferi** | `MZYStockTransfer` | `api.createStockTransfer` | `src/api/client.ts` |
-
+| **Sayım Belgeleri Listesi** | `MZYListingAdjustment` | `api.getAdjustmentList` | `src/api/client.ts` |
+| **Sayım Emri Giriş** | `MZYEnterAdjustment` | `api.getAdjustmentOrder` | `src/api/client.ts` |

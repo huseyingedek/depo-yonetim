@@ -17,6 +17,7 @@ import type {
   PutawayItem,
   TransferTask,
   CountTask,
+  AdjustmentOrder,
   ProductStock,
   PickSuggestion,
   StockBatch,
@@ -139,8 +140,9 @@ const READ_ONLY = new Set<string>([SERVICES.listingPick]);
 const inflight = new Map<string, Promise<MzyResult>>();
 
 function call(service: string, params: Record<string, unknown>): Promise<MzyResult> {
-  // Tüm servislere trace bayrağını otomatik ekle (1 = trace açık, 0 = kapalı)
-  params = { PITRACESTATUS: useAppStore.getState().trace ? "1" : "0", ...params };
+  if (useAppStore.getState().trace && params.PITRACESTATUS === undefined) {
+    params = { PITRACESTATUS: "1", ...params };
+  }
   if (!READ_ONLY.has(service)) return doCall(service, params);
 
   const key = service + ":" + JSON.stringify(params);
@@ -351,6 +353,32 @@ function toPickOrder(row: Row): PickOrder {
     status: toStatus(pick(row, ["STATUS"], "0")),
     started: pick(row, ["ISSTARTED"], "0") === "1",
     lines: [],
+  };
+}
+
+function toAdjustmentOrder(row: Row): AdjustmentOrder {
+  const id = pick(row, ["DOCNUM", "ADJUSTMENTNUM", "ORDERNUM", "ID", "DOCNO", "COUNTNUM"]);
+  const docType = pick(row, ["DOCTYPE", "ADJUSTMENTTYPE", "ORDERTYPE", "TYPE"]);
+  const warehouse = pick(row, ["WAREHOUSE", "SRCWAREHOUSE", "WH", "WAREHOUSEFA"]);
+  const stockPlace = pick(row, ["STOCKPLACE", "SRCSTOCKPLACE", "LOCATION", "SHELF", "FRONTAREA"]);
+  const worker = pick(row, ["WORKER", "USER", "ASSIGNEDUSER", "PERSONNEL"]);
+  const docDate = pick(row, ["DOCDATE", "CREATEDAT", "DATE", "STARTDATE"]);
+  const description = pick(row, ["STEXT", "DESCRIPTION", "TITLE", "NOTE"]);
+  const traceStatus = pick(row, ["TRACESTATUS", "STATUS", "ISCLOSED", "STATUSTEXT"]);
+  const itemCount = num(row, ["ITEMCOUNT", "TOTALITEMS", "TOTALITEM", "LINECOUNT", "COUNT"]);
+  const priority = pick(row, ["PRIORITY"]) === "" ? undefined : num(row, ["PRIORITY"], 0);
+
+  return {
+    id: id || "SAYIM",
+    docType: docType || undefined,
+    docDate: docDate || undefined,
+    warehouse: warehouse && warehouse !== "*" ? warehouse : undefined,
+    stockPlace: stockPlace && stockPlace !== "*" ? stockPlace : undefined,
+    worker: worker && worker !== "*" ? worker : undefined,
+    status: traceStatus || "0",
+    description: description || undefined,
+    itemCount: itemCount > 0 ? itemCount : undefined,
+    priority,
   };
 }
 
@@ -1780,6 +1808,90 @@ export const api = {
     return {
       ok: true,
       message: mesaj || "Mal kabul işlemi başarıyla kaydedildi.",
+    };
+  },
+
+  // ---------------------------------------------------------------------------
+  // SAYIM SERVİSLERİ (COUNT / ADJUSTMENT)
+  // ---------------------------------------------------------------------------
+
+  // 1. MZYListingAdjustment - Sayım Belgelerini Listele
+  async getAdjustmentList(params?: {
+    company?: string;
+    plant?: string;
+    startDate?: string;
+    endDate?: string;
+    traceStatus?: number;
+  }): Promise<AdjustmentOrder[]> {
+    const c = ctx();
+    const r = await call(SERVICES.listingAdjustment, {
+      PSCOMPANY: String(params?.company ?? c.company ?? "01").trim(),
+      PSPLANT: String(params?.plant ?? c.plant ?? "100").trim(),
+      PDSTARTDATE: params?.startDate ?? DATE_MIN,
+      PDENDDATE: params?.endDate ?? DATE_MAX,
+      PITRACESTATUS: params?.traceStatus ?? 0,
+    });
+
+    const rows = rowsOf(r, [
+      "TBLADJUSTMENT",
+      "TBLADJUSTMENTLIST",
+      "IASWMSADJ",
+      "IASWMSADJUSTMENT",
+      "TBLADJLIST",
+      "TBLWMSADJ",
+      "TBLDOCLIST",
+      "TBLPOLIST",
+    ]);
+
+    return rows.map(toAdjustmentOrder);
+  },
+
+  // 2. MZYEnterAdjustment - Sayım Emrine Gir / Detay ve Kalemleri Getir
+  async getAdjustmentOrder(payload: {
+    orderNum: string;
+    orderType?: string;
+    warehouse?: string;
+    company?: string;
+    plant?: string;
+    user?: string;
+    traceStatus?: number;
+  } | string): Promise<AdjustmentOrder | undefined> {
+    const c = ctx();
+    const orderNum = typeof payload === "string" ? payload : payload.orderNum;
+    const orderType = typeof payload === "string" ? "" : (payload.orderType ?? "");
+    const warehouse = typeof payload === "string" ? (c.warehouse ?? "01") : (payload.warehouse ?? c.warehouse ?? "01");
+    const compCode = typeof payload === "string" ? (c.company ?? "01") : (payload.company ?? c.company ?? "01");
+    const plantCode = typeof payload === "string" ? (c.plant ?? "100") : (payload.plant ?? c.plant ?? "100");
+    const userCode = typeof payload === "string" ? (c.worker ?? "") : (payload.user ?? c.worker ?? "");
+    const traceStatus = typeof payload === "string" ? 0 : (payload.traceStatus ?? 0);
+
+    const r = await call(SERVICES.enterAdjustment, {
+      PSCOMPANY: String(compCode).trim(),
+      PSPLANT: String(plantCode).trim(),
+      WAREHOUSE: String(warehouse).trim(),
+      PSORDERNUM: String(orderNum).trim(),
+      PSORDERTYPE: String(orderType).trim(),
+      PSUSER: String(userCode).trim(),
+      PITRACESTATUS: traceStatus,
+    });
+
+    const rows = rowsOf(r, [
+      "IASWMSADJITEM",
+      "TBLADJUSTMENTITEM",
+      "TBLADJDETAIL",
+      "TBLWMSADJITEM",
+      "IASWMSADJ",
+      "TBLADJUSTMENT",
+    ]);
+
+    if (!rows.length) return undefined;
+    const head = rows[0];
+    const order = toAdjustmentOrder(head);
+    return {
+      ...order,
+      id: orderNum || order.id,
+      docType: orderType || order.docType,
+      warehouse: warehouse || order.warehouse,
     };
   },
 };

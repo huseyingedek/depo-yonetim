@@ -216,6 +216,20 @@ export interface StockTransferPayload {
   }[];
 }
 
+export interface AdjustmentOrder {
+  id: string; // DOCNUM, ADJUSTMENTNUM, ORDERNUM — Belge Numarası
+  docType?: string; // DOCTYPE, ORDERTYPE — Belge Tipi
+  docDate?: string; // DOCDATE, CREATEDAT — Belge Tarihi
+  warehouse?: string; // WAREHOUSE — Depo Kodu
+  stockPlace?: string; // STOCKPLACE — Stok Yeri / Raf
+  worker?: string; // WORKER, USER — Atanan Kullanıcı
+  status?: string; // STATUS, TRACESTATUS — Durum Kodu (0: Yeni/Açık vb.)
+  statusText?: string; // Durum metni
+  description?: string; // STEXT, DESCRIPTION, TITLE — Belge Açıklaması
+  itemCount?: number; // ITEMCOUNT, TOTALITEMS — Kalem Sayısı
+  priority?: number; // Öncelik
+}
+
 export interface CountLine {
   id: string;
   product: ProductRef;

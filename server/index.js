@@ -88,6 +88,17 @@ const ALLOWED = new Set([
   // Stok Transfer Servisleri
   "MZYStockTransfer",
   "MzyStockTransfer",
+
+  // Sayım Servisleri
+  "MZYListingAdjustment",
+  "MzyListingAdjustment",
+  "MZYLISTINGADJUSTMENT",
+  "MZYEnterAdjustment",
+  "MzyEnterAdjustment",
+  "MZYENTERADJUSTMENT",
+  "MZYSAVEADJUSTMENT",
+  "MZYSaveAdjustment",
+  "MzySaveAdjustment",
 ]);
 
 const app = express();
@@ -382,6 +393,12 @@ app.post("/api/mzy/:service", async (req, res) => {
   let { service } = req.params;
   if (SERVICE_ALIASES[service]) {
     service = SERVICE_ALIASES[service];
+  }
+  if (!ALLOWED.has(service)) {
+    const ciMatch = [...ALLOWED].find((s) => s.toLowerCase() === service.toLowerCase());
+    if (ciMatch) {
+      service = ciMatch;
+    }
   }
   if (!ALLOWED.has(service)) {
     return res.status(404).json({ error: `Bilinmeyen servis: ${service}` });

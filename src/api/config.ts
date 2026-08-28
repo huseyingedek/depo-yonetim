@@ -43,4 +43,8 @@ export const SERVICES = {
 
   // Stok Transfer Servisleri
   stockTransfer: "MZYStockTransfer", // Serbest depo ve raf stok transferi
+
+  // Sayım Servisleri
+  listingAdjustment: "MZYListingAdjustment", // Sayım belgelerini listele
+  enterAdjustment: "MZYEnterAdjustment", // Sayım emrine gir / detayları getir
 } as const;
