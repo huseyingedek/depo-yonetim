@@ -32,7 +32,7 @@ export default function AppShell() {
       {}
       <div className="flex min-w-0 flex-1 flex-col">
         {}
-        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface px-4 lg:px-8 short:hidden">
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface px-4 lg:px-8 short:hidden lg:!flex">
           {}
           <button
             type="button"
@@ -52,6 +52,10 @@ export default function AppShell() {
             </div>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            {/* Alt menü göründüğünde (lg altı) gizle; sadece lg+ header'da göster */}
+            <span className="hidden lg:flex">
+              <TraceSwitch header />
+            </span>
             <button className="flex h-10 w-10 items-center justify-center rounded-xl text-subtle transition hover:bg-elevated" aria-label="Bildirimler">
               <Bell className="h-5 w-5" />
             </button>
@@ -129,6 +133,7 @@ function MobileTabBar() {
           </button>
         );
       })}
+      <TraceSwitch />
     </nav>
     </>
   );
@@ -220,6 +225,56 @@ function LogoutButton() {
     >
       <LogOut className="h-5 w-5" />
       {t("settings.signOut")}
+    </button>
+  );
+}
+
+// Kaydırmalı aç/kapa (0 kapalı, 1 açık) — alt menüde (bar) ve PC header'da (header)
+function TraceSwitch({ header = false }: { header?: boolean }) {
+  const trace = useAppStore((s) => s.trace);
+  const toggleTrace = useAppStore((s) => s.toggleTrace);
+  const raylı = (
+    <span
+      className={`relative flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 ${
+        trace ? "bg-rose-500" : "bg-slate-300"
+      }`}
+    >
+      <span
+        className={`absolute flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold shadow transition-transform duration-200 ${
+          trace ? "translate-x-[22px] text-rose-600" : "translate-x-0.5 text-slate-500"
+        }`}
+      >
+        {trace ? "1" : "0"}
+      </span>
+    </span>
+  );
+  if (header) {
+    return (
+      <button
+        type="button"
+        onClick={toggleTrace}
+        role="switch"
+        aria-checked={trace}
+        aria-label="Trace aç/kapa"
+        title={trace ? "Trace AÇIK (1)" : "Trace KAPALI (0)"}
+        className="flex h-10 items-center gap-2 rounded-xl px-3 transition hover:bg-elevated active:scale-95"
+      >
+        <span className={`text-sm font-semibold ${trace ? "text-rose-600" : "text-subtle"}`}>Trace</span>
+        {raylı}
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={toggleTrace}
+      role="switch"
+      aria-checked={trace}
+      aria-label="Trace aç/kapa"
+      className="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-semibold active:scale-95"
+    >
+      {raylı}
+      <span className={trace ? "text-rose-600" : "text-subtle"}>Trace</span>
     </button>
   );
 }

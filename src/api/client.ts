@@ -139,6 +139,8 @@ const READ_ONLY = new Set<string>([SERVICES.listingPick]);
 const inflight = new Map<string, Promise<MzyResult>>();
 
 function call(service: string, params: Record<string, unknown>): Promise<MzyResult> {
+  // Tüm servislere trace bayrağını otomatik ekle (1 = trace açık, 0 = kapalı)
+  params = { PITRACESTATUS: useAppStore.getState().trace ? "1" : "0", ...params };
   if (!READ_ONLY.has(service)) return doCall(service, params);
 
   const key = service + ":" + JSON.stringify(params);

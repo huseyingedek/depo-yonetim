@@ -10,6 +10,7 @@ interface PersistedState {
   user: User | null;
   settings: Settings;
   theme: Theme;
+  trace: boolean;
 }
 
 const defaultSettings: Settings = {
@@ -28,12 +29,13 @@ function load(): PersistedState {
         user: parsed.user ?? null,
         settings: { ...defaultSettings, ...parsed.settings },
         theme: parsed.theme === "dark" ? "dark" : "light",
+        trace: parsed.trace === true,
       };
     }
   } catch {
 
   }
-  return { user: null, settings: defaultSettings, theme: "light" };
+  return { user: null, settings: defaultSettings, theme: "light", trace: false };
 }
 
 function applyTheme(theme: Theme) {
@@ -47,10 +49,13 @@ interface AppState {
   user: User | null;
   settings: Settings;
   theme: Theme;
+  trace: boolean;
   login: (username: string, displayName?: string) => void;
   logout: () => void;
   updateSettings: (patch: Partial<Settings>) => void;
   setTheme: (theme: Theme) => void;
+  toggleTrace: () => void;
+  setTrace: (trace: boolean) => void;
 }
 
 const initial = load();
@@ -71,6 +76,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   user: initial.user,
   settings: initial.settings,
   theme: initial.theme,
+  trace: initial.trace,
   login: (username: string, displayName?: string) => {
 
     const user: User = {
@@ -81,11 +87,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         "Depo Kullanıcısı",
     };
     set({ user });
-    persist({ user, settings: get().settings, theme: get().theme });
+    persist({ user, settings: get().settings, theme: get().theme, trace: get().trace });
   },
   logout: () => {
     set({ user: null });
-    persist({ user: null, settings: get().settings, theme: get().theme });
+    persist({ user: null, settings: get().settings, theme: get().theme, trace: get().trace });
   },
   updateSettings: (patch: Partial<Settings>) => {
     const settings = { ...get().settings, ...patch };
@@ -93,11 +99,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       i18n.changeLanguage(patch.language);
     }
     set({ settings });
-    persist({ user: get().user, settings, theme: get().theme });
+    persist({ user: get().user, settings, theme: get().theme, trace: get().trace });
   },
   setTheme: (theme: Theme) => {
     applyTheme(theme);
     set({ theme });
-    persist({ user: get().user, settings: get().settings, theme });
+    persist({ user: get().user, settings: get().settings, theme, trace: get().trace });
+  },
+  toggleTrace: () => {
+    const trace = !get().trace;
+    set({ trace });
+    persist({ user: get().user, settings: get().settings, theme: get().theme, trace });
+  },
+  setTrace: (trace: boolean) => {
+    set({ trace });
+    persist({ user: get().user, settings: get().settings, theme: get().theme, trace });
   },
 }));
