@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import {
-  Barcode,
   Package,
   Plus,
   Minus,
@@ -1598,8 +1597,7 @@ export default function ReceivingDetailPage() {
           {activeStep === "product" && (
             <div className="space-y-2 sm:space-y-2.5 animate-fade-in flex-1 flex flex-col justify-between">
               <div>
-                <label className="text-xs font-extrabold text-fg flex items-center gap-1.5 mb-1">
-                  <Barcode className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                <label className="text-xs font-extrabold text-fg block mb-1">
                   Malzeme Barkodunu Okutun
                 </label>
 
