@@ -39,6 +39,7 @@ export default function CountDetailPage() {
   const [searchParams] = useSearchParams();
   const orderType = searchParams.get("type") || searchParams.get("docType") || "";
   const invDocNum = searchParams.get("invDocNum") || id || "";
+  const warehouseParam = searchParams.get("warehouse") || searchParams.get("wh") || "";
 
   const [order, setOrder] = useState<AdjustmentOrder | null>(null);
   const [lines, setLines] = useState<AdjustmentLine[]>([]);
@@ -61,6 +62,7 @@ export default function CountDetailPage() {
         orderType,
         invDocNum,
         invDocType: orderType,
+        warehouse: warehouseParam,
       });
 
       if (data) {

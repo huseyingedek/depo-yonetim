@@ -74,7 +74,8 @@ export default function CountListPage() {
   const emreGir = (o: AdjustmentOrder) => {
     const num = o.invDocNum || o.id;
     const docType = o.docType || "";
-    navigate(`/count/${encodeURIComponent(num)}?type=${encodeURIComponent(docType)}&invDocNum=${encodeURIComponent(o.invDocNum ?? num)}&docType=${encodeURIComponent(docType)}`);
+    const wh = o.warehouse || "";
+    navigate(`/count/${encodeURIComponent(num)}?type=${encodeURIComponent(docType)}&invDocNum=${encodeURIComponent(o.invDocNum ?? num)}&docType=${encodeURIComponent(docType)}&warehouse=${encodeURIComponent(wh)}`);
   };
 
   const barkodOkundu = (code: string) => {

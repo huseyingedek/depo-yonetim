@@ -141,8 +141,9 @@ const READ_ONLY = new Set<string>([SERVICES.listingPick]);
 const inflight = new Map<string, Promise<MzyResult>>();
 
 function call(service: string, params: Record<string, unknown>): Promise<MzyResult> {
-  if (useAppStore.getState().trace && params.PITRACESTATUS === undefined) {
-    params = { PITRACESTATUS: "1", ...params };
+  const isTrace = useAppStore.getState().trace;
+  if (isTrace) {
+    params = { ...params, PITRACESTATUS: 1 };
   }
   if (!READ_ONLY.has(service)) return doCall(service, params);
 
@@ -1862,12 +1863,14 @@ export const api = {
     traceStatus?: number;
   }): Promise<AdjustmentOrder[]> {
     const c = ctx();
+    const isTrace = useAppStore.getState().trace;
+    const traceStatus = params?.traceStatus ?? (isTrace ? 1 : 0);
     const r = await call(SERVICES.listingAdjustment, {
       PSCOMPANY: String(params?.company ?? c.company ?? "01").trim(),
       PSPLANT: String(params?.plant ?? c.plant ?? "100").trim(),
       PDSTARTDATE: params?.startDate ?? DATE_MIN,
       PDENDDATE: params?.endDate ?? DATE_MAX,
-      PITRACESTATUS: params?.traceStatus ?? 0,
+      PITRACESTATUS: traceStatus,
     });
 
     const rows = rowsOf(r, [
@@ -1897,21 +1900,30 @@ export const api = {
     traceStatus?: number;
   } | string): Promise<AdjustmentOrder | undefined> {
     const c = ctx();
+    const isTrace = useAppStore.getState().trace;
     const orderNum = typeof payload === "string" ? payload : (payload.invDocNum || payload.orderNum);
     const orderType = typeof payload === "string" ? "" : (payload.invDocType || payload.orderType || "");
     const warehouse = typeof payload === "string" ? (c.warehouse ?? "01") : (payload.warehouse ?? c.warehouse ?? "01");
     const compCode = typeof payload === "string" ? (c.company ?? "01") : (payload.company ?? c.company ?? "01");
     const plantCode = typeof payload === "string" ? (c.plant ?? "100") : (payload.plant ?? c.plant ?? "100");
     const userCode = typeof payload === "string" ? (c.worker ?? "") : (payload.user ?? c.worker ?? "");
-    const traceStatus = typeof payload === "string" ? 0 : (payload.traceStatus ?? 0);
+    const traceStatus = typeof payload === "string" ? (isTrace ? 1 : 0) : (payload.traceStatus ?? (isTrace ? 1 : 0));
 
     const params: Record<string, unknown> = {
       PSCOMPANY: String(compCode).trim(),
       PSPLANT: String(plantCode).trim(),
+      // Hem WAREHOUSE hem PSWAREHOUSE parametre desteği
+      WAREHOUSE: String(warehouse).trim(),
       PSWAREHOUSE: String(warehouse).trim(),
+      // Hem PSORDERNUM hem PSINVDOCNUM parametre desteği
+      PSORDERNUM: String(orderNum).trim(),
       PSINVDOCNUM: String(orderNum).trim(),
+      // Hem PSORDERTYPE hem PSINVDOCTYPE parametre desteği
+      PSORDERTYPE: String(orderType).trim(),
       PSINVDOCTYPE: String(orderType).trim(),
+      // Hem PSUSER hem PSWORKER parametre desteği
       PSUSER: String(userCode).trim(),
+      PSWORKER: String(userCode).trim(),
       PITRACESTATUS: traceStatus,
     };
 

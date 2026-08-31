@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { api, DATE_MIN, DATE_MAX } from "../api/client";
 import { SERVICES } from "../api/config";
+import { useAppStore } from "../store/appStore";
 
 describe("Sayım Servisleri — MZYListingAdjustment & MZYEnterAdjustment", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    useAppStore.getState().setTrace(false);
   });
 
   it("1. api.getAdjustmentList MZYListingAdjustment parametrelerini eksiksiz iletir", async () => {
@@ -102,10 +104,14 @@ describe("Sayım Servisleri — MZYListingAdjustment & MZYEnterAdjustment", () =
     expect(capturedBody).toEqual({
       PSCOMPANY: "01",
       PSPLANT: "100",
+      WAREHOUSE: "01",
       PSWAREHOUSE: "01",
+      PSORDERNUM: "SYM-2026-001",
       PSINVDOCNUM: "SYM-2026-001",
+      PSORDERTYPE: "SYM",
       PSINVDOCTYPE: "SYM",
       PSUSER: "depocu1",
+      PSWORKER: "depocu1",
       PITRACESTATUS: 0,
     });
 
@@ -114,5 +120,25 @@ describe("Sayım Servisleri — MZYListingAdjustment & MZYEnterAdjustment", () =
     expect(result?.docType).toBe("SYM");
     expect(result?.warehouse).toBe("01");
     expect(result?.itemCount).toBe(10);
+  });
+
+  it("3. Trace modu açıkken (trace: true) getAdjustmentList ve getAdjustmentOrder servislere PITRACESTATUS: 1 iletir", async () => {
+    useAppStore.getState().setTrace(true);
+    let capturedBodies: any[] = [];
+
+    global.fetch = vi.fn().mockImplementation(async (_url: string, init: any) => {
+      capturedBodies.push(JSON.parse(init?.body || "{}"));
+      return {
+        ok: true,
+        json: async () => ({ data: { TBLADJUSTMENT: { ROW: [] } } }),
+      } as Response;
+    });
+
+    await api.getAdjustmentList();
+    await api.getAdjustmentOrder("SYM-2026-001");
+
+    expect(capturedBodies).toHaveLength(2);
+    expect(capturedBodies[0].PITRACESTATUS).toBe(1);
+    expect(capturedBodies[1].PITRACESTATUS).toBe(1);
   });
 });
