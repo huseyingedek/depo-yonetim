@@ -73,10 +73,19 @@ export default function PutawayListPage() {
     yukle();
   };
 
-  // Yazarken client-side filtre YOK — ürün barkodunu yazınca liste boşalmasın.
-  // Filtreleme serviste (PSBARCODE); Enter / ↵ butonu / kamera ile tetiklenir.
-  const pg = usePagination(orders, 9);
-  useEffect(() => pg.reset(), [barkodFiltre]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Yazarken emir no / müşteri / referansa göre client-side filtre.
+  // Ürün barkodu filtresi AYRI: Enter / ↵ butonu / kamera ile SERVİSTEN (PSBARCODE) gelir.
+  const arama = q.trim().toLowerCase();
+  const filtered = arama
+    ? orders.filter(
+        (o) =>
+          o.id.toLowerCase().includes(arama) ||
+          (o.customer ?? "").toLowerCase().includes(arama) ||
+          (o.reference ?? "").toLowerCase().includes(arama)
+      )
+    : orders;
+  // Filtre/arama değişince sayfa 1'e döner (resetKey); ilk açılışta kalıcı sayfa korunur.
+  const pg = usePagination(filtered, 9, "putaway", `${barkodFiltre}|${arama}`);
 
   const emreGir = (o: PickOrder) => navigate(`/putaway/${o.id}?type=${encodeURIComponent(o.orderType ?? "")}`);
 
@@ -168,10 +177,16 @@ export default function PutawayListPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((i) => <div key={i} className="h-32 animate-pulse rounded-2xl bg-elevated" />)}
         </div>
-      ) : orders.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-subtle">
           <Warehouse className="mb-2 h-10 w-10" />
-          <p className="text-sm">{barkodFiltre ? "Bu ürünü içeren açık yerleştirme emri yok" : t("putaway.allPlaced")}</p>
+          <p className="text-sm">
+            {arama
+              ? `"${q.trim()}" ile eşleşen emir yok`
+              : barkodFiltre
+              ? "Bu ürünü içeren açık yerleştirme emri yok"
+              : t("putaway.allPlaced")}
+          </p>
         </div>
       ) : (
         <>

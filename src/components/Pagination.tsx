@@ -1,8 +1,47 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-export function usePagination<T>(items: T[], pageSize = 9) {
-  const [page, setPage] = useState(1);
+// persistKey verilirse sayfa numarası sessionStorage'da tutulur; listeden detaya gidip
+// geri dönünce (bileşen yeniden kurulsa da) aynı sayfada kalınır.
+// resetKey verilirse (ör. arama metni) yalnız DEĞİŞİNCE sayfa 1'e döner — ilk açılışta DEĞİL
+// (böylece kalıcı sayfa mount'ta sıfırlanmaz).
+export function usePagination<T>(items: T[], pageSize = 9, persistKey?: string, resetKey?: unknown) {
+  const depoAnahtar = persistKey ? `pg:${persistKey}` : "";
+  const [page, setPageRaw] = useState(() => {
+    if (!depoAnahtar) return 1;
+    try {
+      const v = sessionStorage.getItem(depoAnahtar);
+      const n = v ? parseInt(v, 10) : 1;
+      return n > 0 ? n : 1;
+    } catch {
+      return 1;
+    }
+  });
+  const setPage = useCallback(
+    (p: number | ((prev: number) => number)) => {
+      setPageRaw((prev) => {
+        const next = typeof p === "function" ? (p as (x: number) => number)(prev) : p;
+        if (depoAnahtar) {
+          try {
+            sessionStorage.setItem(depoAnahtar, String(next));
+          } catch {
+            /* yoksay */
+          }
+        }
+        return next;
+      });
+    },
+    [depoAnahtar]
+  );
+  // resetKey değişince (arama vb.) sayfayı 1'e al — ilk render'da tetiklenmez.
+  const oncekiReset = useRef(resetKey);
+  useEffect(() => {
+    if (oncekiReset.current !== resetKey) {
+      oncekiReset.current = resetKey;
+      setPage(1);
+    }
+  }, [resetKey, setPage]);
+
   const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
   const current = Math.min(page, pageCount);
   const start = (current - 1) * pageSize;

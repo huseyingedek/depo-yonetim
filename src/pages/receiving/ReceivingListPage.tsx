@@ -28,8 +28,7 @@ export default function ReceivingListPage() {
     return docs.filter((d) => d.id.toLowerCase().includes(s) || d.supplier.toLowerCase().includes(s));
   }, [docs, q]);
 
-  const pg = usePagination(filtered, 9);
-  useEffect(() => pg.reset(), [q]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pg = usePagination(filtered, 9, "receiving", q);
 
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8">

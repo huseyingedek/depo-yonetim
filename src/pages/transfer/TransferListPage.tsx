@@ -29,8 +29,7 @@ export default function TransferListPage() {
     );
   }, [tasks, q]);
 
-  const pg = usePagination(filtered, 8);
-  useEffect(() => pg.reset(), [q]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pg = usePagination(filtered, 8, "transfer", q);
 
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8">
