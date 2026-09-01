@@ -179,18 +179,22 @@ export default function CountDetailPage() {
       );
 
       sesBasarili();
+      const mult = baseMult && baseMult > 0 ? baseMult : (matchedLine?.multiplier || 1);
+      const unit = (baseUnit || matchedLine?.unit || "AD").toUpperCase();
+      const skunit = (baseSkunit || matchedLine?.skunit || unit).toUpperCase();
+
       if (matchedLine) {
         flash(matchedLine.id);
-        const unit = (matchedLine.unit || baseUnit).toUpperCase();
-        const skunit = (matchedLine.skunit || baseSkunit || unit).toUpperCase();
-        const mult = matchedLine.multiplier && matchedLine.multiplier > 0 ? matchedLine.multiplier : baseMult || 1;
+        const existingCountedInUnit = matchedLine.countedQty > 0
+          ? Math.round((matchedLine.countedQty / mult) * 100) / 100
+          : 1;
 
         setActiveItem({
           lineId: matchedLine.id,
           material: matchedLine.material,
           name: matchedLine.name,
           barcode: matchedLine.barcode || barcode,
-          quantity: matchedLine.countedQty > 0 ? matchedLine.countedQty : 1,
+          quantity: existingCountedInUnit,
           targetQty: matchedLine.targetQty,
           unit,
           skunit,
@@ -211,9 +215,9 @@ export default function CountDetailPage() {
           barcode,
           quantity: 1,
           targetQty: 0,
-          unit: (baseUnit || "AD").toUpperCase(),
-          skunit: (baseSkunit || baseUnit || "AD").toUpperCase(),
-          multiplier: baseMult || 1,
+          unit,
+          skunit,
+          multiplier: mult,
           batchNum: rawBatch,
           specialStock: "1",
           isLotTracked: true,
@@ -231,25 +235,12 @@ export default function CountDetailPage() {
     [lines, order, show, activeItem, lotPendingItem]
   );
 
-  // Miktar Panelinden Geriye Parti Tabına Dönüş
+  // Miktar Panelinden Geriye Parti Tabına Anında Geçiş
   const handleBackToLot = useCallback(
-    async (item: ActiveCountItem) => {
+    (item: ActiveCountItem) => {
+      // 1. Önce belgedeki mevcut partileri hemen toplayıp anında Parti Tabına geç:
       const matLines = lines.filter((l) => sadelestir(l.material) === sadelestir(item.material));
-      let batches: { batchNum: string; availStock: number; unit?: string }[] = [];
-      try {
-        batches = await api.getStock(
-          item.material,
-          item.warehouse || order?.warehouse || "01",
-          item.stockPlace || order?.stockPlace || ""
-        );
-      } catch {
-        // ignore
-      }
-
       const batchMap = new Map<string, { batchNum: string; availStock: number; unit?: string }>();
-      for (const b of batches) {
-        if (b.batchNum && b.batchNum !== "*") batchMap.set(b.batchNum.toUpperCase(), b);
-      }
       for (const l of matLines) {
         if (l.batchNum && l.batchNum !== "*") {
           const key = l.batchNum.toUpperCase();
@@ -266,12 +257,36 @@ export default function CountDetailPage() {
         unit: item.unit,
         skunit: item.skunit,
         multiplier: item.multiplier,
-        specialStock: item.specialStock,
-        warehouse: item.warehouse,
-        stockPlace: item.stockPlace,
+        specialStock: item.specialStock || "1",
+        warehouse: item.warehouse || order?.warehouse,
+        stockPlace: item.stockPlace || order?.stockPlace,
         batches: Array.from(batchMap.values()),
       });
       setActiveItem(null);
+
+      // 2. Arka planda CANIAS'tan güncel stok partilerini çekip listeyi zenginleştir:
+      api.getStock(
+        item.material,
+        item.warehouse || order?.warehouse || "01",
+        item.stockPlace || order?.stockPlace || ""
+      ).then((stockBatches) => {
+        if (stockBatches && stockBatches.length > 0) {
+          for (const cb of stockBatches) {
+            if (cb.batchNum && cb.batchNum !== "*") {
+              batchMap.set(cb.batchNum.toUpperCase(), { ...cb });
+            }
+          }
+          setLotPendingItem((prev) => {
+            if (!prev || sadelestir(prev.material) !== sadelestir(item.material)) return prev;
+            return {
+              ...prev,
+              batches: Array.from(batchMap.values()),
+            };
+          });
+        }
+      }).catch(() => {
+        // ignore
+      });
     },
     [lines, order]
   );
@@ -289,24 +304,62 @@ export default function CountDetailPage() {
         return;
       }
 
-      // B) Barkod tabındaysak:
-      // 1. Önce mevcut listede barkod veya malzeme kodu ile eşleşenleri bul:
+      // B) Barkod tabındaysak: CANIAS MZYReadBarcode ile ambalaj birimini (KO, PK, AD) ve çarpanı sorgula
+      setBusy(true);
+      let barcodeMat = "";
+      let barcodeName = "";
+      let barcodeUnit = "AD";
+      let barcodeSkunit = "AD";
+      let barcodeMult = 1;
+      let barcodeLot: string | undefined;
+      let barcodeSpecialStock = "0";
+
+      try {
+        const res = await api.readBarcode(
+          rawCode,
+          order?.warehouse || "01",
+          order?.stockPlace || ""
+        );
+
+        if (res.ok && res.material) {
+          barcodeMat = res.material;
+          barcodeName = res.name || res.material;
+          barcodeUnit = (res.unit || "AD").toUpperCase();
+          barcodeSkunit = (res.skunit || barcodeUnit).toUpperCase();
+          barcodeMult = res.multiplier && res.multiplier > 0 ? res.multiplier : 1;
+          barcodeLot = res.lot && res.lot !== "*" ? res.lot : undefined;
+          barcodeSpecialStock = res.specialStock || "0";
+        }
+      } catch {
+        // Servis yanıt vermezse listeden devam et
+      } finally {
+        setBusy(false);
+      }
+
+      // 1. Mevcut listede okutulan barkod, malzeme kodu veya CANIAS'tan dönen malzeme kodu ile eşleşenleri bul:
       const matches = lines.filter(
         (l) =>
           (l.barcode && sadelestir(l.barcode) === hedef) ||
-          sadelestir(l.material) === hedef
+          sadelestir(l.material) === hedef ||
+          (barcodeMat && sadelestir(l.material) === sadelestir(barcodeMat))
       );
 
       if (matches.length > 0) {
         const mat = matches[0].material;
-        const matName = matches[0].name;
+        const matName = barcodeName || matches[0].name;
+        const finalUnit = barcodeUnit || matches[0].unit || "AD";
+        const finalSkunit = barcodeSkunit || matches[0].skunit || finalUnit;
+        const finalMult = barcodeMult > 1 ? barcodeMult : (matches[0].multiplier || 1);
 
         // Malzemenin belgedeki partilerini topla (varsa):
         const linesWithBatch = matches.filter((l) => l.batchNum && l.batchNum !== "*");
-        const isLotTracked = linesWithBatch.length > 0 || matches.some((l) => l.specialStock === "1");
+        const isLotTracked =
+          linesWithBatch.length > 0 ||
+          matches.some((l) => l.specialStock === "1") ||
+          barcodeSpecialStock === "1";
 
-        // Eğer partili malzeme ise:
-        if (isLotTracked) {
+        // Eğer partili malzeme ise ve barkodda parti yoksa:
+        if (isLotTracked && !barcodeLot) {
           // CANIAS'tan o malzemenin raftaki tüm partilerini alalım:
           let caniasBatches: { batchNum: string; availStock: number; unit?: string }[] = [];
           try {
@@ -349,9 +402,9 @@ export default function CountDetailPage() {
               material: mat,
               name: matName,
               barcode: rawCode,
-              unit: matches[0].unit,
-              skunit: matches[0].skunit,
-              multiplier: matches[0].multiplier,
+              unit: finalUnit,
+              skunit: finalSkunit,
+              multiplier: finalMult,
               specialStock: "1",
               warehouse: matches[0].warehouse || order?.warehouse,
               stockPlace: matches[0].stockPlace || order?.stockPlace,
@@ -367,9 +420,9 @@ export default function CountDetailPage() {
             material: mat,
             name: matName,
             barcode: rawCode,
-            unit: matches[0].unit,
-            skunit: matches[0].skunit,
-            multiplier: matches[0].multiplier,
+            unit: finalUnit,
+            skunit: finalSkunit,
+            multiplier: finalMult,
             specialStock: "1",
             warehouse: matches[0].warehouse || order?.warehouse,
             stockPlace: matches[0].stockPlace || order?.stockPlace,
@@ -383,17 +436,18 @@ export default function CountDetailPage() {
           return;
         }
 
-        // Partisiz malzeme ise: Doğrudan 3 Miktar Tabına geç:
+        // Partisiz malzeme veya barkodda partisi olan: Doğrudan 3 Miktar Tabına geç:
         const matchedLine =
+          (barcodeLot ? matches.find((m) => m.batchNum && m.batchNum.toUpperCase() === barcodeLot!.toUpperCase()) : null) ||
           matches.find((m) => activeItem && m.id === activeItem.lineId) ||
           matches.find((m) => m.targetQty > 0 && m.countedQty < m.targetQty) ||
           matches[0];
 
         sesBasarili();
         flash(matchedLine.id);
-        const unit = (matchedLine.unit || "AD").toUpperCase();
-        const skunit = (matchedLine.skunit || unit).toUpperCase();
-        const mult = matchedLine.multiplier && matchedLine.multiplier > 0 ? matchedLine.multiplier : 1;
+        const existingCountedInUnit = matchedLine.countedQty > 0
+          ? Math.round((matchedLine.countedQty / finalMult) * 100) / 100
+          : 1;
 
         setLotPendingItem(null);
         setActiveItem({
@@ -401,14 +455,14 @@ export default function CountDetailPage() {
           material: matchedLine.material,
           name: matchedLine.name,
           barcode: matchedLine.barcode || rawCode,
-          quantity: matchedLine.countedQty > 0 ? matchedLine.countedQty : 1,
+          quantity: existingCountedInUnit,
           targetQty: matchedLine.targetQty,
-          unit,
-          skunit,
-          multiplier: mult,
-          batchNum: matchedLine.batchNum,
+          unit: finalUnit,
+          skunit: finalSkunit,
+          multiplier: finalMult,
+          batchNum: barcodeLot || matchedLine.batchNum,
           specialStock: matchedLine.specialStock,
-          isLotTracked: false,
+          isLotTracked: Boolean(isLotTracked),
           warehouse: matchedLine.warehouse || order?.warehouse,
           stockPlace: matchedLine.stockPlace || order?.stockPlace,
         });
@@ -420,100 +474,80 @@ export default function CountDetailPage() {
         return;
       }
 
-      // 2. Listede yoksa CANIAS MZYReadBarcode ile genel sorgula:
-      setBusy(true);
-      try {
-        const res = await api.readBarcode(
-          rawCode,
-          order?.warehouse || "01",
-          order?.stockPlace || ""
-        );
+      // 2. Listede yok ama CANIAS'ta bulunduysa:
+      if (barcodeMat) {
+        sesBasarili();
+        const lotTracked = barcodeSpecialStock === "1" || (barcodeLot && barcodeLot !== "*");
 
-        if (res.ok && res.material) {
-          sesBasarili();
-          const unit = (res.unit || "AD").toUpperCase();
-          const skunit = (res.skunit || unit).toUpperCase();
-          const mult = res.multiplier && res.multiplier > 0 ? res.multiplier : 1;
-          const ozelStok = res.specialStock || "0";
-          const lotTracked = ozelStok === "1" || /takipli|partili/i.test(ozelStok) || (res.lot && res.lot !== "*");
-
-          // Eğer partili malzeme ise ve barkodda parti yoksa -> 2 Parti tabına geç:
-          if (lotTracked && (!res.lot || res.lot === "*")) {
-            let batches: { batchNum: string; availStock: number; unit?: string }[] = [];
-            try {
-              batches = await api.getStock(res.material, order?.warehouse || "01", order?.stockPlace || "");
-            } catch {
-              // ignore
-            }
-
-            setLotPendingItem({
-              material: res.material,
-              name: res.name || res.material,
-              barcode: rawCode,
-              unit,
-              skunit,
-              multiplier: mult,
-              specialStock: ozelStok,
-              warehouse: order?.warehouse,
-              stockPlace: order?.stockPlace,
-              batches: batches.filter((b) => b.batchNum && b.batchNum !== "*"),
-            });
-            setActiveItem(null);
-            show({
-              kind: "ok",
-              text: `${res.name || res.material} partili ürün. Lütfen parti seçin.`,
-            });
-            return;
+        // Eğer partili malzeme ise ve barkodda parti yoksa -> 2 Parti tabına geç:
+        if (lotTracked && !barcodeLot) {
+          let batches: { batchNum: string; availStock: number; unit?: string }[] = [];
+          try {
+            batches = await api.getStock(barcodeMat, order?.warehouse || "01", order?.stockPlace || "");
+          } catch {
+            // ignore
           }
 
-          // Partisiz veya barkodunda partisi olan malzeme -> 3 Miktar tabına geç:
-          const newLineId = `new-${Date.now()}`;
-          setLotPendingItem(null);
-          setActiveItem({
-            lineId: newLineId,
-            material: res.material,
-            name: res.name || res.material,
+          setLotPendingItem({
+            material: barcodeMat,
+            name: barcodeName,
             barcode: rawCode,
-            quantity: 1,
-            targetQty: 0,
-            unit,
-            skunit,
-            multiplier: mult,
-            batchNum: res.lot && res.lot !== "*" ? res.lot : undefined,
-            specialStock: ozelStok,
-            isLotTracked: Boolean(lotTracked),
+            unit: barcodeUnit,
+            skunit: barcodeSkunit,
+            multiplier: barcodeMult,
+            specialStock: barcodeSpecialStock,
             warehouse: order?.warehouse,
             stockPlace: order?.stockPlace,
+            batches: batches.filter((b) => b.batchNum && b.batchNum !== "*"),
           });
-
+          setActiveItem(null);
           show({
             kind: "ok",
-            text: `${res.material} okundu. Miktar girip ekleyin.`,
+            text: `${barcodeName} partili ürün. Lütfen parti seçin.`,
           });
-        } else {
-          sesHata();
-          show({
-            kind: "error",
-            text: res.message || `${rawCode} barkodu bulunamadı`,
-          });
+          return;
         }
-      } catch (err: unknown) {
+
+        // Partisiz veya barkodunda partisi olan malzeme -> 3 Miktar tabına geç:
+        const newLineId = `new-${Date.now()}`;
+        setLotPendingItem(null);
+        setActiveItem({
+          lineId: newLineId,
+          material: barcodeMat,
+          name: barcodeName,
+          barcode: rawCode,
+          quantity: 1,
+          targetQty: 0,
+          unit: barcodeUnit,
+          skunit: barcodeSkunit,
+          multiplier: barcodeMult,
+          batchNum: barcodeLot,
+          specialStock: barcodeSpecialStock,
+          isLotTracked: Boolean(lotTracked),
+          warehouse: order?.warehouse,
+          stockPlace: order?.stockPlace,
+        });
+
+        show({
+          kind: "ok",
+          text: `${barcodeMat} okundu. Miktar girip ekleyin.`,
+        });
+      } else {
         sesHata();
         show({
           kind: "error",
-          text: err instanceof Error ? err.message : "Barkod sorgulanamadı",
+          text: `${rawCode} barkodu bulunamadı`,
         });
-      } finally {
-        setBusy(false);
       }
     },
     [lines, order, show, activeItem, lotPendingItem, handleSelectBatch]
   );
 
-  // Miktar Girişini Onaylama / Listeye Ekleme
+  // Miktar Girişini Onaylama / Listeye Ekleme (Her zaman SKUNIT bazında çevrilmiş hali kaydedilir)
   const handleCommitActiveItem = () => {
     if (!activeItem) return;
-    const finalQty = Math.max(0, activeItem.quantity);
+    const mult = activeItem.multiplier && activeItem.multiplier > 0 ? activeItem.multiplier : 1;
+    const baseCountedQty = Math.max(0, activeItem.quantity) * mult;
 
     setLines((prev) => {
       // Satırı KESİNLİKLE benzersiz lineId üzerinden buluyoruz.
@@ -523,10 +557,10 @@ export default function CountDetailPage() {
         const updated = [...prev];
         updated[idx] = {
           ...updated[idx],
-          countedQty: finalQty,
+          countedQty: baseCountedQty,
           unit: activeItem.unit,
           skunit: activeItem.skunit,
-          multiplier: activeItem.multiplier,
+          multiplier: mult,
           batchNum: activeItem.batchNum || updated[idx].batchNum,
         };
         return updated;
@@ -538,10 +572,10 @@ export default function CountDetailPage() {
           name: activeItem.name,
           barcode: activeItem.barcode,
           targetQty: activeItem.targetQty,
-          countedQty: finalQty,
+          countedQty: baseCountedQty,
           unit: activeItem.unit,
           skunit: activeItem.skunit,
-          multiplier: activeItem.multiplier,
+          multiplier: mult,
           batchNum: activeItem.batchNum,
           specialStock: activeItem.specialStock,
           warehouse: activeItem.warehouse,
@@ -555,7 +589,7 @@ export default function CountDetailPage() {
     flash(activeItem.lineId);
     show({
       kind: "ok",
-      text: `${activeItem.material}${activeItem.batchNum ? ` (Parti: ${activeItem.batchNum})` : ""} için ${finalQty} ${activeItem.unit} sayımı kaydedildi.`,
+      text: `${activeItem.material} için ${activeItem.quantity} ${activeItem.unit} (${baseCountedQty} ${activeItem.skunit}) kaydedildi.`,
     });
     setActiveItem(null);
   };
@@ -565,7 +599,14 @@ export default function CountDetailPage() {
     const unit = (line.unit || "AD").toUpperCase();
     const skunit = (line.skunit || unit).toUpperCase();
     const mult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
-    const isLot = Boolean((line.batchNum && line.batchNum !== "*") || line.specialStock === "1");
+    const isLot = Boolean(
+      (line.batchNum && line.batchNum !== "*") ||
+      line.specialStock === "1" ||
+      lines.some((l) => sadelestir(l.material) === sadelestir(line.material) && l.batchNum && l.batchNum !== "*")
+    );
+    const existingCountedInUnit = line.countedQty > 0
+      ? Math.round((line.countedQty / mult) * 100) / 100
+      : 1;
 
     setLotPendingItem(null);
     setActiveItem({
@@ -573,13 +614,13 @@ export default function CountDetailPage() {
       material: line.material,
       name: line.name,
       barcode: line.barcode || "",
-      quantity: line.countedQty > 0 ? line.countedQty : 1,
+      quantity: existingCountedInUnit,
       targetQty: line.targetQty,
       unit,
       skunit,
       multiplier: mult,
       batchNum: line.batchNum,
-      specialStock: line.specialStock,
+      specialStock: line.specialStock || (isLot ? "1" : "0"),
       isLotTracked: isLot,
       warehouse: line.warehouse || order?.warehouse,
       stockPlace: line.stockPlace || order?.stockPlace,
@@ -597,13 +638,18 @@ export default function CountDetailPage() {
   // ---------------------------------------------------------------------------
   const sortedLines = useMemo(() => {
     return [...lines].sort((a, b) => {
-      // 1. Aktif seçili olan satır her zaman en üstte yer alır
-      const aIsActive = activeItem ? a.id === activeItem.lineId : false;
-      const bIsActive = activeItem ? b.id === activeItem.lineId : false;
+      // 1. Aktif seçili olan veya Parti tabında işlem gören satır(lar) her zaman EN ÜSTTE yer alır
+      const aIsActive =
+        (activeItem && a.id === activeItem.lineId) ||
+        (lotPendingItem && sadelestir(a.material) === sadelestir(lotPendingItem.material));
+      const bIsActive =
+        (activeItem && b.id === activeItem.lineId) ||
+        (lotPendingItem && sadelestir(b.material) === sadelestir(lotPendingItem.material));
+
       if (aIsActive && !bIsActive) return -1;
       if (!aIsActive && bIsActive) return 1;
 
-      // 2. Katman sıralaması
+      // 2. Katman sıralaması (Kırmızı -> Sarı -> Siyah -> Yeşil)
       const getTier = (l: AdjustmentLine) => {
         const counted = l.countedQty;
         const target = l.targetQty;
@@ -620,10 +666,10 @@ export default function CountDetailPage() {
       // Kendi aralarında ID sırası
       return a.id.localeCompare(b.id, undefined, { numeric: true });
     });
-  }, [lines, activeItem]);
+  }, [lines, activeItem, lotPendingItem]);
 
-  // Özet Sayılar
-  const totalCountedLines = lines.filter((l) => l.targetQty > 0 && l.countedQty === l.targetQty).length;
+  // Özet Sayılar (Değer girilen kalemler: fazla, eksik veya tam)
+  const totalCountedLines = lines.filter((l) => l.countedQty > 0).length;
   const isAllComplete = lines.length > 0 && totalCountedLines === lines.length;
 
   return (
@@ -711,7 +757,7 @@ export default function CountDetailPage() {
 
                 const isClickable =
                   (s === "barcode" && (!!lotPendingItem || !!activeItem)) ||
-                  (s === "lot" && !!activeItem && Boolean(activeItem.isLotTracked || (activeItem.batchNum && activeItem.batchNum !== "*")));
+                  (s === "lot" && !!activeItem);
 
                 const handleClick = () => {
                   if (s === "barcode") {
@@ -776,30 +822,9 @@ export default function CountDetailPage() {
               </div>
             )}
 
-            {/* ADIM 2: PARTİ SEÇİMİ (Transfer Ekranıyla Birebir Aynı) */}
+            {/* ADIM 2: PARTİ SEÇİMİ */}
             {lotPendingItem && (
               <div className="space-y-2 pt-0.5 animate-fade-in">
-                {/* Malzeme Başlığı & İptal */}
-                <div className="flex items-center justify-between gap-1.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-bold text-fg">
-                      {lotPendingItem.name}
-                    </p>
-                    <div className="flex items-center gap-1.5 font-mono text-[11.5px] text-slate-500">
-                      <span className="font-bold text-brand-600">{lotPendingItem.material}</span>
-                      {lotPendingItem.barcode && <span>· {lotPendingItem.barcode}</span>}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setLotPendingItem(null)}
-                    className="flex h-5.5 w-5.5 items-center justify-center rounded-md border border-line bg-elevated/40 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
-                    title="İptal"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </div>
-
                 {/* Parti seç (stoktakiler) combobox */}
                 <div className="rounded-xl bg-elevated px-2.5 py-1.5 border border-line/60">
                   <span className="mb-1 block text-[11.5px] font-bold text-subtle">
@@ -863,15 +888,27 @@ export default function CountDetailPage() {
               </div>
             )}
 
-            {/* ADIM 3: MİKTAR GİRİŞİ (Mal Kabul ile Birebir Aynı) */}
+            {/* ADIM 3: MİKTAR GİRİŞİ */}
             {activeItem && (
               <div className="space-y-2 animate-fade-in flex-1 flex flex-col justify-between">
+                {/* 1 BUNIT = X SKUNIT Birim Dönüşüm Rozeti */}
+                {(activeItem.multiplier > 1 || activeItem.unit !== activeItem.skunit) && (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200/60 px-2 py-1 font-mono text-[12px] font-bold text-amber-800">
+                    1 {activeItem.unit} = {activeItem.multiplier} {activeItem.skunit}
+                  </div>
+                )}
+
                 {/* Miktar Stepper Girişi */}
                 <div>
-                  <div className="mb-1">
+                  <div className="mb-1 flex items-center justify-between">
                     <label className="text-xs font-bold text-fg block">
                       Sayılacak Miktar ({activeItem.unit}) <span className="text-red-500">*</span>
                     </label>
+                    {activeItem.multiplier > 1 && (
+                      <span className="font-mono text-[11.5px] font-bold text-emerald-600">
+                        = {activeItem.quantity * activeItem.multiplier} {activeItem.skunit}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -890,7 +927,7 @@ export default function CountDetailPage() {
                       type="number"
                       min={0}
                       step={1}
-                      value={activeItem.quantity === 0 ? "" : activeItem.quantity}
+                      value={activeItem.quantity}
                       placeholder="0"
                       onChange={(e) => {
                         const raw = e.target.value;
@@ -925,7 +962,7 @@ export default function CountDetailPage() {
                     </button>
                   </div>
 
-                  {/* Hızlı Butonlar ve Kaydet Butonu (Sıfırla, +5, +10, Kaydet) */}
+                  {/* Hızlı Butonlar ve Kaydet Butonu (Sıfırla, +5, +10, Miktarı Kaydet) */}
                   <div className="grid grid-cols-4 gap-1.5 pt-1.5">
                     {/* 1. Sıfırla (Çöp Kutusu İkonu) */}
                     <button
@@ -955,15 +992,15 @@ export default function CountDetailPage() {
                       </button>
                     ))}
 
-                    {/* 4. Kaydet (En sağda) */}
+                    {/* 4. Miktarı Kaydet (En sağda - 0 dahil kaydedebilir) */}
                     <button
                       type="button"
                       onClick={handleCommitActiveItem}
-                      disabled={!activeItem || activeItem.quantity <= 0}
+                      disabled={!activeItem || activeItem.quantity < 0}
                       className="flex flex-col items-center justify-center rounded-xl bg-emerald-600 py-1 text-[10px] sm:text-[11px] font-black leading-tight text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-35 disabled:cursor-not-allowed"
-                      title="Sayımı Kaydet"
+                      title="Miktarı Kaydet"
                     >
-                      <span>Sayımı</span>
+                      <span>Miktarı</span>
                       <span>Kaydet</span>
                     </button>
                   </div>
@@ -1065,12 +1102,12 @@ export default function CountDetailPage() {
                       </div>
                     </div>
 
-                    {/* Alt Satır: Birim Eşitliği (1 KO = 5 PK) ve Girilen Miktar */}
+                    {/* Alt Satır: Birim Eşitliği (1 KO = 24 AD) ve Girilen Miktar */}
                     {isDiffUnit && (
                       <div className="mt-1.5 flex items-center justify-between border-t border-line/40 pt-1 font-mono text-[12px] sm:text-[13px]">
                         <span className="font-semibold text-slate-500">{equation}</span>
                         <span className="font-bold text-fg">
-                          Girilen: {counted} {unit}
+                          Girilen: {Math.round((counted / mult) * 100) / 100} {unit}
                         </span>
                       </div>
                     )}
