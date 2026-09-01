@@ -390,17 +390,17 @@ function toAdjustmentLine(row: Row, index: number): AdjustmentLine {
   const material = pick(row, ["MATERIAL", "MATCODE", "ITEMCODE", "PSMATERIAL", "STOCKCODE", "PRODUCT", "MATNUM"]);
   const name = pick(row, ["MTEXT", "STEXT", "TEXT", "MATNAME", "DESCRIPTION", "NAME", "PRODUCTNAME", "ITEMNAME", "TITLE"]);
   const barcode = pick(row, ["BARCODE", "EAN", "BARCODENUM", "CODE", "ALTBARCODE", "PACKBARCODE"]);
-  const targetQty = num(row, ["TARGETQTY", "SYSTEMQTY", "TOTALITEMS", "TOTALQTY", "QUANTITY", "REMAININGQTY", "QTY", "STOCKQTY", "AVAILSTOCK", "ACTUALSTOCK", "STOCK", "SKQUANTITY", "AMOUNT"], 0);
-  const countedQty = num(row, ["COUNTEDQTY", "READQUANTITY", "READQTY", "ACTUALQTY", "TOTALCOUNTED", "COUNTED"], 0);
-  const unit = pick(row, ["BUNIT", "UNIT", "QUNIT", "PURUNIT", "IUNIT", "SKUNIT", "STOCKUNIT"]) || "AD";
-  const skunit = pick(row, ["SKUNIT", "IUNIT", "STOCKUNIT", "BUNIT", "UNIT"]) || unit || "AD";
+  const targetQty = num(row, ["AVAILSTOCKN", "AVAILSTOCKV", "CUAVAILSTOCKN", "AVAILSTOCK", "TARGETQTY", "SYSTEMQTY", "TOTALITEMS", "TOTALQTY", "QUANTITY", "REMAININGQTY", "QTY", "STOCKQTY", "ACTUALSTOCK", "STOCK", "SKQUANTITY", "AMOUNT"], 0);
+  const countedQty = num(row, ["COUNTEDQTY", "READQUANTITY", "READQTY", "ACTUALQTY", "TOTALCOUNTED", "COUNTED", "REVISESTOCKN", "REVISESTOCKV", "CUREVISESTOCKN"], 0);
+  const unit = pick(row, ["SKUNIT", "CUNIT", "BUNIT", "UNIT", "QUNIT", "PURUNIT", "IUNIT", "STOCKUNIT"]) || "AD";
+  const skunit = pick(row, ["SKUNIT", "CUNIT", "IUNIT", "STOCKUNIT", "BUNIT", "UNIT"]) || unit || "AD";
   const multiplier = num(row, ["MULTIPLIER", "FACTOR", "PACKAGEMULTIPLIER", "CFACTOR"], 1);
   const batchNum = pick(row, ["BATCHNUM", "LOT", "LOTNUM", "PARTI", "BATCH"]);
   const specialStock = pick(row, ["SPECIALSTOCK", "ISLOT", "ISBATCH"]);
   const warehouse = pick(row, ["WAREHOUSE", "SRCWAREHOUSE", "WH", "DEPOT", "PSWAREHOUSE"]);
   const stockPlace = pick(row, ["STOCKPLACE", "SRCSTOCKPLACE", "LOCATION", "SHELF", "RAF", "PSSTOCKPLACE"]);
 
-  const lineId = pick(row, ["ITEMNUM", "LINENUM", "ITEMNO", "LINEID", "ID"]) || `${material || "MLZ"}_${index + 1}`;
+  const lineId = pick(row, ["INVDOCITEM", "ITEMNUM", "LINENUM", "ITEMNO", "LINEID", "ID"]) || `${material || "MLZ"}_${index + 1}`;
 
   return {
     id: lineId,
@@ -1876,6 +1876,11 @@ export const api = {
     });
 
     const rows = rowsOf(r, [
+      "IASINVADJHEADLIST",
+      "IASINVADJLIST",
+      "IASINVHEADLIST",
+      "IASINVADJHEAD",
+      "IASINVHEAD",
       "TBLADJUSTMENT",
       "TBLADJUSTMENTLIST",
       "IASWMSADJ",
@@ -1935,8 +1940,11 @@ export const api = {
 
     const d = r.data && typeof r.data === "object" ? (r.data as Record<string, unknown>) : {};
 
-    // 1. Header (Başlık) tablosunu belirle
+    // 1. Header (Başlık) nesnesini belirle
     const headerCandidates = [
+      "IASINVADJHEAD",
+      "IASINVADJHEADLIST",
+      "IASINVHEAD",
       "IASWMSADJ",
       "TBLADJUSTMENT",
       "TBLADJ",
@@ -1948,16 +1956,32 @@ export const api = {
     let headRow: Row = {};
     for (const hName of headerCandidates) {
       if (hName in d) {
-        const hRows = unwrapRows(d[hName]);
-        if (hRows.length > 0) {
-          headRow = hRows[0];
-          break;
+        const val = d[hName];
+        if (val && typeof val === "object" && "ROW" in (val as Record<string, unknown>)) {
+          const rVal = (val as Record<string, unknown>).ROW;
+          if (Array.isArray(rVal)) {
+            headRow = (rVal[0] as Row) || {};
+          } else if (rVal && typeof rVal === "object") {
+            headRow = rVal as Row;
+          }
+        } else if (Array.isArray(val)) {
+          headRow = (val[0] as Row) || {};
+        } else if (val && typeof val === "object") {
+          headRow = val as Row;
         }
+        if (Object.keys(headRow).length > 0) break;
       }
     }
 
-    // 2. Kalemler (Items / Malzemeler) tablosunu belirle
-    const itemTableNames = [
+    // 2. Kalemler (Items / Malzemeler) tablosunu belirle:
+    // Canias TROIA'da kalemler IASINVADJHEAD.ROW.IASINVADJITEMLIST altında veya doğrudan r.data altında dönebilir.
+    let itemRows: Row[] = [];
+
+    const itemKeyPatterns = [
+      "IASINVADJITEMLIST",
+      "IASINVITEMLIST",
+      "IASWMSADJITEMLIST",
+      "IASINVADJITEM",
       "IASWMSADJITEM",
       "TBLADJUSTMENTITEM",
       "TBLADJITEM",
@@ -1979,44 +2003,73 @@ export const api = {
       "ROW",
     ];
 
-    let itemRows: Row[] = [];
-    // 2a. Öncelikli olarak bilinen kalem tablolarında malzeme içeren satırları ara:
-    for (const name of itemTableNames) {
-      if (name in d) {
-        const rows = unwrapRows(d[name]);
-        const validRows = rows.filter((rw) =>
-          pick(rw, ["MATERIAL", "MATCODE", "ITEMCODE", "PSMATERIAL", "MTEXT", "BARCODE", "STOCKCODE"]) !== ""
-        );
-        if (validRows.length > 0) {
-          itemRows = rows;
+    // 2a. Önce headRow içerisindeki gömülü listelerde ara (örn: IASINVADJHEAD.ROW.IASINVADJITEMLIST)
+    for (const k of itemKeyPatterns) {
+      if (k in headRow) {
+        const nestedVal = headRow[k];
+        if (Array.isArray(nestedVal)) {
+          itemRows = nestedVal as Row[];
           break;
+        } else if (nestedVal && typeof nestedVal === "object") {
+          const unwrapped = unwrapRows(nestedVal);
+          if (unwrapped.length > 0) {
+            itemRows = unwrapped;
+            break;
+          }
         }
       }
     }
 
-    // 2b. Eğer bilinen kalem tablolarında bulunamadıysa r.data altındaki en çok malzeme içeren tabloyu seç:
+    // 2b. headRow içinde bulunamadıysa, r.data içindeki nesnelerde ara:
     if (!itemRows.length) {
-      let maxItemCount = 0;
-      let bestRows: Row[] = [];
-      for (const [k, v] of Object.entries(d)) {
-        if (/SYSTEMMSG|MESSAGETABLE|TBLMESSAGE/i.test(k)) continue;
-        const rows = unwrapRows(v);
-        const matCount = rows.filter((rw) =>
-          pick(rw, ["MATERIAL", "MATCODE", "ITEMCODE", "PSMATERIAL", "MTEXT", "BARCODE", "STOCKCODE"]) !== ""
-        ).length;
-        if (matCount > maxItemCount) {
-          maxItemCount = matCount;
-          bestRows = rows;
+      for (const k of itemKeyPatterns) {
+        if (k in d) {
+          const val = d[k];
+          if (Array.isArray(val)) {
+            itemRows = val as Row[];
+            break;
+          } else if (val && typeof val === "object") {
+            const unwrapped = unwrapRows(val);
+            if (unwrapped.length > 0) {
+              itemRows = unwrapped;
+              break;
+            }
+          }
         }
-      }
-      if (bestRows.length > 0) {
-        itemRows = bestRows;
       }
     }
 
-    // 2c. Hala bulunamadıysa genel rowsOf yedek çağrısı yap:
+    // 2c. Eğer hala bulunamadıysa, d veya d[*].ROW içindeki tüm array özelliklerini tara:
     if (!itemRows.length) {
-      itemRows = rowsOf(r, itemTableNames.concat(headerCandidates));
+      const scanObjects = [d, headRow];
+      for (const obj of scanObjects) {
+        for (const [k, v] of Object.entries(obj)) {
+          if (/SYSTEMMSG|MESSAGETABLE|TBLMESSAGE/i.test(k)) continue;
+          if (Array.isArray(v)) {
+            const matCount = v.filter(
+              (rw) => rw && typeof rw === "object" && pick(rw as Row, ["MATERIAL", "MATCODE", "ITEMCODE", "PSMATERIAL", "MTEXT", "BARCODE", "STOCKCODE"]) !== ""
+            ).length;
+            if (matCount > 0) {
+              itemRows = v as Row[];
+              break;
+            }
+          } else if (v && typeof v === "object") {
+            for (const [subK, subV] of Object.entries(v as Record<string, unknown>)) {
+              if (Array.isArray(subV)) {
+                const matCount = subV.filter(
+                  (rw) => rw && typeof rw === "object" && pick(rw as Row, ["MATERIAL", "MATCODE", "ITEMCODE", "PSMATERIAL", "MTEXT", "BARCODE", "STOCKCODE"]) !== ""
+                ).length;
+                if (matCount > 0) {
+                  itemRows = subV as Row[];
+                  break;
+                }
+              }
+            }
+            if (itemRows.length > 0) break;
+          }
+        }
+        if (itemRows.length > 0) break;
+      }
     }
 
     if (!itemRows.length && Object.keys(headRow).length === 0) return undefined;
