@@ -68,8 +68,7 @@ export default function CountListPage() {
   }, [orders, q]);
 
   // 914x412 yatay ekranda 2 sütunlu düzende 6 kart ideal sayfa boyutudur
-  const pg = usePagination(filtered, 6);
-  useEffect(() => pg.reset(), [q]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pg = usePagination(filtered, 6, "count", q);
 
   const emreGir = (o: AdjustmentOrder) => {
     const num = o.invDocNum || o.id;

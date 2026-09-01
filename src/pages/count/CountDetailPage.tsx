@@ -9,7 +9,6 @@ import {
   Trash2,
   Plus,
   Minus,
-  Check,
 } from "lucide-react";
 import BarcodeScanner from "../../components/BarcodeScanner";
 import ToastView, { useToast } from "../../components/Toast";

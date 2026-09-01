@@ -45,8 +45,7 @@ export default function PickingListPage() {
     );
   }, [orders, q]);
 
-  const pg = usePagination(filtered, 9);
-  useEffect(() => pg.reset(), [q]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pg = usePagination(filtered, 9, "picking", q);
 
   const emreGir = (o: PickOrder) => {
     const engel = blockingHigherPriorityOrders(o, orders);
