@@ -149,14 +149,6 @@ export function evaluatePlacementScan(input: PlacementScanInput): PlacementDecis
     return { outcome: { kind: "exceedsAvail", message: "Bu kalem zaten tamamlandı", enFazla: 0 } };
   }
 
-  // Parti takipli mi? (SPECIALSTOCK=1). Satırlarda parti zaten varsa sormaya gerek yok.
-  const ozelStok = scan.specialStock || (lines.some((l) => l.lotTracked) ? "1" : "*");
-  const satirdaLotVar = lines.some((l) => !!l.lot);
-  if (ozelStok === "1" && !batchDate && !satirdaLotVar) {
-    return { outcome: { kind: "needsBatch", lineId: acikSatirlar[0].id, material: scan.material, name: scan.name } };
-  }
-  const parti = ozelStok === "1" ? batchDate ?? "*" : "*";
-
   // Okunan miktar (barkodun getirdiği miktar; yoksa okutma adedi).
   const okunan = scan.quantity > 0 ? scan.quantity : Math.max(1, Math.floor(adet || 1));
 
@@ -166,6 +158,15 @@ export function evaluatePlacementScan(input: PlacementScanInput): PlacementDecis
   const line =
     acikSatirlar.find((l) => kalanOf(l) >= okunan) ??
     acikSatirlar.reduce((best, l) => (kalanOf(l) > kalanOf(best) ? l : best));
+
+  // Parti takipli mi? Emir satırı parti-takipliyse (SPECIALSTOCK=1) ya da barkod "1" dönerse.
+  const ozelStok = line.lotTracked || scan.specialStock === "1" ? "1" : "*";
+  // Parti takipliyse parti adımı HER ZAMAN gelir — parti emirde (BATCHNUM) zaten olsa bile
+  // ATLANMAZ (Hüseyin). Kullanıcı partiyi okutunca/onaylayınca (batchDate) devam edilir.
+  if (ozelStok === "1" && !batchDate) {
+    return { outcome: { kind: "needsBatch", lineId: line.id, material: scan.material, name: scan.name } };
+  }
+  const parti = ozelStok === "1" ? batchDate || line.lot || "*" : "*";
 
   // Miktar okunandan ve o satırın kalanından fazla olamaz.
   const qty = Math.min(okunan, kalanOf(line));

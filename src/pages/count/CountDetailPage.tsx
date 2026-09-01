@@ -65,7 +65,7 @@ export default function CountDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [flashLineId, setFlashLineId] = useState<string | null>(null);
+  const [, setFlashLineId] = useState<string | null>(null);
   const [activeItem, setActiveItem] = useState<ActiveCountItem | null>(null);
   const [lotPendingItem, setLotPendingItem] = useState<LotPendingItem | null>(null);
 
@@ -1046,8 +1046,6 @@ export default function CountDetailPage() {
                   ? "text-amber-500 dark:text-amber-400"
                   : "text-fg";
 
-                const isFlashing = flashLineId === line.id;
-                const isSelected = activeItem ? activeItem.lineId === line.id : false;
                 const mult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
                 const unit = (line.unit || "AD").toUpperCase();
                 const skunit = (line.skunit || unit).toUpperCase();

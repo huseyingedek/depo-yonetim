@@ -109,7 +109,12 @@ export default function PutawayItemPage() {
         const out = await scanProduct(barkod, 1);
         setRedMesaji(null);
         if (out.kind === "ok") { setOkutmaAdedi(""); showToast({ kind: "ok", text: `${out.name} · hedef rafı okutun` }); }
-        else if (out.kind === "needsBatch") showToast({ kind: "ok", text: `${out.name} · parti barkodunu okutun` });
+        else if (out.kind === "needsBatch") {
+          // Emirde parti (BATCHNUM) varsa alanı onunla ön-doldur — çalışan sadece onaylasın.
+          const emirLot = order?.lines.find((l) => l.id === out.lineId)?.lot;
+          setPartiPrefill(emirLot ?? "");
+          showToast({ kind: "ok", text: `${out.name} · parti barkodunu okutun` });
+        }
         else if (out.kind === "notInOrder") showToast({ kind: "error", text: `${out.material} bu emirde yok` });
         else if (out.kind === "exceedsAvail") {
           sesHata(); // toast yok ama okutma başarısız → hata sesi
