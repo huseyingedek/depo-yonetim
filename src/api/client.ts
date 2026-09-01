@@ -387,21 +387,23 @@ function toAdjustmentOrder(row: Row): AdjustmentOrder {
 }
 
 function toAdjustmentLine(row: Row, index: number): AdjustmentLine {
-  const material = pick(row, ["MATERIAL", "MATCODE", "ITEMCODE", "PSMATERIAL"]);
-  const name = pick(row, ["MTEXT", "STEXT", "TEXT", "MATNAME", "DESCRIPTION", "NAME"]);
-  const barcode = pick(row, ["BARCODE", "EAN", "BARCODENUM"]);
-  const targetQty = num(row, ["TARGETQTY", "SYSTEMQTY", "TOTALITEMS", "TOTALQTY", "QUANTITY", "REMAININGQTY", "QTY"], 0);
-  const countedQty = num(row, ["COUNTEDQTY", "READQUANTITY", "READQTY", "ACTUALQTY"], 0);
-  const unit = pick(row, ["BUNIT", "UNIT", "QUNIT", "PURUNIT"]) || "AD";
-  const skunit = pick(row, ["SKUNIT", "IUNIT", "STOCKUNIT"]) || unit || "AD";
-  const multiplier = num(row, ["MULTIPLIER", "FACTOR", "PACKAGEMULTIPLIER"], 1);
-  const batchNum = pick(row, ["BATCHNUM", "LOT", "LOTNUM"]);
-  const specialStock = pick(row, ["SPECIALSTOCK", "ISLOT"]);
-  const warehouse = pick(row, ["WAREHOUSE", "SRCWAREHOUSE", "WH"]);
-  const stockPlace = pick(row, ["STOCKPLACE", "SRCSTOCKPLACE", "LOCATION", "SHELF"]);
+  const material = pick(row, ["MATERIAL", "MATCODE", "ITEMCODE", "PSMATERIAL", "STOCKCODE", "PRODUCT", "MATNUM"]);
+  const name = pick(row, ["MTEXT", "STEXT", "TEXT", "MATNAME", "DESCRIPTION", "NAME", "PRODUCTNAME", "ITEMNAME", "TITLE"]);
+  const barcode = pick(row, ["BARCODE", "EAN", "BARCODENUM", "CODE", "ALTBARCODE", "PACKBARCODE"]);
+  const targetQty = num(row, ["TARGETQTY", "SYSTEMQTY", "TOTALITEMS", "TOTALQTY", "QUANTITY", "REMAININGQTY", "QTY", "STOCKQTY", "AVAILSTOCK", "ACTUALSTOCK", "STOCK", "SKQUANTITY", "AMOUNT"], 0);
+  const countedQty = num(row, ["COUNTEDQTY", "READQUANTITY", "READQTY", "ACTUALQTY", "TOTALCOUNTED", "COUNTED"], 0);
+  const unit = pick(row, ["BUNIT", "UNIT", "QUNIT", "PURUNIT", "IUNIT", "SKUNIT", "STOCKUNIT"]) || "AD";
+  const skunit = pick(row, ["SKUNIT", "IUNIT", "STOCKUNIT", "BUNIT", "UNIT"]) || unit || "AD";
+  const multiplier = num(row, ["MULTIPLIER", "FACTOR", "PACKAGEMULTIPLIER", "CFACTOR"], 1);
+  const batchNum = pick(row, ["BATCHNUM", "LOT", "LOTNUM", "PARTI", "BATCH"]);
+  const specialStock = pick(row, ["SPECIALSTOCK", "ISLOT", "ISBATCH"]);
+  const warehouse = pick(row, ["WAREHOUSE", "SRCWAREHOUSE", "WH", "DEPOT", "PSWAREHOUSE"]);
+  const stockPlace = pick(row, ["STOCKPLACE", "SRCSTOCKPLACE", "LOCATION", "SHELF", "RAF", "PSSTOCKPLACE"]);
+
+  const lineId = pick(row, ["ITEMNUM", "LINENUM", "ITEMNO", "LINEID", "ID"]) || `${material || "MLZ"}_${index + 1}`;
 
   return {
-    id: pick(row, ["ITEMNUM", "LINENUM", "ID"]) || `${material || index + 1}`,
+    id: lineId,
     material: material || "MLZ",
     name: name || material || "Malzeme",
     barcode: barcode || undefined,
@@ -1931,44 +1933,101 @@ export const api = {
     const r = await call(SERVICES.enterAdjustment, params);
     console.info("📥 [MZYEnterAdjustment GELEN YANIT]", r);
 
-    let rows = rowsOf(r, [
-      "IASWMSADJITEM",
-      "TBLADJUSTMENTITEM",
-      "TBLADJDETAIL",
-      "TBLWMSADJITEM",
+    const d = r.data && typeof r.data === "object" ? (r.data as Record<string, unknown>) : {};
+
+    // 1. Header (Başlık) tablosunu belirle
+    const headerCandidates = [
       "IASWMSADJ",
       "TBLADJUSTMENT",
-      "TBLADJITEM",
-      "IASINVITEM",
-      "TBLINVITEM",
-      "TBLITEMS",
-      "TBLITEM",
-      "TBLMATLIST",
-      "IASWMSADJUSTMENT",
-      "TBLDETAIL",
-      "TBLDOCDETAIL",
-      "ROW",
-    ]);
-
-    // Eğer belirtilen tablo adlarında bulunamadıysa r.data altındaki herhangi bir diziyi tara:
-    if (!rows.length && r.data && typeof r.data === "object") {
-      for (const [k, v] of Object.entries(r.data)) {
-        if (!/SYSTEMMSG|MESSAGETABLE|TBLMESSAGE/i.test(k)) {
-          const unwrapped = unwrapRows(v);
-          if (unwrapped.length > 0) {
-            rows = unwrapped;
-            break;
-          }
+      "TBLADJ",
+      "TBLHEAD",
+      "TBLHEADER",
+      "TBLDOC",
+      "TBLADJUSTMENTLIST",
+    ];
+    let headRow: Row = {};
+    for (const hName of headerCandidates) {
+      if (hName in d) {
+        const hRows = unwrapRows(d[hName]);
+        if (hRows.length > 0) {
+          headRow = hRows[0];
+          break;
         }
       }
     }
 
-    if (!rows.length) return undefined;
-    const head = rows[0];
-    const order = toAdjustmentOrder(head);
-    const lines = rows
-      .filter((r) => pick(r, ["MATERIAL", "MATCODE", "ITEMCODE", "PSMATERIAL"]) !== "")
-      .map((r, i) => toAdjustmentLine(r, i));
+    // 2. Kalemler (Items / Malzemeler) tablosunu belirle
+    const itemTableNames = [
+      "IASWMSADJITEM",
+      "TBLADJUSTMENTITEM",
+      "TBLADJITEM",
+      "TBLADJDETAIL",
+      "TBLWMSADJITEM",
+      "TBLITEMS",
+      "TBLITEM",
+      "TBLMATLIST",
+      "TBLMATERIAL",
+      "IASINVITEM",
+      "TBLINVITEM",
+      "TBLDETAIL",
+      "TBLDOCDETAIL",
+      "TBLPOLIST",
+      "ITEMS",
+      "ITEMLIST",
+      "KALEMLER",
+      "TABLE",
+      "ROW",
+    ];
+
+    let itemRows: Row[] = [];
+    // 2a. Öncelikli olarak bilinen kalem tablolarında malzeme içeren satırları ara:
+    for (const name of itemTableNames) {
+      if (name in d) {
+        const rows = unwrapRows(d[name]);
+        const validRows = rows.filter((rw) =>
+          pick(rw, ["MATERIAL", "MATCODE", "ITEMCODE", "PSMATERIAL", "MTEXT", "BARCODE", "STOCKCODE"]) !== ""
+        );
+        if (validRows.length > 0) {
+          itemRows = rows;
+          break;
+        }
+      }
+    }
+
+    // 2b. Eğer bilinen kalem tablolarında bulunamadıysa r.data altındaki en çok malzeme içeren tabloyu seç:
+    if (!itemRows.length) {
+      let maxItemCount = 0;
+      let bestRows: Row[] = [];
+      for (const [k, v] of Object.entries(d)) {
+        if (/SYSTEMMSG|MESSAGETABLE|TBLMESSAGE/i.test(k)) continue;
+        const rows = unwrapRows(v);
+        const matCount = rows.filter((rw) =>
+          pick(rw, ["MATERIAL", "MATCODE", "ITEMCODE", "PSMATERIAL", "MTEXT", "BARCODE", "STOCKCODE"]) !== ""
+        ).length;
+        if (matCount > maxItemCount) {
+          maxItemCount = matCount;
+          bestRows = rows;
+        }
+      }
+      if (bestRows.length > 0) {
+        itemRows = bestRows;
+      }
+    }
+
+    // 2c. Hala bulunamadıysa genel rowsOf yedek çağrısı yap:
+    if (!itemRows.length) {
+      itemRows = rowsOf(r, itemTableNames.concat(headerCandidates));
+    }
+
+    if (!itemRows.length && Object.keys(headRow).length === 0) return undefined;
+    const finalHead = Object.keys(headRow).length > 0 ? headRow : (itemRows[0] || {});
+    const order = toAdjustmentOrder(finalHead);
+
+    const lines = itemRows
+      .filter((rw) => pick(rw, ["MATERIAL", "MATCODE", "ITEMCODE", "PSMATERIAL", "STOCKCODE", "PRODUCT", "MATNUM", "MTEXT", "BARCODE"]) !== "")
+      .map((rw, i) => toAdjustmentLine(rw, i));
+
+    console.info(`📦 [MZYEnterAdjustment] Toplam ${lines.length} adet sayım kalemi yüklendi.`);
 
     return {
       ...order,
