@@ -140,14 +140,23 @@ export default function CountDetailPage() {
       const sadelestir = (s: string) => s.trim().toLowerCase().replace(/^0+/, "");
       const hedef = sadelestir(rawCode);
 
-      // 1. Önce mevcut listede barkod veya malzeme kodu ile eşleşen var mı bak:
-      const matchedLine = lines.find(
+      // 1. Önce mevcut listede barkod veya malzeme kodu ile eşleşenleri bul:
+      const matches = lines.filter(
         (l) =>
           (l.barcode && sadelestir(l.barcode) === hedef) ||
           sadelestir(l.material) === hedef
       );
 
-      if (matchedLine) {
+      if (matches.length > 0) {
+        // Eğer aynı üründen birden fazla lokasyonda/rafta varsa:
+        // Öncelik: Şu an aktif seçili satır bu eşleşmelerden biriyse onu kullan,
+        // Değilse henüz tamamlanmamış (countedQty < targetQty) olan ilk satırı seç,
+        // O da yoksa ilk satırı seç.
+        const matchedLine =
+          matches.find((m) => activeItem && m.id === activeItem.lineId) ||
+          matches.find((m) => m.targetQty > 0 && m.countedQty < m.targetQty) ||
+          matches[0];
+
         sesBasarili();
         flash(matchedLine.id);
         const unit = (matchedLine.unit || "AD").toUpperCase();
@@ -172,7 +181,7 @@ export default function CountDetailPage() {
 
         show({
           kind: "ok",
-          text: `${matchedLine.material} seçildi. Miktar girip onaylayın.`,
+          text: `${matchedLine.material}${matchedLine.stockPlace ? ` (${matchedLine.stockPlace})` : ""} seçildi. Miktar girip onaylayın.`,
         });
         return;
       }
@@ -231,7 +240,7 @@ export default function CountDetailPage() {
         setBusy(false);
       }
     },
-    [lines, order, show]
+    [lines, order, show, activeItem]
   );
 
   // Miktar Girişini Onaylama / Listeye Ekleme
@@ -240,7 +249,9 @@ export default function CountDetailPage() {
     const finalQty = Math.max(0, activeItem.quantity);
 
     setLines((prev) => {
-      const idx = prev.findIndex((l) => l.id === activeItem.lineId || l.material === activeItem.material);
+      // Satırı KESİNLİKLE benzersiz lineId üzerinden buluyoruz.
+      // Aynı malzemeden farklı raflarda (Y2R1, Y2R2 vb.) olduğunda birbirine karışmaz.
+      const idx = prev.findIndex((l) => l.id === activeItem.lineId);
       if (idx >= 0) {
         const updated = [...prev];
         updated[idx] = {
@@ -277,7 +288,7 @@ export default function CountDetailPage() {
     flash(activeItem.lineId);
     show({
       kind: "ok",
-      text: `${activeItem.material} için ${finalQty} ${activeItem.unit} sayımı kaydedildi.`,
+      text: `${activeItem.material}${activeItem.stockPlace ? ` (${activeItem.stockPlace})` : ""} için ${finalQty} ${activeItem.unit} sayımı kaydedildi.`,
     });
     setActiveItem(null);
   };
@@ -306,23 +317,40 @@ export default function CountDetailPage() {
   };
 
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // SAĞ TARAF SIRALAMA MANTIĞI:
-  // 1. Üstte: Eksik (counted < target) veya Fazla (counted > target) olan kartlar.
-  // 2. Altta: Tam olan (counted === target) kartlar.
+  // 1. En üstte: Şu an aktif tıklanmış / okutulmuş ürün
+  // 2. Kırmızı olanlar (Fazla sayılanlar: counted > target)
+  // 3. Sarı olanlar (Kısmi sayılmış / eksik: counted > 0 && counted < target)
+  // 4. Siyah olanlar (Henüz sayılmamış: counted === 0)
+  // 5. Yeşil olanlar (Tamamlanmış olanlar: counted === target)
   // ---------------------------------------------------------------------------
   const sortedLines = useMemo(() => {
     return [...lines].sort((a, b) => {
-      const aIsComplete = a.targetQty > 0 && a.countedQty === a.targetQty;
-      const bIsComplete = b.targetQty > 0 && b.countedQty === b.targetQty;
+      // 1. Aktif seçili olan satır her zaman en üstte yer alır
+      const aIsActive = activeItem ? a.id === activeItem.lineId : false;
+      const bIsActive = activeItem ? b.id === activeItem.lineId : false;
+      if (aIsActive && !bIsActive) return -1;
+      if (!aIsActive && bIsActive) return 1;
 
-      // Tam olanlar en alta gitsin (tam olmayanlar üstte kalsın)
-      if (!aIsComplete && bIsComplete) return -1;
-      if (aIsComplete && !bIsComplete) return 1;
+      // 2. Katman sıralaması
+      const getTier = (l: AdjustmentLine) => {
+        const counted = l.countedQty;
+        const target = l.targetQty;
+        if (counted > target) return 1; // Kırmızı (Fazla)
+        if (counted > 0 && counted < target) return 2; // Sarı (Kısmi Eksik)
+        if (counted === 0) return 3; // Siyah (Henüz Sayılmamış)
+        return 4; // Yeşil (Tamamlanmış)
+      };
 
-      // Kendi aralarında id sırası
+      const aTier = getTier(a);
+      const bTier = getTier(b);
+      if (aTier !== bTier) return aTier - bTier;
+
+      // Kendi aralarında ID sırası
       return a.id.localeCompare(b.id, undefined, { numeric: true });
     });
-  }, [lines]);
+  }, [lines, activeItem]);
 
   // Özet Sayılar
   const totalCountedLines = lines.filter((l) => l.targetQty > 0 && l.countedQty === l.targetQty).length;
@@ -430,16 +458,16 @@ export default function CountDetailPage() {
               </div>
             )}
 
-            {/* Aktif Malzeme Miktar Paneli (Transfer Ekranıyla Birebir Kompakt Stepper) */}
+            {/* Aktif Malzeme Miktar Paneli (Kompakt ve Küçük Bar) */}
             {activeItem && (
-              <div className="space-y-1.5 pt-0.5 animate-fade-in">
+              <div className="space-y-1 pt-0.5 animate-fade-in">
                 {/* Malzeme Başlığı & İptal */}
                 <div className="flex items-center justify-between gap-1.5">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13.5px] font-bold text-fg">
+                    <p className="truncate text-[13px] font-bold text-fg">
                       {activeItem.name}
                     </p>
-                    <div className="flex items-center gap-1.5 font-mono text-[12px] text-slate-500">
+                    <div className="flex items-center gap-1.5 font-mono text-[11.5px] text-slate-500">
                       <span className="font-bold text-brand-600">{activeItem.material}</span>
                       {activeItem.barcode && <span>· {activeItem.barcode}</span>}
                     </div>
@@ -447,22 +475,22 @@ export default function CountDetailPage() {
                   <button
                     type="button"
                     onClick={() => setActiveItem(null)}
-                    className="flex h-6 w-6 items-center justify-center rounded-lg border border-line bg-elevated/40 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                    className="flex h-5.5 w-5.5 items-center justify-center rounded-md border border-line bg-elevated/40 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
                     title="İptal"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="h-3 w-3" />
                   </button>
                 </div>
 
                 {/* Birim Eşitliği (örn: 1 KO = 5 PK) */}
                 {activeItem.multiplier > 1 || activeItem.unit !== activeItem.skunit ? (
-                  <div className="rounded-md bg-amber-50 border border-amber-200/60 px-1.5 py-0.5 font-mono text-[12px] font-bold text-amber-800">
+                  <div className="rounded bg-amber-50 border border-amber-200/60 px-1 py-0.5 font-mono text-[11px] font-bold text-amber-800">
                     1 {activeItem.unit} = {activeItem.multiplier} {activeItem.skunit}
                   </div>
                 ) : null}
 
-                {/* Miktar Stepper Girişi */}
-                <div>
+                {/* Miktar Stepper Girişi (KÜÇÜLTÜLMÜŞ KOMPAKT BAR) */}
+                <div className="space-y-1">
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
@@ -471,9 +499,9 @@ export default function CountDetailPage() {
                           prev ? { ...prev, quantity: Math.max(0, prev.quantity - 1) } : null
                         )
                       }
-                      className="flex h-8.5 w-8.5 items-center justify-center rounded-lg bg-elevated text-subtle hover:bg-line active:scale-95 transition shrink-0"
+                      className="flex h-7.5 w-7.5 items-center justify-center rounded-lg bg-elevated text-subtle hover:bg-line active:scale-95 transition shrink-0"
                     >
-                      <Minus className="h-3.5 w-3.5" />
+                      <Minus className="h-3 w-3" />
                     </button>
 
                     <div className="relative flex-1">
@@ -500,10 +528,10 @@ export default function CountDetailPage() {
                             handleCommitActiveItem();
                           }
                         }}
-                        className="field-input w-full text-center font-mono text-[15px] font-extrabold text-emerald-600 h-8.5 py-0.5"
+                        className="field-input w-full text-center font-mono text-[14px] font-extrabold text-emerald-600 h-7.5 py-0"
                         autoFocus
                       />
-                      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 font-mono text-[12px] font-bold text-slate-500">
+                      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 font-mono text-[11px] font-bold text-slate-500">
                         {activeItem.unit}
                       </span>
                     </div>
@@ -515,23 +543,23 @@ export default function CountDetailPage() {
                           prev ? { ...prev, quantity: prev.quantity + 1 } : null
                         )
                       }
-                      className="flex h-8.5 w-8.5 items-center justify-center rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition shadow-sm shrink-0"
+                      className="flex h-7.5 w-7.5 items-center justify-center rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition shadow-sm shrink-0"
                     >
-                      <Plus className="h-3.5 w-3.5" />
+                      <Plus className="h-3 w-3" />
                     </button>
                   </div>
 
-                  {/* Hızlı Butonlar ve Ekle Butonu */}
-                  <div className="grid grid-cols-4 gap-1 pt-1">
+                  {/* Hızlı Butonlar */}
+                  <div className="grid grid-cols-4 gap-1">
                     <button
                       type="button"
                       onClick={() =>
                         setActiveItem((prev) => (prev ? { ...prev, quantity: 0 } : null))
                       }
-                      className="flex items-center justify-center rounded-lg border border-line bg-elevated/50 py-1.5 text-subtle hover:bg-rose-50 hover:text-rose-600 transition active:scale-95"
+                      className="flex h-6.5 items-center justify-center rounded-md border border-line bg-elevated/50 text-subtle hover:bg-rose-50 hover:text-rose-600 transition active:scale-95"
                       title="Sıfırla"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3 w-3" />
                     </button>
 
                     {[1, 5, 10].map((inc) => (
@@ -543,7 +571,7 @@ export default function CountDetailPage() {
                             prev ? { ...prev, quantity: prev.quantity + inc } : null
                           )
                         }
-                        className="rounded-lg border border-line bg-elevated/80 py-1.5 font-mono text-[12px] font-black text-fg hover:bg-brand-600 hover:text-white transition active:scale-95"
+                        className="flex h-6.5 items-center justify-center rounded-md border border-line bg-elevated/80 font-mono text-[11px] font-black text-fg hover:bg-brand-600 hover:text-white transition active:scale-95"
                       >
                         +{inc}
                       </button>
@@ -554,7 +582,7 @@ export default function CountDetailPage() {
                   <button
                     type="button"
                     onClick={handleCommitActiveItem}
-                    className="mt-1.5 flex h-8.5 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 text-[13px] font-extrabold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition"
+                    className="flex h-7.5 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 text-[12px] font-extrabold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition"
                   >
                     <Check className="h-3.5 w-3.5" />
                     <span>Kaydet ({activeItem.quantity * activeItem.multiplier} {activeItem.skunit})</span>
@@ -591,17 +619,25 @@ export default function CountDetailPage() {
                 const target = line.targetQty;
                 const isMatched = target > 0 && counted === target;
                 const isExcess = counted > target;
+                const isPartial = counted > 0 && counted < target;
 
                 // -----------------------------------------------------------
-                // KURAL: Fazla olan KIRMIZI, Az olan SARI, Tam olan YEŞİL
+                // KURAL:
+                // 1. Fazla: KIRMIZI (counted > target)
+                // 2. Tam: YEŞİL (counted === target)
+                // 3. Kısmi / Eksik sayılmış: SARI (counted > 0 && counted < target)
+                // 4. Default / Henüz başlanmamış (0/X): SİYAH (counted === 0)
                 // -----------------------------------------------------------
-                const colorClass = isExcess
-                  ? "text-rose-600 bg-rose-50 border-rose-200"
+                const qtyColorClass = isExcess
+                  ? "text-rose-600 dark:text-rose-400"
                   : isMatched
-                  ? "text-emerald-600 bg-emerald-50 border-emerald-200"
-                  : "text-amber-600 bg-amber-50 border-amber-200";
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : isPartial
+                  ? "text-amber-500 dark:text-amber-400"
+                  : "text-fg";
 
                 const isFlashing = flashLineId === line.id;
+                const isSelected = activeItem ? activeItem.lineId === line.id : false;
                 const mult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
                 const unit = (line.unit || "AD").toUpperCase();
                 const skunit = (line.skunit || unit).toUpperCase();
@@ -613,59 +649,50 @@ export default function CountDetailPage() {
                     key={line.id}
                     type="button"
                     onClick={() => selectLineForCounting(line)}
-                    className={`w-full text-left rounded-2xl border bg-surface p-2.5 sm:p-3 shadow-card transition-all hover:-translate-y-0.5 hover:shadow-soft active:scale-[0.99] ${
-                      isFlashing
-                        ? "border-brand-500 ring-2 ring-brand-300"
-                        : isMatched
-                        ? "border-emerald-300/80 bg-emerald-50/10"
-                        : "border-line"
-                    }`}
+                    className="w-full text-left rounded-2xl border border-line bg-surface p-2.5 sm:p-3 transition-all shadow-xs hover:border-slate-400/60 active:scale-[0.99]"
                   >
-                    {/* Üst Satır: Malzeme Adı & Oran Rozeti (x / y) */}
+                    {/* Üst Satır: Malzeme Bilgileri & Renkli Metin Miktar Oranı */}
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[15px] font-bold text-fg">
                           {line.name}
                         </p>
-                        <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[14px] text-slate-600">
-                          <span className="font-bold text-brand-600">{line.material}</span>
+                        <div className="mt-0.5 flex items-center gap-2.5 font-mono text-[13px] flex-wrap text-slate-600 dark:text-slate-300">
+                          {/* Ürün Kodu - Koyu Gri */}
+                          <span className="font-bold text-slate-700 dark:text-slate-200">{line.material}</span>
+                          {/* Lokasyon / Raf - Koyu Gri */}
                           {line.stockPlace && (
-                            <>
-                              <span>·</span>
-                              <span className="inline-flex items-center gap-1 font-semibold text-rose-700">
-                                <MapPin className="h-3 w-3 text-rose-500" />
-                                {line.stockPlace}
-                              </span>
-                            </>
+                            <span className="inline-flex items-center gap-0.5 font-semibold">
+                              <MapPin className="h-3 w-3 shrink-0 text-slate-500" />
+                              {line.stockPlace}
+                            </span>
                           )}
+                          {/* Parti - Koyu Gri */}
                           {line.batchNum && (
-                            <>
-                              <span>·</span>
-                              <span className="inline-flex items-center gap-1 font-semibold text-violet-700">
-                                Parti: {line.batchNum}
-                              </span>
-                            </>
+                            <span className="font-semibold">
+                              Parti: {line.batchNum}
+                            </span>
                           )}
                         </div>
                       </div>
 
-                      {/* x / y Miktar Oranı Göstergesi (KIRMIZI, SARI, YEŞİL) */}
-                      <div
-                        className={`shrink-0 flex items-center gap-1 rounded-xl border px-2.5 py-1 font-mono text-[16px] font-black ${colorClass}`}
-                      >
-                        <span>
+                      {/* Sağ: Kaçta Kaçı Sayıldı (Miktar & Birim aynı renkte) */}
+                      <div className={`shrink-0 text-right font-mono self-center ${qtyColorClass}`}>
+                        <span className="text-[16px] sm:text-[17px] font-black">
                           {counted} / {target}
                         </span>
-                        <span className="text-[14px] font-bold uppercase">{unit}</span>
+                        <span className="ml-1 text-[13px] font-black uppercase">
+                          {skunit}
+                        </span>
                       </div>
                     </div>
 
-                    {/* Alt Satır: Birim Eşitliği (1 KO = 5 PK) ve Toplam Temel Stok */}
+                    {/* Alt Satır: Birim Eşitliği (1 KO = 5 PK) ve Girilen Miktar */}
                     {isDiffUnit && (
-                      <div className="mt-1.5 flex items-center justify-between border-t border-line/40 pt-1 font-mono text-[14px]">
+                      <div className="mt-1.5 flex items-center justify-between border-t border-line/40 pt-1 font-mono text-[12px] sm:text-[13px]">
                         <span className="font-semibold text-slate-500">{equation}</span>
-                        <span className="font-black text-emerald-600">
-                          Toplam: {counted * mult} {skunit}
+                        <span className="font-bold text-fg">
+                          Girilen: {counted} {unit}
                         </span>
                       </div>
                     )}

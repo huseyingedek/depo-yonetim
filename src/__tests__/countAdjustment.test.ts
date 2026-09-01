@@ -204,4 +204,56 @@ describe("Sayım Servisleri — MZYListingAdjustment & MZYEnterAdjustment", () =
     expect(result?.lines?.[1].material).toBe("MLZ002");
     expect(result?.lines?.[2].material).toBe("MLZ003");
   });
+
+  it("5. CANIAS canlı IASINVADJHEAD.ROW.IASINVADJITEMLIST yapısını eksiksiz parse eder", async () => {
+    global.fetch = vi.fn().mockImplementation(async () => {
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            IASINVADJHEAD: {
+              ROW: {
+                CLIENT: "00",
+                COMPANY: "01",
+                PLANT: "100",
+                WAREHOUSE: "D1",
+                INVDOCTYPE: "50",
+                INVDOCNUM: "00000882",
+                DOCDATE: "31.08.2026",
+                IASINVADJITEMLIST: [
+                  {
+                    INVDOCITEM: "10",
+                    STOCKPLACE: "Q1",
+                    MATERIAL: "0X002",
+                    MTEXT: "Fax Okyanus Sıvı Sabun 3Lt",
+                    AVAILSTOCKV: "30.0",
+                    SKUNIT: "AD",
+                  },
+                  {
+                    INVDOCITEM: "20",
+                    STOCKPLACE: "Q1",
+                    MATERIAL: "6SM01",
+                    MTEXT: "Smart Tuvalet Kağıdı 24'lü",
+                    AVAILSTOCKV: "91.0",
+                    SKUNIT: "AD",
+                  },
+                ],
+              },
+            },
+          },
+        }),
+      } as Response;
+    });
+
+    const result = await api.getAdjustmentOrder("00000882");
+    expect(result).toBeDefined();
+    expect(result?.invDocNum).toBe("00000882");
+    expect(result?.lines).toHaveLength(2);
+    expect(result?.lines?.[0].material).toBe("0X002");
+    expect(result?.lines?.[0].name).toBe("Fax Okyanus Sıvı Sabun 3Lt");
+    expect(result?.lines?.[0].targetQty).toBe(30);
+    expect(result?.lines?.[0].stockPlace).toBe("Q1");
+    expect(result?.lines?.[1].material).toBe("6SM01");
+    expect(result?.lines?.[1].targetQty).toBe(91);
+  });
 });
