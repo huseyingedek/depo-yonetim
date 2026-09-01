@@ -688,20 +688,20 @@ export default function CountDetailPage() {
         </div>
       )}
 
-      {/* İki Sütunlu Grid Düzen (Sol Küçük, Sağ Geniş) */}
-      <div className="grid min-w-0 gap-2.5 md:gap-3.5 md:grid-cols-[265px_minmax(0,1fr)] lg:grid-cols-[275px_minmax(0,1fr)] xl:grid-cols-[285px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-2.5">
+      {/* İki Sütunlu Grid Düzen (Sol Genişletilmiş, Sağ Daraltılmış) */}
+      <div className="grid min-w-0 gap-2.5 md:gap-3.5 md:grid-cols-[330px_minmax(0,1fr)] lg:grid-cols-[350px_minmax(0,1fr)] xl:grid-cols-[370px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-2.5">
         {/* =================================================================== */}
-        {/* SOL KOLON: 3 Tablı (1 Barkod, 2 Parti, 3 Miktar) Giriş Alanı       */}
+        {/* SOL KOLON: 3 Tablı (Barkod, Parti, Miktar) Giriş Alanı              */}
         {/* =================================================================== */}
-        <div className="min-w-0 md:sticky md:top-2 md:self-start lg:sticky lg:top-2 xl:sticky xl:top-2 short:!static short:w-[265px] short:shrink-0 short:self-stretch short:overflow-y-auto">
-          <div className="card p-1.5 sm:p-2 space-y-1.5">
+        <div className="min-w-0 md:sticky md:top-2 md:self-start lg:sticky lg:top-2 xl:sticky xl:top-2 short:!static short:w-[330px] short:shrink-0 short:self-stretch short:overflow-y-auto">
+          <div className="card p-2 sm:p-2.5 space-y-1.5">
             {/* 3 Adım İndikatörü / Tabları */}
             <div className="grid grid-cols-3 gap-1 w-full">
               {(
                 [
-                  ["barcode", "1 Barkod"],
-                  ["lot", "2 Parti"],
-                  ["qty", "3 Miktar"],
+                  ["barcode", "Barkod"],
+                  ["lot", "Parti"],
+                  ["qty", "Miktar"],
                 ] as const
               ).map(([s, label]) => {
                 const active =
@@ -863,45 +863,18 @@ export default function CountDetailPage() {
               </div>
             )}
 
-            {/* ADIM 3: MİKTAR GİRİŞİ (Kompakt Bar) */}
+            {/* ADIM 3: MİKTAR GİRİŞİ (Mal Kabul ile Birebir Aynı) */}
             {activeItem && (
-              <div className="space-y-1 pt-0.5 animate-fade-in">
-                {/* Malzeme Başlığı & İptal */}
-                <div className="flex items-center justify-between gap-1.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-bold text-fg">
-                      {activeItem.name}
-                    </p>
-                    <div className="flex items-center gap-1.5 font-mono text-[11.5px] text-slate-500 flex-wrap">
-                      <span className="font-bold text-brand-600">{activeItem.material}</span>
-                      {activeItem.batchNum && (
-                        <span className="rounded bg-purple-50 px-1 py-0.2 font-semibold text-purple-700">
-                          Parti: {activeItem.batchNum}
-                        </span>
-                      )}
-                      {activeItem.barcode && <span>· {activeItem.barcode}</span>}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveItem(null)}
-                    className="flex h-5.5 w-5.5 items-center justify-center rounded-md border border-line bg-elevated/40 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
-                    title="İptal"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </div>
-
-                {/* Birim Eşitliği (örn: 1 KO = 5 PK) */}
-                {activeItem.multiplier > 1 || activeItem.unit !== activeItem.skunit ? (
-                  <div className="rounded bg-amber-50 border border-amber-200/60 px-1 py-0.5 font-mono text-[11px] font-bold text-amber-800">
-                    1 {activeItem.unit} = {activeItem.multiplier} {activeItem.skunit}
-                  </div>
-                ) : null}
-
+              <div className="space-y-2 animate-fade-in flex-1 flex flex-col justify-between">
                 {/* Miktar Stepper Girişi */}
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1">
+                <div>
+                  <div className="mb-1">
+                    <label className="text-xs font-bold text-fg block">
+                      Sayılacak Miktar ({activeItem.unit}) <span className="text-red-500">*</span>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() =>
@@ -909,43 +882,36 @@ export default function CountDetailPage() {
                           prev ? { ...prev, quantity: Math.max(0, prev.quantity - 1) } : null
                         )
                       }
-                      className="flex h-7.5 w-7.5 items-center justify-center rounded-lg bg-elevated text-subtle hover:bg-line active:scale-95 transition shrink-0"
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-elevated text-subtle hover:bg-line transition active:scale-95 shrink-0"
                     >
-                      <Minus className="h-3 w-3" />
+                      <Minus className="h-4 w-4" />
                     </button>
-
-                    <div className="relative flex-1">
-                      <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={activeItem.quantity === 0 ? "" : activeItem.quantity}
-                        placeholder="0"
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          if (raw === "") {
-                            setActiveItem((prev) => (prev ? { ...prev, quantity: 0 } : null));
-                            return;
-                          }
-                          const val = parseFloat(raw);
-                          setActiveItem((prev) =>
-                            prev ? { ...prev, quantity: isNaN(val) ? 0 : Math.max(0, val) } : null
-                          );
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleCommitActiveItem();
-                          }
-                        }}
-                        className="field-input w-full text-center font-mono text-[14px] font-extrabold text-emerald-600 h-7.5 py-0"
-                        autoFocus
-                      />
-                      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 font-mono text-[11px] font-bold text-slate-500">
-                        {activeItem.unit}
-                      </span>
-                    </div>
-
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={activeItem.quantity === 0 ? "" : activeItem.quantity}
+                      placeholder="0"
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === "") {
+                          setActiveItem((prev) => (prev ? { ...prev, quantity: 0 } : null));
+                          return;
+                        }
+                        const val = parseInt(raw, 10);
+                        setActiveItem((prev) =>
+                          prev ? { ...prev, quantity: isNaN(val) ? 0 : Math.max(0, val) } : null
+                        );
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleCommitActiveItem();
+                        }
+                      }}
+                      className="field-input flex-1 text-center font-mono text-base sm:text-lg font-extrabold text-emerald-600 dark:text-emerald-400 h-10 py-1"
+                      autoFocus
+                    />
                     <button
                       type="button"
                       onClick={() =>
@@ -953,26 +919,28 @@ export default function CountDetailPage() {
                           prev ? { ...prev, quantity: prev.quantity + 1 } : null
                         )
                       }
-                      className="flex h-7.5 w-7.5 items-center justify-center rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition shadow-sm shrink-0"
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition active:scale-95 shadow-md shrink-0"
                     >
-                      <Plus className="h-3 w-3" />
+                      <Plus className="h-4 w-4" />
                     </button>
                   </div>
 
-                  {/* Hızlı Butonlar */}
-                  <div className="grid grid-cols-4 gap-1">
+                  {/* Hızlı Butonlar ve Kaydet Butonu (Sıfırla, +5, +10, Kaydet) */}
+                  <div className="grid grid-cols-4 gap-1.5 pt-1.5">
+                    {/* 1. Sıfırla (Çöp Kutusu İkonu) */}
                     <button
                       type="button"
                       onClick={() =>
                         setActiveItem((prev) => (prev ? { ...prev, quantity: 0 } : null))
                       }
-                      className="flex h-6.5 items-center justify-center rounded-md border border-line bg-elevated/50 text-subtle hover:bg-rose-50 hover:text-rose-600 transition active:scale-95"
-                      title="Sıfırla"
+                      className="flex items-center justify-center rounded-xl border border-line bg-elevated/50 py-2 text-subtle hover:bg-red-500/20 hover:text-red-500 hover:border-red-500/30 transition active:scale-95 shadow-xs"
+                      title="Miktarı Sıfırla (0)"
                     >
-                      <Trash2 className="h-3 w-3" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
 
-                    {[1, 5, 10].map((inc) => (
+                    {/* 2. +5, 3. +10 */}
+                    {[5, 10].map((inc) => (
                       <button
                         key={inc}
                         type="button"
@@ -981,22 +949,24 @@ export default function CountDetailPage() {
                             prev ? { ...prev, quantity: prev.quantity + inc } : null
                           )
                         }
-                        className="flex h-6.5 items-center justify-center rounded-md border border-line bg-elevated/80 font-mono text-[11px] font-black text-fg hover:bg-brand-600 hover:text-white transition active:scale-95"
+                        className="rounded-xl border border-line bg-elevated/80 py-2 text-xs sm:text-sm font-black text-fg hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition active:scale-95 shadow-xs"
                       >
                         +{inc}
                       </button>
                     ))}
-                  </div>
 
-                  {/* Ekle / Kaydet Butonu */}
-                  <button
-                    type="button"
-                    onClick={handleCommitActiveItem}
-                    className="flex h-7.5 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 text-[12px] font-extrabold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition"
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                    <span>Kaydet ({activeItem.quantity * activeItem.multiplier} {activeItem.skunit})</span>
-                  </button>
+                    {/* 4. Kaydet (En sağda) */}
+                    <button
+                      type="button"
+                      onClick={handleCommitActiveItem}
+                      disabled={!activeItem || activeItem.quantity <= 0}
+                      className="flex flex-col items-center justify-center rounded-xl bg-emerald-600 py-1 text-[10px] sm:text-[11px] font-black leading-tight text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-35 disabled:cursor-not-allowed"
+                      title="Sayımı Kaydet"
+                    >
+                      <span>Sayımı</span>
+                      <span>Kaydet</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
