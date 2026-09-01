@@ -613,35 +613,40 @@ export default function CountDetailPage() {
                     key={line.id}
                     type="button"
                     onClick={() => selectLineForCounting(line)}
-                    className={`w-full text-left rounded-2xl border bg-surface p-2.5 sm:p-3 shadow-card transition-all hover:-translate-y-0.5 hover:shadow-soft active:scale-[0.99] ${
+                    className={`w-full text-left rounded-2xl border p-2.5 sm:p-3 transition-all shadow-xs hover:border-emerald-500/40 active:scale-[0.99] ${
                       isFlashing
-                        ? "border-brand-500 ring-2 ring-brand-300"
+                        ? "border-brand-500 ring-2 ring-brand-300 bg-surface"
                         : isMatched
-                        ? "border-emerald-300/80 bg-emerald-50/10"
-                        : "border-line"
+                        ? "border-emerald-500/60 bg-emerald-500/10"
+                        : isExcess
+                        ? "border-rose-500/60 bg-rose-500/10"
+                        : "border-line bg-surface"
                     }`}
                   >
-                    {/* Üst Satır: Malzeme Adı & Oran Rozeti (x / y) */}
+                    {/* Üst Satır: Malzeme Bilgileri & Doğrudan Metin Miktar Oranı */}
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[15px] font-bold text-fg">
                           {line.name}
                         </p>
-                        <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[14px] text-slate-600">
-                          <span className="font-bold text-brand-600">{line.material}</span>
+                        <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[13px] flex-wrap">
+                          {/* Ürün Kodu - Siyah */}
+                          <span className="font-black text-fg">{line.material}</span>
+                          {/* Lokasyon / Raf - Siyah */}
                           {line.stockPlace && (
                             <>
-                              <span>·</span>
-                              <span className="inline-flex items-center gap-1 font-semibold text-rose-700">
-                                <MapPin className="h-3 w-3 text-rose-500" />
+                              <span className="text-subtle">·</span>
+                              <span className="inline-flex items-center gap-0.5 font-bold text-fg">
+                                <MapPin className="h-3 w-3 text-subtle shrink-0" />
                                 {line.stockPlace}
                               </span>
                             </>
                           )}
+                          {/* Parti - Mor */}
                           {line.batchNum && (
                             <>
-                              <span>·</span>
-                              <span className="inline-flex items-center gap-1 font-semibold text-violet-700">
+                              <span className="text-subtle">·</span>
+                              <span className="inline-flex items-center gap-1 font-semibold text-violet-700 dark:text-violet-400">
                                 Parti: {line.batchNum}
                               </span>
                             </>
@@ -649,23 +654,31 @@ export default function CountDetailPage() {
                         </div>
                       </div>
 
-                      {/* x / y Miktar Oranı Göstergesi (KIRMIZI, SARI, YEŞİL) */}
-                      <div
-                        className={`shrink-0 flex items-center gap-1 rounded-xl border px-2.5 py-1 font-mono text-[16px] font-black ${colorClass}`}
-                      >
-                        <span>
+                      {/* Sağ: Kaçta Kaçı Sayıldı (Ekstra kart yok, doğrudan beyaz kart üzerinde) */}
+                      <div className="shrink-0 text-right font-mono self-center">
+                        <span
+                          className={`text-[16px] sm:text-[17px] font-black ${
+                            isExcess
+                              ? "text-rose-600 dark:text-rose-400"
+                              : isMatched
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-amber-600 dark:text-amber-400"
+                          }`}
+                        >
                           {counted} / {target}
                         </span>
-                        <span className="text-[14px] font-bold uppercase">{skunit}</span>
+                        <span className="ml-1 text-[13px] font-black text-fg uppercase">
+                          {skunit}
+                        </span>
                       </div>
                     </div>
 
-                    {/* Alt Satır: Birim Eşitliği (1 KO = 5 PK) ve Toplam Temel Stok */}
+                    {/* Alt Satır: Birim Eşitliği (1 KO = 5 PK) ve Girilen Miktar */}
                     {isDiffUnit && (
-                      <div className="mt-1.5 flex items-center justify-between border-t border-line/40 pt-1 font-mono text-[14px]">
-                        <span className="font-semibold text-slate-500">{equation}</span>
-                        <span className="font-black text-emerald-600">
-                          Toplam: {counted * mult} {skunit}
+                      <div className="mt-1.5 flex items-center justify-between border-t border-line/40 pt-1 font-mono text-[12px] sm:text-[13px]">
+                        <span className="font-semibold text-subtle">{equation}</span>
+                        <span className="font-bold text-fg">
+                          Girilen: {counted} {unit}
                         </span>
                       </div>
                     )}
