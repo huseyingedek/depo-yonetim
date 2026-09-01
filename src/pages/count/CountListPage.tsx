@@ -6,7 +6,6 @@ import {
   ChevronRight,
   ClipboardList,
   Camera,
-  RotateCw,
   Warehouse,
   Calendar,
   User,
@@ -109,34 +108,23 @@ export default function CountListPage() {
         subtitle="Açık Sayım Belgeleri Listesi"
         backTo="/home"
         right={
-          <div className="flex items-center gap-2">
+          <div className="relative hidden sm:block">
+            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={t("count.searchOrder")}
+              className="field-input w-72 pl-11 pr-12 text-[15px]"
+            />
             <button
               type="button"
-              onClick={fetchAdjustmentOrders}
-              title="Yenile"
-              aria-label="Yenile"
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface text-fg shadow-card transition hover:bg-elevated"
+              onClick={() => setKamera(true)}
+              aria-label={t("count.scanOrder")}
+              title={t("count.scanOrder")}
+              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg"
             >
-              <RotateCw className={`h-5 w-5 ${loading ? "animate-spin text-brand-600" : ""}`} />
+              <Camera className="h-5 w-5" />
             </button>
-            <div className="relative hidden sm:block">
-              <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder={t("count.searchOrder")}
-                className="field-input w-72 pl-11 pr-12 text-[15px]"
-              />
-              <button
-                type="button"
-                onClick={() => setKamera(true)}
-                aria-label={t("count.scanOrder")}
-                title={t("count.scanOrder")}
-                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg"
-              >
-                <Camera className="h-5 w-5" />
-              </button>
-            </div>
           </div>
         }
       />
