@@ -2055,7 +2055,7 @@ export const api = {
               break;
             }
           } else if (v && typeof v === "object") {
-            for (const [subK, subV] of Object.entries(v as Record<string, unknown>)) {
+            for (const subV of Object.values(v as Record<string, unknown>)) {
               if (Array.isArray(subV)) {
                 const matCount = subV.filter(
                   (rw) => rw && typeof rw === "object" && pick(rw as Row, ["MATERIAL", "MATCODE", "ITEMCODE", "PSMATERIAL", "MTEXT", "BARCODE", "STOCKCODE"]) !== ""
