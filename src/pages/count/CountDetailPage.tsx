@@ -629,45 +629,31 @@ export default function CountDetailPage() {
                         <p className="truncate text-[15px] font-bold text-fg">
                           {line.name}
                         </p>
-                        <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[13px] flex-wrap">
-                          {/* Ürün Kodu - Siyah */}
-                          <span className="font-black text-fg">{line.material}</span>
-                          {/* Lokasyon / Raf - Siyah */}
+                        <div className="mt-0.5 flex items-center gap-2.5 font-mono text-[13px] flex-wrap text-subtle">
+                          {/* Ürün Kodu - Gri */}
+                          <span className="font-semibold">{line.material}</span>
+                          {/* Lokasyon / Raf - Gri */}
                           {line.stockPlace && (
-                            <>
-                              <span className="text-subtle">·</span>
-                              <span className="inline-flex items-center gap-0.5 font-bold text-fg">
-                                <MapPin className="h-3 w-3 text-subtle shrink-0" />
-                                {line.stockPlace}
-                              </span>
-                            </>
+                            <span className="inline-flex items-center gap-0.5 font-medium">
+                              <MapPin className="h-3 w-3 shrink-0 opacity-70" />
+                              {line.stockPlace}
+                            </span>
                           )}
-                          {/* Parti - Mor */}
+                          {/* Parti - Gri */}
                           {line.batchNum && (
-                            <>
-                              <span className="text-subtle">·</span>
-                              <span className="inline-flex items-center gap-1 font-semibold text-violet-700 dark:text-violet-400">
-                                Parti: {line.batchNum}
-                              </span>
-                            </>
+                            <span className="font-medium">
+                              Parti: {line.batchNum}
+                            </span>
                           )}
                         </div>
                       </div>
 
-                      {/* Sağ: Kaçta Kaçı Sayıldı (Ekstra kart yok, doğrudan beyaz kart üzerinde) */}
+                      {/* Sağ: Kaçta Kaçı Sayıldı (Siyah Renkte) */}
                       <div className="shrink-0 text-right font-mono self-center">
-                        <span
-                          className={`text-[16px] sm:text-[17px] font-black ${
-                            isExcess
-                              ? "text-rose-600 dark:text-rose-400"
-                              : isMatched
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : "text-amber-600 dark:text-amber-400"
-                          }`}
-                        >
+                        <span className="text-[16px] sm:text-[17px] font-black text-fg">
                           {counted} / {target}
                         </span>
-                        <span className="ml-1 text-[13px] font-black text-fg uppercase">
+                        <span className="ml-1 text-[13px] font-bold text-subtle uppercase">
                           {skunit}
                         </span>
                       </div>
