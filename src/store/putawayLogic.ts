@@ -133,33 +133,46 @@ export function distributePlacement(
 }
 
 export function evaluatePlacementScan(input: PlacementScanInput): PlacementDecision {
-  const { order, source, scan, batchDate } = input;
+  const { order, source, scan, batchDate, adet } = input;
 
   if (!scan.ok) return { outcome: { kind: "error", message: scan.message || "Barkod tanınmadı" } };
   if (!source) return { outcome: { kind: "error", message: "Önce kaynak depoyu okutun." } };
 
-  // Aynı malzemenin TÜM satırları (farklı depo/stok yeri/parti → çok satır).
+  // Aynı malzeme birden fazla satırda olabilir (farklı sipariş/depo/parti).
   const lines = order.lines.filter((l) => l.product.code === scan.material);
   if (!lines.length) return { outcome: { kind: "notInOrder", material: scan.material, name: scan.name } };
+
+  // Açık (kalanı olan) satırlar
+  const kalanOf = (l: (typeof lines)[number]) => l.requestedQty - l.pickedQty;
+  const acikSatirlar = lines.filter((l) => kalanOf(l) > 0);
+  if (!acikSatirlar.length) {
+    return { outcome: { kind: "exceedsAvail", message: "Bu kalem zaten tamamlandı", enFazla: 0 } };
+  }
 
   // Parti takipli mi? (SPECIALSTOCK=1). Satırlarda parti zaten varsa sormaya gerek yok.
   const ozelStok = scan.specialStock || (lines.some((l) => l.lotTracked) ? "1" : "*");
   const satirdaLotVar = lines.some((l) => !!l.lot);
   if (ozelStok === "1" && !batchDate && !satirdaLotVar) {
-    return { outcome: { kind: "needsBatch", lineId: lines[0].id, material: scan.material, name: scan.name } };
+    return { outcome: { kind: "needsBatch", lineId: acikSatirlar[0].id, material: scan.material, name: scan.name } };
   }
   const parti = ozelStok === "1" ? batchDate ?? "*" : "*";
 
-  // Tek satır değil, MALZEME GENELİ kalan bakılır — ilk satır dolsa da diğerleri açıksa devam.
-  const toplamKalan = materialRemaining(order, scan.material);
-  if (toplamKalan <= 0) {
-    return { outcome: { kind: "exceedsAvail", message: "Bu kalem zaten tamamlandı", enFazla: 0 } };
-  }
+  // Okunan miktar (barkodun getirdiği miktar; yoksa okutma adedi).
+  const okunan = scan.quantity > 0 ? scan.quantity : Math.max(1, Math.floor(adet || 1));
 
-  const ilkAcik = lines.find((l) => l.requestedQty - l.pickedQty > 0) ?? lines[0];
+  // TEK satır eşle (toplamadaki mantık): kalanı okunana yeten ilk satır, yoksa en çok kalanı olan.
+  // Böylece bir okutma yalnız BİR satıra, okunan miktar kadar yazılır — satırlar/siparişler
+  // arası dağıtım YOK.
+  const line =
+    acikSatirlar.find((l) => kalanOf(l) >= okunan) ??
+    acikSatirlar.reduce((best, l) => (kalanOf(l) > kalanOf(best) ? l : best));
+
+  // Miktar okunandan ve o satırın kalanından fazla olamaz.
+  const qty = Math.min(okunan, kalanOf(line));
+
   return {
-    outcome: { kind: "ok", lineId: ilkAcik.id, material: scan.material, name: scan.name },
-    ready: { lineId: ilkAcik.id, material: scan.material, name: scan.name, qty: toplamKalan, lot: parti, specialStock: ozelStok },
+    outcome: { kind: "ok", lineId: line.id, material: scan.material, name: scan.name },
+    ready: { lineId: line.id, material: scan.material, name: scan.name, qty, lot: parti, specialStock: ozelStok },
   };
 }
 

@@ -182,14 +182,11 @@ export default function PutawayItemPage() {
 
   // Hazır ürünün GÜNCEL kalanı — aynı malzemenin TÜM açık satırlarının toplamı
   // (farklı depo/stok yeri/partide çok satır olabilir; girilen miktar sırayla dağıtılır).
-  const readyLine = ready
-    ? order.lines.find((l) => l.id === ready.lineId || l.product.code === ready.material)
-    : undefined;
-  const readyKalan = ready
-    ? order.lines
-        .filter((l) => l.product.code === ready.material)
-        .reduce((s, l) => s + Math.max(0, l.requestedQty - yerlesenOf(l)), 0)
-    : 0;
+  // Yerleştirme TEK satıra yapılır: eşleşen satırın kalanını göster (toplam değil).
+  const readyLine = ready ? order.lines.find((l) => l.id === ready.lineId) : undefined;
+  const readyKalan = readyLine
+    ? Math.max(0, readyLine.requestedQty - yerlesenOf(readyLine))
+    : ready?.qty ?? 0;
   const readyBirim = readyLine?.orderUnit || readyLine?.product.unit || "";
 
   const promptText = !source

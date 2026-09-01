@@ -10,8 +10,6 @@ import {
   validateSource,
   evaluatePlacementScan,
   buildPlacementRecord,
-  distributePlacement,
-  materialRemaining,
   type SourceContext,
   type ReadyPlacement,
   type PlacementRecord,
@@ -124,49 +122,38 @@ export const usePutawayStore = create<PutawayState>()(
         if (!order || !source) return { ok: false, message: "Bağlam eksik (emir/kaynak)" };
         if (!ready) return { ok: false, message: "Önce ürünü (ve gerekiyorsa partisini) okutun." };
 
-        // MALZEME GENELİ kalan — aynı malzemenin TÜM açık satırlarının toplamı.
-        const toplamKalan = materialRemaining(order, ready.material);
-        if (toplamKalan <= 0) return { ok: false, message: "Bu kalem zaten tamamlandı" };
-        const istenen = adet && adet > 0 ? Math.floor(adet) : toplamKalan; // boşsa kalanın tamamı
-        // FAZLA MAL: girilen miktar toplam kalandan büyükse HİÇ kaydetme.
-        if (istenen > toplamKalan) {
-          return { ok: false, message: `Fazla mal — en fazla ${toplamKalan} yerleştirebilirsiniz (kalan ${toplamKalan})` };
+        // Yerleştirme YALNIZ eşleşen TEK satıra yapılır (ready.lineId).
+        // Miktar okunandan (ready.qty) ve o satırın kalanından fazla olamaz — dağıtım yok.
+        const line = order.lines.find((l) => l.id === ready.lineId);
+        const satirKalan = line ? Math.max(0, line.requestedQty - line.pickedQty) : ready.qty;
+        const tavan = Math.min(ready.qty, satirKalan);
+        if (tavan <= 0) return { ok: false, message: "Bu satır zaten tamamlandı" };
+        const istenen = adet && adet > 0 ? Math.floor(adet) : tavan; // boşsa okunan kadar
+        // FAZLA MAL: okunandan / satır kalanından fazlasını HİÇ kaydetme.
+        if (istenen > tavan) {
+          return { ok: false, message: `Fazla mal — en fazla ${tavan} yerleştirebilirsiniz` };
         }
 
         const r = await api.readShelfBarcode(barcode.trim());
         if (!r.ok) return { ok: false, message: r.message || "Hedef raf okunamadı" };
         const target = { barcode: barcode.trim(), warehouse: r.warehouse, stockPlace: r.stockPlace };
 
-        // Girilen miktarı açık satırlara SIRAYLA dağıt; her satır için ayrı SavePlacement.
-        const allocations = distributePlacement(order, ready.material, istenen, ready.lot);
-        const yeniKayitlar: PlacementRecord[] = [];
-        for (const a of allocations) {
-          const record = buildPlacementRecord(
-            { ...ready, lineId: a.lineId, lot: a.lot, specialStock: a.specialStock, qty: a.qty },
-            source,
-            target,
-            a.qty
-          );
-          const s = await api.savePlacement({
-            order,
-            itemNo: a.lineId, // PIITEMNO — o satır
-            material: ready.material, // PSMATERIAL
-            targetWarehouse: target.warehouse,
-            targetShelf: target.stockPlace,
-            specialStock: a.specialStock,
-            lot: a.lot,
-            qty: a.qty,
-            startTime: order.startTime, // PDSTARTTIME
-          });
-          if (!s.ok) {
-            // Kısmi başarı: o ana kadar kaydedilenleri sakla, hatayı dön.
-            if (yeniKayitlar.length) set({ records: [...get().records, ...yeniKayitlar] });
-            return { ok: false, message: s.message || "Yerleştirme kaydedilemedi" };
-          }
-          yeniKayitlar.push(record);
-        }
+        // TEK satır → TEK SavePlacement (o satırın kendi kalem no'su ile).
+        const record = buildPlacementRecord({ ...ready, qty: istenen }, source, target, istenen);
+        const s = await api.savePlacement({
+          order,
+          itemNo: ready.lineId, // PIITEMNO — eşleşen tek satır
+          material: ready.material, // PSMATERIAL
+          targetWarehouse: target.warehouse,
+          targetShelf: target.stockPlace,
+          specialStock: ready.specialStock,
+          lot: ready.lot,
+          qty: istenen,
+          startTime: order.startTime, // PDSTARTTIME
+        });
+        if (!s.ok) return { ok: false, message: s.message || "Yerleştirme kaydedilemedi" };
 
-        set({ records: [...get().records, ...yeniKayitlar], ready: null });
+        set({ records: [...get().records, record], ready: null });
 
         // Tüm satırlar gönderildikten sonra TEK tazeleme (EnterPlacement).
         try {
