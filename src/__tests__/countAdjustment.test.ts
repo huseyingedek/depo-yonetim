@@ -256,4 +256,34 @@ describe("Sayım Servisleri — MZYListingAdjustment & MZYEnterAdjustment", () =
     expect(result?.lines?.[1].material).toBe("6SM01");
     expect(result?.lines?.[1].targetQty).toBe(91);
   });
+
+  it("6. Sayım satırları hiyerarşisinde listede olmayan (targetQty: 0) mavi ürünler kırmızının üzerinde sıralanır", () => {
+    const lines = [
+      { id: "1", material: "TAM", targetQty: 10, countedQty: 10 },       // Yeşil (Tier 5)
+      { id: "2", material: "SIFIR", targetQty: 10, countedQty: 0 },      // Siyah (Tier 4)
+      { id: "3", material: "EKSIK", targetQty: 10, countedQty: 5 },      // Sarı (Tier 3)
+      { id: "4", material: "FAZLA", targetQty: 10, countedQty: 15 },     // Kırmızı (Tier 2)
+      { id: "5", material: "LISTEDE_YOK", targetQty: 0, countedQty: 3 }, // Mavi (Tier 1)
+    ];
+
+    const getTier = (l: { targetQty: number; countedQty: number }) => {
+      const counted = l.countedQty;
+      const target = l.targetQty;
+      if (target <= 0 && counted > 0) return 1; // Mavi
+      if (target > 0 && counted > target) return 2; // Kırmızı
+      if (target > 0 && counted > 0 && counted < target) return 3; // Sarı
+      if (counted === 0) return 4; // Siyah
+      return 5; // Yeşil
+    };
+
+    const sorted = [...lines].sort((a, b) => getTier(a) - getTier(b));
+
+    expect(sorted.map((s) => s.material)).toEqual([
+      "LISTEDE_YOK", // Tier 1: Mavi (Kırmızının üstünde)
+      "FAZLA",       // Tier 2: Kırmızı
+      "EKSIK",       // Tier 3: Sarı
+      "SIFIR",       // Tier 4: Siyah
+      "TAM",         // Tier 5: Yeşil
+    ]);
+  });
 });

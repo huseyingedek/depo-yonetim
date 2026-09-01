@@ -629,11 +629,12 @@ export default function CountDetailPage() {
   // ---------------------------------------------------------------------------
   // ---------------------------------------------------------------------------
   // SAĞ TARAF SIRALAMA MANTIĞI:
-  // 1. En üstte: Şu an aktif tıklanmış / okutulmuş ürün
-  // 2. Kırmızı olanlar (Fazla sayılanlar: counted > target)
-  // 3. Sarı olanlar (Kısmi sayılmış / eksik: counted > 0 && counted < target)
+  // 0. En üstte: Şu an aktif tıklanmış / okutulmuş ürün
+  // 1. Mavi olanlar (Belgede olmayan / yeni eklenenler: target <= 0 && counted > 0)
+  // 2. Kırmızı olanlar (Fazla sayılanlar: target > 0 && counted > target)
+  // 3. Sarı olanlar (Kısmi sayılmış / eksik: target > 0 && counted > 0 && counted < target)
   // 4. Siyah olanlar (Henüz sayılmamış: counted === 0)
-  // 5. Yeşil olanlar (Tamamlanmış olanlar: counted === target)
+  // 5. Yeşil olanlar (Tamamlanmış olanlar: target > 0 && counted === target)
   // ---------------------------------------------------------------------------
   const sortedLines = useMemo(() => {
     return [...lines].sort((a, b) => {
@@ -648,14 +649,15 @@ export default function CountDetailPage() {
       if (aIsActive && !bIsActive) return -1;
       if (!aIsActive && bIsActive) return 1;
 
-      // 2. Katman sıralaması (Kırmızı -> Sarı -> Siyah -> Yeşil)
+      // 2. Katman sıralaması (Mavi -> Kırmızı -> Sarı -> Siyah -> Yeşil)
       const getTier = (l: AdjustmentLine) => {
         const counted = l.countedQty;
         const target = l.targetQty;
-        if (counted > target) return 1; // Kırmızı (Fazla)
-        if (counted > 0 && counted < target) return 2; // Sarı (Kısmi Eksik)
-        if (counted === 0) return 3; // Siyah (Henüz Sayılmamış)
-        return 4; // Yeşil (Tamamlanmış)
+        if (target <= 0 && counted > 0) return 1; // Mavi (Belgede Olmayan / Yeni Eklenen)
+        if (target > 0 && counted > target) return 2; // Kırmızı (Fazla)
+        if (target > 0 && counted > 0 && counted < target) return 3; // Sarı (Kısmi Eksik)
+        if (counted === 0) return 4; // Siyah (Henüz Sayılmamış)
+        return 5; // Yeşil (Tamamlanmış)
       };
 
       const aTier = getTier(a);
@@ -1033,18 +1035,22 @@ export default function CountDetailPage() {
               {sortedLines.map((line) => {
                 const counted = line.countedQty;
                 const target = line.targetQty;
+                const isUnexpected = target <= 0 && counted > 0;
+                const isExcess = target > 0 && counted > target;
                 const isMatched = target > 0 && counted === target;
-                const isExcess = counted > target;
-                const isPartial = counted > 0 && counted < target;
+                const isPartial = target > 0 && counted > 0 && counted < target;
 
                 // -----------------------------------------------------------
                 // KURAL:
-                // 1. Fazla: KIRMIZI (counted > target)
-                // 2. Tam: YEŞİL (counted === target)
-                // 3. Kısmi / Eksik sayılmış: SARI (counted > 0 && counted < target)
-                // 4. Default / Henüz başlanmamış (0/X): SİYAH (counted === 0)
+                // 1. Belgede Olmayan / Yeni Eklenen: MAVİ (target <= 0 && counted > 0)
+                // 2. Fazla: KIRMIZI (target > 0 && counted > target)
+                // 3. Tam: YEŞİL (target > 0 && counted === target)
+                // 4. Kısmi / Eksik sayılmış: SARI (target > 0 && counted > 0 && counted < target)
+                // 5. Default / Henüz başlanmamış (0/X): SİYAH (counted === 0)
                 // -----------------------------------------------------------
-                const qtyColorClass = isExcess
+                const qtyColorClass = isUnexpected
+                  ? "text-blue-600 dark:text-blue-400"
+                  : isExcess
                   ? "text-rose-600 dark:text-rose-400"
                   : isMatched
                   ? "text-emerald-600 dark:text-emerald-400"
@@ -1065,7 +1071,7 @@ export default function CountDetailPage() {
                     onClick={() => selectLineForCounting(line)}
                     className="w-full text-left rounded-2xl border border-line bg-surface p-2.5 sm:p-3 transition-all shadow-xs hover:border-slate-400/60 active:scale-[0.99]"
                   >
-                    {/* Üst Satır: Malzeme Bilgileri & Renkli Metin Miktar Oranı */}
+                    {/* Malzeme Bilgileri & Sağ Miktar Bloğu (Bütün Kart Düzeni) */}
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[15px] font-bold text-fg">
@@ -1090,26 +1096,24 @@ export default function CountDetailPage() {
                         </div>
                       </div>
 
-                      {/* Sağ: Kaçta Kaçı Sayıldı (Miktar & Birim aynı renkte) */}
-                      <div className={`shrink-0 text-right font-mono self-center ${qtyColorClass}`}>
-                        <span className="text-[16px] sm:text-[17px] font-black">
-                          {counted} / {target}
-                        </span>
-                        <span className="ml-1 text-[13px] font-black uppercase">
-                          {skunit}
-                        </span>
+                      {/* Sağ: Miktar / Oran ve Altında Birim Denklemi */}
+                      <div className="shrink-0 text-right font-mono flex flex-col items-end justify-center">
+                        <div className={qtyColorClass}>
+                          <span className="text-[16px] sm:text-[17px] font-black">
+                            {target > 0 ? `${counted} / ${target}` : counted}
+                          </span>
+                          <span className="ml-1 text-[13px] font-black uppercase">
+                            {skunit}
+                          </span>
+                        </div>
+                        {/* Birim Denklemi (1 KO = 24 AD) - Miktarın Hemen Altında */}
+                        {isDiffUnit && (
+                          <span className="text-[12px] font-semibold text-slate-500 mt-0.5">
+                            {equation}
+                          </span>
+                        )}
                       </div>
                     </div>
-
-                    {/* Alt Satır: Birim Eşitliği (1 KO = 24 AD) ve Girilen Miktar */}
-                    {isDiffUnit && (
-                      <div className="mt-1.5 flex items-center justify-between border-t border-line/40 pt-1 font-mono text-[12px] sm:text-[13px]">
-                        <span className="font-semibold text-slate-500">{equation}</span>
-                        <span className="font-bold text-fg">
-                          Girilen: {Math.round((counted / mult) * 100) / 100} {unit}
-                        </span>
-                      </div>
-                    )}
                   </button>
                 );
               })}
