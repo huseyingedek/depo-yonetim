@@ -649,11 +649,7 @@ export default function CountDetailPage() {
                     key={line.id}
                     type="button"
                     onClick={() => selectLineForCounting(line)}
-                    className={`w-full text-left rounded-2xl border bg-surface p-2.5 sm:p-3 transition-all shadow-xs hover:border-slate-400/60 active:scale-[0.99] ${
-                      isFlashing || isSelected
-                        ? "border-brand-500 ring-2 ring-brand-300"
-                        : "border-line"
-                    }`}
+                    className="w-full text-left rounded-2xl border border-line bg-surface p-2.5 sm:p-3 transition-all shadow-xs hover:border-slate-400/60 active:scale-[0.99]"
                   >
                     {/* Üst Satır: Malzeme Bilgileri & Renkli Metin Miktar Oranı */}
                     <div className="flex items-center justify-between gap-2">
