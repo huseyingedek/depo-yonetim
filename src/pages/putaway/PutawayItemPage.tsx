@@ -60,7 +60,7 @@ export default function PutawayItemPage() {
     if (tamamGoster) return; // zaten kilitli
     if (!order || order.lines.length === 0 || records.length === 0) return;
     const yer = (l: (typeof order.lines)[number]) =>
-      Math.max(l.pickedQty, records.filter((r) => r.material === l.product.code).reduce((s, r) => s + r.qty, 0));
+      Math.max(l.pickedQty, records.filter((r) => r.lineId === l.id).reduce((s, r) => s + r.qty, 0));
     if (order.lines.every((l) => yer(l) >= l.requestedQty)) {
       setOzet({
         emir: order.orderType ? `${order.id} · ${order.orderType}` : order.id,
@@ -145,7 +145,7 @@ export default function PutawayItemPage() {
   // Yerleştirilen = CANIAS (pickedQty) ile bu oturum kayıtlarının BÜYÜĞÜ.
   // EnterPlacement tazelemesi boş dönse bile ilerleme/tamamlanma doğru olur.
   const yerlesenOf = (l: (typeof order.lines)[number]) =>
-    Math.max(l.pickedQty, records.filter((r) => r.material === l.product.code).reduce((s, r) => s + r.qty, 0));
+    Math.max(l.pickedQty, records.filter((r) => r.lineId === l.id).reduce((s, r) => s + r.qty, 0));
 
   // TAMAMLANDI (kilitli): snapshot'lanan özeti göster, listeye dön ile yönlendir.
   if (tamamGoster) {
@@ -187,11 +187,13 @@ export default function PutawayItemPage() {
 
   // Hazır ürünün GÜNCEL kalanı — aynı malzemenin TÜM açık satırlarının toplamı
   // (farklı depo/stok yeri/partide çok satır olabilir; girilen miktar sırayla dağıtılır).
-  // Yerleştirme TEK satıra yapılır: eşleşen satırın kalanını göster (toplam değil).
-  const readyLine = ready ? order.lines.find((l) => l.id === ready.lineId) : undefined;
-  const readyKalan = readyLine
-    ? Math.max(0, readyLine.requestedQty - yerlesenOf(readyLine))
-    : ready?.qty ?? 0;
+  // Miktar açık satırlara ÜSTTEN dağıtılır → TOPLAM kalanı göster (girilebilecek en fazla).
+  const readyLine = ready ? order.lines.find((l) => l.product.code === ready.material) : undefined;
+  const readyKalan = ready
+    ? order.lines
+        .filter((l) => l.product.code === ready.material)
+        .reduce((s, l) => s + Math.max(0, l.requestedQty - yerlesenOf(l)), 0)
+    : 0;
   const readyBirim = readyLine?.orderUnit || readyLine?.product.unit || "";
 
   const promptText = !source

@@ -38,6 +38,7 @@ export interface ReadyPlacement {
 
 export interface PlacementRecord {
   id: string;
+  lineId: string; // hangi satıra (ITEMNO) yerleştirildi — satır bazlı ilerleme için
   material: string;
   sourceWarehouse: string;
   sourceShelf: string;
@@ -149,31 +150,28 @@ export function evaluatePlacementScan(input: PlacementScanInput): PlacementDecis
     return { outcome: { kind: "exceedsAvail", message: "Bu kalem zaten tamamlandı", enFazla: 0 } };
   }
 
-  // Okunan miktar (barkodun getirdiği miktar; yoksa okutma adedi).
+  // Okunan miktar (barkodun getirdiği miktar; yoksa okutma adedi). Bu, yerleştirilecek
+  // ÖNERİLEN miktardır; kullanıcı "Kaç tane?" ile değiştirebilir. Miktar, açık satırlara
+  // ÜSTTEN sırayla dağıtılır (scanTarget → distributePlacement): 60 → 24, 24, 12 gibi.
   const okunan = scan.quantity > 0 ? scan.quantity : Math.max(1, Math.floor(adet || 1));
+  const ilkAcik = acikSatirlar[0];
 
-  // TEK satır eşle (toplamadaki mantık): kalanı okunana yeten ilk satır, yoksa en çok kalanı olan.
-  // Böylece bir okutma yalnız BİR satıra, okunan miktar kadar yazılır — satırlar/siparişler
-  // arası dağıtım YOK.
-  const line =
-    acikSatirlar.find((l) => kalanOf(l) >= okunan) ??
-    acikSatirlar.reduce((best, l) => (kalanOf(l) > kalanOf(best) ? l : best));
-
-  // Parti takipli mi? Emir satırı parti-takipliyse (SPECIALSTOCK=1) ya da barkod "1" dönerse.
-  const ozelStok = line.lotTracked || scan.specialStock === "1" ? "1" : "*";
+  // Parti takipli mi? (satırlardan biri parti-takipliyse ya da barkod "1" dönerse)
+  const ozelStok = lines.some((l) => l.lotTracked) || scan.specialStock === "1" ? "1" : "*";
   // Parti takipliyse parti adımı HER ZAMAN gelir — parti emirde (BATCHNUM) zaten olsa bile
   // ATLANMAZ (Hüseyin). Kullanıcı partiyi okutunca/onaylayınca (batchDate) devam edilir.
   if (ozelStok === "1" && !batchDate) {
-    return { outcome: { kind: "needsBatch", lineId: line.id, material: scan.material, name: scan.name } };
+    return { outcome: { kind: "needsBatch", lineId: ilkAcik.id, material: scan.material, name: scan.name } };
   }
-  const parti = ozelStok === "1" ? batchDate || line.lot || "*" : "*";
+  const parti = ozelStok === "1" ? batchDate || ilkAcik.lot || "*" : "*";
 
-  // Miktar okunandan ve o satırın kalanından fazla olamaz.
-  const qty = Math.min(okunan, kalanOf(line));
+  // Miktar toplam kalanı aşamaz (dağıtım/fazla kontrolü scanTarget'ta da yapılır).
+  const toplamKalan = acikSatirlar.reduce((s, l) => s + kalanOf(l), 0);
+  const qty = Math.min(okunan, toplamKalan);
 
   return {
-    outcome: { kind: "ok", lineId: line.id, material: scan.material, name: scan.name },
-    ready: { lineId: line.id, material: scan.material, name: scan.name, qty, lot: parti, specialStock: ozelStok },
+    outcome: { kind: "ok", lineId: ilkAcik.id, material: scan.material, name: scan.name },
+    ready: { lineId: ilkAcik.id, material: scan.material, name: scan.name, qty, lot: parti, specialStock: ozelStok },
   };
 }
 
@@ -187,6 +185,7 @@ export function buildPlacementRecord(
 ): PlacementRecord {
   return {
     id: makeId(0),
+    lineId: ready.lineId,
     material: ready.material,
     sourceWarehouse: source.warehouse,
     sourceShelf: source.stockPlace,
