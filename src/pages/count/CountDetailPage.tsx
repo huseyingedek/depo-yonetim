@@ -140,14 +140,23 @@ export default function CountDetailPage() {
       const sadelestir = (s: string) => s.trim().toLowerCase().replace(/^0+/, "");
       const hedef = sadelestir(rawCode);
 
-      // 1. Önce mevcut listede barkod veya malzeme kodu ile eşleşen var mı bak:
-      const matchedLine = lines.find(
+      // 1. Önce mevcut listede barkod veya malzeme kodu ile eşleşenleri bul:
+      const matches = lines.filter(
         (l) =>
           (l.barcode && sadelestir(l.barcode) === hedef) ||
           sadelestir(l.material) === hedef
       );
 
-      if (matchedLine) {
+      if (matches.length > 0) {
+        // Eğer aynı üründen birden fazla lokasyonda/rafta varsa:
+        // Öncelik: Şu an aktif seçili satır bu eşleşmelerden biriyse onu kullan,
+        // Değilse henüz tamamlanmamış (countedQty < targetQty) olan ilk satırı seç,
+        // O da yoksa ilk satırı seç.
+        const matchedLine =
+          matches.find((m) => activeItem && m.id === activeItem.lineId) ||
+          matches.find((m) => m.targetQty > 0 && m.countedQty < m.targetQty) ||
+          matches[0];
+
         sesBasarili();
         flash(matchedLine.id);
         const unit = (matchedLine.unit || "AD").toUpperCase();
@@ -172,7 +181,7 @@ export default function CountDetailPage() {
 
         show({
           kind: "ok",
-          text: `${matchedLine.material} seçildi. Miktar girip onaylayın.`,
+          text: `${matchedLine.material}${matchedLine.stockPlace ? ` (${matchedLine.stockPlace})` : ""} seçildi. Miktar girip onaylayın.`,
         });
         return;
       }
@@ -231,7 +240,7 @@ export default function CountDetailPage() {
         setBusy(false);
       }
     },
-    [lines, order, show]
+    [lines, order, show, activeItem]
   );
 
   // Miktar Girişini Onaylama / Listeye Ekleme
@@ -240,7 +249,9 @@ export default function CountDetailPage() {
     const finalQty = Math.max(0, activeItem.quantity);
 
     setLines((prev) => {
-      const idx = prev.findIndex((l) => l.id === activeItem.lineId || l.material === activeItem.material);
+      // Satırı KESİNLİKLE benzersiz lineId üzerinden buluyoruz.
+      // Aynı malzemeden farklı raflarda (Y2R1, Y2R2 vb.) olduğunda birbirine karışmaz.
+      const idx = prev.findIndex((l) => l.id === activeItem.lineId);
       if (idx >= 0) {
         const updated = [...prev];
         updated[idx] = {
@@ -277,7 +288,7 @@ export default function CountDetailPage() {
     flash(activeItem.lineId);
     show({
       kind: "ok",
-      text: `${activeItem.material} için ${finalQty} ${activeItem.unit} sayımı kaydedildi.`,
+      text: `${activeItem.material}${activeItem.stockPlace ? ` (${activeItem.stockPlace})` : ""} için ${finalQty} ${activeItem.unit} sayımı kaydedildi.`,
     });
     setActiveItem(null);
   };
