@@ -390,10 +390,11 @@ function toAdjustmentLine(row: Row, index: number): AdjustmentLine {
   const material = pick(row, ["MATERIAL", "MATCODE", "ITEMCODE", "PSMATERIAL", "STOCKCODE", "PRODUCT", "MATNUM"]);
   const name = pick(row, ["MTEXT", "STEXT", "TEXT", "MATNAME", "DESCRIPTION", "NAME", "PRODUCTNAME", "ITEMNAME", "TITLE"]);
   const barcode = pick(row, ["BARCODE", "EAN", "BARCODENUM", "CODE", "ALTBARCODE", "PACKBARCODE"]);
-  const targetQty = num(row, ["AVAILSTOCKN", "AVAILSTOCKV", "CUAVAILSTOCKN", "AVAILSTOCK", "TARGETQTY", "SYSTEMQTY", "TOTALITEMS", "TOTALQTY", "QUANTITY", "REMAININGQTY", "QTY", "STOCKQTY", "ACTUALSTOCK", "STOCK", "SKQUANTITY", "AMOUNT"], 0);
+  // Kalan/Hedef miktar her zaman ana stok birimi (SKUNIT / AVAILSTOCKN / AVAILSTOCK) cinsinden alınır
+  const targetQty = num(row, ["AVAILSTOCKN", "AVAILSTOCKV", "AVAILSTOCK", "SKQUANTITY", "ACTUALSTOCK", "STOCKQTY", "STOCK", "TARGETQTY", "SYSTEMQTY", "TOTALITEMS", "TOTALQTY", "QUANTITY", "CUAVAILSTOCKN", "AMOUNT"], 0);
   const countedQty = num(row, ["COUNTEDQTY", "READQUANTITY", "READQTY", "ACTUALQTY", "TOTALCOUNTED", "COUNTED", "REVISESTOCKN", "REVISESTOCKV", "CUREVISESTOCKN"], 0);
-  const unit = pick(row, ["SKUNIT", "CUNIT", "BUNIT", "UNIT", "QUNIT", "PURUNIT", "IUNIT", "STOCKUNIT"]) || "AD";
-  const skunit = pick(row, ["SKUNIT", "CUNIT", "IUNIT", "STOCKUNIT", "BUNIT", "UNIT"]) || unit || "AD";
+  const skunit = pick(row, ["SKUNIT", "STOCKUNIT", "IUNIT", "BUNIT", "UNIT", "CUNIT"]) || "AD";
+  const unit = pick(row, ["SKUNIT", "CUNIT", "BUNIT", "UNIT", "QUNIT", "PURUNIT", "IUNIT", "STOCKUNIT"]) || skunit;
   const multiplier = num(row, ["MULTIPLIER", "FACTOR", "PACKAGEMULTIPLIER", "CFACTOR"], 1);
   const batchNum = pick(row, ["BATCHNUM", "LOT", "LOTNUM", "PARTI", "BATCH"]);
   const specialStock = pick(row, ["SPECIALSTOCK", "ISLOT", "ISBATCH"]);
@@ -407,7 +408,7 @@ function toAdjustmentLine(row: Row, index: number): AdjustmentLine {
     material: material || "MLZ",
     name: name || material || "Malzeme",
     barcode: barcode || undefined,
-    targetQty: targetQty > 0 ? targetQty : 1,
+    targetQty: targetQty > 0 ? targetQty : 0,
     countedQty: countedQty >= 0 ? countedQty : 0,
     unit: unit.toUpperCase(),
     skunit: skunit.toUpperCase(),

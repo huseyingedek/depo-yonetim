@@ -656,7 +656,7 @@ export default function CountDetailPage() {
                         <span>
                           {counted} / {target}
                         </span>
-                        <span className="text-[14px] font-bold uppercase">{unit}</span>
+                        <span className="text-[14px] font-bold uppercase">{skunit}</span>
                       </div>
                     </div>
 
