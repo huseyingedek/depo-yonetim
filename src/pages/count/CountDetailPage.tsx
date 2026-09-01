@@ -321,8 +321,9 @@ export default function CountDetailPage() {
   // SAĞ TARAF SIRALAMA MANTIĞI:
   // 1. En üstte: Şu an aktif tıklanmış / okutulmuş ürün
   // 2. Kırmızı olanlar (Fazla sayılanlar: counted > target)
-  // 3. Sarı olanlar (Eksik / açık kalanlar: counted < target)
-  // 4. Yeşil olanlar (Tamamlanmış olanlar: counted === target)
+  // 3. Sarı olanlar (Kısmi sayılmış / eksik: counted > 0 && counted < target)
+  // 4. Siyah olanlar (Henüz sayılmamış: counted === 0)
+  // 5. Yeşil olanlar (Tamamlanmış olanlar: counted === target)
   // ---------------------------------------------------------------------------
   const sortedLines = useMemo(() => {
     return [...lines].sort((a, b) => {
@@ -332,13 +333,14 @@ export default function CountDetailPage() {
       if (aIsActive && !bIsActive) return -1;
       if (!aIsActive && bIsActive) return 1;
 
-      // 2. Kırmızı (1) -> Sarı (2) -> Yeşil (3) katman sıralaması
+      // 2. Katman sıralaması
       const getTier = (l: AdjustmentLine) => {
         const counted = l.countedQty;
         const target = l.targetQty;
         if (counted > target) return 1; // Kırmızı (Fazla)
-        if (target === 0 || counted < target) return 2; // Sarı (Eksik)
-        return 3; // Yeşil (Tamamlanmış)
+        if (counted > 0 && counted < target) return 2; // Sarı (Kısmi Eksik)
+        if (counted === 0) return 3; // Siyah (Henüz Sayılmamış)
+        return 4; // Yeşil (Tamamlanmış)
       };
 
       const aTier = getTier(a);
@@ -617,16 +619,22 @@ export default function CountDetailPage() {
                 const target = line.targetQty;
                 const isMatched = target > 0 && counted === target;
                 const isExcess = counted > target;
+                const isPartial = counted > 0 && counted < target;
 
                 // -----------------------------------------------------------
-                // KURAL: Fazla olan KIRMIZI, Eksik olan SARI, Tam olan YEŞİL
-                // (Miktar ve birim yazısı AYNI renkte gösterilir)
+                // KURAL:
+                // 1. Fazla: KIRMIZI (counted > target)
+                // 2. Tam: YEŞİL (counted === target)
+                // 3. Kısmi / Eksik sayılmış: SARI (counted > 0 && counted < target)
+                // 4. Default / Henüz başlanmamış (0/X): SİYAH (counted === 0)
                 // -----------------------------------------------------------
                 const qtyColorClass = isExcess
                   ? "text-rose-600 dark:text-rose-400"
                   : isMatched
                   ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-amber-500 dark:text-amber-400";
+                  : isPartial
+                  ? "text-amber-500 dark:text-amber-400"
+                  : "text-fg";
 
                 const isFlashing = flashLineId === line.id;
                 const isSelected = activeItem ? activeItem.lineId === line.id : false;
