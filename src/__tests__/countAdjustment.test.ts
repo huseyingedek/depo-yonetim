@@ -141,4 +141,67 @@ describe("Sayım Servisleri — MZYListingAdjustment & MZYEnterAdjustment", () =
     expect(capturedBodies[0].PITRACESTATUS).toBe(1);
     expect(capturedBodies[1].PITRACESTATUS).toBe(1);
   });
+
+  it("4. CANIAS hem TBLADJUSTMENT başlık tablosu hem de TBLADJITEM altında birden çok ürün döndüğünde tüm ürünleri lines içine yükler", async () => {
+    global.fetch = vi.fn().mockImplementation(async () => {
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            TBLADJUSTMENT: {
+              ROW: [
+                {
+                  INVDOCNUM: "SYM-2026-999",
+                  DOCTYPE: "SYM",
+                  WAREHOUSE: "01",
+                  STOCKPLACE: "A-01-01",
+                },
+              ],
+            },
+            TBLADJITEM: {
+              ROW: [
+                {
+                  ITEMNUM: "1",
+                  MATERIAL: "MLZ001",
+                  MTEXT: "A4 Kağıt",
+                  BARCODE: "869001",
+                  QUANTITY: 10,
+                  QUNIT: "KO",
+                  SKUNIT: "PK",
+                  MULTIPLIER: 5,
+                },
+                {
+                  ITEMNUM: "2",
+                  MATERIAL: "MLZ002",
+                  MTEXT: "Tükenmez Kalem",
+                  BARCODE: "869002",
+                  QUANTITY: 50,
+                  QUNIT: "AD",
+                  SKUNIT: "AD",
+                  MULTIPLIER: 1,
+                },
+                {
+                  ITEMNUM: "3",
+                  MATERIAL: "MLZ003",
+                  MTEXT: "Zımba Teli",
+                  BARCODE: "869003",
+                  QUANTITY: 24,
+                  QUNIT: "PK",
+                  SKUNIT: "AD",
+                  MULTIPLIER: 10,
+                },
+              ],
+            },
+          },
+        }),
+      } as Response;
+    });
+
+    const result = await api.getAdjustmentOrder("SYM-2026-999");
+    expect(result).toBeDefined();
+    expect(result?.lines).toHaveLength(3);
+    expect(result?.lines?.[0].material).toBe("MLZ001");
+    expect(result?.lines?.[1].material).toBe("MLZ002");
+    expect(result?.lines?.[2].material).toBe("MLZ003");
+  });
 });
