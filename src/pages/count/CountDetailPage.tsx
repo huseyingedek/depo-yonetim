@@ -1021,14 +1021,14 @@ export default function CountDetailPage() {
                       Sayılacak Miktar ({activeItem.unit}) <span className="text-red-500">*</span>
                     </label>
                     <div className="flex flex-col items-end font-mono text-[11.5px] font-bold leading-tight shrink-0">
-                      {(activeItem.multiplier > 1 || activeItem.unit !== activeItem.skunit) && (
-                        <span className="text-slate-600 dark:text-slate-300">
-                          1 {activeItem.unit} = {activeItem.multiplier} {activeItem.skunit}
-                        </span>
-                      )}
                       {activeItem.multiplier > 1 && activeItem.quantity > 0 && (
                         <span className="text-emerald-600 dark:text-emerald-400">
                           ({activeItem.quantity * activeItem.multiplier} {activeItem.skunit})
+                        </span>
+                      )}
+                      {(activeItem.multiplier > 1 || activeItem.unit !== activeItem.skunit) && (
+                        <span className="text-slate-600 dark:text-slate-300">
+                          1 {activeItem.unit} = {activeItem.multiplier} {activeItem.skunit}
                         </span>
                       )}
                     </div>
