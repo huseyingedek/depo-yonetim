@@ -286,4 +286,71 @@ describe("Sayım Servisleri — MZYListingAdjustment & MZYEnterAdjustment", () =
       "TAM",         // Tier 5: Yeşil
     ]);
   });
+
+  it("7. Parti doğrulamasında geçmiş tarih ve 2100'den büyük yıl girilemez, geçerli tarihler kabul edilir", () => {
+    function validateBatchTest(batch: string): { valid: boolean; error?: string } {
+      const clean = batch.trim();
+      if (!clean) return { valid: false, error: "Parti bilgisi boş olamaz!" };
+
+      let year: number | null = null;
+      let month: number | null = null;
+      let day: number | null = null;
+
+      const mIso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(clean);
+      const mNum = /^(\d{4})(\d{2})(\d{2})$/.exec(clean);
+      const mDot = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(clean);
+
+      if (mIso) {
+        year = parseInt(mIso[1], 10);
+        month = parseInt(mIso[2], 10);
+        day = parseInt(mIso[3], 10);
+      } else if (mNum) {
+        year = parseInt(mNum[1], 10);
+        month = parseInt(mNum[2], 10);
+        day = parseInt(mNum[3], 10);
+      } else if (mDot) {
+        day = parseInt(mDot[1], 10);
+        month = parseInt(mDot[2], 10);
+        year = parseInt(mDot[3], 10);
+      }
+
+      if (year !== null && month !== null && day !== null) {
+        if (year > 2100) {
+          return { valid: false, error: "Parti yılı 2100'den büyük olamaz!" };
+        }
+        if (month < 1 || month > 12 || day < 1 || day > 31) {
+          return { valid: false, error: "Geçersiz tarih formatı!" };
+        }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const targetDate = new Date(year, month - 1, day);
+        targetDate.setHours(0, 0, 0, 0);
+
+        if (targetDate < today) {
+          return { valid: false, error: "Geçmiş tarihli parti girilemez!" };
+        }
+      }
+
+      return { valid: true };
+    }
+
+    // Geçmiş tarih testleri
+    expect(validateBatchTest("2020-01-01").valid).toBe(false);
+    expect(validateBatchTest("20200101").valid).toBe(false);
+    expect(validateBatchTest("01.01.2020").valid).toBe(false);
+
+    // 2100'den büyük yıl testleri
+    expect(validateBatchTest("2101-01-01").valid).toBe(false);
+    expect(validateBatchTest("21050505").valid).toBe(false);
+
+    // Gelecek / Bugün geçerli tarihler
+    const nextYear = new Date().getFullYear() + 1;
+    expect(validateBatchTest(`${nextYear}-06-15`).valid).toBe(true);
+    expect(validateBatchTest(`${nextYear}0615`).valid).toBe(true);
+    expect(validateBatchTest(`15.06.${nextYear}`).valid).toBe(true);
+
+    // Düz alfanümerik parti kodları
+    expect(validateBatchTest("PARTI-2026-X").valid).toBe(true);
+  });
 });

@@ -22,6 +22,54 @@ function isoDateToBatch(iso: string): string {
   return m ? `${m[1]}${m[2]}${m[3]}` : "";
 }
 
+function validateBatch(batch: string): { valid: boolean; error?: string } {
+  const clean = batch.trim();
+  if (!clean) return { valid: false, error: "Parti bilgisi boş olamaz!" };
+
+  // Tarih tabanlı parti kontrolü: YYYY-MM-DD, YYYYMMDD veya DD.MM.YYYY
+  let year: number | null = null;
+  let month: number | null = null;
+  let day: number | null = null;
+
+  const mIso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(clean);
+  const mNum = /^(\d{4})(\d{2})(\d{2})$/.exec(clean);
+  const mDot = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(clean);
+
+  if (mIso) {
+    year = parseInt(mIso[1], 10);
+    month = parseInt(mIso[2], 10);
+    day = parseInt(mIso[3], 10);
+  } else if (mNum) {
+    year = parseInt(mNum[1], 10);
+    month = parseInt(mNum[2], 10);
+    day = parseInt(mNum[3], 10);
+  } else if (mDot) {
+    day = parseInt(mDot[1], 10);
+    month = parseInt(mDot[2], 10);
+    year = parseInt(mDot[3], 10);
+  }
+
+  if (year !== null && month !== null && day !== null) {
+    if (year > 2100) {
+      return { valid: false, error: "Parti yılı 2100'den büyük olamaz!" };
+    }
+    if (month < 1 || month > 12 || day < 1 || day > 31) {
+      return { valid: false, error: "Geçersiz tarih formatı!" };
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const targetDate = new Date(year, month - 1, day);
+    targetDate.setHours(0, 0, 0, 0);
+
+    if (targetDate < today) {
+      return { valid: false, error: "Geçmiş tarihli parti girilemez!" };
+    }
+  }
+
+  return { valid: true };
+}
+
 type ActiveCountItem = {
   lineId: string;
   material: string;
@@ -201,6 +249,17 @@ export default function CountDetailPage() {
     (batchVal: string, candidateLines?: AdjustmentLine[], pendingContext?: LotPendingItem | null) => {
       const rawBatch = batchVal.trim();
       if (!rawBatch) return;
+
+      // Geçmiş tarih ve yıl > 2100 doğrulaması
+      const validation = validateBatch(rawBatch);
+      if (!validation.valid) {
+        sesHata();
+        show({
+          kind: "error",
+          text: validation.error || "Geçersiz parti bilgisi!",
+        });
+        return;
+      }
 
       const currentPending = pendingContext !== undefined ? pendingContext : lotPendingItem;
       const searchLines = candidateLines || lines;
@@ -995,6 +1054,8 @@ export default function CountDetailPage() {
                   <span className="shrink-0 text-[11.5px] font-bold text-subtle">Tarih seç</span>
                   <input
                     type="date"
+                    min={new Date().toISOString().slice(0, 10)}
+                    max="2100-12-31"
                     onChange={(e) => {
                       const val = isoDateToBatch(e.target.value);
                       if (val) handleSelectBatch(val);
