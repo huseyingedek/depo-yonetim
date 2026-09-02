@@ -1020,7 +1020,7 @@ export default function CountDetailPage() {
                     <label className="text-xs font-bold text-fg block shrink-0">
                       Sayılacak Miktar ({activeItem.unit}) <span className="text-red-500">*</span>
                     </label>
-                    <div className="flex items-center gap-1.5 font-mono text-[12px] font-bold">
+                    <div className="flex flex-col items-end font-mono text-[11.5px] font-bold leading-tight shrink-0">
                       {(activeItem.multiplier > 1 || activeItem.unit !== activeItem.skunit) && (
                         <span className="text-slate-600 dark:text-slate-300">
                           1 {activeItem.unit} = {activeItem.multiplier} {activeItem.skunit}
