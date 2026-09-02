@@ -905,20 +905,17 @@ export default function CountDetailPage() {
               </div>
             )}
 
-            {/* ADIM 1: RAF OKUTMA (00$* veya 01$A-01-01 FORMATI - COMBO BOX YOK) */}
+            {/* ADIM 1: RAF OKUTMA */}
             {tab === "shelf" && (
               <div className="space-y-2 animate-fade-in">
                 <div className="space-y-1">
                   <span className="block text-[13px] font-bold text-fg">Raf Barkodu Okut</span>
                   <BarcodeScanner
                     onDetected={handleSelectShelf}
-                    placeholder="00$* veya 01$A-01-01 okutun"
+                    placeholder="Raf barkodunu girin"
                     hideCardWrapper
                     compact
                   />
-                  <p className="text-[11px] font-semibold text-subtle px-1">
-                    Format: <span className="font-mono text-fg">Depo$Raf</span> (Örn: <span className="font-mono font-bold text-fg">01$A-01-01</span> veya tümü için <span className="font-mono font-bold text-fg">00$*</span>)
-                  </p>
                 </div>
               </div>
             )}
