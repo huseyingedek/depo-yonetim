@@ -286,7 +286,7 @@ function toProduct(row: Row): ProductRef {
     name: pick(row, ["MTEXT"]) || pick(row, ["MATERIAL"]),
 
     barcode: pick(row, ["BARCODE", "BARCODENUM", "EAN"]),
-    // 2. barkod (koli barkodu) — Bora'nın göndereceği alan; esnek adla okunur.
+    // 2. barkod (koli barkodu) — 
     barcode2: pick(row, ["BARCODE2", "BARCODENUM2", "EAN2", "ALTBARCODE", "PACKBARCODE"]) || undefined,
     unit: pick(row, ["IUNIT", "UNIT"], "Adet"),
   };
@@ -647,8 +647,16 @@ export const api = {
     });
     const gorulen = new Set<string>();
     const list = rowsOf(r, ["TBLSTOCK"])
-      // Sadece OKUTULAN malzemeyle sınırlıyoruz.
-      .filter((row) => !material || pick(row, ["MATERIAL"]).trim() === material.trim())
+      // Sadece OKUTULAN malzemeyle sınırlıyoruz (başındaki sıfır ve büyük/küçük harf toleranslı).
+      .filter((row) => {
+        if (!material) return true;
+        const rowMat = pick(row, ["MATERIAL"]).trim().toUpperCase();
+        const targetMat = material.trim().toUpperCase();
+        return (
+          rowMat === targetMat ||
+          rowMat.replace(/^0+/, "") === targetMat.replace(/^0+/, "")
+        );
+      })
       .map((row) => ({
         batchNum: pick(row, ["BATCHNUM"]),
         availStock: num(row, ["AVAILSTOCK"], 0),
@@ -666,13 +674,7 @@ export const api = {
     return list;
   },
 
-  // Ürün Sorgulama — Raf ve Ürün BAĞIMSIZ (Bora, 05.08: "ikisi için de getstock").
-  // Okutulan alan dolu gider, diğeri boş; diğer parametreler öndeğer.
-  //   • Ürün okutulur → PSBARCODE dolu, raf boş  → o ürünün tüm stoğu
-  //   • Raf okutulur   → PSWAREHOUSE/PSSTOCKPLACE dolu, ürün boş → raftaki stok
-  //   • İkisi birden   → ikisi de dolu → o rafta o ürün
-  // TBLSTOCK alanları canlı yanıtla teyit edildi (05.08): MATERIAL, MTEXT,
-  // WAREHOUSE, STOCKPLACE, SPECIALSTOCK, BATCHNUM, AVAILSTOCK, QUNIT.
+
   async queryStock(opts: {
     barcode?: string;
     material?: string;
@@ -692,7 +694,6 @@ export const api = {
       PSSPECIALSTOCK: "",
       PSVOPTIONS: "",
       PSBARCODE: opts.barcode ?? "",
-      // Bora, 05.08: filtreleme artık serviste (WMS destek tablosu).
       PICONTAINER: opts.container ? 1 : 0,
       PIISPICKWH: opts.onlyPickWarehouse ? 1 : 0,
     });
@@ -949,7 +950,7 @@ export const api = {
     }));
   },
 
-  // Raporlama (Bora, 27.08): MZYGetTransaction. PSPLANT ve PSUSER boş olabilir.
+
   // Tarihler "GG.AA.YYYY" (gün iki haneli!). Alan adları teyit bekliyor → savunmacı.
   async getTransaction(opts: {
     plant?: string;
@@ -1234,8 +1235,6 @@ export const api = {
     return undefined;
   },
 
-  // barcode verilirse (Bora, 14.08: listingPlacement'a PSBARCODE eklendi) sadece o
-  // ürünü içeren yerleştirme emirleri döner — depocu önündeki ürünü okutup emri bulur.
   async getPutawayOrders(barcode = ""): Promise<PickOrder[]> {
     const c = ctx();
     const r = await call(SERVICES.listingPlacement, {

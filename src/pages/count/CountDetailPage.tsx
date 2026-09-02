@@ -871,17 +871,8 @@ export default function CountDetailPage() {
   const isAllComplete = lines.length > 0 && totalCountedLines === lines.length;
 
   const documentWarehouseDisplay = useMemo(() => {
-    const set = new Set<string>();
-    if (order?.warehouse) set.add(order.warehouse.trim());
-    for (const l of lines) {
-      if (l.warehouse) set.add(l.warehouse.trim());
-    }
-    const arr = Array.from(set).filter(Boolean);
-    if (arr.length > 0) {
-      return arr.join(" / ");
-    }
-    return warehouseParam || order?.warehouse || "";
-  }, [lines, order, warehouseParam]);
+    return order?.warehouse?.trim() || warehouseParam?.trim() || (lines.length > 0 && lines[0].warehouse ? lines[0].warehouse.trim() : "");
+  }, [order?.warehouse, warehouseParam, lines]);
 
   return (
     <div className="mx-auto max-w-6xl p-3 md:p-4 lg:p-8 short:h-[100dvh] short:max-w-none short:flex short:flex-col short:overflow-hidden short:p-2">
@@ -1136,18 +1127,11 @@ export default function CountDetailPage() {
                     <label className="text-xs font-bold text-fg block shrink-0">
                       Sayılacak Miktar ({activeItem.unit}) <span className="text-red-500">*</span>
                     </label>
-                    <div className="flex flex-col items-end font-mono text-[11.5px] font-bold leading-tight shrink-0">
-                      {activeItem.multiplier > 1 && activeItem.quantity > 0 && (
-                        <span className="text-emerald-600 dark:text-emerald-400">
-                          ({activeItem.quantity * activeItem.multiplier} {activeItem.skunit})
-                        </span>
-                      )}
-                      {(activeItem.multiplier > 1 || activeItem.unit !== activeItem.skunit) && (
-                        <span className="text-slate-600 dark:text-slate-300">
-                          1 {activeItem.unit} = {activeItem.multiplier} {activeItem.skunit}
-                        </span>
-                      )}
-                    </div>
+                    {(activeItem.multiplier > 1 || activeItem.unit !== activeItem.skunit) && (
+                      <span className="font-mono text-[11.5px] font-bold text-slate-600 dark:text-slate-300 shrink-0">
+                        1 {activeItem.unit} = {activeItem.multiplier} {activeItem.skunit}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -1278,7 +1262,17 @@ export default function CountDetailPage() {
                 const unit = (line.unit || "AD").toUpperCase();
                 const skunit = (line.skunit || unit).toUpperCase();
                 const isDiffUnit = mult > 1 || unit !== skunit;
-                const equation = `1 ${unit} = ${mult} ${skunit}`;
+                const countedInUnit = mult > 1 ? Math.round((counted / mult) * 100) / 100 : counted;
+                const targetInUnit = mult > 1 ? Math.round((target / mult) * 100) / 100 : target;
+                const wh = line.warehouse || order?.warehouse || "";
+                const sp = line.stockPlace || "";
+                let locationStr = "";
+                if (wh && sp) {
+                  locationStr = sp.toUpperCase().startsWith(wh.toUpperCase()) ? sp : `${wh}${sp}`;
+                } else {
+                  locationStr = sp || wh;
+                }
+                locationStr = locationStr.replace(/\$/g, "");
 
                 return (
                   <button
@@ -1292,26 +1286,40 @@ export default function CountDetailPage() {
                         <p className="truncate text-[15px] font-bold text-fg">{line.name}</p>
                         <div className="mt-0.5 flex items-center gap-2.5 font-mono text-[13px] flex-wrap text-slate-600 dark:text-slate-300">
                           <span className="font-bold text-slate-700 dark:text-slate-200">{line.material}</span>
-                          {line.stockPlace && (
-                            <span className="inline-flex items-center gap-0.5 font-semibold">
-                              <MapPin className="h-3 w-3 shrink-0 text-slate-500" />
-                              {line.stockPlace}
+                          {locationStr && (
+                            <span className="inline-flex items-center gap-0.5 font-semibold text-slate-600 dark:text-slate-400">
+                              <Warehouse className="h-3 w-3 shrink-0 text-slate-500" />
+                              {locationStr}
                             </span>
                           )}
-                          {line.batchNum && <span className="font-semibold">Parti: {line.batchNum}</span>}
+                          {line.batchNum && (
+                            <span className="inline-flex shrink-0 items-center rounded bg-violet-100 dark:bg-violet-950/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-violet-700 dark:text-violet-300">
+                              Parti: {line.batchNum}
+                            </span>
+                          )}
+                          {isDiffUnit && (
+                            <span className="font-semibold text-slate-500 dark:text-slate-400">
+                              1 {unit} = {mult} {skunit}
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <div className="shrink-0 text-right font-mono flex flex-col items-end justify-center">
-                        <div className={qtyColorClass}>
-                          <span className="text-[16px] sm:text-[17px] font-black">
+                      <div className="shrink-0 text-right font-mono flex flex-col items-end justify-center pr-[17px] leading-tight">
+                        {/* Üst satır: Stok birimi cinsinden çevrilmiş miktar (örn: 24 / 24 KT) */}
+                        <div className={`${qtyColorClass} leading-tight`}>
+                          <span className="text-[15px] sm:text-[16px] font-black">
                             {target > 0 ? `${counted} / ${target}` : counted}
                           </span>
-                          <span className="ml-1 text-[13px] font-black uppercase">{skunit}</span>
+                          <span className="ml-1 text-[14px] font-black uppercase">{skunit}</span>
                         </div>
+                        {/* Alt satır: Okutulan barkod birimi cinsinden miktar (örn: 1 / 1 KO) */}
                         {isDiffUnit && (
-                          <span className="text-[12px] font-semibold text-slate-500 mt-0.5">
-                            {equation}
-                          </span>
+                          <div className="text-fg leading-tight -mt-0.5">
+                            <span className="text-[15px] sm:text-[16px] font-black">
+                              {target > 0 ? `${countedInUnit} / ${targetInUnit}` : countedInUnit}
+                            </span>
+                            <span className="ml-1 text-[14px] font-black uppercase">{unit}</span>
+                          </div>
                         )}
                       </div>
                     </div>
