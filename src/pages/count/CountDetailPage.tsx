@@ -858,6 +858,9 @@ export default function CountDetailPage() {
                 const handleClick = () => {
                   if (s === "shelf") {
                     setTab("shelf");
+                    setSelectedShelf(null);
+                    setSelectedWarehouse(null);
+                    setSelectedStockPlace(null);
                     setActiveItem(null);
                     setLotPendingItem(null);
                   } else if (s === "barcode") {
@@ -896,7 +899,7 @@ export default function CountDetailPage() {
             </div>
 
             {/* SEÇİLİ RAF BİLGİSİ */}
-            {selectedShelf && (
+            {selectedShelf && tab !== "shelf" && (
               <div className="flex items-center justify-between gap-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 text-[13px]">
                 <span className="inline-flex min-w-0 items-center gap-1 font-bold text-emerald-800 dark:text-emerald-200">
                   <MapPin className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
@@ -908,6 +911,9 @@ export default function CountDetailPage() {
                   type="button"
                   onClick={() => {
                     setTab("shelf");
+                    setSelectedShelf(null);
+                    setSelectedWarehouse(null);
+                    setSelectedStockPlace(null);
                     setActiveItem(null);
                     setLotPendingItem(null);
                   }}
