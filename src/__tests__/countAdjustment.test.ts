@@ -315,10 +315,7 @@ describe("Sayım Servisleri — MZYListingAdjustment & MZYEnterAdjustment", () =
       }
 
       if (year !== null && month !== null && day !== null) {
-        if (year > 2100) {
-          return { valid: false, error: "Parti yılı 2100'den büyük olamaz!" };
-        }
-        if (month < 1 || month > 12 || day < 1 || day > 31) {
+        if (month < 1 || month > 12 || day < 1 || day > 31 || year > 2100) {
           return { valid: false, error: "Geçersiz tarih formatı!" };
         }
 

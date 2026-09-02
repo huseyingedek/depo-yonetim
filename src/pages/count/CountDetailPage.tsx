@@ -50,10 +50,12 @@ function validateBatch(batch: string): { valid: boolean; error?: string } {
   }
 
   if (year !== null && month !== null && day !== null) {
-    if (year > 2100) {
-      return { valid: false, error: "Parti yılı 2100'den büyük olamaz!" };
+    // Yıl henüz 4 basamaklı tamamlanmadıysa (örn. kullanıcı yazarken 0002, 0020 vb.) uyarı verme
+    if (year < 1000) {
+      return { valid: true };
     }
-    if (month < 1 || month > 12 || day < 1 || day > 31) {
+
+    if (month < 1 || month > 12 || day < 1 || day > 31 || year > 2100) {
       return { valid: false, error: "Geçersiz tarih formatı!" };
     }
 
@@ -125,6 +127,7 @@ export default function CountDetailPage() {
 
   const [activeItem, setActiveItem] = useState<ActiveCountItem | null>(null);
   const [lotPendingItem, setLotPendingItem] = useState<LotPendingItem | null>(null);
+  const prefetchedBatchesRef = useRef<Map<string, { batchNum: string; availStock: number; unit?: string }[]>>(new Map());
 
   const { toast, show } = useToast();
   const istendi = useRef(false);
@@ -146,6 +149,23 @@ export default function CountDetailPage() {
         setOrder(data);
         if (data.lines && data.lines.length > 0) {
           setLines(data.lines);
+          // Belgedeki partili malzemeleri arka planda önceden sorgula (prefetch getStock)
+          const uniqueMats = Array.from(new Set(data.lines.map((l) => l.material.trim()))).filter(Boolean);
+          for (const mat of uniqueMats) {
+            const matLines = data.lines.filter((l) => sadelestir(l.material) === sadelestir(mat));
+            const isLot = matLines.some((l) => (l.batchNum && l.batchNum !== "*") || l.specialStock === "1") || matLines.length > 1;
+            if (isLot) {
+              const wh = matLines[0].warehouse || data.warehouse || warehouseParam || "01";
+              api.getStock(mat, wh, "").then((stockBatches) => {
+                if (stockBatches && stockBatches.length > 0) {
+                  prefetchedBatchesRef.current.set(
+                    mat.toUpperCase(),
+                    stockBatches.filter((b) => b.batchNum && b.batchNum !== "*")
+                  );
+                }
+              }).catch(() => {});
+            }
+          }
         } else {
           setLines([
             {
@@ -470,7 +490,9 @@ export default function CountDetailPage() {
         const linesWithBatch = allMatLines.filter((l) => l.batchNum && l.batchNum !== "*");
         const isLotTracked =
           linesWithBatch.length > 0 ||
+          allMatLines.length > 1 ||
           allMatLines.some((l) => l.specialStock === "1") ||
+          effectiveMatches.some((l) => l.specialStock === "1") ||
           barcodeSpecialStock === "1";
 
         if (isLotTracked && !barcodeLot) {
@@ -507,23 +529,7 @@ export default function CountDetailPage() {
 
           const allBatches = Array.from(batchMap.values());
 
-          if (allBatches.length === 1) {
-            const pendingContext: LotPendingItem = {
-              material: mat,
-              name: matName,
-              barcode: rawCode,
-              unit: finalUnit,
-              skunit: finalSkunit,
-              multiplier: finalMult,
-              specialStock: "1",
-              warehouse: selectedWarehouse || effectiveMatches[0].warehouse || order?.warehouse,
-              stockPlace: selectedStockPlace || effectiveMatches[0].stockPlace || selectedShelf || order?.stockPlace,
-              batches: allBatches,
-            };
-            handleSelectBatch(allBatches[0].batchNum, effectiveMatches, pendingContext);
-            return;
-          }
-
+          // Partili ürünlerde otomatik seçim YAPILMAZ; kullanıcı her zaman partiyi kendisi seçmelidir.
           sesBasarili();
           setLotPendingItem({
             material: mat,
@@ -586,38 +592,21 @@ export default function CountDetailPage() {
 
       if (barcodeMat) {
         sesBasarili();
-        const lotTracked = barcodeSpecialStock === "1" || (barcodeLot && barcodeLot !== "*");
+        let batches: { batchNum: string; availStock: number; unit?: string }[] = [];
+        try {
+          // CANIAS'tan depo genelindeki partileri getir
+          batches = await api.getStock(
+            barcodeMat,
+            selectedWarehouse || order?.warehouse || "01",
+            ""
+          );
+        } catch {}
+
+        const validBatches = batches.filter((b) => b.batchNum && b.batchNum !== "*");
+        const lotTracked = barcodeSpecialStock === "1" || (barcodeLot && barcodeLot !== "*") || validBatches.length > 0;
 
         if (lotTracked && !barcodeLot) {
-          let batches: { batchNum: string; availStock: number; unit?: string }[] = [];
-          try {
-            // Depo genelindeki partileri getir
-            batches = await api.getStock(
-              barcodeMat,
-              selectedWarehouse || order?.warehouse || "01",
-              ""
-            );
-          } catch {}
-
-          const validBatches = batches.filter((b) => b.batchNum && b.batchNum !== "*");
-
-          if (validBatches.length === 1) {
-            const pendingContext: LotPendingItem = {
-              material: barcodeMat,
-              name: barcodeName,
-              barcode: rawCode,
-              unit: barcodeUnit,
-              skunit: barcodeSkunit,
-              multiplier: barcodeMult,
-              specialStock: barcodeSpecialStock,
-              warehouse: selectedWarehouse || order?.warehouse,
-              stockPlace: selectedStockPlace || selectedShelf || order?.stockPlace,
-              batches: validBatches,
-            };
-            handleSelectBatch(validBatches[0].batchNum, lines, pendingContext);
-            return;
-          }
-
+          // Partili ürünlerde otomatik seçim YAPILMAZ; kullanıcı her zaman partiyi kendisi seçmelidir.
           setLotPendingItem({
             material: barcodeMat,
             name: barcodeName,
@@ -625,7 +614,7 @@ export default function CountDetailPage() {
             unit: barcodeUnit,
             skunit: barcodeSkunit,
             multiplier: barcodeMult,
-            specialStock: barcodeSpecialStock,
+            specialStock: barcodeSpecialStock || (validBatches.length > 0 ? "1" : "0"),
             warehouse: selectedWarehouse || order?.warehouse,
             stockPlace: selectedStockPlace || selectedShelf || order?.stockPlace,
             batches: validBatches,
@@ -729,14 +718,14 @@ export default function CountDetailPage() {
     const unit = (line.unit || "AD").toUpperCase();
     const skunit = (line.skunit || unit).toUpperCase();
     const mult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
+    const allMatLines = lines.filter((l) => sadelestir(l.material) === sadelestir(line.material));
+    const linesWithBatch = allMatLines.filter((l) => l.batchNum && l.batchNum !== "*");
     const isLot = Boolean(
-      (line.batchNum && line.batchNum !== "*") ||
+      linesWithBatch.length > 0 ||
+      allMatLines.length > 1 ||
       line.specialStock === "1" ||
-      lines.some((l) => sadelestir(l.material) === sadelestir(line.material) && l.batchNum && l.batchNum !== "*")
+      allMatLines.some((l) => l.specialStock === "1")
     );
-    const existingCountedInUnit = line.countedQty > 0
-      ? Math.round((line.countedQty / mult) * 100) / 100
-      : 1;
 
     if (line.stockPlace) {
       const wh = line.warehouse || selectedWarehouse || order?.warehouse || "01";
@@ -745,6 +734,63 @@ export default function CountDetailPage() {
       setSelectedStockPlace(sp);
       setSelectedShelf(`${wh}$${sp}`);
     }
+
+    if (isLot) {
+      const batchMap = new Map<string, { batchNum: string; availStock: number; unit?: string }>();
+      for (const l of allMatLines) {
+        if (l.batchNum && l.batchNum !== "*") {
+          const key = l.batchNum.toUpperCase();
+          if (!batchMap.has(key)) {
+            batchMap.set(key, { batchNum: l.batchNum, availStock: l.targetQty, unit: l.unit });
+          }
+        }
+      }
+
+      setLotPendingItem({
+        material: line.material,
+        name: line.name,
+        barcode: line.barcode || "",
+        unit,
+        skunit,
+        multiplier: mult,
+        specialStock: line.specialStock || "1",
+        warehouse: line.warehouse || selectedWarehouse || order?.warehouse,
+        stockPlace: line.stockPlace || selectedStockPlace || selectedShelf || order?.stockPlace,
+        batches: Array.from(batchMap.values()),
+      });
+      setActiveItem(null);
+      setTab("lot");
+
+      // CANIAS'tan depo genelindeki partileri sorgula ve listeyi zenginleştir
+      api.getStock(
+        line.material,
+        line.warehouse || selectedWarehouse || order?.warehouse || "01",
+        ""
+      ).then((stockBatches) => {
+        if (stockBatches && stockBatches.length > 0) {
+          for (const cb of stockBatches) {
+            if (cb.batchNum && cb.batchNum !== "*") {
+              const key = cb.batchNum.toUpperCase();
+              if (!batchMap.has(key)) {
+                batchMap.set(key, { ...cb });
+              }
+            }
+          }
+          setLotPendingItem((prev) => {
+            if (!prev || sadelestir(prev.material) !== sadelestir(line.material)) return prev;
+            return {
+              ...prev,
+              batches: Array.from(batchMap.values()),
+            };
+          });
+        }
+      }).catch(() => {});
+      return;
+    }
+
+    const existingCountedInUnit = line.countedQty > 0
+      ? Math.round((line.countedQty / mult) * 100) / 100
+      : 1;
 
     setLotPendingItem(null);
     setActiveItem({
@@ -758,8 +804,8 @@ export default function CountDetailPage() {
       skunit,
       multiplier: mult,
       batchNum: line.batchNum,
-      specialStock: line.specialStock || (isLot ? "1" : "0"),
-      isLotTracked: isLot,
+      specialStock: line.specialStock || "0",
+      isLotTracked: false,
       warehouse: line.warehouse || selectedWarehouse || order?.warehouse,
       stockPlace: line.stockPlace || selectedStockPlace || order?.stockPlace,
     });
@@ -1057,7 +1103,14 @@ export default function CountDetailPage() {
                     min={new Date().toISOString().slice(0, 10)}
                     max="2100-12-31"
                     onChange={(e) => {
-                      const val = isoDateToBatch(e.target.value);
+                      const raw = e.target.value;
+                      if (!raw) return;
+                      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw.trim());
+                      if (!m) return;
+                      const y = parseInt(m[1], 10);
+                      // Yıl henüz 4 basamaklı tamamlanmadıysa (örn. 0002, 0020, 0202) tetikleme
+                      if (y < 1000) return;
+                      const val = isoDateToBatch(raw);
                       if (val) handleSelectBatch(val);
                     }}
                     className="h-7.5 flex-1 rounded-lg border border-line bg-surface px-2 font-mono text-xs text-fg outline-none focus:border-brand-500 cursor-pointer"
