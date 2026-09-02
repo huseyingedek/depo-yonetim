@@ -153,7 +153,7 @@ export default function CountDetailPage() {
           const uniqueMats = Array.from(new Set(data.lines.map((l) => l.material.trim()))).filter(Boolean);
           for (const mat of uniqueMats) {
             const matLines = data.lines.filter((l) => sadelestir(l.material) === sadelestir(mat));
-            const isLot = matLines.some((l) => (l.batchNum && l.batchNum !== "*") || l.specialStock === "1") || matLines.length > 1;
+            const isLot = matLines.some((l) => l.specialStock === "1" || (l.batchNum && l.batchNum !== "*"));
             if (isLot) {
               const wh = matLines[0].warehouse || data.warehouse || warehouseParam || "01";
               api.getStock(mat, wh, "").then((stockBatches) => {
@@ -489,11 +489,10 @@ export default function CountDetailPage() {
         const allMatLines = lines.filter((l) => sadelestir(l.material) === sadelestir(mat));
         const linesWithBatch = allMatLines.filter((l) => l.batchNum && l.batchNum !== "*");
         const isLotTracked =
-          linesWithBatch.length > 0 ||
-          allMatLines.length > 1 ||
+          barcodeSpecialStock === "1" ||
           allMatLines.some((l) => l.specialStock === "1") ||
           effectiveMatches.some((l) => l.specialStock === "1") ||
-          barcodeSpecialStock === "1";
+          linesWithBatch.length > 0;
 
         if (isLotTracked && !barcodeLot) {
           // CANIAS'tan depo genelindeki partileri sorgula (raf kısıtlaması olmadan)
@@ -592,21 +591,22 @@ export default function CountDetailPage() {
 
       if (barcodeMat) {
         sesBasarili();
-        let batches: { batchNum: string; availStock: number; unit?: string }[] = [];
-        try {
-          // CANIAS'tan depo genelindeki partileri getir
-          batches = await api.getStock(
-            barcodeMat,
-            selectedWarehouse || order?.warehouse || "01",
-            ""
-          );
-        } catch {}
-
-        const validBatches = batches.filter((b) => b.batchNum && b.batchNum !== "*");
-        const lotTracked = barcodeSpecialStock === "1" || (barcodeLot && barcodeLot !== "*") || validBatches.length > 0;
+        const lotTracked = barcodeSpecialStock === "1" || (barcodeLot && barcodeLot !== "*");
 
         if (lotTracked && !barcodeLot) {
-          // Partili ürünlerde otomatik seçim YAPILMAZ; kullanıcı her zaman partiyi kendisi seçmelidir.
+          let batches: { batchNum: string; availStock: number; unit?: string }[] = [];
+          try {
+            // CANIAS'tan sadece partili (specialStock === "1") ürünler için depo genelindeki partileri getir
+            batches = await api.getStock(
+              barcodeMat,
+              selectedWarehouse || order?.warehouse || "01",
+              ""
+            );
+          } catch {}
+
+          const validBatches = batches.filter((b) => b.batchNum && b.batchNum !== "*");
+
+          // Partili ürünlerde kullanıcı her zaman partiyi kendisi seçmelidir.
           setLotPendingItem({
             material: barcodeMat,
             name: barcodeName,
@@ -614,7 +614,7 @@ export default function CountDetailPage() {
             unit: barcodeUnit,
             skunit: barcodeSkunit,
             multiplier: barcodeMult,
-            specialStock: barcodeSpecialStock || (validBatches.length > 0 ? "1" : "0"),
+            specialStock: "1",
             warehouse: selectedWarehouse || order?.warehouse,
             stockPlace: selectedStockPlace || selectedShelf || order?.stockPlace,
             batches: validBatches,
@@ -721,10 +721,9 @@ export default function CountDetailPage() {
     const allMatLines = lines.filter((l) => sadelestir(l.material) === sadelestir(line.material));
     const linesWithBatch = allMatLines.filter((l) => l.batchNum && l.batchNum !== "*");
     const isLot = Boolean(
-      linesWithBatch.length > 0 ||
-      allMatLines.length > 1 ||
       line.specialStock === "1" ||
-      allMatLines.some((l) => l.specialStock === "1")
+      allMatLines.some((l) => l.specialStock === "1") ||
+      linesWithBatch.length > 0
     );
 
     if (line.stockPlace) {
