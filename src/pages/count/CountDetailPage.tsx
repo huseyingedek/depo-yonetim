@@ -9,6 +9,7 @@ import {
   Trash2,
   Plus,
   Minus,
+  Info,
 } from "lucide-react";
 import BarcodeScanner from "../../components/BarcodeScanner";
 import ToastView, { useToast } from "../../components/Toast";
@@ -68,7 +69,12 @@ export default function CountDetailPage() {
   const [busy, setBusy] = useState(false);
   const [, setFlashLineId] = useState<string | null>(null);
   const [tab, setTab] = useState<CountTab>("shelf");
+  
+  // Raf / Depo state (Format: 00$* veya 01$A-01-01)
   const [selectedShelf, setSelectedShelf] = useState<string | null>(null);
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string | null>(null);
+  const [selectedStockPlace, setSelectedStockPlace] = useState<string | null>(null);
+
   const [activeItem, setActiveItem] = useState<ActiveCountItem | null>(null);
   const [lotPendingItem, setLotPendingItem] = useState<LotPendingItem | null>(null);
 
@@ -156,30 +162,39 @@ export default function CountDetailPage() {
 
   const sadelestir = (s: string) => s.trim().toLowerCase().replace(/^0+/, "");
 
-  const shelves = useMemo(() => {
-    const set = new Set<string>();
-    if (order?.stockPlace) set.add(order.stockPlace.trim().toUpperCase());
-    for (const l of lines) {
-      if (l.stockPlace) set.add(l.stockPlace.trim().toUpperCase());
-    }
-    return Array.from(set).sort();
-  }, [lines, order]);
-
+  // Raf okutma/girme (00$* veya 01$A-01-01 formatı)
   const handleSelectShelf = useCallback(
-    (shelfCode: string) => {
-      const clean = shelfCode.trim().toUpperCase();
+    (shelfInput: string) => {
+      const clean = shelfInput.trim();
       if (!clean) return;
-      setSelectedShelf(clean);
+
+      let wh = order?.warehouse || "01";
+      let sp = clean;
+      let fullCode = clean;
+
+      if (clean.includes("$")) {
+        const parts = clean.split("$");
+        wh = parts[0].trim() || wh;
+        sp = parts.slice(1).join("$").trim() || "*";
+        fullCode = `${wh}$${sp}`;
+      } else {
+        fullCode = `${wh}$${clean}`;
+        sp = clean;
+      }
+
+      setSelectedWarehouse(wh);
+      setSelectedStockPlace(sp);
+      setSelectedShelf(fullCode);
       setActiveItem(null);
       setLotPendingItem(null);
       setTab("barcode");
       sesBasarili();
       show({
         kind: "ok",
-        text: `${clean} rafı seçildi. Malzeme barkodunu okutun.`,
+        text: `Raf (${fullCode}) seçildi. Malzeme barkodunu okutun.`,
       });
     },
-    [show]
+    [order, show]
   );
 
   const handleSelectBatch = useCallback(
@@ -228,8 +243,8 @@ export default function CountDetailPage() {
           batchNum: matchedLine.batchNum,
           specialStock: matchedLine.specialStock || "1",
           isLotTracked: true,
-          warehouse: matchedLine.warehouse || order?.warehouse,
-          stockPlace: matchedLine.stockPlace || selectedShelf || order?.stockPlace,
+          warehouse: matchedLine.warehouse || selectedWarehouse || order?.warehouse,
+          stockPlace: selectedStockPlace || matchedLine.stockPlace || selectedShelf || order?.stockPlace,
         });
       } else {
         const newLineId = `new-lot-${Date.now()}`;
@@ -246,8 +261,8 @@ export default function CountDetailPage() {
           batchNum: rawBatch,
           specialStock: "1",
           isLotTracked: true,
-          warehouse: order?.warehouse,
-          stockPlace: selectedShelf || order?.stockPlace,
+          warehouse: selectedWarehouse || order?.warehouse,
+          stockPlace: selectedStockPlace || selectedShelf || order?.stockPlace,
         });
       }
 
@@ -258,11 +273,12 @@ export default function CountDetailPage() {
         text: `Parti (${rawBatch}) seçildi. Miktar girip onaylayın.`,
       });
     },
-    [lines, order, show, activeItem, lotPendingItem, selectedShelf]
+    [lines, order, show, activeItem, lotPendingItem, selectedShelf, selectedWarehouse, selectedStockPlace]
   );
 
   const handleBackToLot = useCallback(
     (item: ActiveCountItem) => {
+      // Belgedeki tüm partileri tara
       const matLines = lines.filter((l) => sadelestir(l.material) === sadelestir(item.material));
       const batchMap = new Map<string, { batchNum: string; availStock: number; unit?: string }>();
       for (const l of matLines) {
@@ -282,22 +298,26 @@ export default function CountDetailPage() {
         skunit: item.skunit,
         multiplier: item.multiplier,
         specialStock: item.specialStock || "1",
-        warehouse: item.warehouse || order?.warehouse,
-        stockPlace: item.stockPlace || selectedShelf || order?.stockPlace,
+        warehouse: item.warehouse || selectedWarehouse || order?.warehouse,
+        stockPlace: item.stockPlace || selectedStockPlace || selectedShelf || order?.stockPlace,
         batches: Array.from(batchMap.values()),
       });
       setActiveItem(null);
       setTab("lot");
 
+      // Depo genelindeki tüm partileri CANIAS'tan sorgula (stockPlace filtresi göndermeden)
       api.getStock(
         item.material,
-        item.warehouse || order?.warehouse || "01",
-        item.stockPlace || selectedShelf || order?.stockPlace || ""
+        item.warehouse || selectedWarehouse || order?.warehouse || "01",
+        "" // Depo genelindeki tüm partileri getir
       ).then((stockBatches) => {
         if (stockBatches && stockBatches.length > 0) {
           for (const cb of stockBatches) {
             if (cb.batchNum && cb.batchNum !== "*") {
-              batchMap.set(cb.batchNum.toUpperCase(), { ...cb });
+              const key = cb.batchNum.toUpperCase();
+              if (!batchMap.has(key)) {
+                batchMap.set(key, { ...cb });
+              }
             }
           }
           setLotPendingItem((prev) => {
@@ -310,7 +330,7 @@ export default function CountDetailPage() {
         }
       }).catch(() => {});
     },
-    [lines, order, selectedShelf]
+    [lines, order, selectedShelf, selectedWarehouse, selectedStockPlace]
   );
 
   const handleDetected = useCallback(
@@ -319,19 +339,21 @@ export default function CountDetailPage() {
       if (!rawCode) return;
       const hedef = sadelestir(rawCode);
 
+      // 1. Raf Tabındayken okutma yapıldıysa doğrudan raf olarak kaydet
       if (tab === "shelf") {
         handleSelectShelf(rawCode);
         return;
       }
 
+      // 2. Parti Tabındayken okutma yapıldıysa doğrudan parti olarak kaydet
       if (lotPendingItem || tab === "lot") {
         handleSelectBatch(rawCode, lines, lotPendingItem);
         return;
       }
 
-      const matchingShelf = shelves.find((sh) => sh.toUpperCase() === rawCode.toUpperCase());
-      if (matchingShelf) {
-        handleSelectShelf(matchingShelf);
+      // 3. Barkod tabındayken kullanıcı doğrudan depo$raf barkodu okuttuysa rafa geçir
+      if (rawCode.includes("$")) {
+        handleSelectShelf(rawCode);
         return;
       }
 
@@ -347,8 +369,8 @@ export default function CountDetailPage() {
       try {
         const res = await api.readBarcode(
           rawCode,
-          order?.warehouse || "01",
-          selectedShelf || order?.stockPlace || ""
+          selectedWarehouse || order?.warehouse || "01",
+          selectedStockPlace || order?.stockPlace || ""
         );
 
         if (res.ok && res.material) {
@@ -364,6 +386,7 @@ export default function CountDetailPage() {
         setBusy(false);
       }
 
+      // Belgedeki eşleşen kalemleri bul
       const matches = lines.filter(
         (l) =>
           (l.barcode && sadelestir(l.barcode) === hedef) ||
@@ -371,8 +394,8 @@ export default function CountDetailPage() {
           (barcodeMat && sadelestir(l.material) === sadelestir(barcodeMat))
       );
 
-      const shelfMatched = selectedShelf
-        ? matches.filter((l) => l.stockPlace && l.stockPlace.trim().toUpperCase() === selectedShelf.toUpperCase())
+      const shelfMatched = selectedStockPlace && selectedStockPlace !== "*"
+        ? matches.filter((l) => l.stockPlace && l.stockPlace.trim().toUpperCase() === selectedStockPlace.toUpperCase())
         : matches;
       const effectiveMatches = shelfMatched.length > 0 ? shelfMatched : matches;
 
@@ -383,19 +406,22 @@ export default function CountDetailPage() {
         const finalSkunit = barcodeSkunit || effectiveMatches[0].skunit || finalUnit;
         const finalMult = barcodeMult > 1 ? barcodeMult : (effectiveMatches[0].multiplier || 1);
 
-        const linesWithBatch = effectiveMatches.filter((l) => l.batchNum && l.batchNum !== "*");
+        // Belgedeki tüm partili satırları bul
+        const allMatLines = lines.filter((l) => sadelestir(l.material) === sadelestir(mat));
+        const linesWithBatch = allMatLines.filter((l) => l.batchNum && l.batchNum !== "*");
         const isLotTracked =
           linesWithBatch.length > 0 ||
-          effectiveMatches.some((l) => l.specialStock === "1") ||
+          allMatLines.some((l) => l.specialStock === "1") ||
           barcodeSpecialStock === "1";
 
         if (isLotTracked && !barcodeLot) {
+          // CANIAS'tan depo genelindeki partileri sorgula (raf kısıtlaması olmadan)
           let caniasBatches: { batchNum: string; availStock: number; unit?: string }[] = [];
           try {
             const stockBatches = await api.getStock(
               mat,
-              order?.warehouse || effectiveMatches[0].warehouse || "01",
-              selectedShelf || effectiveMatches[0].stockPlace || order?.stockPlace || ""
+              selectedWarehouse || order?.warehouse || effectiveMatches[0].warehouse || "01",
+              "" // Depo genelindeki partileri getir
             );
             caniasBatches = stockBatches.filter((b) => b.batchNum && b.batchNum !== "*");
           } catch {}
@@ -431,8 +457,8 @@ export default function CountDetailPage() {
               skunit: finalSkunit,
               multiplier: finalMult,
               specialStock: "1",
-              warehouse: effectiveMatches[0].warehouse || order?.warehouse,
-              stockPlace: effectiveMatches[0].stockPlace || selectedShelf || order?.stockPlace,
+              warehouse: selectedWarehouse || effectiveMatches[0].warehouse || order?.warehouse,
+              stockPlace: selectedStockPlace || effectiveMatches[0].stockPlace || selectedShelf || order?.stockPlace,
               batches: allBatches,
             };
             handleSelectBatch(allBatches[0].batchNum, effectiveMatches, pendingContext);
@@ -448,8 +474,8 @@ export default function CountDetailPage() {
             skunit: finalSkunit,
             multiplier: finalMult,
             specialStock: "1",
-            warehouse: effectiveMatches[0].warehouse || order?.warehouse,
-            stockPlace: effectiveMatches[0].stockPlace || selectedShelf || order?.stockPlace,
+            warehouse: selectedWarehouse || effectiveMatches[0].warehouse || order?.warehouse,
+            stockPlace: selectedStockPlace || effectiveMatches[0].stockPlace || selectedShelf || order?.stockPlace,
             batches: allBatches,
           });
           setActiveItem(null);
@@ -487,8 +513,8 @@ export default function CountDetailPage() {
           batchNum: barcodeLot || matchedLine.batchNum,
           specialStock: matchedLine.specialStock,
           isLotTracked: Boolean(isLotTracked),
-          warehouse: matchedLine.warehouse || order?.warehouse,
-          stockPlace: matchedLine.stockPlace || selectedShelf || order?.stockPlace,
+          warehouse: selectedWarehouse || matchedLine.warehouse || order?.warehouse,
+          stockPlace: selectedStockPlace || matchedLine.stockPlace || selectedShelf || order?.stockPlace,
         });
         setTab("qty");
 
@@ -506,8 +532,32 @@ export default function CountDetailPage() {
         if (lotTracked && !barcodeLot) {
           let batches: { batchNum: string; availStock: number; unit?: string }[] = [];
           try {
-            batches = await api.getStock(barcodeMat, order?.warehouse || "01", selectedShelf || order?.stockPlace || "");
+            // Depo genelindeki partileri getir
+            batches = await api.getStock(
+              barcodeMat,
+              selectedWarehouse || order?.warehouse || "01",
+              ""
+            );
           } catch {}
+
+          const validBatches = batches.filter((b) => b.batchNum && b.batchNum !== "*");
+
+          if (validBatches.length === 1) {
+            const pendingContext: LotPendingItem = {
+              material: barcodeMat,
+              name: barcodeName,
+              barcode: rawCode,
+              unit: barcodeUnit,
+              skunit: barcodeSkunit,
+              multiplier: barcodeMult,
+              specialStock: barcodeSpecialStock,
+              warehouse: selectedWarehouse || order?.warehouse,
+              stockPlace: selectedStockPlace || selectedShelf || order?.stockPlace,
+              batches: validBatches,
+            };
+            handleSelectBatch(validBatches[0].batchNum, lines, pendingContext);
+            return;
+          }
 
           setLotPendingItem({
             material: barcodeMat,
@@ -517,9 +567,9 @@ export default function CountDetailPage() {
             skunit: barcodeSkunit,
             multiplier: barcodeMult,
             specialStock: barcodeSpecialStock,
-            warehouse: order?.warehouse,
-            stockPlace: selectedShelf || order?.stockPlace,
-            batches: batches.filter((b) => b.batchNum && b.batchNum !== "*"),
+            warehouse: selectedWarehouse || order?.warehouse,
+            stockPlace: selectedStockPlace || selectedShelf || order?.stockPlace,
+            batches: validBatches,
           });
           setActiveItem(null);
           setTab("lot");
@@ -545,8 +595,8 @@ export default function CountDetailPage() {
           batchNum: barcodeLot,
           specialStock: barcodeSpecialStock,
           isLotTracked: Boolean(lotTracked),
-          warehouse: order?.warehouse,
-          stockPlace: selectedShelf || order?.stockPlace,
+          warehouse: selectedWarehouse || order?.warehouse,
+          stockPlace: selectedStockPlace || selectedShelf || order?.stockPlace,
         });
         setTab("qty");
 
@@ -562,7 +612,7 @@ export default function CountDetailPage() {
         });
       }
     },
-    [lines, order, show, activeItem, lotPendingItem, tab, selectedShelf, shelves, handleSelectBatch, handleSelectShelf]
+    [lines, order, show, activeItem, lotPendingItem, tab, selectedShelf, selectedWarehouse, selectedStockPlace, handleSelectBatch, handleSelectShelf]
   );
 
   const handleCommitActiveItem = () => {
@@ -581,7 +631,8 @@ export default function CountDetailPage() {
           skunit: activeItem.skunit,
           multiplier: mult,
           batchNum: activeItem.batchNum || updated[idx].batchNum,
-          stockPlace: activeItem.stockPlace || updated[idx].stockPlace || selectedShelf || undefined,
+          stockPlace: selectedStockPlace || activeItem.stockPlace || updated[idx].stockPlace || undefined,
+          warehouse: selectedWarehouse || activeItem.warehouse || updated[idx].warehouse || undefined,
         };
         return updated;
       } else {
@@ -597,8 +648,8 @@ export default function CountDetailPage() {
           multiplier: mult,
           batchNum: activeItem.batchNum,
           specialStock: activeItem.specialStock,
-          warehouse: activeItem.warehouse,
-          stockPlace: activeItem.stockPlace || selectedShelf || undefined,
+          warehouse: selectedWarehouse || activeItem.warehouse || order?.warehouse,
+          stockPlace: selectedStockPlace || activeItem.stockPlace || undefined,
         };
         return [newLine, ...prev];
       }
@@ -629,7 +680,11 @@ export default function CountDetailPage() {
       : 1;
 
     if (line.stockPlace) {
-      setSelectedShelf(line.stockPlace.trim().toUpperCase());
+      const wh = line.warehouse || selectedWarehouse || order?.warehouse || "01";
+      const sp = line.stockPlace.trim().toUpperCase();
+      setSelectedWarehouse(wh);
+      setSelectedStockPlace(sp);
+      setSelectedShelf(`${wh}$${sp}`);
     }
 
     setLotPendingItem(null);
@@ -646,8 +701,8 @@ export default function CountDetailPage() {
       batchNum: line.batchNum,
       specialStock: line.specialStock || (isLot ? "1" : "0"),
       isLotTracked: isLot,
-      warehouse: line.warehouse || order?.warehouse,
-      stockPlace: line.stockPlace || selectedShelf || order?.stockPlace,
+      warehouse: line.warehouse || selectedWarehouse || order?.warehouse,
+      stockPlace: line.stockPlace || selectedStockPlace || order?.stockPlace,
     });
     setTab("qty");
   };
@@ -656,14 +711,27 @@ export default function CountDetailPage() {
     if (tab === "shelf" || !selectedShelf) {
       return lines;
     }
-    const cleanShelf = selectedShelf.trim().toUpperCase();
+    
+    // 00$* seçildiyse ve depo tanımlıysa depoya göre filtrele
+    if (selectedStockPlace === "*") {
+      if (!selectedWarehouse) return lines;
+      return lines.filter((l) => {
+        if (!l.warehouse || l.warehouse.trim().toUpperCase() === selectedWarehouse.trim().toUpperCase()) return true;
+        if (activeItem && l.id === activeItem.lineId) return true;
+        if (lotPendingItem && sadelestir(l.material) === sadelestir(lotPendingItem.material)) return true;
+        return false;
+      });
+    }
+
+    const cleanShelf = (selectedStockPlace || selectedShelf).trim().toUpperCase();
     return lines.filter((l) => {
       if (l.stockPlace && l.stockPlace.trim().toUpperCase() === cleanShelf) return true;
+      if (l.stockPlace && `${l.warehouse || ""}$${l.stockPlace}`.toUpperCase() === selectedShelf.toUpperCase()) return true;
       if (activeItem && l.id === activeItem.lineId) return true;
       if (lotPendingItem && sadelestir(l.material) === sadelestir(lotPendingItem.material)) return true;
       return false;
     });
-  }, [lines, tab, selectedShelf, activeItem, lotPendingItem]);
+  }, [lines, tab, selectedShelf, selectedWarehouse, selectedStockPlace, activeItem, lotPendingItem]);
 
   const sortedLines = useMemo(() => {
     return [...displayedLines].sort((a, b) => {
@@ -700,6 +768,7 @@ export default function CountDetailPage() {
 
   return (
     <div className="mx-auto max-w-6xl p-3 md:p-4 lg:p-8 short:h-[100dvh] short:max-w-none short:flex short:flex-col short:overflow-hidden short:p-2">
+      {/* ÜST BAŞLIK */}
       <div className="mb-2 flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-2.5">
           <button
@@ -727,7 +796,7 @@ export default function CountDetailPage() {
           {(order?.warehouse || selectedShelf || order?.stockPlace) && (
             <div className="hidden sm:flex items-center gap-1.5 rounded-xl border border-line bg-surface px-2.5 py-1 text-[14px] font-bold text-slate-800 shadow-card">
               <Warehouse className="h-4 w-4 text-brand-600 shrink-0" />
-              <span>{[order?.warehouse, selectedShelf || order?.stockPlace].filter(Boolean).join(" / ")}</span>
+              <span>{selectedShelf || [order?.warehouse, order?.stockPlace].filter(Boolean).join(" / ")}</span>
             </div>
           )}
           <span
@@ -749,9 +818,14 @@ export default function CountDetailPage() {
         </div>
       )}
 
+      {/* ANA İÇERİK: SOL PANEL & SAĞ LİSTE */}
       <div className="grid min-w-0 gap-2.5 md:gap-3.5 md:grid-cols-[330px_minmax(0,1fr)] lg:grid-cols-[350px_minmax(0,1fr)] xl:grid-cols-[370px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-2.5">
+        {/* =================================================================== */}
+        {/* SOL KOLON: Sayım İşlem Kartı                                        */}
+        {/* =================================================================== */}
         <div className="min-w-0 md:sticky md:top-2 md:self-start lg:sticky lg:top-2 xl:sticky xl:top-2 short:!static short:w-[330px] short:shrink-0 short:self-stretch short:overflow-y-auto">
           <div className="card p-2 sm:p-2.5 space-y-1.5">
+            {/* 4 TAB BAŞLIĞI: [Raf, Barkod, Parti, Miktar] */}
             <div className="grid grid-cols-4 gap-1 w-full">
               {(
                 [
@@ -808,13 +882,13 @@ export default function CountDetailPage() {
               })}
             </div>
 
+            {/* SEÇİLİ RAF BİLGİSİ */}
             {selectedShelf && (
               <div className="flex items-center justify-between gap-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 text-[13px]">
                 <span className="inline-flex min-w-0 items-center gap-1 font-bold text-emerald-800 dark:text-emerald-200">
                   <MapPin className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
                   <span className="truncate">
                     Aktif Raf: <span className="font-mono">{selectedShelf}</span>
-                    {order?.warehouse ? ` · Depo: ${order.warehouse}` : ""}
                   </span>
                 </span>
                 <button
@@ -831,49 +905,286 @@ export default function CountDetailPage() {
               </div>
             )}
 
+            {/* ADIM 1: RAF OKUTMA (00$* veya 01$A-01-01 FORMATI - COMBO BOX YOK) */}
             {tab === "shelf" && (
               <div className="space-y-2 animate-fade-in">
                 <div className="space-y-1">
                   <span className="block text-[13px] font-bold text-fg">Raf Barkodu Okut</span>
-                  <BarcodeScanner onDetected={handleSelectShelf} placeholder="Raf barkodu okutun" hideCardWrapper compact />
+                  <BarcodeScanner
+                    onDetected={handleSelectShelf}
+                    placeholder="00$* veya 01$A-01-01 okutun"
+                    hideCardWrapper
+                    compact
+                  />
+                  <p className="text-[11px] font-semibold text-subtle px-1">
+                    Format: <span className="font-mono text-fg">Depo$Raf</span> (Örn: <span className="font-mono font-bold text-fg">01$A-01-01</span> veya tümü için <span className="font-mono font-bold text-fg">00$*</span>)
+                  </p>
                 </div>
-                {shelves.length > 0 && (
-                  <div className="rounded-xl bg-elevated px-2.5 py-1.5 border border-line/60">
-                    <span className="mb-1 block text-[11.5px] font-bold text-subtle">Veya belgedeki raflardan seçin</span>
-                    <select
-                      value={selectedShelf || ""}
-                      onChange={(e) => handleSelectShelf(e.target.value)}
-                      className="h-8 w-full rounded-lg border border-line bg-surface px-2 font-mono text-xs text-fg outline-none focus:border-brand-500 cursor-pointer"
-                    >
-                      <option value="" disabled>Raf seçin…</option>
-                      {shelves.map((sh) => {
-                        const countInShelf = lines.filter((l) => l.stockPlace && l.stockPlace.trim().toUpperCase() === sh).length;
-                        return (
-                          <option key={sh} value={sh}>{sh} ({countInShelf} Kalem)</option>
-                        );
-                      })}
-                    </select>
-                  </div>
+              </div>
+            )}
+
+            {/* ADIM 2: BARKOD OKUTMA */}
+            {tab === "barcode" && !lotPendingItem && !activeItem && (
+              <div className="space-y-1 animate-fade-in">
+                <span className="block text-[13px] font-bold text-fg">
+                  Malzeme Barkodu Okut
+                </span>
+                <BarcodeScanner
+                  onDetected={handleDetected}
+                  placeholder="Malzeme barkodu okutun"
+                  hideCardWrapper
+                  compact
+                />
+                {busy && (
+                  <p className="mt-1 flex items-center gap-1.5 text-[12.5px] font-semibold text-brand-600">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> CANIAS sorgulanıyor…
+                  </p>
                 )}
               </div>
             )}
+
+            {/* ADIM 3: PARTİ SEÇİMİ */}
+            {tab === "lot" && lotPendingItem && (
+              <div className="space-y-2 pt-0.5 animate-fade-in">
+                {/* Stokta kayıtlı partiler varsa liste */}
+                {lotPendingItem.batches && lotPendingItem.batches.length > 0 ? (
+                  <div className="rounded-xl bg-elevated px-2.5 py-1.5 border border-line/60">
+                    <span className="mb-1 block text-[11.5px] font-bold text-subtle">
+                      Parti seç (stoktakiler)
+                    </span>
+                    <select
+                      defaultValue=""
+                      onChange={(e) => handleSelectBatch(e.target.value)}
+                      className="h-8 w-full rounded-lg border border-line bg-surface px-2 font-mono text-xs text-fg outline-none focus:border-brand-500 cursor-pointer"
+                    >
+                      <option value="" disabled>
+                        Parti seçin…
+                      </option>
+                      {lotPendingItem.batches.map((b) => (
+                        <option key={b.batchNum} value={b.batchNum}>
+                          {b.batchNum} {b.availStock > 0 ? `— ${b.availStock} ${b.unit || lotPendingItem.unit}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 p-2 text-[11.5px] font-medium text-amber-800 dark:text-amber-200">
+                    <Info className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                    <span>Bu ürün için stokta kayıtlı parti bulunamadı. Lütfen tarih seçin veya parti barkodu okutun / girin.</span>
+                  </div>
+                )}
+
+                {/* Tarih Seçimi */}
+                <div className="flex items-center gap-2 rounded-xl bg-elevated px-2.5 py-1.5 border border-line/60">
+                  <span className="shrink-0 text-[11.5px] font-bold text-subtle">Tarih seç</span>
+                  <input
+                    type="date"
+                    onChange={(e) => {
+                      const val = isoDateToBatch(e.target.value);
+                      if (val) handleSelectBatch(val);
+                    }}
+                    className="h-7.5 flex-1 rounded-lg border border-line bg-surface px-2 font-mono text-xs text-fg outline-none focus:border-brand-500 cursor-pointer"
+                  />
+                </div>
+
+                {/* Parti Barkodu Okutma / Elle Giriş */}
+                <div className="pt-0.5">
+                  <span className="mb-0.5 block text-[11.5px] font-bold text-subtle">
+                    Veya parti barkodunu okutun / girin
+                  </span>
+                  <BarcodeScanner
+                    onDetected={handleDetected}
+                    placeholder="Parti barkodu veya parti no okutun"
+                    hideCardWrapper
+                    compact
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ADIM 4: MİKTAR GİRİŞİ */}
+            {tab === "qty" && activeItem && (
+              <div className="space-y-2 animate-fade-in flex-1 flex flex-col justify-between">
+                {(activeItem.multiplier > 1 || activeItem.unit !== activeItem.skunit) && (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200/60 px-2 py-1 font-mono text-[12px] font-bold text-amber-800">
+                    1 {activeItem.unit} = {activeItem.multiplier} {activeItem.skunit}
+                  </div>
+                )}
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="text-xs font-bold text-fg block">
+                      Sayılacak Miktar ({activeItem.unit}) <span className="text-red-500">*</span>
+                    </label>
+                    {activeItem.multiplier > 1 && (
+                      <span className="font-mono text-[11.5px] font-bold text-emerald-600">
+                        = {activeItem.quantity * activeItem.multiplier} {activeItem.skunit}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setActiveItem((p) =>
+                          p ? { ...p, quantity: Math.max(0, p.quantity - 1) } : null
+                        )
+                      }
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-elevated text-subtle hover:bg-line transition active:scale-95 shrink-0"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={activeItem.quantity}
+                      placeholder="0"
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === "") {
+                          setActiveItem((p) => (p ? { ...p, quantity: 0 } : null));
+                          return;
+                        }
+                        const val = parseInt(raw, 10);
+                        setActiveItem((p) =>
+                          p ? { ...p, quantity: isNaN(val) ? 0 : Math.max(0, val) } : null
+                        );
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleCommitActiveItem();
+                        }
+                      }}
+                      className="field-input flex-1 text-center font-mono text-base font-extrabold text-emerald-600 h-10"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setActiveItem((p) =>
+                          p ? { ...p, quantity: p.quantity + 1 } : null
+                        )
+                      }
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition active:scale-95 shadow-md shrink-0"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5 pt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setActiveItem((p) => (p ? { ...p, quantity: 0 } : null))}
+                      className="flex items-center justify-center rounded-xl border border-line bg-elevated/50 py-2 text-subtle hover:text-red-500 shadow-xs"
+                      title="Miktarı Sıfırla (0)"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                    {[5, 10].map((inc) => (
+                      <button
+                        key={inc}
+                        type="button"
+                        onClick={() =>
+                          setActiveItem((p) =>
+                            p ? { ...p, quantity: p.quantity + inc } : null
+                          )
+                        }
+                        className="rounded-xl border border-line bg-elevated/80 py-2 text-xs font-black text-fg hover:bg-emerald-600 hover:text-white transition shadow-xs"
+                      >
+                        +{inc}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={handleCommitActiveItem}
+                      disabled={!activeItem || activeItem.quantity < 0}
+                      className="flex flex-col items-center justify-center rounded-xl bg-emerald-600 py-1 text-[10.5px] sm:text-[11.5px] font-black leading-tight text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <span>Miktarı</span>
+                      <span>Kaydet</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* =================================================================== */}
+        {/* SAĞ KOLON: Okutulacak Mallar (Aşağı doğru biriken kartlar)         */}
+        {/* =================================================================== */}
+        <div className="min-w-0 short:flex-1 short:overflow-y-auto short:pr-1 space-y-2">
+          {/* Yükleniyor Durumu */}
+          {loading ? (
+            <div className="space-y-2">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-20 animate-pulse rounded-2xl bg-elevated" />
+              ))}
+            </div>
+          ) : sortedLines.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-surface/50 py-8 text-center text-subtle">
+              <Package className="mb-2 h-7 w-7 text-slate-400" />
+              <p className="text-[15px] font-bold text-fg">
+                {selectedShelf ? `${selectedShelf} rafında sayılacak malzeme bulunamadı` : "Sayılacak malzeme bulunamadı"}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {sortedLines.map((line) => {
+                const counted = line.countedQty;
+                const target = line.targetQty;
+                const isUnexpected = target <= 0 && counted > 0;
+                const isExcess = target > 0 && counted > target;
+                const isMatched = target > 0 && counted === target;
+                const isPartial = target > 0 && counted > 0 && counted < target;
+                const qtyColorClass = isUnexpected
+                  ? "text-blue-600 dark:text-blue-400"
+                  : isExcess
+                  ? "text-rose-600 dark:text-rose-400"
+                  : isMatched
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : isPartial
+                  ? "text-amber-500 dark:text-amber-400"
+                  : "text-fg";
+                const mult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
+                const unit = (line.unit || "AD").toUpperCase();
+                const skunit = (line.skunit || unit).toUpperCase();
+                const isDiffUnit = mult > 1 || unit !== skunit;
+                const equation = `1 ${unit} = ${mult} ${skunit}`;
+
+                return (
+                  <button
+                    key={line.id}
+                    type="button"
+                    onClick={() => selectLineForCounting(line)}
                     className="w-full text-left rounded-2xl border border-line bg-surface p-2.5 sm:p-3 transition-all shadow-xs hover:border-slate-400/60 active:scale-[0.99]"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[15px] font-bold text-fg">{line.name}</p>
-                        <div className="mt-0.5 flex items-center gap-2.5 font-mono text-[13px] text-slate-600">
-                          <span className="font-bold text-slate-700">{line.material}</span>
-                          {line.stockPlace && <span className="inline-flex items-center gap-0.5 font-semibold"><MapPin className="h-3 w-3 shrink-0" />{line.stockPlace}</span>}
+                        <div className="mt-0.5 flex items-center gap-2.5 font-mono text-[13px] flex-wrap text-slate-600 dark:text-slate-300">
+                          <span className="font-bold text-slate-700 dark:text-slate-200">{line.material}</span>
+                          {line.stockPlace && (
+                            <span className="inline-flex items-center gap-0.5 font-semibold">
+                              <MapPin className="h-3 w-3 shrink-0 text-slate-500" />
+                              {line.stockPlace}
+                            </span>
+                          )}
                           {line.batchNum && <span className="font-semibold">Parti: {line.batchNum}</span>}
                         </div>
                       </div>
                       <div className="shrink-0 text-right font-mono flex flex-col items-end justify-center">
                         <div className={qtyColorClass}>
-                          <span className="text-[16px] font-black">{target > 0 ? `${counted} / ${target}` : counted}</span>
+                          <span className="text-[16px] sm:text-[17px] font-black">
+                            {target > 0 ? `${counted} / ${target}` : counted}
+                          </span>
                           <span className="ml-1 text-[13px] font-black uppercase">{skunit}</span>
                         </div>
-                        {(mult > 1 || unit !== skunit) && <span className="text-[12px] font-semibold text-slate-500 mt-0.5">1 {unit} = {mult} {skunit}</span>}
+                        {isDiffUnit && (
+                          <span className="text-[12px] font-semibold text-slate-500 mt-0.5">
+                            {equation}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </button>
