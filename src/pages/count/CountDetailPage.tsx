@@ -1118,12 +1118,9 @@ export default function CountDetailPage() {
 
                 {/* Parti Barkodu Okutma / Elle Giriş */}
                 <div className="pt-0.5">
-                  <span className="mb-0.5 block text-[11.5px] font-bold text-subtle">
-                    Veya parti barkodunu okutun / girin
-                  </span>
                   <BarcodeScanner
                     onDetected={handleDetected}
-                    placeholder="Parti barkodu veya parti no okutun"
+                    placeholder="Parti barkodu girin"
                     hideCardWrapper
                     compact
                   />
