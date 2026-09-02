@@ -766,6 +766,19 @@ export default function CountDetailPage() {
   const totalCountedLines = lines.filter((l) => l.countedQty > 0).length;
   const isAllComplete = lines.length > 0 && totalCountedLines === lines.length;
 
+  const documentWarehouseDisplay = useMemo(() => {
+    const set = new Set<string>();
+    if (order?.warehouse) set.add(order.warehouse.trim());
+    for (const l of lines) {
+      if (l.warehouse) set.add(l.warehouse.trim());
+    }
+    const arr = Array.from(set).filter(Boolean);
+    if (arr.length > 0) {
+      return arr.join(" / ");
+    }
+    return warehouseParam || order?.warehouse || "";
+  }, [lines, order, warehouseParam]);
+
   return (
     <div className="mx-auto max-w-6xl p-3 md:p-4 lg:p-8 short:h-[100dvh] short:max-w-none short:flex short:flex-col short:overflow-hidden short:p-2">
       {/* ÜST BAŞLIK */}
@@ -793,10 +806,10 @@ export default function CountDetailPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {(order?.warehouse || selectedShelf || order?.stockPlace) && (
+          {documentWarehouseDisplay && (
             <div className="hidden sm:flex items-center gap-1.5 rounded-xl border border-line bg-surface px-2.5 py-1 text-[14px] font-bold text-slate-800 shadow-card">
               <Warehouse className="h-4 w-4 text-brand-600 shrink-0" />
-              <span>{selectedShelf || [order?.warehouse, order?.stockPlace].filter(Boolean).join(" / ")}</span>
+              <span>{documentWarehouseDisplay}</span>
             </div>
           )}
           <span
