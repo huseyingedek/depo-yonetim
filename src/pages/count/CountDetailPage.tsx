@@ -1015,21 +1015,23 @@ export default function CountDetailPage() {
             {/* ADIM 4: MİKTAR GİRİŞİ */}
             {tab === "qty" && activeItem && (
               <div className="space-y-2 animate-fade-in flex-1 flex flex-col justify-between">
-                {(activeItem.multiplier > 1 || activeItem.unit !== activeItem.skunit) && (
-                  <div className="rounded-lg bg-amber-50 border border-amber-200/60 px-2 py-1 font-mono text-[12px] font-bold text-amber-800">
-                    1 {activeItem.unit} = {activeItem.multiplier} {activeItem.skunit}
-                  </div>
-                )}
                 <div>
-                  <div className="mb-1 flex items-center justify-between">
-                    <label className="text-xs font-bold text-fg block">
+                  <div className="mb-1.5 flex items-center justify-between gap-1">
+                    <label className="text-xs font-bold text-fg block shrink-0">
                       Sayılacak Miktar ({activeItem.unit}) <span className="text-red-500">*</span>
                     </label>
-                    {activeItem.multiplier > 1 && (
-                      <span className="font-mono text-[11.5px] font-bold text-emerald-600">
-                        = {activeItem.quantity * activeItem.multiplier} {activeItem.skunit}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5 font-mono text-[12px] font-bold">
+                      {(activeItem.multiplier > 1 || activeItem.unit !== activeItem.skunit) && (
+                        <span className="text-slate-600 dark:text-slate-300">
+                          1 {activeItem.unit} = {activeItem.multiplier} {activeItem.skunit}
+                        </span>
+                      )}
+                      {activeItem.multiplier > 1 && activeItem.quantity > 0 && (
+                        <span className="text-emerald-600 dark:text-emerald-400">
+                          ({activeItem.quantity * activeItem.multiplier} {activeItem.skunit})
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
