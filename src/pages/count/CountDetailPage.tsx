@@ -354,11 +354,13 @@ export default function CountDetailPage() {
       const baseSkunit = currentPending ? currentPending.skunit : (activeItem ? activeItem.skunit : baseUnit);
       const baseMult = currentPending ? currentPending.multiplier : (activeItem ? activeItem.multiplier : 1);
 
+      const currentShelfUpper = selectedStockPlace && selectedStockPlace !== "*" ? selectedStockPlace.trim().toUpperCase() : null;
       const matchedLine = searchLines.find(
         (l) =>
           sadelestir(l.material) === sadelestir(mat) &&
           l.batchNum &&
-          l.batchNum.trim().toUpperCase() === rawBatch.toUpperCase()
+          l.batchNum.trim().toUpperCase() === rawBatch.toUpperCase() &&
+          (!currentShelfUpper || (l.stockPlace && l.stockPlace.trim().toUpperCase() === currentShelfUpper))
       );
 
       sesBasarili();
@@ -386,7 +388,7 @@ export default function CountDetailPage() {
           specialStock: matchedLine.specialStock || "1",
           isLotTracked: true,
           warehouse: matchedLine.warehouse || selectedWarehouse || order?.warehouse,
-          stockPlace: selectedStockPlace || matchedLine.stockPlace || selectedShelf || order?.stockPlace,
+          stockPlace: matchedLine.stockPlace || selectedStockPlace || selectedShelf || order?.stockPlace,
         });
       } else {
         const newLineId = `new-lot-${Date.now()}`;
@@ -536,17 +538,21 @@ export default function CountDetailPage() {
           (barcodeMat && sadelestir(l.material) === sadelestir(barcodeMat))
       );
 
-      const shelfMatched = selectedStockPlace && selectedStockPlace !== "*"
-        ? matches.filter((l) => l.stockPlace && l.stockPlace.trim().toUpperCase() === selectedStockPlace.toUpperCase())
-        : matches;
-      const effectiveMatches = shelfMatched.length > 0 ? shelfMatched : matches;
+      const hasSpecificShelf = Boolean(selectedStockPlace && selectedStockPlace !== "*");
+      const currentShelfUpper = hasSpecificShelf ? selectedStockPlace!.trim().toUpperCase() : null;
 
-      if (effectiveMatches.length > 0) {
-        const mat = effectiveMatches[0].material;
-        const matName = barcodeName || effectiveMatches[0].name;
-        const finalUnit = barcodeUnit || effectiveMatches[0].unit || "AD";
-        const finalSkunit = barcodeSkunit || effectiveMatches[0].skunit || finalUnit;
-        const finalMult = barcodeMult > 1 ? barcodeMult : (effectiveMatches[0].multiplier || 1);
+      // 1. Seçili raf ile birebir eşleşen kalemler
+      const shelfMatched = currentShelfUpper
+        ? matches.filter((l) => l.stockPlace && l.stockPlace.trim().toUpperCase() === currentShelfUpper)
+        : matches;
+
+      // 1a. Seçili rafta ürün kalemi bulunduysa o satırı seç
+      if (shelfMatched.length > 0) {
+        const mat = shelfMatched[0].material;
+        const matName = barcodeName || shelfMatched[0].name;
+        const finalUnit = barcodeUnit || shelfMatched[0].unit || "AD";
+        const finalSkunit = barcodeSkunit || shelfMatched[0].skunit || finalUnit;
+        const finalMult = barcodeMult > 1 ? barcodeMult : (shelfMatched[0].multiplier || 1);
 
         // Belgedeki tüm partili satırları bul
         const allMatLines = lines.filter((l) => sadelestir(l.material) === sadelestir(mat));
@@ -554,16 +560,16 @@ export default function CountDetailPage() {
         const isLotTracked =
           barcodeSpecialStock === "1" ||
           allMatLines.some((l) => l.specialStock === "1") ||
-          effectiveMatches.some((l) => l.specialStock === "1") ||
+          shelfMatched.some((l) => l.specialStock === "1") ||
           linesWithBatch.length > 0;
 
         if (isLotTracked && !barcodeLot) {
-          // CANIAS'tan depo genelindeki partileri sorgula (raf kısıtlaması olmadan)
+          // CANIAS'tan depo genelindeki partileri sorgula
           let caniasBatches: { batchNum: string; availStock: number; unit?: string }[] = [];
           try {
             const stockBatches = await api.getStock(
               mat,
-              selectedWarehouse || order?.warehouse || effectiveMatches[0].warehouse || "01",
+              selectedWarehouse || order?.warehouse || shelfMatched[0].warehouse || "01",
               "" // Depo genelindeki partileri getir
             );
             caniasBatches = stockBatches.filter((b) => b.batchNum && b.batchNum !== "*");
@@ -591,7 +597,6 @@ export default function CountDetailPage() {
 
           const allBatches = Array.from(batchMap.values());
 
-          // Partili ürünlerde otomatik seçim YAPILMAZ; kullanıcı her zaman partiyi kendisi seçmelidir.
           sesBasarili();
           setLotPendingItem({
             material: mat,
@@ -601,8 +606,8 @@ export default function CountDetailPage() {
             skunit: finalSkunit,
             multiplier: finalMult,
             specialStock: "1",
-            warehouse: selectedWarehouse || effectiveMatches[0].warehouse || order?.warehouse,
-            stockPlace: selectedStockPlace || effectiveMatches[0].stockPlace || selectedShelf || order?.stockPlace,
+            warehouse: selectedWarehouse || shelfMatched[0].warehouse || order?.warehouse,
+            stockPlace: selectedStockPlace || shelfMatched[0].stockPlace || selectedShelf || order?.stockPlace,
             batches: allBatches,
           });
           setActiveItem(null);
@@ -615,10 +620,10 @@ export default function CountDetailPage() {
         }
 
         const matchedLine =
-          (barcodeLot ? effectiveMatches.find((m) => m.batchNum && m.batchNum.toUpperCase() === barcodeLot!.toUpperCase()) : null) ||
-          effectiveMatches.find((m) => activeItem && m.id === activeItem.lineId) ||
-          effectiveMatches.find((m) => m.targetQty > 0 && m.countedQty < m.targetQty) ||
-          effectiveMatches[0];
+          (barcodeLot ? shelfMatched.find((m) => m.batchNum && m.batchNum.toUpperCase() === barcodeLot!.toUpperCase()) : null) ||
+          shelfMatched.find((m) => activeItem && m.id === activeItem.lineId) ||
+          shelfMatched.find((m) => m.targetQty > 0 && m.countedQty < m.targetQty) ||
+          shelfMatched[0];
 
         sesBasarili();
         flash(matchedLine.id);
@@ -640,8 +645,8 @@ export default function CountDetailPage() {
           batchNum: barcodeLot || matchedLine.batchNum,
           specialStock: matchedLine.specialStock,
           isLotTracked: Boolean(isLotTracked),
-          warehouse: selectedWarehouse || matchedLine.warehouse || order?.warehouse,
-          stockPlace: selectedStockPlace || matchedLine.stockPlace || selectedShelf || order?.stockPlace,
+          warehouse: matchedLine.warehouse || selectedWarehouse || order?.warehouse,
+          stockPlace: matchedLine.stockPlace || selectedStockPlace || selectedShelf || order?.stockPlace,
         });
         setTab("qty");
 
@@ -652,16 +657,26 @@ export default function CountDetailPage() {
         return;
       }
 
-      if (barcodeMat) {
-        sesBasarili();
-        const lotTracked = barcodeSpecialStock === "1" || (barcodeLot && barcodeLot !== "*");
+      // 1b. Ürün belgede başka bir rafta var VEYA barkod sorgusundan bulundu (ancak seçili rafta henüz satırı yok)
+      if (matches.length > 0 || barcodeMat) {
+        const refLine = matches[0];
+        const mat = refLine ? refLine.material : barcodeMat;
+        const matName = barcodeName || refLine?.name || mat;
+        const finalUnit = barcodeUnit || refLine?.unit || "AD";
+        const finalSkunit = barcodeSkunit || refLine?.skunit || finalUnit;
+        const finalMult = barcodeMult > 1 ? barcodeMult : (refLine?.multiplier || 1);
+        const specialStock = barcodeSpecialStock === "1" || refLine?.specialStock === "1" ? "1" : "0";
 
-        if (lotTracked && !barcodeLot) {
+        // Partili mi kontrol et
+        const allMatLines = lines.filter((l) => sadelestir(l.material) === sadelestir(mat));
+        const linesWithBatch = allMatLines.filter((l) => l.batchNum && l.batchNum !== "*");
+        const isLotTracked = specialStock === "1" || (barcodeLot && barcodeLot !== "*") || linesWithBatch.length > 0;
+
+        if (isLotTracked && !barcodeLot) {
           let batches: { batchNum: string; availStock: number; unit?: string }[] = [];
           try {
-            // CANIAS'tan sadece partili (specialStock === "1") ürünler için depo genelindeki partileri getir
             batches = await api.getStock(
-              barcodeMat,
+              mat,
               selectedWarehouse || order?.warehouse || "01",
               ""
             );
@@ -669,14 +684,14 @@ export default function CountDetailPage() {
 
           const validBatches = batches.filter((b) => b.batchNum && b.batchNum !== "*");
 
-          // Partili ürünlerde kullanıcı her zaman partiyi kendisi seçmelidir.
+          sesBasarili();
           setLotPendingItem({
-            material: barcodeMat,
-            name: barcodeName,
+            material: mat,
+            name: matName,
             barcode: rawCode,
-            unit: barcodeUnit,
-            skunit: barcodeSkunit,
-            multiplier: barcodeMult,
+            unit: finalUnit,
+            skunit: finalSkunit,
+            multiplier: finalMult,
             specialStock: "1",
             warehouse: selectedWarehouse || order?.warehouse,
             stockPlace: selectedStockPlace || selectedShelf || order?.stockPlace,
@@ -686,26 +701,27 @@ export default function CountDetailPage() {
           setTab("lot");
           show({
             kind: "ok",
-            text: `${barcodeName} partili ürün. Lütfen parti seçin.`,
+            text: `${matName} partili ürün. Lütfen parti seçin.`,
           });
           return;
         }
 
+        sesBasarili();
         const newLineId = `new-${Date.now()}`;
         setLotPendingItem(null);
         setActiveItem({
           lineId: newLineId,
-          material: barcodeMat,
-          name: barcodeName,
-          barcode: rawCode,
+          material: mat,
+          name: matName,
+          barcode: refLine?.barcode || rawCode,
           quantity: 1,
           targetQty: 0,
-          unit: barcodeUnit,
-          skunit: barcodeSkunit,
-          multiplier: barcodeMult,
+          unit: finalUnit,
+          skunit: finalSkunit,
+          multiplier: finalMult,
           batchNum: barcodeLot,
-          specialStock: barcodeSpecialStock,
-          isLotTracked: Boolean(lotTracked),
+          specialStock,
+          isLotTracked: Boolean(isLotTracked),
           warehouse: selectedWarehouse || order?.warehouse,
           stockPlace: selectedStockPlace || selectedShelf || order?.stockPlace,
         });
@@ -713,15 +729,16 @@ export default function CountDetailPage() {
 
         show({
           kind: "ok",
-          text: `${barcodeMat} okundu. Miktar girip ekleyin.`,
+          text: `${mat}${selectedStockPlace ? ` (${selectedStockPlace})` : ""} yeni raf kalemi olarak açıldı. Miktar girip ekleyin.`,
         });
-      } else {
-        sesHata();
-        show({
-          kind: "error",
-          text: `${rawCode} barkodu bulunamadı`,
-        });
+        return;
       }
+
+      sesHata();
+      show({
+        kind: "error",
+        text: `${rawCode} barkodu bulunamadı`,
+      });
     },
     [lines, order, show, activeItem, lotPendingItem, tab, selectedShelf, selectedWarehouse, selectedStockPlace, handleSelectBatch, handleSelectShelf]
   );
@@ -742,8 +759,8 @@ export default function CountDetailPage() {
           skunit: activeItem.skunit,
           multiplier: mult,
           batchNum: activeItem.batchNum || updated[idx].batchNum,
-          stockPlace: selectedStockPlace || activeItem.stockPlace || updated[idx].stockPlace || undefined,
-          warehouse: selectedWarehouse || activeItem.warehouse || updated[idx].warehouse || undefined,
+          stockPlace: activeItem.stockPlace || updated[idx].stockPlace || selectedStockPlace || undefined,
+          warehouse: activeItem.warehouse || updated[idx].warehouse || selectedWarehouse || undefined,
         };
         return updated;
       } else {
@@ -752,15 +769,15 @@ export default function CountDetailPage() {
           material: activeItem.material,
           name: activeItem.name,
           barcode: activeItem.barcode,
-          targetQty: activeItem.targetQty,
+          targetQty: activeItem.targetQty || 0,
           countedQty: baseCountedQty,
           unit: activeItem.unit,
           skunit: activeItem.skunit,
           multiplier: mult,
           batchNum: activeItem.batchNum,
           specialStock: activeItem.specialStock,
-          warehouse: selectedWarehouse || activeItem.warehouse || order?.warehouse,
-          stockPlace: selectedStockPlace || activeItem.stockPlace || undefined,
+          stockPlace: activeItem.stockPlace || selectedStockPlace || undefined,
+          warehouse: activeItem.warehouse || selectedWarehouse || order?.warehouse || undefined,
         };
         return [newLine, ...prev];
       }
