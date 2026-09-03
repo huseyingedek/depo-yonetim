@@ -289,9 +289,9 @@ export default function CountListPage() {
                         </div>
                       ) : null}
 
-                      {/* Deneme amaçlı gösterim: ltext veya örnek XXXXXX */}
+                      {/* Deneme amaçlı gösterim: ltext veya örnek XXXXXX (Kartsız, düz metin) */}
                       <span
-                        className="truncate text-[13px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60 max-w-[180px] sm:max-w-[240px]"
+                        className="truncate text-[14px] font-semibold text-slate-600 dark:text-slate-400 max-w-[180px] sm:max-w-[260px]"
                         title={o.ltext || "XXXXXXXXXXXXXXXXXXXX"}
                       >
                         {o.ltext || "XXXXXXXXXXXXXXXXXXXX"}
