@@ -227,6 +227,7 @@ export interface AdjustmentOrder {
   status?: string; // STATUS, TRACESTATUS — Durum Kodu (0: Yeni/Açık vb.)
   statusText?: string; // Durum metni
   description?: string; // STEXT, DESCRIPTION, TITLE — Belge Açıklaması
+  ltext?: string; // LTEXT, LONGTEXT, HEADTEXT — Uzun Açıklama / Başlık Metni
   itemCount?: number; // ITEMCOUNT, TOTALITEMS — Kalem Sayısı
   priority?: number; // Öncelik
   lines?: AdjustmentLine[]; // Sayım Kalemleri

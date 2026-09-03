@@ -367,6 +367,7 @@ function toAdjustmentOrder(row: Row): AdjustmentOrder {
   const worker = pick(row, ["WORKER", "USER", "ASSIGNEDUSER", "PERSONNEL"]);
   const docDate = pick(row, ["DOCDATE", "CREATEDAT", "DATE", "STARTDATE"]);
   const description = pick(row, ["STEXT", "DESCRIPTION", "TITLE", "NOTE"]);
+  const ltext = pick(row, ["LTEXT", "LONGTEXT", "HEADTEXT", "TEXTL", "HEADERTEXT"]);
   const traceStatus = pick(row, ["TRACESTATUS", "STATUS", "ISCLOSED", "STATUSTEXT"]);
   const itemCount = num(row, ["ITEMCOUNT", "TOTALITEMS", "TOTALITEM", "LINECOUNT", "COUNT"]);
   const priority = pick(row, ["PRIORITY"]) === "" ? undefined : num(row, ["PRIORITY"], 0);
@@ -381,6 +382,7 @@ function toAdjustmentOrder(row: Row): AdjustmentOrder {
     worker: worker && worker !== "*" ? worker : undefined,
     status: traceStatus || "0",
     description: description || undefined,
+    ltext: ltext || undefined,
     itemCount: itemCount > 0 ? itemCount : undefined,
     priority,
   };

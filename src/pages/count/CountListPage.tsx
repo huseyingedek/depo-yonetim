@@ -60,6 +60,7 @@ export default function CountListPage() {
         o.id.toLowerCase().includes(s) ||
         (o.invDocNum && o.invDocNum.toLowerCase().includes(s)) ||
         (o.description && o.description.toLowerCase().includes(s)) ||
+        (o.ltext && o.ltext.toLowerCase().includes(s)) ||
         (o.warehouse && o.warehouse.toLowerCase().includes(s)) ||
         (o.stockPlace && o.stockPlace.toLowerCase().includes(s)) ||
         (o.worker && o.worker.toLowerCase().includes(s))
@@ -278,19 +279,27 @@ export default function CountListPage() {
                     </p>
                   )}
 
-                  {/* Depo Bilgisi ve Tarih (AYNI HİZADA) */}
+                  {/* Depo Bilgisi, LTEXT ve Tarih (AYNI HİZADA) */}
                   <div className="flex items-center justify-between gap-2 text-[15px]">
-                    {depoRafMetni ? (
-                      <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                        <Warehouse className="h-4.5 w-4.5 text-brand-600 shrink-0" />
-                        <span>{depoRafMetni}</span>
-                      </div>
-                    ) : (
-                      <div />
-                    )}
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      {depoRafMetni ? (
+                        <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200 shrink-0">
+                          <Warehouse className="h-4.5 w-4.5 text-brand-600 shrink-0" />
+                          <span>{depoRafMetni}</span>
+                        </div>
+                      ) : null}
+
+                      {/* Deneme amaçlı gösterim: ltext veya örnek XXXXXX */}
+                      <span
+                        className="truncate text-[13px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60 max-w-[180px] sm:max-w-[240px]"
+                        title={o.ltext || "XXXXXXXXXXXXXXXXXXXX"}
+                      >
+                        {o.ltext || "XXXXXXXXXXXXXXXXXXXX"}
+                      </span>
+                    </div>
 
                     {o.docDate && (
-                      <span className="inline-flex items-center gap-1 font-mono text-[15px] text-slate-500">
+                      <span className="inline-flex items-center gap-1 font-mono text-[15px] text-slate-500 shrink-0 ml-auto">
                         <Calendar className="h-4 w-4 text-slate-400 shrink-0" />
                         <span>{o.docDate}</span>
                       </span>
