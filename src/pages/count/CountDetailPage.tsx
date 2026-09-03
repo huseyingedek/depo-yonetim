@@ -117,6 +117,7 @@ export default function CountDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [shelfBusy, setShelfBusy] = useState(false);
   const [, setFlashLineId] = useState<string | null>(null);
   const [tab, setTab] = useState<CountTab>("shelf");
   
@@ -230,39 +231,101 @@ export default function CountDetailPage() {
 
   const sadelestir = (s: string) => s.trim().toLowerCase().replace(/^0+/, "");
 
-  // Raf okutma/girme (00$* veya 01$A-01-01 formatı)
+  // Raf okutma/girme (CANIAS MZYReadBarcodeSP ve GetStockPlace ile doğrulama)
   const handleSelectShelf = useCallback(
-    (shelfInput: string) => {
+    async (shelfInput: string) => {
       const clean = shelfInput.trim();
-      if (!clean) return;
+      if (!clean || shelfBusy) return;
 
-      let wh = order?.warehouse || "01";
-      let sp = clean;
-      let fullCode = clean;
+      setShelfBusy(true);
+      const defaultWh = order?.warehouse || warehouseParam || "01";
+      let inputWh = defaultWh;
+      let inputSp = clean;
 
       if (clean.includes("$")) {
         const parts = clean.split("$");
-        wh = parts[0].trim() || wh;
-        sp = parts.slice(1).join("$").trim() || "*";
-        fullCode = `${wh}$${sp}`;
-      } else {
-        fullCode = `${wh}$${clean}`;
-        sp = clean;
+        inputWh = parts[0].trim() || defaultWh;
+        inputSp = parts.slice(1).join("$").trim() || "*";
       }
 
-      setSelectedWarehouse(wh);
-      setSelectedStockPlace(sp);
-      setSelectedShelf(fullCode);
-      setActiveItem(null);
-      setLotPendingItem(null);
-      setTab("barcode");
-      sesBasarili();
-      show({
-        kind: "ok",
-        text: `Raf (${fullCode}) seçildi. Malzeme barkodunu okutun.`,
-      });
+      try {
+        let isValid = false;
+        let confirmedWh = inputWh;
+        let confirmedSp = inputSp;
+
+        // 1. CANIAS MZYReadBarcodeSP ile sorgula
+        try {
+          const shelfRes = await api.readShelfBarcode(clean);
+          if (shelfRes.ok && (shelfRes.warehouse || shelfRes.stockPlace)) {
+            confirmedWh = shelfRes.warehouse || inputWh;
+            confirmedSp = shelfRes.stockPlace || inputSp;
+            isValid = true;
+          }
+        } catch {
+          // Fallback to stock places list
+        }
+
+        // 2. MZYReadBarcodeSP ile bulunamadıysa GetStockPlace ile depodaki rafları sorgula
+        if (!isValid) {
+          try {
+            const knownPlaces = await api.getStockPlaces(inputWh);
+            if (inputSp === "*" && (inputWh === "00" || knownPlaces.length > 0)) {
+              isValid = true;
+              confirmedWh = inputWh;
+              confirmedSp = "*";
+            } else if (knownPlaces && knownPlaces.length > 0) {
+              const found = knownPlaces.find(
+                (p) =>
+                  p.code.toUpperCase() === inputSp.toUpperCase() ||
+                  p.name.toUpperCase() === inputSp.toUpperCase() ||
+                  sadelestir(p.code) === sadelestir(inputSp) ||
+                  p.code.toUpperCase() === clean.toUpperCase()
+              );
+              if (found) {
+                confirmedWh = inputWh;
+                confirmedSp = found.code;
+                isValid = true;
+              }
+            }
+          } catch {
+            // Error handling
+          }
+        }
+
+        // 3. Geçerlilik Kontrolü
+        if (!isValid) {
+          sesHata();
+          show({
+            kind: "error",
+            text: `"${clean}" — Bu raf CANIAS sisteminde bulunamadı! Lütfen geçerli bir raf okutun.`,
+          });
+          return;
+        }
+
+        // Başarılı: Rafı seç ve Barkod okutma tabına geç
+        const fullCode = `${confirmedWh}$${confirmedSp}`;
+        setSelectedWarehouse(confirmedWh);
+        setSelectedStockPlace(confirmedSp);
+        setSelectedShelf(fullCode);
+        setActiveItem(null);
+        setLotPendingItem(null);
+        setTab("barcode");
+        sesBasarili();
+        show({
+          kind: "ok",
+          text: `Raf (${fullCode}) doğrulandı. Malzeme barkodunu okutun.`,
+        });
+      } catch (err: unknown) {
+        sesHata();
+        show({
+          kind: "error",
+          text: err instanceof Error ? err.message : "Raf sorgulanırken bir hata oluştu.",
+        });
+      } finally {
+        setShelfBusy(false);
+      }
     },
-    [order, show]
+    [order, warehouseParam, shelfBusy, show]
   );
 
   const handleSelectBatch = useCallback(
@@ -1029,7 +1092,14 @@ export default function CountDetailPage() {
                     placeholder="Raf barkodunu girin"
                     hideCardWrapper
                     compact
+                    disabled={shelfBusy}
                   />
+                  {shelfBusy && (
+                    <p className="mt-1 flex items-center gap-1.5 text-[12.5px] font-semibold text-brand-600 animate-pulse">
+                      <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                      <span>Raf CANIAS'ta sorgulanıyor...</span>
+                    </p>
+                  )}
                 </div>
               </div>
             )}
