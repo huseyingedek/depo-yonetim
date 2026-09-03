@@ -289,13 +289,14 @@ export default function CountListPage() {
                         </div>
                       ) : null}
 
-                      {/* Deneme amaçlı gösterim: ltext veya örnek XXXXXX (Kartsız, düz metin) */}
-                      <span
-                        className="truncate text-[14px] font-semibold text-slate-600 dark:text-slate-400 max-w-[180px] sm:max-w-[260px]"
-                        title={o.ltext || "XXXXXXXXXXXXXXXXXXXX"}
-                      >
-                        {o.ltext || "XXXXXXXXXXXXXXXXXXXX"}
-                      </span>
+                      {o.ltext ? (
+                        <span
+                          className="truncate text-[14px] font-semibold text-slate-600 dark:text-slate-400 max-w-[180px] sm:max-w-[260px]"
+                          title={o.ltext}
+                        >
+                          {o.ltext}
+                        </span>
+                      ) : null}
                     </div>
 
                     {o.docDate && (
