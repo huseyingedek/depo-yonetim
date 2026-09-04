@@ -1816,20 +1816,31 @@ export default function ReceivingDetailPage() {
 
               {/* 3. Satır: Fotoğraf + 3D Şema + Sağ Bilgi & Barkod Paneli */}
               <div className="flex-1 flex items-stretch gap-0 w-full min-w-0 pt-0.5 pb-0 min-h-0">
-                {/* 1. Bölüm: Solda Ürün Görseli */}
-                <div className="h-24 w-24 sm:h-26 sm:w-26 rounded-2xl overflow-hidden shrink-0 border border-line bg-elevated/40 flex items-center justify-center shadow-xs self-start mr-1.5">
-                  {currentMaterial.image ? (
-                    <img
-                      src={currentMaterial.image}
-                      alt={currentMaterial.name}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex flex-col items-center justify-center text-subtle/70 gap-1 p-1 text-center">
-                      <ImageIcon className="h-5 w-5 text-subtle/50" />
-                      <span className="text-[8px] font-bold">Fotoğraf Yok</span>
-                    </div>
-                  )}
+                {/* 1. Bölüm: Solda Ürün Görseli ve Altında Ürün Kodu */}
+                <div className="flex flex-col items-center shrink-0 mr-1.5 self-start w-24 sm:w-26 min-w-0">
+                  {/* Ürün Görseli (Boyutu ve konumu aynı kalır) */}
+                  <div className="h-24 w-24 sm:h-26 sm:w-26 rounded-2xl overflow-hidden shrink-0 border border-line bg-elevated/40 flex items-center justify-center shadow-xs">
+                    {currentMaterial.image ? (
+                      <img
+                        src={currentMaterial.image}
+                        alt={currentMaterial.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-subtle/70 gap-1 p-1 text-center">
+                        <ImageIcon className="h-5 w-5 text-subtle/50" />
+                        <span className="text-[8px] font-bold">Fotoğraf Yok</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Resmin Altındaki Boş Alana Eklenen Ürün Kodu */}
+                  <div
+                    className="mt-1.5 w-full text-center px-1 py-0.5 rounded-lg bg-elevated/70 border border-line/60 font-mono font-black text-[11px] sm:text-xs text-fg truncate shadow-2xs"
+                    title={currentMaterial.material}
+                  >
+                    {currentMaterial.material}
+                  </div>
                 </div>
 
                 {/* Çizgi 1: Resim ile 3D Model Arasındaki Ayırıcı Çizgi */}
@@ -1883,10 +1894,12 @@ export default function ReceivingDetailPage() {
                 <div className="flex-1 min-w-0 flex flex-col justify-between h-full min-h-0">
                   {/* Üst Kısım: 2x2 Simetrik Grid (Ürün, Net, Hacim, Brüt) */}
                   <div className="grid grid-cols-2 gap-x-2.5 gap-y-1 text-xs sm:text-[12px] leading-tight">
-                    {/* Sol Üst: Ürün */}
+                    {/* Sol Üst: Eski Ürün yerine Stok Birimi (SKUNIT) */}
                     <div className="flex items-center gap-1 min-w-0">
-                      <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Ürün:</span>
-                      <span className="font-mono font-black text-fg text-xs sm:text-[12.5px] truncate">{currentMaterial.material}</span>
+                      <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Stok:</span>
+                      <span className="font-mono font-black text-fg text-xs sm:text-[12.5px] truncate">
+                        {currentMaterial.unit || "AD"}
+                      </span>
                     </div>
 
                     {/* Sağ Üst: Net (Parti Yerine) */}
