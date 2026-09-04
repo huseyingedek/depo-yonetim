@@ -1834,13 +1834,13 @@ export default function ReceivingDetailPage() {
                     )}
                   </div>
 
-                  {/* Resmin Altındaki Boş Alana Eklenen Ürün Kodu */}
-                  <div
-                    className="mt-1.5 w-full text-center px-1 py-0.5 rounded-lg bg-elevated/70 border border-line/60 font-mono font-black text-[11px] sm:text-xs text-fg truncate shadow-2xs"
+                  {/* Resmin Altındaki Ürün Kodu (Kartsız, yalın metin) */}
+                  <span
+                    className="mt-1 w-full text-center font-mono font-bold text-[11px] sm:text-xs text-fg truncate select-all"
                     title={currentMaterial.material}
                   >
                     {currentMaterial.material}
-                  </div>
+                  </span>
                 </div>
 
                 {/* Çizgi 1: Resim ile 3D Model Arasındaki Ayırıcı Çizgi */}
@@ -1896,7 +1896,7 @@ export default function ReceivingDetailPage() {
                   <div className="grid grid-cols-2 gap-x-2.5 gap-y-1 text-xs sm:text-[12px] leading-tight">
                     {/* Sol Üst: Eski Ürün yerine Stok Birimi (SKUNIT) */}
                     <div className="flex items-center gap-1 min-w-0">
-                      <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Stok:</span>
+                      <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Stok Birimi:</span>
                       <span className="font-mono font-black text-fg text-xs sm:text-[12.5px] truncate">
                         {currentMaterial.unit || "AD"}
                       </span>
@@ -2044,14 +2044,24 @@ export default function ReceivingDetailPage() {
                       }`}
                   >
                     <div className="flex items-center justify-between gap-2 text-xs flex-wrap">
-                      {/* Sol: Siparişten Ne Kaldığı (örn: 17 KO kaldı veya 30 AD kaldı), Belge Tipi, Belge No, Kalem No, Tarih */}
+                      {/* Sol: Siparişten Ne Kaldığı (Birimler farklıysa çift satır, aynıysa tek satır), Belge Tipi, Belge No, Kalem No, Tarih */}
                       <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap min-w-0 font-mono text-[11px]">
-                        {/* 1. Ne Kaldığı (Sipariş Birimi Cinsinden) */}
-                        <span className="font-bold text-fg">
-                          <strong className="text-fg font-black text-xs">
-                            {al.remPurQty} {al.purUnit} kaldı
-                          </strong>
-                        </span>
+                        {/* Kalan Miktar Alanı */}
+                        <div className="flex flex-col justify-center leading-tight">
+                          {/* Üst: Sipariş Birimi Cinsinden Kalan */}
+                          <span className="font-bold text-fg">
+                            <strong className="text-fg font-black text-xs">
+                              {al.remPurQty} {al.purUnit} kaldı
+                            </strong>
+                          </span>
+
+                          {/* Alt: Birimler farklıysa Çevrim Oranı (1 bunit = x skunit) */}
+                          {al.purUnit !== al.stockUnit && (
+                            <span className="text-[10px] sm:text-[10.5px] font-bold text-subtle">
+                              1 {al.purUnit} = {al.factor} {al.stockUnit}
+                            </span>
+                          )}
+                        </div>
 
                         {/* 2. Belge Tipi & Belge No */}
                         <span className="font-black text-fg flex items-center gap-1">
@@ -2072,24 +2082,20 @@ export default function ReceivingDetailPage() {
                         )}
                       </div>
 
-                      {/* Sağ: Çevrim Oranı + 2 Satırlı Kaçta Kaçı Toplandı (1. Satır: Sipariş Birimi örn 3/20 KO, 2. Satır: Stok Birimi örn 18/120 AD) */}
+                      {/* Sağ: Karşılanan/Toplam (Üstte Stok Birimi, altta Sipariş Birimi - Şartlı Çift/Tek Satır) */}
                       <div className="flex items-center gap-2 sm:gap-2.5 font-mono shrink-0 ml-auto mr-2 sm:mr-4 text-right">
-                        {/* Çevrim Oranı (örn: (1 KO = 10 AD)) */}
-                        {al.purUnit !== al.stockUnit && al.factor > 1 && (
-                          <span className="text-[11px] font-bold text-subtle whitespace-nowrap">
-                            (1 {al.purUnit} = {al.factor} {al.stockUnit})
-                          </span>
-                        )}
-
-                        <div className="flex flex-col items-end leading-tight gap-0.5">
-                          {/* 1. Satır: Sipariş Birimi */}
-                          <span className="font-black text-fg text-xs sm:text-[12px]">
-                            {al.fulfilledPurQty}/{al.totalPurQty} {al.purUnit}
-                          </span>
-                          {/* 2. Satır: Stok / Adet Birimi (Aynı Büyüklük ve Renkte) */}
+                        <div className="flex flex-col items-end justify-center leading-tight gap-0.5">
+                          {/* Üst Satır: Daima Stok Birimi Cinsinden */}
                           <span className="font-black text-fg text-xs sm:text-[12px]">
                             {al.fulfilledStockQty}/{al.totalStockQty} {al.stockUnit}
                           </span>
+
+                          {/* Alt Satır: Yalnızca Birimler Farklıysa Sipariş Birimi Cinsinden */}
+                          {al.purUnit !== al.stockUnit && (
+                            <span className="font-bold text-subtle text-[10.5px] sm:text-[11px]">
+                              {al.fulfilledPurQty}/{al.totalPurQty} {al.purUnit}
+                            </span>
+                          )}
                         </div>
 
                         {/* Tamamlandı Rozeti */}
