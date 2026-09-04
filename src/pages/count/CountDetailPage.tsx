@@ -10,6 +10,7 @@ import {
   Plus,
   Minus,
   Info,
+  CheckCheck,
 } from "lucide-react";
 import BarcodeScanner from "../../components/BarcodeScanner";
 import ToastView, { useToast } from "../../components/Toast";
@@ -954,6 +955,18 @@ export default function CountDetailPage() {
     return order?.warehouse?.trim() || warehouseParam?.trim() || (lines.length > 0 && lines[0].warehouse ? lines[0].warehouse.trim() : "");
   }, [order?.warehouse, warehouseParam, lines]);
 
+  const handleGoToSummary = () => {
+    navigate(`/count/${id}/summary`, {
+      state: {
+        order,
+        lines,
+        warehouse: documentWarehouseDisplay,
+        orderType,
+        invDocNum,
+      },
+    });
+  };
+
   return (
     <div className="mx-auto max-w-6xl p-3 md:p-4 lg:p-8 short:h-[100dvh] short:max-w-none short:flex short:flex-col short:overflow-hidden short:p-2">
       {/* ÜST BAŞLIK */}
@@ -987,6 +1000,15 @@ export default function CountDetailPage() {
               <span>{documentWarehouseDisplay}</span>
             </div>
           )}
+          <button
+            type="button"
+            onClick={handleGoToSummary}
+            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 text-xs sm:text-sm font-bold shadow-sm transition active:scale-95 shrink-0"
+            title="Sayımı İncele ve Bitir"
+          >
+            <CheckCheck className="h-4 w-4" />
+            <span>Bitir</span>
+          </button>
           <span
             className={`chip border px-2.5 py-1 text-[14px] font-bold ${
               isAllComplete
@@ -1109,7 +1131,6 @@ export default function CountDetailPage() {
                     placeholder="Raf barkodunu girin"
                     hideCardWrapper
                     compact
-                    disabled={shelfBusy}
                   />
                   {shelfBusy && (
                     <p className="mt-1 flex items-center gap-1.5 text-[12.5px] font-semibold text-brand-600 animate-pulse">
