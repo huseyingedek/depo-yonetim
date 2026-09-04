@@ -10,7 +10,6 @@ import {
   Plus,
   Minus,
   Info,
-  CheckCheck,
 } from "lucide-react";
 import BarcodeScanner from "../../components/BarcodeScanner";
 import ToastView, { useToast } from "../../components/Toast";
@@ -1003,10 +1002,9 @@ export default function CountDetailPage() {
           <button
             type="button"
             onClick={handleGoToSummary}
-            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 text-xs sm:text-sm font-bold shadow-sm transition active:scale-95 shrink-0"
+            className="flex items-center justify-center rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1 text-xs sm:text-sm font-bold shadow-sm transition active:scale-95 shrink-0"
             title="Sayımı İncele ve Bitir"
           >
-            <CheckCheck className="h-4 w-4" />
             <span>Bitir</span>
           </button>
           <span
@@ -1081,7 +1079,7 @@ export default function CountDetailPage() {
                     type="button"
                     onClick={handleClick}
                     disabled={!isClickable}
-                    className={`flex h-8.5 w-full items-center justify-center rounded-xl px-0.5 text-xs font-bold tracking-tight transition-all duration-200 ease-soft ${
+                    className={`flex h-10 sm:h-10.5 w-full items-center justify-center rounded-xl px-0.5 text-xs sm:text-[13px] font-bold tracking-tight transition-all duration-200 ease-soft ${
                       active
                         ? "bg-brand-600 text-white shadow-soft font-extrabold cursor-default"
                         : isClickable
