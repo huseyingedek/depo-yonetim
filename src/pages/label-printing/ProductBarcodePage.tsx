@@ -97,7 +97,7 @@ async function fetchCardsForMaterial(
     if (matDetail.ok && Array.isArray(matDetail.matList) && matDetail.matList.length > 0) {
       const m = matDetail.matList[0];
       name = String(m.STEXT || m.MTEXT || m.NAME1 || m.NAME || name || matCode).trim();
-      baseUnit = String(m.QUNIT || m.UNIT || m.IUNIT || baseUnit || "AD").trim().toUpperCase();
+      baseUnit = String(m.QUNIT || m.UNIT || m.IUNIT || baseUnit).trim().toUpperCase();
     }
 
     const rawBarcodeList = Array.isArray(matDetail.barcodeList) ? matDetail.barcodeList : [];
@@ -108,7 +108,7 @@ async function fetchCardsForMaterial(
       const bCode = String(b.BARCODE || b.barcode || b.BARCODENUM || b.EAN || b.CODE || "").trim();
       const rawUnit = String(
         b.BUNIT || b.UNIT || b.BARCODEUNIT || b.B_UNIT || b.QUNIT || b.SKUNIT || b.unit || baseUnit
-      ).trim().toUpperCase() || "AD";
+      ).trim().toUpperCase();
 
       if (!bCode) continue;
 
@@ -416,8 +416,7 @@ export default function ProductBarcodePage() {
       setSelectedCards([]);
     } else {
       setErrorMsg(
-        `${successCount} etiket yazdırıldı, ${failedCount} adet etikette hata oluştu.${
-          lastError ? ` (Detay: ${lastError})` : ""
+        `${successCount} etiket yazdırıldı, ${failedCount} adet etikette hata oluştu.${lastError ? ` (Detay: ${lastError})` : ""
         }`
       );
     }
@@ -532,11 +531,10 @@ export default function ProductBarcodePage() {
         <button
           type="button"
           onClick={() => handleTabChange("materialCode")}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-3 text-xs font-bold transition-all ${
-            activeTab === "materialCode"
-              ? "bg-blue-600 text-white shadow-md"
-              : "text-subtle hover:text-fg hover:bg-elevated"
-          }`}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-3 text-xs font-bold transition-all ${activeTab === "materialCode"
+            ? "bg-blue-600 text-white shadow-md"
+            : "text-subtle hover:text-fg hover:bg-elevated"
+            }`}
         >
           <Package className="h-4 w-4" />
           <span>1. Malzeme Kodu ile Arama</span>
@@ -545,11 +543,10 @@ export default function ProductBarcodePage() {
         <button
           type="button"
           onClick={() => handleTabChange("barcode")}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-3 text-xs font-bold transition-all ${
-            activeTab === "barcode"
-              ? "bg-blue-600 text-white shadow-md"
-              : "text-subtle hover:text-fg hover:bg-elevated"
-          }`}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-3 text-xs font-bold transition-all ${activeTab === "barcode"
+            ? "bg-blue-600 text-white shadow-md"
+            : "text-subtle hover:text-fg hover:bg-elevated"
+            }`}
         >
           <Tag className="h-4 w-4" />
           <span>2. Barkod ile Arama</span>
@@ -558,11 +555,10 @@ export default function ProductBarcodePage() {
         <button
           type="button"
           onClick={() => handleTabChange("description")}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-3 text-xs font-bold transition-all ${
-            activeTab === "description"
-              ? "bg-blue-600 text-white shadow-md"
-              : "text-subtle hover:text-fg hover:bg-elevated"
-          }`}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-3 text-xs font-bold transition-all ${activeTab === "description"
+            ? "bg-blue-600 text-white shadow-md"
+            : "text-subtle hover:text-fg hover:bg-elevated"
+            }`}
         >
           <FileText className="h-4 w-4" />
           <span>3. Ürün Açıklaması ile Arama</span>
@@ -657,28 +653,26 @@ export default function ProductBarcodePage() {
                 <div
                   key={r.id}
                   onClick={() => toggleSelectCard(r)}
-                  className={`relative flex cursor-pointer items-center justify-between rounded-2xl border p-5 text-left shadow-card transition-all ${
-                    selected
-                      ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
-                      : "border-line bg-bg hover:border-emerald-300"
-                  }`}
+                  className={`relative flex cursor-pointer items-center justify-between rounded-2xl border p-5 text-left shadow-card transition-all ${selected
+                    ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
+                    : "border-line bg-bg hover:border-emerald-300"
+                    }`}
                 >
+
                   <div>
-                    <div className="flex items-center gap-2.5">
-                      <span className="font-mono text-lg font-extrabold text-fg">{r.material}</span>
-                      <span
-                        className={`rounded-lg px-2.5 py-0.5 text-xs font-extrabold tracking-wide border uppercase ${unitInfo.badgeClass}`}
-                      >
-                        {r.unit}
-                      </span>
+                    <div className="flex items-center gap-8">
+                      <p>{r.barcode}</p>
+                      <p>{r.unit}</p>
+                      <p>{r.material}</p>
+                      <p>{r.name}</p>
                     </div>
-                    <p className="mt-1 text-sm text-subtle font-medium">{r.name}</p>
                   </div>
 
+
+
                   <span
-                    className={`chip text-xs font-bold ${
-                      selected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
-                    }`}
+                    className={`chip text-xs font-bold ${selected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
+                      }`}
                   >
                     {selected ? <Check className="h-4 w-4 inline mr-1" /> : null}
                     {selected ? "Seçildi" : "Seç"}
