@@ -106,6 +106,53 @@ const groupOrdersToSuppliers = (orders: Record<string, unknown>[], barcodeFilter
   return Array.from(map.values());
 };
 
+// Tedarikçilerin Şehir, İlçe, Adres ve Telefon bilgilerini CANIAS MzyGetCustomer servisiyle zenginleştirme
+const enrichSuppliersWithCustomerInfo = async (supplierList: SupplierOrder[]): Promise<SupplierOrder[]> => {
+  if (!supplierList || supplierList.length === 0) return supplierList;
+
+  try {
+    const enriched = await Promise.all(
+      supplierList.map(async (sup) => {
+        try {
+          const cusRes = await api.getCustomers({ customer: sup.id, customerType: 1 });
+          if (cusRes.ok && cusRes.customers && cusRes.customers.length > 0) {
+            const cRow = cusRes.customers[0];
+            const city = String(cRow.CITY || cRow.CUSCITY || cRow.IL || cRow.PROVINCE || cRow.SEHIR || "").trim();
+            const district = String(cRow.DISTRICT || cRow.ILCE || cRow.TOWN || cRow.COUNTY || "").trim();
+            const address = String(cRow.ADDRESS1 || cRow.STREET || cRow.ADRES || "").trim();
+            const country = String(cRow.COUNTRY || cRow.ULKE || "").trim();
+            const phone = String(cRow.TELEPHONE1 || cRow.PHONE || cRow.TEL || "").trim();
+
+            let loc = "";
+            if (city && district) {
+              loc = `${city} / ${district}`;
+            } else if (city) {
+              loc = country && country !== "TR" ? `${city} (${country})` : city;
+            } else if (district) {
+              loc = district;
+            } else if (address) {
+              loc = address;
+            }
+
+            return {
+              ...sup,
+              city: city || sup.city,
+              location: loc || sup.location,
+              phone: phone || sup.phone,
+            };
+          }
+        } catch (e) {
+          console.warn(`[getCustomers] Cari bilgisi çekilemedi (${sup.id}):`, e);
+        }
+        return sup;
+      })
+    );
+    return enriched;
+  } catch {
+    return supplierList;
+  }
+};
+
 export default function ReceivingSupplierSelectPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<SearchTab>("barcode");
@@ -182,6 +229,11 @@ export default function ReceivingSupplierSelectPage() {
 
       const supplierList = groupOrdersToSuppliers(matchedOrders, params.barcode || "");
       setSuppliers(supplierList);
+
+      // CANIAS MzyGetCustomer ile arka planda il/ilçe/telefon bilgilerini zenginleştir
+      enrichSuppliersWithCustomerInfo(supplierList).then((enrichedList) => {
+        setSuppliers(enrichedList);
+      });
     } catch (err: any) {
       console.error("CANIAS MZYGetOpenOrder error:", err);
       setApiError(
@@ -228,6 +280,11 @@ export default function ReceivingSupplierSelectPage() {
 
       const supplierList = groupOrdersToSuppliers(matchedOrders);
       setSuppliers(supplierList);
+
+      // CANIAS MzyGetCustomer ile arka planda il/ilçe/telefon bilgilerini zenginleştir
+      enrichSuppliersWithCustomerInfo(supplierList).then((enrichedList) => {
+        setSuppliers(enrichedList);
+      });
     } catch (err: any) {
       console.error("CANIAS OpenOrders supplier search error:", err);
       setApiError(
@@ -657,16 +714,9 @@ export default function ReceivingSupplierSelectPage() {
                     className={`field-input w-full pl-9 font-semibold ${targetError ? "border-red-500 focus:ring-red-500" : ""
                       }`}
                   />
-                  {caniasWarehouses.length > 0 && (
-                    <datalist id="canias-warehouse-options">
-                      <option value="00$*" label="Standart Depo Kodu" />
-                      {caniasWarehouses.map((w) => (
-                        <option key={`tgt-${w.code}`} value={w.code}>
-                          {w.code} {w.name ? `— ${w.name}` : ""}
-                        </option>
-                      ))}
-                    </datalist>
-                  )}
+                  <datalist id="canias-warehouse-options">
+                    <option value="00$*" label="Standart Depo Kodu" />
+                  </datalist>
                   <Warehouse className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
                 </div>
                 {targetError && (
