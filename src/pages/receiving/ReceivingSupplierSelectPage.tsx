@@ -79,8 +79,9 @@ const groupOrdersToSuppliers = (orders: Record<string, unknown>[], barcodeFilter
       formattedLocation = country;
     }
 
-    if (!map.has(vendorCode)) {
-      map.set(vendorCode, {
+    const groupKey = poNum ? `${vendorCode}_${poNum}` : vendorCode;
+    if (!map.has(groupKey)) {
+      map.set(groupKey, {
         id: vendorCode,
         name: vendorName,
         poNumber: poNum || "Açık Sipariş",
@@ -91,7 +92,7 @@ const groupOrdersToSuppliers = (orders: Record<string, unknown>[], barcodeFilter
         phone: phone || undefined,
       });
     } else {
-      const existing = map.get(vendorCode)!;
+      const existing = map.get(groupKey)!;
       existing.orderCount += 1;
       if ((!existing.poNumber || existing.poNumber === "Açık Sipariş") && poNum) {
         existing.poNumber = poNum;
@@ -253,7 +254,7 @@ export default function ReceivingSupplierSelectPage() {
   }, [suppliers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelectSupplier = (supplier: SupplierOrder) => {
-    if (selectedSupplier?.id === supplier.id) {
+    if (selectedSupplier?.id === supplier.id && selectedSupplier?.poNumber === supplier.poNumber) {
       setSelectedSupplier(null);
     } else {
       setSelectedSupplier(supplier);
@@ -398,7 +399,7 @@ export default function ReceivingSupplierSelectPage() {
           disabled={!selectedSupplier}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700 disabled:opacity-40"
         >
-          <span>Devam Et {selectedSupplier ? `(${selectedSupplier.id})` : ""}</span>
+          <span>Devam Et {selectedSupplier ? `(${selectedSupplier.poNumber || selectedSupplier.name})` : ""}</span>
           <ArrowRight className="h-4 w-4" />
         </button>
       </div>
@@ -528,11 +529,13 @@ export default function ReceivingSupplierSelectPage() {
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {pg.pageItems.map((supplier) => {
-              const isSelected = selectedSupplier?.id === supplier.id;
+              const isSelected =
+                selectedSupplier?.id === supplier.id &&
+                selectedSupplier?.poNumber === supplier.poNumber;
 
               return (
                 <button
-                  key={supplier.id}
+                  key={`${supplier.id}_${supplier.poNumber}`}
                   type="button"
                   onClick={() => handleSelectSupplier(supplier)}
                   className={`w-full rounded-2xl border p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft ${isSelected
@@ -543,7 +546,9 @@ export default function ReceivingSupplierSelectPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-base font-bold text-fg">{supplier.id}</span>
+                        <span className="font-mono text-base font-bold text-fg">
+                          {supplier.poNumber || "Açık Sipariş"}
+                        </span>
                         <span className="chip bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 font-medium">
                           {supplier.orderCount > 1 ? `${supplier.orderCount} Kalem Açık` : "Açık Sipariş"}
                         </span>
@@ -557,11 +562,8 @@ export default function ReceivingSupplierSelectPage() {
                     <ChevronRight className="mt-1 h-5 w-5 text-subtle shrink-0" />
                   </div>
 
-                  {(supplier.poNumber || supplier.location || supplier.phone) && (
+                  {(supplier.location || supplier.phone) && (
                     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-subtle">
-                      {supplier.poNumber && supplier.poNumber !== "Açık Sipariş" && (
-                        <span>{supplier.poNumber}</span>
-                      )}
                       {supplier.location && <span>{supplier.location}</span>}
                       {supplier.phone && <span className="font-mono">{supplier.phone}</span>}
                     </div>
