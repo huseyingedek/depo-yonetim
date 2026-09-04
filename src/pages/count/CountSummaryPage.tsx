@@ -90,6 +90,26 @@ export default function CountSummaryPage() {
     [lines]
   );
 
+  // Sayım satırlarını sessionStorage'a senkronize et
+  useEffect(() => {
+    if (!id || lines.length === 0) return;
+    try {
+      sessionStorage.setItem(`count_session_${id}`, JSON.stringify({ order, lines }));
+    } catch {}
+  }, [id, order, lines]);
+
+  const handleBack = () => {
+    navigate(`/count/${id}`, {
+      state: {
+        order,
+        lines,
+        warehouse,
+        orderType: docType,
+        invDocNum: docNum,
+      },
+    });
+  };
+
   // Sağ üstteki "Bitir" butonuna basılınca çalışacak handler
   const handleFinish = () => {
     show({
@@ -186,7 +206,7 @@ export default function CountSummaryPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={handleBack}
             className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border border-line bg-surface text-fg shadow-card transition hover:bg-elevated active:scale-95 shrink-0"
             title="Geri Dön"
           >
@@ -210,15 +230,20 @@ export default function CountSummaryPage() {
           </div>
         </div>
 
-        {/* SAĞ ÜST: BİTİR TUŞU (Tik ikonsuz, sade) */}
-        <button
-          type="button"
-          onClick={handleFinish}
-          className="flex items-center justify-center rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1 text-xs sm:text-sm font-bold shadow-sm transition active:scale-95 shrink-0"
-          title="Bitir"
-        >
-          <span>Bitir</span>
-        </button>
+        {/* SAĞ ÜST: BİTİR TUŞU VE SAĞINDA YEŞİL ROZET */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleFinish}
+            className="flex items-center justify-center rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1 text-xs sm:text-sm font-bold shadow-sm transition active:scale-95 shrink-0"
+            title="Bitir"
+          >
+            <span>Bitir</span>
+          </button>
+          <span className="chip border px-2.5 py-1 text-[13px] sm:text-[14px] font-bold bg-emerald-100 text-emerald-800 border-emerald-300 rounded-xl shrink-0">
+            {matchedLines.length} / {targetLinesCount} Tamamlandı
+          </span>
+        </div>
       </div>
 
       {/* HATA MESAJI */}
@@ -267,13 +292,6 @@ export default function CountSummaryPage() {
             {partialLines.map((line) =>
               renderItemCard(line, "text-amber-500 dark:text-amber-400")
             )}
-
-            {/* 4. YEŞİL KART (EN ALTTA: Sadece X / X Sayım Tamamlandı) */}
-            <div className="w-full rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 sm:p-4 text-center">
-              <span className="font-mono text-sm sm:text-base font-black text-emerald-700 dark:text-emerald-300">
-                {matchedLines.length} / {targetLinesCount || lines.length} Sayım Tamamlandı
-              </span>
-            </div>
           </>
         )}
       </div>

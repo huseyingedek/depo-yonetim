@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ChevronLeft,
   Warehouse,
@@ -111,10 +111,46 @@ export default function CountDetailPage() {
   const orderType = searchParams.get("type") || searchParams.get("docType") || "";
   const invDocNum = searchParams.get("invDocNum") || id || "";
   const warehouseParam = searchParams.get("warehouse") || searchParams.get("wh") || "";
+  const location = useLocation();
+  const navState = location.state as {
+    order?: AdjustmentOrder;
+    lines?: AdjustmentLine[];
+    warehouse?: string;
+  } | undefined;
 
-  const [order, setOrder] = useState<AdjustmentOrder | null>(null);
-  const [lines, setLines] = useState<AdjustmentLine[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [order, setOrder] = useState<AdjustmentOrder | null>(() => {
+    if (navState?.order) return navState.order;
+    try {
+      const saved = sessionStorage.getItem(`count_session_${id}`);
+      if (saved) return JSON.parse(saved).order || null;
+    } catch {}
+    return null;
+  });
+
+  const [lines, setLines] = useState<AdjustmentLine[]>(() => {
+    if (navState?.lines && navState.lines.length > 0) return navState.lines;
+    try {
+      const saved = sessionStorage.getItem(`count_session_${id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.lines && parsed.lines.length > 0) return parsed.lines;
+      }
+    } catch {}
+    return [];
+  });
+
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (navState?.lines && navState.lines.length > 0) return false;
+    try {
+      const saved = sessionStorage.getItem(`count_session_${id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.lines && parsed.lines.length > 0) return false;
+      }
+    } catch {}
+    return true;
+  });
+
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [shelfBusy, setShelfBusy] = useState(false);
@@ -218,11 +254,23 @@ export default function CountDetailPage() {
     }
   }, [id, orderType, invDocNum, warehouseParam]);
 
+  // Sayım satırlarını sessionStorage'a senkronize et (sayfa yenilense veya geri dönülse bile kaybolmasın)
+  useEffect(() => {
+    if (!id || lines.length === 0) return;
+    try {
+      sessionStorage.setItem(`count_session_${id}`, JSON.stringify({ order, lines }));
+    } catch {}
+  }, [id, order, lines]);
+
   useEffect(() => {
     if (istendi.current) return;
     istendi.current = true;
+    if (lines.length > 0) {
+      setLoading(false);
+      return;
+    }
     loadAdjustmentDetail();
-  }, [loadAdjustmentDetail]);
+  }, [loadAdjustmentDetail, lines.length]);
 
   const flash = (lineId: string) => {
     setFlashLineId(lineId);
@@ -1079,7 +1127,7 @@ export default function CountDetailPage() {
                     type="button"
                     onClick={handleClick}
                     disabled={!isClickable}
-                    className={`flex h-10 sm:h-10.5 w-full items-center justify-center rounded-xl px-0.5 text-xs sm:text-[13px] font-bold tracking-tight transition-all duration-200 ease-soft ${
+                    className={`flex h-9 w-full items-center justify-center rounded-xl px-0.5 text-xs font-bold tracking-tight transition-all duration-200 ease-soft ${
                       active
                         ? "bg-brand-600 text-white shadow-soft font-extrabold cursor-default"
                         : isClickable
