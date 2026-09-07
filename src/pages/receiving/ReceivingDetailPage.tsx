@@ -668,10 +668,7 @@ export default function ReceivingDetailPage() {
     }
   }, [location.state]);
 
-  // Mal Kabulü Kaydetme ve Onay Modal State'leri
-  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-  const [isSavingReceipt, setIsSavingReceipt] = useState(false);
-  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
+
 
   // Kamera Barkod Okuyucu Döngüsü
   const startCamera = () => {
@@ -1175,6 +1172,7 @@ export default function ReceivingDetailPage() {
       remPurQty: number;
       totalStockQty: number;
       fulfilledStockQty: number;
+      remStockQty: number;
       purUnit: string;
       stockUnit: string;
       factor: number;
@@ -1213,6 +1211,7 @@ export default function ReceivingDetailPage() {
 
       const fulfilledPurQty = factor > 1 ? Number((fulfilledStockQty / factor).toFixed(2)) : fulfilledStockQty;
       const remPurQty = Math.max(0, Number((totalPurQty - fulfilledPurQty).toFixed(2)));
+      const remStockQty = Math.max(0, Number((totalStockQty - fulfilledStockQty).toFixed(2)));
 
       allocations.push({
         order: ord,
@@ -1224,6 +1223,7 @@ export default function ReceivingDetailPage() {
         remPurQty,
         totalStockQty,
         fulfilledStockQty,
+        remStockQty,
         purUnit,
         stockUnit,
         factor,
@@ -1439,68 +1439,37 @@ export default function ReceivingDetailPage() {
   };
 
   // ---------------------------------------------------------------------------
-  // MAL KABULÜ BİTİR (MZYSAVEINVPURORDER)
+  // MAL KABULÜ BİTİR (ÖZET EKRANINA YÖNLENDİRME)
   // ---------------------------------------------------------------------------
-  const handleSaveReceipt = async () => {
+  const handleOpenSummary = () => {
     if (receivedItems.length === 0) {
       sesHata();
       show({ kind: "error", text: "Lütfen en az bir malzeme okutarak kabul ediniz." });
       return;
     }
 
-    setIsSavingReceipt(true);
-    try {
-      const itemsPayload = receivedItems.map((it) => ({
-        orderType: it.orderType || "OP",
-        orderNum: it.orderNum,
-        itemNum: it.itemNum,
-        material: it.material,
-        quantity: it.receivedQty,
-        receivedQty: it.receivedQty,
-        unit: it.unit || "AD",
-        purQty: it.purQty,
-        purUnit: it.purUnit,
-        specialStock: it.isSpecialLot || it.specialStock === "1" ? "1" : "0",
-        isSpecialLot: it.isSpecialLot,
-        batchNum: it.batchNum,
-        expiryDate: it.expiryDate,
-      }));
-
-      const res = await api.saveReceipt({
-        vendor: vendorCode,
-        waybillNo,
-        warehouse: targetWH || "00",
-        targetWarehouse: targetWH || "00",
-        stockPlace: targetSP || "*",
-        items: itemsPayload,
-      });
-
-      if (!res.ok) {
-        sesHata();
-        show({ kind: "error", text: res.message || "Mal kabul kaydedilemedi." });
-        return;
+    navigate(
+      `/receiving/${encodeURIComponent(vendorCode || id)}/summary?waybill=${encodeURIComponent(
+        waybillNo
+      )}&targetWH=${encodeURIComponent(targetWH)}&targetSP=${encodeURIComponent(targetSP)}&vendor=${encodeURIComponent(
+        vendorCode
+      )}&vendorName=${encodeURIComponent(vendorName)}`,
+      {
+        state: {
+          items: receivedItems,
+          allocations: orderFulfillment.allocations,
+          waybillNo,
+          targetWarehouse: targetWH,
+          targetStockPlace: targetSP,
+          vendor: vendorCode,
+          vendorName,
+          currentMaterial,
+          openOrders,
+          areDimensionsDone,
+          activeStep,
+        },
       }
-
-      sesBasarili();
-      setSaveSuccessMessage(
-        res.message || `${receivedItems.length} kalem malzemenin mal kabulü başarıyla tamamlandı.`
-      );
-
-      // LocalStorage temizle
-      localStorage.removeItem(storageKey);
-
-      setTimeout(() => {
-        navigate("/receiving");
-      }, 2000);
-    } catch (err: unknown) {
-      sesHata();
-      show({
-        kind: "error",
-        text: err instanceof Error ? err.message : "Kayıt sırasında hata oluştu.",
-      });
-    } finally {
-      setIsSavingReceipt(false);
-    }
+    );
   };
 
   const totalReceivedQty = receivedItems.reduce((sum, it) => sum + it.receivedQty, 0);
@@ -1517,31 +1486,15 @@ export default function ReceivingDetailPage() {
             {/* Mal Kabulü Bitir Butonu */}
             <button
               type="button"
-              onClick={() => setIsConfirmModalOpen(true)}
-              disabled={receivedItems.length === 0 || isSavingReceipt}
-              className="flex items-center gap-1.5 sm:gap-2 rounded-xl bg-emerald-600 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-extrabold text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              onClick={handleOpenSummary}
+              disabled={receivedItems.length === 0}
+              className="flex items-center gap-1.5 sm:gap-2 rounded-xl bg-emerald-600 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-extrabold text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
-              {isSavingReceipt ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Kaydediliyor...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" /> Mal Kabulü Bitir
-                </>
-              )}
+              <Save className="h-4 w-4" /> Mal Kabulü Bitir
             </button>
           </div>
         }
       />
-
-      {/* Başarı Bildirimi */}
-      {saveSuccessMessage && (
-        <div className="flex items-center gap-2.5 rounded-2xl border border-emerald-500 bg-emerald-500/20 p-3 text-xs font-bold text-emerald-800 dark:text-emerald-200 animate-slide-up">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-          <span>{saveSuccessMessage} Yönlendiriliyor...</span>
-        </div>
-      )}
 
       {/* ANA GRID - 2 SÜTUNLU VE EŞİT YÜKSEKLİKLİ HİZALANMIŞ YAPI */}
       <div className="grid grid-cols-1 sm:grid-cols-12 md:grid-cols-12 landscape:grid-cols-12 gap-2.5 sm:gap-3 items-stretch">
@@ -2084,7 +2037,7 @@ export default function ReceivingDetailPage() {
 
                       {/* Sağ: Karşılanan/Toplam (Üstte Stok Birimi, altta Sipariş Birimi - Şartlı Çift/Tek Satır) */}
                       <div className="flex items-center gap-2 sm:gap-2.5 font-mono shrink-0 ml-auto mr-2 sm:mr-4 text-right">
-                        <div className="flex flex-col items-end justify-center leading-tight gap-0.5">
+                        <div className="flex flex-col items-end justify-center leading-tight gap-0.5 -translate-x-[5px]">
                           {/* Üst Satır: Daima Stok Birimi Cinsinden */}
                           <span className="font-black text-fg text-xs sm:text-[12px]">
                             {al.fulfilledStockQty}/{al.totalStockQty} {al.stockUnit}
@@ -2116,61 +2069,7 @@ export default function ReceivingDetailPage() {
 
 
 
-      {/* Mal Kabulü Bitir Onay Modalı */}
-      {isConfirmModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/70 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-md rounded-3xl border border-line bg-surface p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-600/10 text-emerald-600 dark:text-emerald-400">
-                <AlertCircle className="h-6 w-6" />
-              </div>
-              <div>
-                <h3 className="text-base font-extrabold text-fg">Mal Kabulü Bitir</h3>
-                <p className="text-xs text-subtle mt-0.5">İşlemi onaylıyor musunuz?</p>
-              </div>
-            </div>
 
-            <div className="rounded-2xl border border-line bg-elevated/40 p-3.5 space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-subtle">Kabul Edilen Kalem:</span>
-                <strong className="text-fg font-mono">{receivedItems.length} Kalem</strong>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-subtle">Toplam Kabul Edilen Miktar:</span>
-                <strong className="text-emerald-600 dark:text-emerald-400 font-mono font-bold">
-                  {totalReceivedQty} {receivedItems[0]?.unit || "AD"}
-                </strong>
-              </div>
-            </div>
-
-            <p className="text-xs text-subtle leading-relaxed">
-              Kabul edilen malzemeler CANIAS sistemine kaydedilecek ve mal kabul işlemi tamamlanacaktır. Emin misiniz?
-            </p>
-
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-line">
-              <button
-                type="button"
-                onClick={() => setIsConfirmModalOpen(false)}
-                className="rounded-xl border border-line px-4 py-2.5 text-xs font-semibold text-subtle hover:bg-elevated transition"
-              >
-                Vazgeç
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsConfirmModalOpen(false);
-                  handleSaveReceipt();
-                }}
-                disabled={isSavingReceipt}
-                className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-lg hover:bg-emerald-700 active:scale-95 transition"
-              >
-                {isSavingReceipt ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                Evet, Tamamla
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <ToastView toast={toast} />
     </div>

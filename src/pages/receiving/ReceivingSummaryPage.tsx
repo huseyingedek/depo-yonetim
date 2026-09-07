@@ -1,119 +1,280 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next";
-import { Check, CheckCircle2, Loader2, Send, Tag } from "lucide-react";
+import { useState } from "react";
+import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
+import { ArrowLeft, Save, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
-import ProgressRing from "../../components/ProgressRing";
-import { useReceivingStore, receiptProgress, receiptTotals } from "../../store/receivingStore";
+import ToastView, { useToast } from "../../components/Toast";
+import { api } from "../../api/client";
+import { sesBasarili, sesHata } from "../../sound";
+import type { ReceivedItem } from "./ReceivingDetailPage";
 
 export default function ReceivingSummaryPage() {
-  const { t } = useTranslation();
   const navigate = useNavigate();
-  const receipt = useReceivingStore((s) => s.receipt);
-  const completing = useReceivingStore((s) => s.completing);
-  const complete = useReceivingStore((s) => s.complete);
-  const clear = useReceivingStore((s) => s.clear);
+  const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const { toast, show } = useToast();
 
-  const [done, setDone] = useState(false);
-  const [caniasRef, setCaniasRef] = useState("");
+  const waybillNo = searchParams.get("waybill") || location.state?.waybillNo || "";
+  const targetWH = searchParams.get("targetWH") || location.state?.targetWarehouse || "00";
+  const targetSP = searchParams.get("targetSP") || location.state?.targetStockPlace || "*";
+  const vendorCode = searchParams.get("vendor") || location.state?.vendor || id || "";
+  const vendorName = searchParams.get("vendorName") || location.state?.vendorName || "Tedarikçi";
 
-  useEffect(() => {
-    if (!receipt) navigate("/receiving", { replace: true });
-  }, [receipt, navigate]);
+  const storageKey = `mzy_receiving_items_${vendorCode || id || "active"}_${waybillNo || "active"}`;
 
-  if (!receipt) return null;
+  const [items] = useState<ReceivedItem[]>(() => {
+    try {
+      const stateItems = location.state?.items as ReceivedItem[] | undefined;
+      if (Array.isArray(stateItems) && stateItems.length > 0) return stateItems;
+      const local = localStorage.getItem(storageKey);
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  });
 
-  const progress = receiptProgress(receipt);
-  const { received, expected, lineCount } = receiptTotals(receipt);
+  const [isSaving, setIsSaving] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const handleComplete = async () => {
-    const ref = await complete();
-    setCaniasRef(ref);
-    setDone(true);
+  const handleBack = () => {
+    const backUrl = `/receiving/${encodeURIComponent(vendorCode || id || "")}?waybill=${encodeURIComponent(
+      waybillNo
+    )}&targetWH=${encodeURIComponent(targetWH)}&targetSP=${encodeURIComponent(targetSP)}&vendor=${encodeURIComponent(
+      vendorCode
+    )}&vendorName=${encodeURIComponent(vendorName)}`;
+
+    navigate(backUrl, {
+      state: {
+        ...location.state,
+        items,
+        waybillNo,
+        targetWarehouse: targetWH,
+        targetStockPlace: targetSP,
+        vendor: vendorCode,
+        vendorName,
+      },
+    });
   };
 
-  if (done) {
-    return (
-      <div className="mx-auto flex max-w-md flex-col items-center px-4 py-16 text-center">
-        <div className="mb-5 flex h-24 w-24 animate-pop-in items-center justify-center rounded-full bg-emerald-100">
-          <CheckCircle2 className="h-12 w-12 text-emerald-600" />
-        </div>
-        <h1 className="text-2xl font-extrabold text-fg">{t("receiving.completed")}</h1>
-        <div className="mt-1 flex items-center gap-1.5 text-sm text-emerald-600">
-          <Send className="h-4 w-4" /> <span>{t("picking.sentToCanias")}</span>
-        </div>
-        <div className="mt-6 w-full rounded-2xl border border-line bg-surface p-5 shadow-card">
-          <Row label={t("receiving.waybill")} value={receipt.id} mono />
-          <Row label={t("picking.reference")} value={caniasRef} mono />
-          <Row label={t("receiving.totalLines")} value={`${lineCount}`} />
-          <Row label={t("receiving.totalReceived")} value={`${received}`} last />
-        </div>
-        <button onClick={() => { clear(); navigate("/receiving", { replace: true }); }} className="btn-primary btn-lg mt-6 w-full">
-          {t("common.backToMenu")}
-        </button>
-      </div>
-    );
-  }
+  const handleSaveReceipt = async () => {
+    if (items.length === 0) {
+      sesHata();
+      show({ kind: "error", text: "Kabul edilecek malzeme bulunamadı." });
+      return;
+    }
+
+    setIsSaving(true);
+    setErrorMessage("");
+
+    try {
+      const itemsPayload = items.map((it) => ({
+        orderType: it.orderType || "OP",
+        orderNum: it.orderNum || "SERBEST",
+        itemNum: it.itemNum ?? 1,
+        material: it.material,
+        quantity: it.receivedQty,
+        receivedQty: it.receivedQty,
+        unit: it.unit || "AD",
+        purQty: it.purQty !== undefined ? it.purQty : it.receivedQty,
+        purUnit: it.purUnit || it.unit || "AD",
+        specialStock: it.isSpecialLot || it.specialStock === "1" ? "1" : "0",
+        isSpecialLot: it.isSpecialLot,
+        batchNum: it.batchNum && it.batchNum !== "—" ? it.batchNum : "*",
+        expiryDate: it.expiryDate || undefined,
+      }));
+
+      const res = await api.saveReceipt({
+        vendor: vendorCode,
+        waybillNo,
+        warehouse: targetWH || "00",
+        targetWarehouse: targetWH || "00",
+        stockPlace: targetSP || "*",
+        items: itemsPayload,
+      });
+
+      if (!res.ok) {
+        sesHata();
+        const msg = res.message || "Mal kabul kaydedilemedi.";
+        setErrorMessage(msg);
+        show({ kind: "error", text: msg });
+        setTimeout(() => {
+          setErrorMessage("");
+        }, 4000);
+        return;
+      }
+
+      sesBasarili();
+      const successText =
+        res.message || `${items.length} kalem malzemenin mal kabulü başarıyla tamamlandı.`;
+      setSuccessMessage(successText);
+      show({ kind: "success", text: successText });
+
+      // LocalStorage temizle
+      try {
+        localStorage.removeItem(storageKey);
+      } catch {}
+
+      // 4 saniye sonra ana ekrana yönlendir
+      setTimeout(() => {
+        navigate("/receiving", { replace: true });
+      }, 4000);
+    } catch (err: unknown) {
+      sesHata();
+      const msg = err instanceof Error ? err.message : "Kayıt sırasında hata oluştu.";
+      setErrorMessage(msg);
+      show({ kind: "error", text: msg });
+      setTimeout(() => {
+        setErrorMessage("");
+      }, 4000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
-    <div className="mx-auto max-w-3xl p-4 lg:p-8">
-      <PageHeader title={t("picking.orderSummary")} subtitle={receipt.id} backTo={`/receiving/${receipt.id}`} />
-
-      <div className="card p-6">
-        <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-center sm:gap-10">
-          <ProgressRing value={progress} label={t("picking.progress")} />
-          <div className="grid w-full max-w-xs grid-cols-3 gap-3 sm:w-auto">
-            <Stat value={lineCount} label={t("receiving.totalLines")} tone="ink" />
-            <Stat value={received} label={t("receiving.received")} tone="emerald" />
-            <Stat value={expected} label={t("receiving.expected")} tone="brand" />
+    <div className="mx-auto max-w-6xl p-4 lg:p-8 animate-fade-in space-y-4">
+      <PageHeader
+        title="Mal Kabul Özeti"
+        subtitle={`${vendorName || vendorCode || id} · İrsaliye: ${waybillNo || "—"} · ${items.length} kalem`}
+        onBack={handleBack}
+        right={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleBack}
+              disabled={isSaving || Boolean(successMessage)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3.5 py-2 text-xs sm:text-sm font-semibold text-muted transition hover:bg-elevated disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Geri
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveReceipt}
+              disabled={items.length === 0 || isSaving || Boolean(successMessage)}
+              className="inline-flex items-center gap-1.5 sm:gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs sm:text-sm font-extrabold text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Kaydediliyor...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  Bitir
+                </>
+              )}
+            </button>
           </div>
+        }
+      />
+
+      {/* Başarı Bildirimi */}
+      {successMessage && (
+        <div className="flex items-center gap-3 rounded-2xl border border-emerald-500 bg-emerald-500/20 p-4 text-sm font-bold text-emerald-800 dark:text-emerald-200 animate-slide-up">
+          <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <div className="flex-1 font-extrabold text-sm">{successMessage}</div>
         </div>
-      </div>
+      )}
 
-      <div className="mt-5 space-y-2">
-        {receipt.lines.map((line) => {
-          const lineDone = line.receivedQty >= line.expectedQty;
-          return (
-            <div key={line.id} className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-card">
-              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${lineDone ? "bg-emerald-100" : "bg-amber-100"}`}>
-                <Check className={`h-4 w-4 ${lineDone ? "text-emerald-600" : "text-amber-500"}`} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-fg">{line.product.name}</p>
-                {line.lot && (
-                  <p className="flex items-center gap-1 text-xs text-violet-600">
-                    <Tag className="h-3 w-3" /> {line.lot} · {line.expiry}
-                  </p>
-                )}
-              </div>
-              <span className="font-mono text-sm font-bold text-fg">{line.receivedQty}/{line.expectedQty}</span>
-            </div>
-          );
-        })}
-      </div>
+      {/* Hata Bildirimi */}
+      {errorMessage && (
+        <div className="flex items-center gap-3 rounded-2xl border border-rose-500 bg-rose-500/20 p-4 text-sm font-bold text-rose-800 dark:text-rose-200 animate-slide-up">
+          <AlertCircle className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0" />
+          <div className="flex-1 font-extrabold text-sm">{errorMessage}</div>
+        </div>
+      )}
 
-      <button onClick={handleComplete} disabled={completing} className="btn-primary btn-lg mt-6 w-full sm:w-auto sm:px-10">
-        {completing ? (<><Loader2 className="h-5 w-5 animate-spin" /> {t("picking.sentToCanias")}...</>) : (<><Send className="h-5 w-5" /> {t("receiving.completeReceipt")}</>)}
-      </button>
-    </div>
-  );
-}
+      {/* Özet Tablosu: Yalnızca Ürün Kodu, Ürün Adı, Stok Birimi ve Okutulan Miktar */}
+      {!items.length ? (
+        <div className="rounded-2xl border border-line bg-surface p-10 text-center text-sm text-subtle">
+          Henüz kabul edilen malzeme yok.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-line bg-surface shadow-card">
+          <table className="w-full text-left text-xs table-auto">
+            <thead className="border-b border-line bg-elevated">
+              <tr>
+                <th className="whitespace-nowrap px-4 py-3 font-bold text-black dark:text-white text-xs">
+                  Malzeme Kodu
+                </th>
+                <th className="whitespace-nowrap px-4 py-3 font-bold text-black dark:text-white text-xs">
+                  Malzeme Adı
+                </th>
+                <th className="whitespace-nowrap px-4 py-3 font-bold text-black dark:text-white text-xs">
+                  Stok Birimi
+                </th>
+                <th className="whitespace-nowrap px-4 py-3 font-bold text-black dark:text-white text-xs text-right">
+                  Kalan Miktar
+                </th>
+                <th className="whitespace-nowrap px-4 py-3 font-bold text-black dark:text-white text-xs text-right">
+                  Okutulan Miktar
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, i) => {
+                const allocations = location.state?.allocations as
+                  | Array<{
+                      orderNum: string;
+                      itemNum: string;
+                      material?: string;
+                      totalStockQty: number;
+                      fulfilledStockQty: number;
+                      remStockQty: number;
+                      stockUnit: string;
+                      remPurQty: number;
+                      purUnit: string;
+                    }>
+                  | undefined;
 
-function Row({ label, value, mono, last }: { label: string; value: string; mono?: boolean; last?: boolean }) {
-  return (
-    <div className={`flex items-center justify-between py-2 ${last ? "" : "border-b border-line"}`}>
-      <span className="text-sm text-subtle">{label}</span>
-      <span className={`text-sm font-bold text-fg ${mono ? "font-mono" : ""}`}>{value}</span>
-    </div>
-  );
-}
+                const matchingAlloc = allocations?.find(
+                  (a) =>
+                    (a.orderNum === item.orderNum && String(a.itemNum) === String(item.itemNum)) ||
+                    a.material === item.material
+                );
 
-function Stat({ value, label, tone }: { value: number; label: string; tone: "ink" | "brand" | "emerald" }) {
-  const tones = { ink: "text-fg", brand: "text-brand-600", emerald: "text-emerald-600" };
-  return (
-    <div className="rounded-2xl border border-line bg-surface p-3 text-center shadow-card">
-      <p className={`text-2xl font-extrabold ${tones[tone]}`}>{value}</p>
-      <p className="mt-0.5 text-[11px] font-medium leading-tight text-subtle">{label}</p>
+                const remainingQty = matchingAlloc
+                  ? matchingAlloc.remStockQty
+                  : Math.max(0, Number(((item.expectedQty || item.receivedQty) - item.receivedQty).toFixed(2)));
+
+                const remainingUnit = matchingAlloc?.stockUnit || item.unit || "AD";
+
+                return (
+                  <tr
+                    key={item.id || i}
+                    className="border-b border-line last:border-0 hover:bg-elevated/20 transition-colors"
+                  >
+                    <td className="px-4 py-3 font-mono text-xs font-bold text-black dark:text-white whitespace-nowrap">
+                      {item.material || "—"}
+                    </td>
+                    <td className="px-4 py-3 font-sans text-xs font-bold text-black dark:text-white min-w-[200px]">
+                      {item.name || "—"}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs font-bold text-black dark:text-white whitespace-nowrap">
+                      {item.unit || "AD"}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs font-bold text-black dark:text-white whitespace-nowrap text-right text-sm">
+                      {remainingQty} {remainingUnit}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs font-bold text-black dark:text-white whitespace-nowrap text-right text-sm">
+                      {item.receivedQty} {item.unit || "AD"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <ToastView toast={toast} />
     </div>
   );
 }
