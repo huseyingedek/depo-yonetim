@@ -4,7 +4,6 @@ import {
   Package,
   Plus,
   Minus,
-  CheckCircle2,
   Loader2,
   Tag,
   Ruler,
@@ -13,7 +12,6 @@ import {
   Camera,
   CornerDownLeft,
   X,
-  AlertCircle,
   Check,
   Calendar,
   ChevronDown,
@@ -515,7 +513,7 @@ export default function ReceivingDetailPage() {
         id: "spoil",
         label: "Bozulur",
         icon: Clock,
-        colorClass: "rounded border border-emerald-500/40 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 font-black text-[9px] sm:text-[9.5px]",
+        colorClass: "rounded border border-green-500/40 bg-green-500/15 text-green-800 dark:text-green-300 font-black text-[9px] sm:text-[9.5px]",
       });
     }
 
@@ -1449,7 +1447,7 @@ export default function ReceivingDetailPage() {
     }
 
     navigate(
-      `/receiving/${encodeURIComponent(vendorCode || id)}/summary?waybill=${encodeURIComponent(
+      `/receiving/${encodeURIComponent(vendorCode)}/summary?waybill=${encodeURIComponent(
         waybillNo
       )}&targetWH=${encodeURIComponent(targetWH)}&targetSP=${encodeURIComponent(targetSP)}&vendor=${encodeURIComponent(
         vendorCode
@@ -1472,8 +1470,6 @@ export default function ReceivingDetailPage() {
     );
   };
 
-  const totalReceivedQty = receivedItems.reduce((sum, it) => sum + it.receivedQty, 0);
-
   return (
     <div className="mx-auto max-w-7xl p-2 sm:p-4 lg:p-6 animate-fade-in space-y-3 sm:space-y-4">
       {/* Üst Başlık ve Aksiyonlar */}
@@ -1488,7 +1484,7 @@ export default function ReceivingDetailPage() {
               type="button"
               onClick={handleOpenSummary}
               disabled={receivedItems.length === 0}
-              className="flex items-center gap-1.5 sm:gap-2 rounded-xl bg-emerald-600 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-extrabold text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              className="flex items-center gap-1.5 sm:gap-2 rounded-xl bg-brand-600 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-extrabold text-white shadow-md hover:bg-brand-700 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               <Save className="h-4 w-4" /> Mal Kabulü Bitir
             </button>
@@ -1509,39 +1505,41 @@ export default function ReceivingDetailPage() {
             : "min-h-[205px] sm:min-h-[215px]"
             }`}
         >
-          {/* 2 Eşit Büyüklükte Adım Butonu (1 Malzeme, 2 Miktar) */}
-          <div className="grid grid-cols-2 gap-0.5 sm:gap-1 bg-elevated/40 p-0.5 rounded-md border border-line/60 shrink-0">
-            <button
-              type="button"
-              onClick={() => setActiveStep("product")}
-              className={`flex min-w-0 items-center justify-center gap-0.5 rounded py-1 px-1 text-[10px] sm:text-[10.5px] font-black whitespace-nowrap transition-all duration-200 ${activeStep === "product"
-                ? "bg-emerald-600 text-white shadow-2xs"
-                : isProductScanned && areDimensionsDone
-                  ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
-                  : "bg-surface hover:bg-elevated text-fg border border-line/50"
-                }`}
-            >
-              {isProductScanned && areDimensionsDone && <span className="shrink-0 font-mono text-[9px]">✓</span>}
-              <span>1 Malzeme</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (isProductScanned && areDimensionsDone) {
-                  setActiveStep("quantity");
-                }
-              }}
-              disabled={!isProductScanned || !areDimensionsDone}
-              className={`flex min-w-0 items-center justify-center gap-0.5 rounded py-1 px-1 text-[10px] sm:text-[10.5px] font-black whitespace-nowrap transition-all duration-200 ${activeStep === "quantity"
-                ? "bg-emerald-600 text-white shadow-2xs"
-                : isProductScanned && areDimensionsDone
-                  ? "bg-surface hover:bg-elevated text-fg border border-line/50"
-                  : "bg-transparent text-subtle/50 cursor-not-allowed"
-                }`}
-            >
-              <span>2 Miktar</span>
-            </button>
+          {/* Adım tab'ları — sipariş toplama/yerleştirme ile birebir aynı pill stili */}
+          <div className="mb-3 flex items-center gap-1.5">
+            {(
+              [
+                ["product", "Malzeme"],
+                ["quantity", "Miktar"],
+              ] as const
+            ).map(([s, label], i) => {
+              const active = activeStep === s;
+              const done = s === "product" && isProductScanned && areDimensionsDone;
+              const tiklanabilir = s === "product" || (isProductScanned && areDimensionsDone);
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => {
+                    if (s === "product") setActiveStep("product");
+                    else if (isProductScanned && areDimensionsDone) setActiveStep("quantity");
+                  }}
+                  disabled={!tiklanabilir}
+                  className={`flex min-w-0 flex-1 items-center justify-center gap-1 truncate rounded-xl px-1.5 py-1.5 text-[11px] font-semibold transition-all duration-200 ease-soft ${
+                    active
+                      ? "bg-brand-600 text-white shadow-soft"
+                      : done
+                        ? "bg-emerald-100 text-emerald-700"
+                        : tiklanabilir
+                          ? "bg-elevated text-subtle hover:bg-elevated"
+                          : "bg-elevated text-subtle/50 cursor-default"
+                  }`}
+                >
+                  <span className="shrink-0 font-mono">{done && !active ? "✓" : i + 1}</span>
+                  <span className="truncate">{label}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* ------------------------------------------------------------------- */}
@@ -1574,7 +1572,7 @@ export default function ReceivingDetailPage() {
                       title="Sorgula"
                     >
                       {isQueryingBarcode ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                        <Loader2 className="h-4 w-4 animate-spin text-brand-600" />
                       ) : (
                         <CornerDownLeft className="h-4 w-4" />
                       )}
@@ -1586,7 +1584,7 @@ export default function ReceivingDetailPage() {
                     type="button"
                     onClick={() => (cameraOpen ? stopCamera() : startCamera())}
                     className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition ${cameraOpen
-                      ? "border-emerald-600 bg-emerald-600 text-white shadow-md"
+                      ? "border-brand-600 bg-brand-600 text-white shadow-md"
                       : "border-line bg-elevated/60 text-subtle hover:bg-elevated hover:text-fg"
                       }`}
                     title="Kamera ile Barkod Tara"
@@ -1598,17 +1596,17 @@ export default function ReceivingDetailPage() {
 
               {/* Inline Kamera Ekranı */}
               {cameraOpen && (
-                <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-ink-950 border border-emerald-500/40 shadow-inner animate-fade-in">
+                <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-ink-950 border border-brand-500/40 shadow-inner animate-fade-in">
                   {!cameraError ? (
                     <>
                       <video ref={videoRef} className="h-full w-full object-cover" muted playsInline />
                       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                         <div className="relative h-44 w-52">
-                          <span className="absolute left-0 top-0 h-5 w-5 rounded-tl-lg border-l-4 border-t-4 border-emerald-400" />
-                          <span className="absolute right-0 top-0 h-5 w-5 rounded-tr-lg border-r-4 border-t-4 border-emerald-400" />
-                          <span className="absolute bottom-0 left-0 h-5 w-5 rounded-bl-lg border-b-4 border-l-4 border-emerald-400" />
-                          <span className="absolute bottom-0 right-0 h-5 w-5 rounded-br-lg border-b-4 border-r-4 border-emerald-400" />
-                          <div className="absolute inset-x-2 top-2 h-0.5 animate-scan-line bg-emerald-400 shadow-[0_0_12px_2px_rgba(16,185,129,0.8)]" />
+                          <span className="absolute left-0 top-0 h-5 w-5 rounded-tl-lg border-l-4 border-t-4 border-brand-400" />
+                          <span className="absolute right-0 top-0 h-5 w-5 rounded-tr-lg border-r-4 border-t-4 border-brand-400" />
+                          <span className="absolute bottom-0 left-0 h-5 w-5 rounded-bl-lg border-b-4 border-l-4 border-brand-400" />
+                          <span className="absolute bottom-0 right-0 h-5 w-5 rounded-br-lg border-b-4 border-r-4 border-brand-400" />
+                          <div className="absolute inset-x-2 top-2 h-0.5 animate-scan-line bg-brand-400 shadow-[0_0_12px_2px_rgba(16,185,129,0.8)]" />
                         </div>
                       </div>
                       <p className="absolute inset-x-0 bottom-2.5 text-center text-[11px] font-bold text-white/90">
@@ -1661,13 +1659,13 @@ export default function ReceivingDetailPage() {
                       const val = parseInt(raw, 10);
                       setReceiptQty(isNaN(val) ? 0 : Math.max(0, val));
                     }}
-                    className="field-input flex-1 text-center font-mono text-base sm:text-lg font-extrabold text-emerald-600 dark:text-emerald-400 h-10 py-1"
+                    className="field-input flex-1 text-center font-mono text-base sm:text-lg font-extrabold text-brand-600 dark:text-brand-400 h-10 py-1"
                     autoFocus
                   />
                   <button
                     type="button"
                     onClick={() => setReceiptQty((prev) => prev + 1)}
-                    className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition active:scale-95 shadow-md shrink-0"
+                    className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white hover:bg-brand-700 transition active:scale-95 shadow-md shrink-0"
                   >
                     <Plus className="h-4 w-4" />
                   </button>
@@ -1691,7 +1689,7 @@ export default function ReceivingDetailPage() {
                       key={inc}
                       type="button"
                       onClick={() => setReceiptQty((prev) => prev + inc)}
-                      className="rounded-xl border border-line bg-elevated/80 py-2 text-xs sm:text-sm font-black text-fg hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition active:scale-95 shadow-xs"
+                      className="rounded-xl border border-line bg-elevated/80 py-2 text-xs sm:text-sm font-black text-fg hover:bg-brand-600 hover:text-white hover:border-brand-600 transition active:scale-95 shadow-xs"
                     >
                       +{inc}
                     </button>
@@ -1702,7 +1700,7 @@ export default function ReceivingDetailPage() {
                     type="button"
                     onClick={handleCompleteItemReceipt}
                     disabled={!isProductScanned || !areDimensionsDone || receiptQty <= 0}
-                    className="flex flex-col items-center justify-center rounded-xl bg-emerald-600 py-1 text-[10px] sm:text-[11px] font-black leading-tight text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-35 disabled:cursor-not-allowed"
+                    className="flex flex-col items-center justify-center rounded-xl bg-brand-600 py-1 text-[10px] sm:text-[11px] font-black leading-tight text-white shadow-md hover:bg-brand-700 active:scale-95 transition disabled:opacity-35 disabled:cursor-not-allowed"
                     title="Malzemeyi Kabul Et / Listeye Ekle"
                   >
                     <span>Kabul</span>
@@ -1814,11 +1812,11 @@ export default function ReceivingDetailPage() {
                       <button
                         type="button"
                         onClick={handleOpenDimensionModal}
-                        className="absolute left-[88px] bottom-[3px] inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 transition cursor-pointer font-sans text-[9px] font-black shadow-2xs active:scale-95 group leading-none z-10 whitespace-nowrap"
+                        className="absolute left-[88px] bottom-[3px] inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-brand-500/15 hover:bg-brand-500/25 text-brand-700 dark:text-brand-300 border border-brand-500/30 transition cursor-pointer font-sans text-[9px] font-black shadow-2xs active:scale-95 group leading-none z-10 whitespace-nowrap"
                         title="Ölçü ve Boyutları Değiştir (CANIAS'a Kaydeder)"
                       >
                         <span>Ölçüm Değiştir</span>
-                        <Pencil className="h-2 w-2 text-emerald-600 dark:text-emerald-400 group-hover:rotate-12 transition-transform shrink-0" />
+                        <Pencil className="h-2 w-2 text-brand-600 dark:text-brand-400 group-hover:rotate-12 transition-transform shrink-0" />
                       </button>
                     </div>
                   ) : (
@@ -1830,11 +1828,11 @@ export default function ReceivingDetailPage() {
                       <button
                         type="button"
                         onClick={handleOpenDimensionModal}
-                        className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 transition cursor-pointer font-sans text-[9.5px] font-black shadow-2xs active:scale-95 group leading-none"
+                        className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-brand-500/15 hover:bg-brand-500/25 text-brand-700 dark:text-brand-300 border border-brand-500/30 transition cursor-pointer font-sans text-[9.5px] font-black shadow-2xs active:scale-95 group leading-none"
                         title="Ölçü Ekle"
                       >
                         <span>Ölçüm Ekle</span>
-                        <Pencil className="h-2.5 w-2.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <Pencil className="h-2.5 w-2.5 text-brand-600 dark:text-brand-400 shrink-0" />
                       </button>
                     </div>
                   )}
@@ -1913,7 +1911,7 @@ export default function ReceivingDetailPage() {
                             prev ? { ...prev, selectedBarcode: e.target.value } : prev
                           )
                         }
-                        className="text-[10px] sm:text-[10.5px] font-mono font-black py-0 pl-1.5 pr-5 h-5.5 sm:h-6 rounded-md border border-line bg-surface text-fg shadow-2xs cursor-pointer focus:outline-none focus:border-emerald-500 appearance-none w-auto tracking-wide shrink-0 leading-none"
+                        className="text-[10px] sm:text-[10.5px] font-mono font-black py-0 pl-1.5 pr-5 h-5.5 sm:h-6 rounded-md border border-line bg-surface text-fg shadow-2xs cursor-pointer focus:outline-none focus:border-brand-500 appearance-none w-auto tracking-wide shrink-0 leading-none"
                         title="Barkod Seçimi"
                       >
                         {currentMaterial.barcodes.map((b) => {
@@ -1945,7 +1943,7 @@ export default function ReceivingDetailPage() {
 
         {/* SOL ALT: KABUL EDİLENLER BARI */}
         <div className="col-span-1 sm:col-span-5 md:col-span-4 lg:col-span-4 xl:col-span-4 landscape:col-span-4 self-start">
-          <div className="rounded-2xl border border-line bg-surface p-2.5 sm:p-3 shadow-xs hover:border-emerald-500/40 transition flex items-center min-h-[66px] sm:min-h-[68px]">
+          <div className="rounded-2xl border border-line bg-surface p-2.5 sm:p-3 shadow-xs hover:border-brand-500/40 transition flex items-center min-h-[66px] sm:min-h-[68px]">
             <button
               type="button"
               onClick={() =>
@@ -1971,10 +1969,10 @@ export default function ReceivingDetailPage() {
                   }
                 )
               }
-              className="flex w-full items-center justify-between text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+              className="flex w-full items-center justify-between text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline cursor-pointer"
             >
               <span>Kabul edilenler ({receivedItems.length})</span>
-              <span>Tümünü gör →</span>
+              <span aria-hidden>→</span>
             </button>
           </div>
         </div>
@@ -1990,7 +1988,7 @@ export default function ReceivingDetailPage() {
                   <div
                     key={`${al.orderNum}-${al.itemNum}-${idx}`}
                     className={`rounded-2xl border p-2 sm:p-2.5 transition-all shadow-xs ${al.isFullyAllocated
-                      ? "border-emerald-500/60 bg-emerald-500/10"
+                      ? "border-brand-500/60 bg-brand-500/10"
                       : al.isPartiallyAllocated
                         ? "border-amber-500/60 bg-amber-500/10"
                         : "border-line bg-surface"
@@ -2053,7 +2051,7 @@ export default function ReceivingDetailPage() {
 
                         {/* Tamamlandı Rozeti */}
                         {al.isFullyAllocated && (
-                          <span className="chip bg-emerald-600 text-white font-black text-[10px] px-1.5 py-0.5 shadow-2xs flex items-center gap-0.5">
+                          <span className="chip bg-brand-600 text-white font-black text-[10px] px-1.5 py-0.5 shadow-2xs flex items-center gap-0.5">
                             <Check className="h-3 w-3" /> Tamamlandı
                           </span>
                         )}

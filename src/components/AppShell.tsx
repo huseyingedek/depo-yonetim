@@ -5,6 +5,7 @@ import { Boxes, Home, Settings as SettingsIcon, LogOut, Building2, Bell, Clipboa
 import { useAppStore } from "../store/appStore";
 import { usePickingStore } from "../store/pickingStore";
 import { OPERATIONS } from "./operations";
+import GlobalHataToast from "./GlobalHataToast";
 
 export default function AppShell() {
   const { t } = useTranslation();
@@ -77,6 +78,9 @@ export default function AppShell() {
 
       {}
       <MobileTabBar />
+
+      {/* Tek yerden global hata bildirimi */}
+      <GlobalHataToast />
     </div>
   );
 }

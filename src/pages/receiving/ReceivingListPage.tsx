@@ -75,7 +75,7 @@ export default function ReceivingListPage() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-base font-bold text-fg">{d.id}</span>
-                        <span className={`chip ${started ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+                        <span className={`chip ${started ? "bg-amber-100 text-amber-700" : "bg-brand-100 text-brand-700"}`}>
                           {started ? t("picking.status.inProgress") : t("picking.status.new")}
                         </span>
                       </div>
@@ -87,7 +87,7 @@ export default function ReceivingListPage() {
                   </div>
                   <div className="mt-4 flex items-center gap-3">
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-elevated">
-                      <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${progress}%` }} />
+                      <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${progress}%` }} />
                     </div>
                     <span className="whitespace-nowrap text-xs font-semibold text-subtle">
                       {lineCount} {t("receiving.items")} · {expected} adet

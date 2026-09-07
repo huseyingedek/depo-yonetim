@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { ArrowLeft, Save, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
+import ProgressRing from "../../components/ProgressRing";
 import ToastView, { useToast } from "../../components/Toast";
 import { api } from "../../api/client";
 import { sesBasarili, sesHata } from "../../sound";
@@ -112,7 +113,7 @@ export default function ReceivingSummaryPage() {
       const successText =
         res.message || `${items.length} kalem malzemenin mal kabulü başarıyla tamamlandı.`;
       setSuccessMessage(successText);
-      show({ kind: "success", text: successText });
+      show({ kind: "done", text: successText });
 
       // LocalStorage temizle
       try {
@@ -136,6 +137,13 @@ export default function ReceivingSummaryPage() {
     }
   };
 
+  // Özet istatistikleri (sipariş toplama özeti ile aynı: ProgressRing + Stat kartları)
+  const toplamKalem = items.length;
+  const okutulan = items.reduce((s, it) => s + (it.receivedQty || 0), 0);
+  const beklenen = items.reduce((s, it) => s + (it.expectedQty || it.receivedQty || 0), 0);
+  const kalan = Math.max(0, Number((beklenen - okutulan).toFixed(2)));
+  const ilerleme = beklenen > 0 ? Math.min(100, Math.round((okutulan / beklenen) * 100)) : items.length > 0 ? 100 : 0;
+
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8 animate-fade-in space-y-4">
       <PageHeader
@@ -157,7 +165,7 @@ export default function ReceivingSummaryPage() {
               type="button"
               onClick={handleSaveReceipt}
               disabled={items.length === 0 || isSaving || Boolean(successMessage)}
-              className="inline-flex items-center gap-1.5 sm:gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs sm:text-sm font-extrabold text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              className="inline-flex items-center gap-1.5 sm:gap-2 rounded-xl bg-brand-600 px-4 py-2 text-xs sm:text-sm font-extrabold text-white shadow-md hover:bg-brand-700 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               {isSaving ? (
                 <>
@@ -167,7 +175,7 @@ export default function ReceivingSummaryPage() {
               ) : (
                 <>
                   <Save className="h-4 w-4" />
-                  Bitir
+                  Mal Kabul Bitir
                 </>
               )}
             </button>
@@ -177,8 +185,8 @@ export default function ReceivingSummaryPage() {
 
       {/* Başarı Bildirimi */}
       {successMessage && (
-        <div className="flex items-center gap-3 rounded-2xl border border-emerald-500 bg-emerald-500/20 p-4 text-sm font-bold text-emerald-800 dark:text-emerald-200 animate-slide-up">
-          <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <div className="flex items-center gap-3 rounded-2xl border border-brand-500 bg-brand-500/20 p-4 text-sm font-bold text-brand-800 dark:text-brand-200 animate-slide-up">
+          <CheckCircle2 className="h-5 w-5 text-brand-600 dark:text-brand-400 shrink-0" />
           <div className="flex-1 font-extrabold text-sm">{successMessage}</div>
         </div>
       )}
@@ -188,6 +196,20 @@ export default function ReceivingSummaryPage() {
         <div className="flex items-center gap-3 rounded-2xl border border-rose-500 bg-rose-500/20 p-4 text-sm font-bold text-rose-800 dark:text-rose-200 animate-slide-up">
           <AlertCircle className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0" />
           <div className="flex-1 font-extrabold text-sm">{errorMessage}</div>
+        </div>
+      )}
+
+      {/* Özet kartı — sipariş toplama özetiyle aynı yapı (ProgressRing + Stat) */}
+      {items.length > 0 && (
+        <div className="card p-6">
+          <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-center sm:gap-10">
+            <ProgressRing value={ilerleme} label="İlerleme" />
+            <div className="grid w-full max-w-xs grid-cols-3 gap-3 sm:w-auto">
+              <SummaryStat value={toplamKalem} label="Toplam Kalem" tone="ink" />
+              <SummaryStat value={okutulan} label="Okutulan Adet" tone="brand" />
+              <SummaryStat value={kalan} label="Kalan Adet" tone={kalan > 0 ? "rose" : "emerald"} />
+            </div>
+          </div>
         </div>
       )}
 
@@ -275,6 +297,21 @@ export default function ReceivingSummaryPage() {
       )}
 
       <ToastView toast={toast} />
+    </div>
+  );
+}
+
+function SummaryStat({ value, label, tone }: { value: number; label: string; tone: "ink" | "brand" | "rose" | "emerald" }) {
+  const tones = {
+    ink: "text-fg",
+    brand: "text-brand-600",
+    rose: "text-rose-500",
+    emerald: "text-emerald-600",
+  };
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-3 text-center shadow-card">
+      <p className={`text-2xl font-extrabold ${tones[tone]}`}>{value}</p>
+      <p className="mt-0.5 text-[11px] font-medium leading-tight text-subtle">{label}</p>
     </div>
   );
 }

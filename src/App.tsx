@@ -11,6 +11,7 @@ import PickingSummaryPage from "./pages/picking/PickingSummaryPage";
 import PickingRecordsPage from "./pages/picking/PickingRecordsPage";
 import ReceivingListPage from "./pages/receiving/ReceivingListPage";
 import ReceivingSupplierSelectPage from "./pages/receiving/ReceivingSupplierSelectPage";
+import ReceivingWaybillPage from "./pages/receiving/ReceivingWaybillPage";
 import ReceivingDetailPage from "./pages/receiving/ReceivingDetailPage";
 import ReceivingRecordsPage from "./pages/receiving/ReceivingRecordsPage";
 import ReceivingDimensionsPage from "./pages/receiving/ReceivingDimensionsPage";
@@ -62,6 +63,7 @@ export default function App() {
 
         {/* Mal Kabul */}
         <Route path="/receiving" element={<ReceivingSupplierSelectPage />} />
+        <Route path="/receiving/irsaliye" element={<ReceivingWaybillPage />} />
         <Route path="/receiving/list" element={<ReceivingListPage />} />
         <Route path="/receiving/:id" element={<ReceivingDetailPage />} />
         <Route path="/receiving/:id/kayitlar" element={<ReceivingRecordsPage />} />

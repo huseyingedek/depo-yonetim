@@ -250,19 +250,19 @@ export default function ReceivingDimensionsPage() {
           <button
             type="button"
             onClick={handleBack}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-elevated border border-line text-subtle hover:bg-emerald-600 hover:text-white transition active:scale-95 shadow-2xs"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-elevated border border-line text-subtle hover:bg-brand-600 hover:text-white transition active:scale-95 shadow-2xs"
             title="Geri Dön"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-2xs">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-600/10 text-brand-600 dark:text-brand-400 border border-brand-500/20 shadow-2xs">
             <Ruler className="h-3.5 w-3.5" />
           </div>
           <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
             <h3 className="text-xs sm:text-sm font-black text-fg whitespace-nowrap">
               Ölçü ve Nitelik Tanımlama
             </h3>
-            <span className="font-mono text-[11px] font-extrabold text-emerald-800 dark:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.2 rounded shadow-2xs">
+            <span className="font-mono text-[11px] font-extrabold text-brand-800 dark:text-brand-300 bg-brand-500/15 border border-brand-500/30 px-1.5 py-0.2 rounded shadow-2xs">
               {material || "KOD"}
             </span>
             <span className="text-xs text-subtle truncate max-w-[220px] sm:max-w-md font-semibold" title={materialName}>
@@ -294,7 +294,7 @@ export default function ReceivingDimensionsPage() {
                   value={form.pwidth || ""}
                   onChange={(e) => handleNumChange("pwidth", e.target.value)}
                   placeholder="0.0"
-                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-brand-500 focus:outline-none shadow-2xs"
                   autoFocus
                   required
                 />
@@ -310,7 +310,7 @@ export default function ReceivingDimensionsPage() {
                   value={form.plength || ""}
                   onChange={(e) => handleNumChange("plength", e.target.value)}
                   placeholder="0.0"
-                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-brand-500 focus:outline-none shadow-2xs"
                   required
                 />
               </div>
@@ -325,7 +325,7 @@ export default function ReceivingDimensionsPage() {
                   value={form.pheight || ""}
                   onChange={(e) => handleNumChange("pheight", e.target.value)}
                   placeholder="0.0"
-                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-brand-500 focus:outline-none shadow-2xs"
                   required
                 />
               </div>
@@ -344,7 +344,7 @@ export default function ReceivingDimensionsPage() {
                   value={form.netweight || ""}
                   onChange={(e) => handleNumChange("netweight", e.target.value)}
                   placeholder="0.00"
-                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-brand-500 focus:outline-none shadow-2xs"
                 />
               </div>
               <div>
@@ -358,7 +358,7 @@ export default function ReceivingDimensionsPage() {
                   value={form.brutweight || ""}
                   onChange={(e) => handleNumChange("brutweight", e.target.value)}
                   placeholder="0.00"
-                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-emerald-500 focus:outline-none shadow-2xs"
+                  className="w-full font-mono text-sm font-black text-center h-8.5 py-0.5 px-1.5 rounded-lg border border-line bg-surface text-fg focus:border-brand-500 focus:outline-none shadow-2xs"
                 />
               </div>
               <div>
@@ -475,7 +475,7 @@ export default function ReceivingDimensionsPage() {
             <button
               type="submit"
               disabled={isSaving}
-              className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 h-8.5 sm:h-9 text-xs font-black text-white shadow-md active:scale-95 transition disabled:opacity-40 w-full cursor-pointer"
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-brand-600 hover:bg-brand-700 h-8.5 sm:h-9 text-xs font-black text-white shadow-md active:scale-95 transition disabled:opacity-40 w-full cursor-pointer"
             >
               {isSaving ? (
                 <>

@@ -648,7 +648,6 @@ export default function ProductBarcodePage() {
           <div className="pt-2 border-t border-line space-y-3">
             {searchResults.map((r) => {
               const selected = isCardSelected(r);
-              const unitInfo = formatBarcodeUnitInfo(r.unit);
               return (
                 <div
                   key={r.id}

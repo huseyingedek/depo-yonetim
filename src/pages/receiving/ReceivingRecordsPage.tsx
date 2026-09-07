@@ -66,6 +66,11 @@ export default function ReceivingRecordsPage() {
       <PageHeader
         title="Kabul Edilenler"
         subtitle={`${vendorName || vendorCode || id} · ${items.length} satır`}
+        onBack={() =>
+          navigate(backUrl, {
+            state: { ...location.state, items, waybillNo, targetWarehouse: targetWH, vendor: vendorCode, vendorName },
+          })
+        }
         right={
           <button
             onClick={() =>
