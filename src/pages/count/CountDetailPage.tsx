@@ -616,6 +616,7 @@ export default function CountDetailPage() {
           shelfMatched.some((l) => l.specialStock === "1") ||
           linesWithBatch.length > 0;
 
+        if (isLotTracked && !barcodeLot) {
           // CANIAS'tan depo genelindeki partileri sorgula (önce cache kontrolü)
           const cached = prefetchedBatchesRef.current.get(mat.toUpperCase());
           let caniasBatches: { batchNum: string; availStock: number; unit?: string }[] = cached || [];
