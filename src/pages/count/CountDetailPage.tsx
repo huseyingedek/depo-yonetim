@@ -469,7 +469,7 @@ export default function CountDetailPage() {
   );
 
   const handleBackToLot = useCallback(
-    (item: ActiveCountItem) => {
+    async (item: ActiveCountItem) => {
       // Belgedeki tüm partileri tara
       const matLines = lines.filter((l) => sadelestir(l.material) === sadelestir(item.material));
       const batchMap = new Map<string, { batchNum: string; availStock: number; unit?: string }>();
@@ -478,6 +478,36 @@ export default function CountDetailPage() {
           const key = l.batchNum.toUpperCase();
           if (!batchMap.has(key)) {
             batchMap.set(key, { batchNum: l.batchNum, availStock: l.targetQty, unit: l.unit });
+          }
+        }
+      }
+
+      // Depo genelindeki tüm partileri CANIAS'tan sorgula (stockPlace filtresi göndermeden)
+      const cached = prefetchedBatchesRef.current.get(item.material.toUpperCase());
+      let stockBatches = cached;
+      if (!stockBatches) {
+        try {
+          stockBatches = await api.getStock(
+            item.material,
+            item.warehouse || selectedWarehouse || order?.warehouse || "01",
+            "" // Depo genelindeki tüm partileri getir
+          );
+          if (stockBatches) {
+            prefetchedBatchesRef.current.set(
+              item.material.toUpperCase(),
+              stockBatches.filter((b) => b.batchNum && b.batchNum !== "*")
+            );
+          }
+        } catch {}
+      }
+
+      if (stockBatches && stockBatches.length > 0) {
+        for (const cb of stockBatches) {
+          if (cb.batchNum && cb.batchNum !== "*") {
+            const key = cb.batchNum.toUpperCase();
+            if (!batchMap.has(key)) {
+              batchMap.set(key, { ...cb });
+            }
           }
         }
       }
@@ -496,31 +526,6 @@ export default function CountDetailPage() {
       });
       setActiveItem(null);
       setTab("lot");
-
-      // Depo genelindeki tüm partileri CANIAS'tan sorgula (stockPlace filtresi göndermeden)
-      api.getStock(
-        item.material,
-        item.warehouse || selectedWarehouse || order?.warehouse || "01",
-        "" // Depo genelindeki tüm partileri getir
-      ).then((stockBatches) => {
-        if (stockBatches && stockBatches.length > 0) {
-          for (const cb of stockBatches) {
-            if (cb.batchNum && cb.batchNum !== "*") {
-              const key = cb.batchNum.toUpperCase();
-              if (!batchMap.has(key)) {
-                batchMap.set(key, { ...cb });
-              }
-            }
-          }
-          setLotPendingItem((prev) => {
-            if (!prev || sadelestir(prev.material) !== sadelestir(item.material)) return prev;
-            return {
-              ...prev,
-              batches: Array.from(batchMap.values()),
-            };
-          });
-        }
-      }).catch(() => {});
     },
     [lines, order, selectedShelf, selectedWarehouse, selectedStockPlace]
   );
@@ -611,17 +616,20 @@ export default function CountDetailPage() {
           shelfMatched.some((l) => l.specialStock === "1") ||
           linesWithBatch.length > 0;
 
-        if (isLotTracked && !barcodeLot) {
-          // CANIAS'tan depo genelindeki partileri sorgula
-          let caniasBatches: { batchNum: string; availStock: number; unit?: string }[] = [];
-          try {
-            const stockBatches = await api.getStock(
-              mat,
-              selectedWarehouse || order?.warehouse || shelfMatched[0].warehouse || "01",
-              "" // Depo genelindeki partileri getir
-            );
-            caniasBatches = stockBatches.filter((b) => b.batchNum && b.batchNum !== "*");
-          } catch {}
+          // CANIAS'tan depo genelindeki partileri sorgula (önce cache kontrolü)
+          const cached = prefetchedBatchesRef.current.get(mat.toUpperCase());
+          let caniasBatches: { batchNum: string; availStock: number; unit?: string }[] = cached || [];
+          if (!cached) {
+            try {
+              const stockBatches = await api.getStock(
+                mat,
+                selectedWarehouse || order?.warehouse || shelfMatched[0].warehouse || "01",
+                "" // Depo genelindeki partileri getir
+              );
+              caniasBatches = stockBatches.filter((b) => b.batchNum && b.batchNum !== "*");
+              prefetchedBatchesRef.current.set(mat.toUpperCase(), caniasBatches);
+            } catch {}
+          }
 
           const batchMap = new Map<string, { batchNum: string; availStock: number; unit?: string; lineId?: string }>();
           for (const cb of caniasBatches) {
@@ -721,16 +729,41 @@ export default function CountDetailPage() {
         const isLotTracked = specialStock === "1" || (barcodeLot && barcodeLot !== "*") || linesWithBatch.length > 0;
 
         if (isLotTracked && !barcodeLot) {
-          let batches: { batchNum: string; availStock: number; unit?: string }[] = [];
-          try {
-            batches = await api.getStock(
-              mat,
-              selectedWarehouse || order?.warehouse || "01",
-              ""
-            );
-          } catch {}
+          const cached = prefetchedBatchesRef.current.get(mat.toUpperCase());
+          let batches: { batchNum: string; availStock: number; unit?: string }[] = cached || [];
+          if (!cached) {
+            try {
+              const stockBatches = await api.getStock(
+                mat,
+                selectedWarehouse || order?.warehouse || "01",
+                ""
+              );
+              batches = stockBatches.filter((b) => b.batchNum && b.batchNum !== "*");
+              prefetchedBatchesRef.current.set(mat.toUpperCase(), batches);
+            } catch {}
+          }
 
-          const validBatches = batches.filter((b) => b.batchNum && b.batchNum !== "*");
+          const batchMap = new Map<string, { batchNum: string; availStock: number; unit?: string; lineId?: string }>();
+          for (const cb of batches) {
+            batchMap.set(cb.batchNum.toUpperCase(), { ...cb });
+          }
+          for (const l of linesWithBatch) {
+            if (l.batchNum && l.batchNum !== "*") {
+              const key = l.batchNum.toUpperCase();
+              if (batchMap.has(key)) {
+                batchMap.get(key)!.lineId = l.id;
+              } else {
+                batchMap.set(key, {
+                  batchNum: l.batchNum,
+                  availStock: l.targetQty,
+                  unit: l.unit,
+                  lineId: l.id,
+                });
+              }
+            }
+          }
+
+          const validBatches = Array.from(batchMap.values());
 
           sesBasarili();
           setLotPendingItem({
@@ -842,7 +875,7 @@ export default function CountDetailPage() {
     setTab("barcode");
   };
 
-  const selectLineForCounting = (line: AdjustmentLine) => {
+  const selectLineForCounting = async (line: AdjustmentLine) => {
     const unit = (line.unit || "AD").toUpperCase();
     const skunit = (line.skunit || unit).toUpperCase();
     const mult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
@@ -873,6 +906,36 @@ export default function CountDetailPage() {
         }
       }
 
+      // CANIAS'tan depo genelindeki partileri sorgula ve birleştir (önce cache kontrolü)
+      const cached = prefetchedBatchesRef.current.get(line.material.toUpperCase());
+      let stockBatches = cached;
+      if (!stockBatches) {
+        try {
+          stockBatches = await api.getStock(
+            line.material,
+            line.warehouse || selectedWarehouse || order?.warehouse || "01",
+            ""
+          );
+          if (stockBatches) {
+            prefetchedBatchesRef.current.set(
+              line.material.toUpperCase(),
+              stockBatches.filter((b) => b.batchNum && b.batchNum !== "*")
+            );
+          }
+        } catch {}
+      }
+
+      if (stockBatches && stockBatches.length > 0) {
+        for (const cb of stockBatches) {
+          if (cb.batchNum && cb.batchNum !== "*") {
+            const key = cb.batchNum.toUpperCase();
+            if (!batchMap.has(key)) {
+              batchMap.set(key, { ...cb });
+            }
+          }
+        }
+      }
+
       setLotPendingItem({
         material: line.material,
         name: line.name,
@@ -887,31 +950,6 @@ export default function CountDetailPage() {
       });
       setActiveItem(null);
       setTab("lot");
-
-      // CANIAS'tan depo genelindeki partileri sorgula ve listeyi zenginleştir
-      api.getStock(
-        line.material,
-        line.warehouse || selectedWarehouse || order?.warehouse || "01",
-        ""
-      ).then((stockBatches) => {
-        if (stockBatches && stockBatches.length > 0) {
-          for (const cb of stockBatches) {
-            if (cb.batchNum && cb.batchNum !== "*") {
-              const key = cb.batchNum.toUpperCase();
-              if (!batchMap.has(key)) {
-                batchMap.set(key, { ...cb });
-              }
-            }
-          }
-          setLotPendingItem((prev) => {
-            if (!prev || sadelestir(prev.material) !== sadelestir(line.material)) return prev;
-            return {
-              ...prev,
-              batches: Array.from(batchMap.values()),
-            };
-          });
-        }
-      }).catch(() => {});
       return;
     }
 
