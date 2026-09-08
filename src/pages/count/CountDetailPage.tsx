@@ -1417,6 +1417,7 @@ export default function CountDetailPage() {
         {/* =================================================================== */}
         {/* SAĞ KOLON: Okutulacak Mallar (Aşağı doğru biriken kartlar)         */}
         {/* =================================================================== */}
+
         <div className="min-w-0 short:flex-1 short:overflow-y-auto short:pr-1 space-y-2">
           {/* Yükleniyor Durumu */}
           {loading ? (
