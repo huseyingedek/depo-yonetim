@@ -123,7 +123,7 @@ export default function CountDetailPage() {
     try {
       const saved = sessionStorage.getItem(`count_session_${id}`);
       if (saved) return JSON.parse(saved).order || null;
-    } catch {}
+    } catch { }
     return null;
   });
 
@@ -135,7 +135,7 @@ export default function CountDetailPage() {
         const parsed = JSON.parse(saved);
         if (parsed.lines && parsed.lines.length > 0) return parsed.lines;
       }
-    } catch {}
+    } catch { }
     return [];
   });
 
@@ -147,7 +147,7 @@ export default function CountDetailPage() {
         const parsed = JSON.parse(saved);
         if (parsed.lines && parsed.lines.length > 0) return false;
       }
-    } catch {}
+    } catch { }
     return true;
   });
 
@@ -156,7 +156,7 @@ export default function CountDetailPage() {
   const [shelfBusy, setShelfBusy] = useState(false);
   const [, setFlashLineId] = useState<string | null>(null);
   const [tab, setTab] = useState<CountTab>("shelf");
-  
+
   // Raf / Depo state (Format: 00$* veya 01$A-01-01)
   const [selectedShelf, setSelectedShelf] = useState<string | null>(null);
   const [selectedWarehouse, setSelectedWarehouse] = useState<string | null>(null);
@@ -200,7 +200,7 @@ export default function CountDetailPage() {
                     stockBatches.filter((b) => b.batchNum && b.batchNum !== "*")
                   );
                 }
-              }).catch(() => {});
+              }).catch(() => { });
             }
           }
         } else {
@@ -259,7 +259,7 @@ export default function CountDetailPage() {
     if (!id || lines.length === 0) return;
     try {
       sessionStorage.setItem(`count_session_${id}`, JSON.stringify({ order, lines }));
-    } catch {}
+    } catch { }
   }, [id, order, lines]);
 
   useEffect(() => {
@@ -498,7 +498,7 @@ export default function CountDetailPage() {
               stockBatches.filter((b) => b.batchNum && b.batchNum !== "*")
             );
           }
-        } catch {}
+        } catch { }
       }
 
       if (stockBatches && stockBatches.length > 0) {
@@ -579,7 +579,7 @@ export default function CountDetailPage() {
           barcodeLot = res.lot && res.lot !== "*" ? res.lot : undefined;
           barcodeSpecialStock = res.specialStock || "0";
         }
-      } catch {} finally {
+      } catch { } finally {
         setBusy(false);
       }
 
@@ -629,7 +629,7 @@ export default function CountDetailPage() {
               );
               caniasBatches = stockBatches.filter((b) => b.batchNum && b.batchNum !== "*");
               prefetchedBatchesRef.current.set(mat.toUpperCase(), caniasBatches);
-            } catch {}
+            } catch { }
           }
 
           const batchMap = new Map<string, { batchNum: string; availStock: number; unit?: string; lineId?: string }>();
@@ -741,7 +741,7 @@ export default function CountDetailPage() {
               );
               batches = stockBatches.filter((b) => b.batchNum && b.batchNum !== "*");
               prefetchedBatchesRef.current.set(mat.toUpperCase(), batches);
-            } catch {}
+            } catch { }
           }
 
           const batchMap = new Map<string, { batchNum: string; availStock: number; unit?: string; lineId?: string }>();
@@ -923,7 +923,7 @@ export default function CountDetailPage() {
               stockBatches.filter((b) => b.batchNum && b.batchNum !== "*")
             );
           }
-        } catch {}
+        } catch { }
       }
 
       if (stockBatches && stockBatches.length > 0) {
@@ -982,7 +982,7 @@ export default function CountDetailPage() {
     if (tab === "shelf" || !selectedShelf) {
       return lines;
     }
-    
+
     // 00$* seçildiyse ve depo tanımlıysa depoya göre filtrele
     if (selectedStockPlace === "*") {
       if (!selectedWarehouse) return lines;
@@ -1095,11 +1095,10 @@ export default function CountDetailPage() {
             <span>Bitir</span>
           </button>
           <span
-            className={`chip border px-2.5 py-1 text-[14px] font-bold ${
-              isAllComplete
-                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                : "bg-brand-100 text-brand-800 border-brand-300"
-            }`}
+            className={`chip border px-2.5 py-1 text-[14px] font-bold ${isAllComplete
+              ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+              : "bg-brand-100 text-brand-800 border-brand-300"
+              }`}
           >
             {totalCountedLines} / {lines.length} Tamamlandı
           </span>
@@ -1166,13 +1165,12 @@ export default function CountDetailPage() {
                     type="button"
                     onClick={handleClick}
                     disabled={!isClickable}
-                    className={`flex h-9 w-full items-center justify-center rounded-xl px-0.5 text-xs font-bold tracking-tight transition-all duration-200 ease-soft ${
-                      active
-                        ? "bg-brand-600 text-white shadow-soft font-extrabold cursor-default"
-                        : isClickable
+                    className={`flex h-9 w-full items-center justify-center rounded-xl px-0.5 text-xs font-bold tracking-tight transition-all duration-200 ease-soft ${active
+                      ? "bg-brand-600 text-white shadow-soft font-extrabold cursor-default"
+                      : isClickable
                         ? "bg-elevated text-subtle hover:text-fg hover:bg-line cursor-pointer"
                         : "bg-elevated/60 text-subtle/60 cursor-default opacity-80"
-                    }`}
+                      }`}
                   >
                     <span className="truncate">{label}</span>
                   </button>
@@ -1415,6 +1413,7 @@ export default function CountDetailPage() {
           </div>
         </div>
 
+
         {/* =================================================================== */}
         {/* SAĞ KOLON: Okutulacak Mallar (Aşağı doğru biriken kartlar)         */}
         {/* =================================================================== */}
@@ -1445,12 +1444,12 @@ export default function CountDetailPage() {
                 const qtyColorClass = isUnexpected
                   ? "text-blue-600 dark:text-blue-400"
                   : isExcess
-                  ? "text-rose-600 dark:text-rose-400"
-                  : isMatched
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : isPartial
-                  ? "text-amber-500 dark:text-amber-400"
-                  : "text-fg";
+                    ? "text-rose-600 dark:text-rose-400"
+                    : isMatched
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : isPartial
+                        ? "text-amber-500 dark:text-amber-400"
+                        : "text-fg";
                 const mult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
                 const unit = (line.unit || "AD").toUpperCase();
                 const skunit = (line.skunit || unit).toUpperCase();
