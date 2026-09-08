@@ -1311,6 +1311,7 @@ export default function CountDetailPage() {
             )}
 
             {/* ADIM 4: MİKTAR GİRİŞİ */}
+
             {tab === "qty" && activeItem && (
               <div className="space-y-2 animate-fade-in flex-1 flex flex-col justify-between">
                 <div>
