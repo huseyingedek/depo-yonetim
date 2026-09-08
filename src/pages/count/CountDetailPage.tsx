@@ -1225,6 +1225,7 @@ export default function CountDetailPage() {
               </div>
             )}
 
+
             {/* ADIM 2: BARKOD OKUTMA */}
             {tab === "barcode" && !lotPendingItem && !activeItem && (
               <div className="space-y-1 animate-fade-in">
