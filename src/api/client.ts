@@ -515,6 +515,7 @@ export const api = {
     };
   },
 
+
   async getPickOrders(): Promise<PickOrder[]> {
     const c = ctx();
     const r = await call(SERVICES.listingPick, {
