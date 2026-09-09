@@ -228,14 +228,14 @@ export default function CountListPage() {
               const durumEtiket = isClosed
                 ? "Tamamlandı"
                 : isPartial
-                ? "Devam Ediyor"
-                : "Aktif Sayım";
+                  ? "Devam Ediyor"
+                  : "Aktif Sayım";
 
               const durumStil = isClosed
                 ? "bg-emerald-100 text-emerald-800 border-emerald-300"
                 : isPartial
-                ? "bg-amber-100 text-amber-800 border-amber-300"
-                : "bg-brand-100 text-brand-800 border-brand-300";
+                  ? "bg-amber-100 text-amber-800 border-amber-300"
+                  : "bg-brand-100 text-brand-800 border-brand-300";
 
               // Depo ve Stok Yeri / Raf gösterimi: örn. "01 / A-01-02" veya "d1/q1"
               const depoRafMetni = [o.warehouse, o.stockPlace].filter(Boolean).join(" / ");
@@ -263,6 +263,7 @@ export default function CountListPage() {
                           {o.id}
                         </span>
                       )}
+
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className={`chip border px-2.5 py-0.5 text-[15px] font-bold ${durumStil}`}>
