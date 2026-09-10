@@ -644,13 +644,14 @@ export default function StockTransferPage() {
               )}
             </div>
 
-            {/* KAYNAK ADIMI: Okutulan Kaynak Raf Bilgisi (Toplama ekranı ile birebir aynı yeşil kart) */}
+            {/* KAYNAK ADIMI: Okutulan Kaynak Raf Bilgisi (Toplama ekranı ile birebir aynı yeşil kart) 
+            <MapPin className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />  
+            <X className="h-3.5 w-3.5" />  */}
             {step === "collect" && sourceShelf && (
-              <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2">
+              <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-1">
                 <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-emerald-800 dark:text-emerald-200">
-                  <MapPin className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                   <span className="truncate">
-                    Depo: <span className="font-mono font-bold">{sourceShelf.warehouse}</span>
+                    Depo: <span className="font-mono font-bold">{sourceShelf.warehouse.toUpperCase()}</span>
                     {" · "}
                     Stok yeri: <span className="font-mono font-bold">{sourceShelf.stockPlace.toUpperCase()}</span>
                   </span>
@@ -664,7 +665,6 @@ export default function StockTransferPage() {
                   }}
                   className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:underline cursor-pointer"
                 >
-                  <X className="h-3.5 w-3.5" />
                   Rafı değiştir
                 </button>
               </div>
