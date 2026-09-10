@@ -490,6 +490,15 @@ export default function StockTransferPage() {
   // ANA TRANSFER EKRANI (TOPLAMA & HEDEF ADIMLARI)
   // Samsung A51/A71 (914x412 Yatay) Tam Uyumlu 2 Sütunlu Düzen
   // ---------------------------------------------------------------------------
+  /*      ? ""
+      : !sourceShelf
+        ? "Raf barkodunu okutun"
+        : lotPendingItem
+          ? ""
+          : activeItem
+            ? ""
+            */
+
   const promptText =
     step === "target"
       ? ""
