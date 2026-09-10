@@ -13,7 +13,6 @@ import {
   CornerDownLeft,
   X,
   Check,
-  Calendar,
   ChevronDown,
   ImageIcon,
   GlassWater,
@@ -388,7 +387,7 @@ export default function ReceivingDetailPage() {
   // ---------------------------------------------------------------------------
   // 2 AŞAMALI (1 ÜRÜN · 2 ADET) ADIM VE DURUM YÖNETİMİ
   // ---------------------------------------------------------------------------
-  const [activeStep, setActiveStep] = useState<"product" | "quantity">("product");
+  const [activeStep, setActiveStep] = useState<"product" | "lot" | "quantity">("product");
   const [isProductScanned, setIsProductScanned] = useState(false);
   const [areDimensionsDone, setAreDimensionsDone] = useState(false);
 
@@ -576,27 +575,13 @@ export default function ReceivingDetailPage() {
   const [expiryDate, setExpiryDate] = useState<string>("");
   const [lotError, setLotError] = useState<string>("");
 
-  // Seçili Barkod ve Birim / Katsayı Bilgisi (Koli, Kutu, Adet)
-  const selectedBarcodeObj = useMemo(() => {
-    if (!currentMaterial || !currentMaterial.barcodes || currentMaterial.barcodes.length === 0) return undefined;
-    return (
-      currentMaterial.barcodes.find((b) => b.barcode === currentMaterial.selectedBarcode) ||
-      currentMaterial.barcodes[0]
-    );
-  }, [currentMaterial]);
-
+  // Miktar HER ZAMAN stok birimi (adet) bazında girilir — diğer ekranlarla tutarlı.
+  // Barkod hangi birim olursa olsun (KO/PK/KT), girilen sayı doğrudan stok birimidir; çarpan uygulanmaz.
   const activeBarcodeUnit = useMemo(() => {
-    return String(selectedBarcodeObj?.unit || currentMaterial?.unit || "AD").trim().toUpperCase();
-  }, [selectedBarcodeObj, currentMaterial?.unit]);
+    return String(currentMaterial?.unit || "AD").trim().toUpperCase();
+  }, [currentMaterial?.unit]);
 
-  const activeBarcodeMultiplier = useMemo(() => {
-    if (!currentMaterial) return 1;
-    if (currentMaterial.unitMultipliers?.[activeBarcodeUnit]) {
-      return currentMaterial.unitMultipliers[activeBarcodeUnit];
-    }
-    if (activeBarcodeUnit === "AD") return 1;
-    return currentMaterial.packageMultiplier || 1;
-  }, [currentMaterial, activeBarcodeUnit]);
+  const activeBarcodeMultiplier: number = 1;
 
   // Açık Siparişler (FIFO Sıralı)
   const [openOrders, setOpenOrders] = useState<Record<string, unknown>[]>([]);
@@ -646,7 +631,7 @@ export default function ReceivingDetailPage() {
         setOpenOrders(location.state.openOrders);
       }
       setAreDimensionsDone(true);
-      setActiveStep("quantity");
+      setActiveStep(location.state.currentMaterial?.isSpecialLot ? "lot" : "quantity");
     } else if (location.state?.currentMaterial) {
       setCurrentMaterial((prev) => ({
         ...prev,
@@ -661,7 +646,8 @@ export default function ReceivingDetailPage() {
         setAreDimensionsDone(Boolean(location.state.areDimensionsDone));
       }
       if (location.state.activeStep) {
-        setActiveStep(location.state.activeStep === "quantity" ? "quantity" : "product");
+        const st = location.state.activeStep;
+        setActiveStep(st === "quantity" ? "quantity" : st === "lot" ? "lot" : "product");
       }
     }
   }, [location.state]);
@@ -894,21 +880,20 @@ export default function ReceivingDetailPage() {
 
         setMatSizeForm(parsedMatSize);
 
-        // 2. Barcode Listesini Topla ve Eşle (CANIAS'tan gelen gerçek BUNIT ve katsayıları koru)
-        let rawBarcodeList = Array.isArray(matRes.barcodeList) ? matRes.barcodeList : [];
-        if (rawBarcodeList.length <= 1 && matCode && matCode !== targetBarcode) {
-          try {
-            const matCodeRes = await api.getMaterialDetail(matCode);
-            if (Array.isArray(matCodeRes.barcodeList) && matCodeRes.barcodeList.length > rawBarcodeList.length) {
-              rawBarcodeList = matCodeRes.barcodeList;
-            }
-          } catch { }
-        }
+        // 2. Barkodlar TBLBARCODELIST, birim çevrimleri TBLUNITLIST altında gelir — hepsi TEK yanıtta.
+        const rawBarcodeList = Array.isArray(matRes.barcodeList) ? matRes.barcodeList : [];
+        const rawUnitList = Array.isArray(matRes.unitList) ? matRes.unitList : [];
         const seenBarcodes = new Set<string>();
         const barcodes: Array<{ barcode: string; unit: string }> = [];
         const unitMultipliers: Record<string, number> = { "AD": 1 };
 
-        const scannedMultiplier = parseNum(matListRow.QUANTITY || 1) || 1;
+        // Birim çarpanları CANIAS'ın TBLUNITLIST tablosundan (ör. 1 KT = 12 AD).
+        for (const u of rawUnitList) {
+          const uCode = String(u.QUNIT || u.UNIT || "").trim().toUpperCase();
+          const uFct = parseNum(u.PERUNIT ?? u.FCT ?? u.VALUE);
+          if (uCode && uFct > 0) unitMultipliers[uCode] = uFct;
+        }
+
         const scannedBarcodeRow = rawBarcodeList.find(
           (b) => String(b.BARCODE || b.barcode || "").trim() === targetBarcode
         );
@@ -916,23 +901,17 @@ export default function ReceivingDetailPage() {
           scannedBarcodeRow?.BUNIT || scannedBarcodeRow?.UNIT || matUnit || "AD"
         ).trim().toUpperCase();
 
-        if (scannedMultiplier > 0) {
+        // TBLUNITLIST'te bulunamadıysa okutulan barkodun QUANTITY'sini yedek çarpan olarak kullan.
+        const scannedMultiplier = parseNum(matListRow.QUANTITY || 1) || 1;
+        if (scannedUnit && scannedMultiplier > 0 && !unitMultipliers[scannedUnit]) {
           unitMultipliers[scannedUnit] = scannedMultiplier;
         }
 
-        // Önce CANIAS'tan gelen resmi barkodları kendi gerçek birimleriyle (KT, BR, KO, PK, AD, SET vb.) ekle
+        // Malzemenin TÜM barkodlarını kendi BUNIT'leriyle ekle (AD, KT, KO, PK ...).
         for (const b of rawBarcodeList) {
           const bCode = String(b.BARCODE || b.barcode || "").trim();
           const bUnit = String(
-            b.BUNIT ||
-            b.UNIT ||
-            b.BARCODEUNIT ||
-            b.B_UNIT ||
-            b.QUNIT ||
-            b.SKUNIT ||
-            b.unit ||
-            matUnit ||
-            "AD"
+            b.BUNIT || b.UNIT || b.BARCODEUNIT || b.B_UNIT || b.unit || matUnit || "AD"
           ).trim().toUpperCase();
           if (bCode && !seenBarcodes.has(bCode)) {
             seenBarcodes.add(bCode);
@@ -940,23 +919,10 @@ export default function ReceivingDetailPage() {
           }
         }
 
-        // Eğer okutulan barkod resmi listede yoksa fallback olarak ekle
+        // Okutulan barkod listede yoksa yine de ekle.
         if (targetBarcode && !seenBarcodes.has(targetBarcode)) {
           seenBarcodes.add(targetBarcode);
-          barcodes.push({ barcode: targetBarcode, unit: matUnit || "AD" });
-        }
-
-        // Eğer KO veya KT barkodu var ve multiplier henüz bilinmiyorsa (Adet barkodu okutulduysa), o barkodun katsayısını çek
-        const nonAdBarcode = barcodes.find((b) => b.unit !== "AD" && !unitMultipliers[b.unit]);
-        if (nonAdBarcode) {
-          try {
-            const extraRes = await api.getMaterialDetail(nonAdBarcode.barcode);
-            const extraRows = Array.isArray(extraRes.matList) ? extraRes.matList : [];
-            const extraMultiplier = parseNum((extraRows[0] as Record<string, unknown>)?.QUANTITY || 1) || 1;
-            if (extraMultiplier > 0) {
-              unitMultipliers[nonAdBarcode.unit] = extraMultiplier;
-            }
-          } catch { }
+          barcodes.push({ barcode: targetBarcode, unit: scannedUnit || matUnit || "AD" });
         }
 
         // 3. MZYGetOpenOrder ile açık siparişleri getir (Barkod, Malzeme Kodu ve Tedarikçi Fallback'li)
@@ -1099,9 +1065,9 @@ export default function ReceivingDetailPage() {
             }
           );
         } else {
-          // Bütün ölçü değerleri var -> 1. yer yeşil olur ve doğrudan 2. Adet kısmına geçer!
+          // Bütün ölçü değerleri var -> 1. yer yeşil; partili malzemede Parti adımına, değilse Miktara geç.
           setAreDimensionsDone(true);
-          setActiveStep("quantity");
+          setActiveStep(matObj.isSpecialLot ? "lot" : "quantity");
           sesBasarili();
         }
       } catch (err: unknown) {
@@ -1267,6 +1233,7 @@ export default function ReceivingDetailPage() {
       sesHata();
       setLotError("Bu malzeme partili olduğu için Parti No girilmesi zorunludur.");
       show({ kind: "err", text: "Lütfen Parti Numarasını giriniz." });
+      setActiveStep("lot"); // Parti adımına dön ki giriş alanı ve hata görünsün
       return;
     }
 
@@ -1510,19 +1477,29 @@ export default function ReceivingDetailPage() {
             {(
               [
                 ["product", "Malzeme"],
+                ["lot", "Parti"],
                 ["quantity", "Miktar"],
               ] as const
             ).map(([s, label], i) => {
+              const urunHazir = isProductScanned && areDimensionsDone;
+              const partili = !!currentMaterial?.isSpecialLot;
               const active = activeStep === s;
-              const done = s === "product" && isProductScanned && areDimensionsDone;
-              const tiklanabilir = s === "product" || (isProductScanned && areDimensionsDone);
+              const done =
+                (s === "product" && urunHazir) ||
+                (s === "lot" && urunHazir && partili && !!lotNumber.trim());
+              // Parti tabı sadece parti-takipli üründe tıklanabilir (aksi halde görünür ama pasif — picking gibi).
+              const tiklanabilir =
+                s === "product" ||
+                (s === "lot" && urunHazir && partili) ||
+                (s === "quantity" && urunHazir);
               return (
                 <button
                   key={s}
                   type="button"
                   onClick={() => {
                     if (s === "product") setActiveStep("product");
-                    else if (isProductScanned && areDimensionsDone) setActiveStep("quantity");
+                    else if (s === "lot" && urunHazir && partili) setActiveStep("lot");
+                    else if (s === "quantity" && urunHazir) setActiveStep("quantity");
                   }}
                   disabled={!tiklanabilir}
                   className={`flex min-w-0 flex-1 items-center justify-center gap-1 truncate rounded-xl px-1.5 py-1.5 text-[11px] font-semibold transition-all duration-200 ease-soft ${
@@ -1624,7 +1601,68 @@ export default function ReceivingDetailPage() {
           )}
 
           {/* ------------------------------------------------------------------- */}
-          {/* ADIM 2 GÖRÜNÜMÜ: MİKTAR, PARTİ GİRİŞİ */}
+          {/* ADIM 2 GÖRÜNÜMÜ: PARTİ & SKT (her malzemede görünür) */}
+          {/* ------------------------------------------------------------------- */}
+          {/* Parti adımı YALNIZCA parti-takipli malzemede içerik gösterir; normal üründe tab pasif kalır. */}
+          {activeStep === "lot" && currentMaterial && currentMaterial.isSpecialLot && (
+            <div className="space-y-2 animate-fade-in flex-1 flex flex-col justify-between">
+              <div className="space-y-1.5 rounded-2xl border border-violet-500/30 bg-violet-500/10 p-2.5 text-xs">
+                <div className="flex items-center gap-1.5 font-bold text-violet-800 dark:text-violet-200">
+                  <Tag className="h-3.5 w-3.5" />
+                  <span>Parti &amp; SKT Girişi (Zorunlu)</span>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-subtle block mb-0.5">Parti No (Lot) *</label>
+                  <input
+                    type="text"
+                    value={lotNumber}
+                    onChange={(e) => {
+                      setLotNumber(e.target.value.toUpperCase());
+                      if (lotError) setLotError("");
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && lotNumber.trim()) {
+                        setLotError("");
+                        setActiveStep("quantity");
+                      }
+                    }}
+                    placeholder="Parti numarasını giriniz"
+                    autoFocus
+                    className={`field-input w-full font-mono text-xs font-bold h-9 py-0.5 ${lotError ? "border-red-500" : ""}`}
+                  />
+                  {lotError && <p className="text-[10px] text-red-500 mt-0.5 font-semibold">{lotError}</p>}
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-subtle block mb-0.5">Son Kullanma Tarihi (SKT)</label>
+                  <input
+                    type="date"
+                    value={expiryDate}
+                    onChange={(e) => setExpiryDate(e.target.value)}
+                    className="field-input w-full font-mono text-xs h-9 py-0.5"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!lotNumber.trim()) {
+                    sesHata();
+                    setLotError("Bu malzeme partili olduğu için Parti No girilmesi zorunludur.");
+                    return;
+                  }
+                  setLotError("");
+                  setActiveStep("quantity");
+                }}
+                className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-brand-700 active:scale-95"
+              >
+                Miktara Geç
+              </button>
+            </div>
+          )}
+
+          {/* ------------------------------------------------------------------- */}
+          {/* ADIM 3 GÖRÜNÜMÜ: MİKTAR GİRİŞİ */}
           {/* ------------------------------------------------------------------- */}
           {activeStep === "quantity" && currentMaterial && (
             <div className="space-y-2 animate-fade-in flex-1 flex flex-col justify-between">
@@ -1709,41 +1747,57 @@ export default function ReceivingDetailPage() {
                 </div>
               </div>
 
-              {/* Partili Malzeme ise Parti No ve SKT Alanları */}
-              {currentMaterial.isSpecialLot && (
-                <div className="space-y-1.5 rounded-2xl border border-violet-500/30 bg-violet-500/10 p-2 text-xs animate-fade-in">
-                  <div className="flex items-center gap-1.5 font-bold text-violet-800 dark:text-violet-200">
-                    <Tag className="h-3 w-3" />
-                    <span>Parti & SKT Girişi (Zorunlu)</span>
+              {/* Stok / Sipariş birimi canlı karşılığı (toplama emrindeki gibi) */}
+              {(() => {
+                const stockUnit = String(currentMaterial.unit || "AD").toUpperCase();
+                const mult = activeBarcodeMultiplier || 1;
+                const stockQty = Number((receiptQty * mult).toFixed(2));
+                const al = orderFulfillment.allocations[0];
+                const purUnit = al ? al.purUnit : stockUnit;
+                const purFactor = al && al.factor > 0 ? al.factor : 1;
+                const purQty = purFactor > 1 ? Number((stockQty / purFactor).toFixed(2)) : stockQty;
+                const showPur = !!al && !!purUnit && purUnit !== stockUnit;
+                const showBarcodeConv = mult > 1 && activeBarcodeUnit !== stockUnit;
+                const entered = receiptQty > 0;
+                // Aynı çevrim (ör. barkod birimi = sipariş birimi) iki kez yazılmasın diye Set ile tekilleştir.
+                const chipSet = new Set<string>();
+                if (showBarcodeConv) chipSet.add(`1 ${activeBarcodeUnit} = ${mult} ${stockUnit}`);
+                if (showPur && purFactor > 1) chipSet.add(`1 ${purUnit} = ${purFactor} ${stockUnit}`);
+                const chips = [...chipSet];
+                if (!entered && chips.length === 0) return null;
+                return (
+                  <div className="space-y-1.5">
+                    {/* Miktar karşılığı — okununca stok (+ sipariş) birimi */}
+                    {entered && (
+                      <div className="flex items-center justify-between gap-2 rounded-xl border border-line bg-surface px-3 py-2 shadow-xs">
+                        <span className="text-[11px] font-semibold text-subtle">Karşılığı</span>
+                        <div className="flex items-baseline gap-1.5 font-mono">
+                          <span className="text-lg font-black text-brand-600 dark:text-brand-400">{stockQty}</span>
+                          <span className="text-xs font-bold text-subtle">{stockUnit}</span>
+                          {showPur && (
+                            <span className="text-[13px] font-semibold text-subtle">= {purQty} {purUnit}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {/* Çevrim rozeti — sipariş toplama ekranındaki amber pill ile birebir */}
+                    {chips.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {chips.map((c, i) => (
+                          <span
+                            key={i}
+                            className="rounded-lg bg-amber-100 px-2 py-1 font-mono text-[13px] font-bold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                          >
+                            {c}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
+                );
+              })()}
 
-                  <div>
-                    <label className="text-[10px] font-bold text-subtle block mb-0.5">Parti No (Lot) *</label>
-                    <input
-                      type="text"
-                      value={lotNumber}
-                      onChange={(e) => {
-                        setLotNumber(e.target.value.toUpperCase());
-                        if (lotError) setLotError("");
-                      }}
-                      placeholder="Parti numarasını giriniz"
-                      className={`field-input w-full font-mono text-xs font-bold h-7.5 py-0.5 ${lotError ? "border-red-500" : ""
-                        }`}
-                    />
-                    {lotError && <p className="text-[10px] text-red-500 mt-0.5 font-semibold">{lotError}</p>}
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-subtle block mb-0.5">Son Kullanma Tarihi (SKT)</label>
-                    <input
-                      type="date"
-                      value={expiryDate}
-                      onChange={(e) => setExpiryDate(e.target.value)}
-                      className="field-input w-full font-mono text-xs h-7.5 py-0.5"
-                    />
-                  </div>
-                </div>
-              )}
+              {/* Parti/SKT girişi artık ayrı "Parti" adımında (yukarıdaki tab). */}
             </div>
           )}
         </div>
@@ -1987,73 +2041,55 @@ export default function ReceivingDetailPage() {
                 return (
                   <div
                     key={`${al.orderNum}-${al.itemNum}-${idx}`}
-                    className={`rounded-2xl border p-2 sm:p-2.5 transition-all shadow-xs ${al.isFullyAllocated
+                    className={`rounded-2xl border p-3 transition-all shadow-xs ${al.isFullyAllocated
                       ? "border-brand-500/60 bg-brand-500/10"
                       : al.isPartiallyAllocated
                         ? "border-amber-500/60 bg-amber-500/10"
                         : "border-line bg-surface"
                       }`}
                   >
-                    <div className="flex items-center justify-between gap-2 text-xs flex-wrap">
-                      {/* Sol: Siparişten Ne Kaldığı (Birimler farklıysa çift satır, aynıysa tek satır), Belge Tipi, Belge No, Kalem No, Tarih */}
-                      <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap min-w-0 font-mono text-[11px]">
-                        {/* Kalan Miktar Alanı */}
-                        <div className="flex flex-col justify-center leading-tight">
-                          {/* Üst: Sipariş Birimi Cinsinden Kalan */}
-                          <span className="font-bold text-fg">
-                            <strong className="text-fg font-black text-xs">
-                              {al.remPurQty} {al.purUnit} kaldı
-                            </strong>
-                          </span>
-
-                          {/* Alt: Birimler farklıysa Çevrim Oranı (1 bunit = x skunit) */}
-                          {al.purUnit !== al.stockUnit && (
-                            <span className="text-[10px] sm:text-[10.5px] font-bold text-subtle">
-                              1 {al.purUnit} = {al.factor} {al.stockUnit}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* 2. Belge Tipi & Belge No */}
-                        <span className="font-black text-fg flex items-center gap-1">
-                          <span className="text-subtle font-extrabold">{orderType}</span>
-                          <span className="font-black text-fg">{al.orderNum}</span>
-                        </span>
-
-                        {/* 3. Kalem No */}
-                        <span className="text-subtle font-bold">
-                          Kalem: <strong className="text-fg font-black">{al.itemNum}</strong>
-                        </span>
-
-                        {/* 4. Tarih */}
-                        {al.orderDate && (
-                          <span className="text-[10.5px] font-bold text-subtle flex items-center gap-0.5">
-                            <Calendar className="h-3 w-3 text-subtle" /> {al.orderDate}
-                          </span>
+                    <div className="flex items-start gap-3 min-w-0">
+                      {/* Sol: kalan (sipariş birimi) daire rozeti — tamamlandıysa ✓ */}
+                      <div
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${al.isFullyAllocated
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                          : al.isPartiallyAllocated
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+                            : "bg-elevated text-subtle"
+                          }`}
+                      >
+                        {al.isFullyAllocated ? (
+                          <Check className="h-4 w-4" />
+                        ) : (
+                          <span className="font-mono text-sm font-black">{Math.round(al.remPurQty)}</span>
                         )}
                       </div>
 
-                      {/* Sağ: Karşılanan/Toplam (Üstte Stok Birimi, altta Sipariş Birimi - Şartlı Çift/Tek Satır) */}
-                      <div className="flex items-center gap-2 sm:gap-2.5 font-mono shrink-0 ml-auto mr-2 sm:mr-4 text-right">
-                        <div className="flex flex-col items-end justify-center leading-tight gap-0.5 -translate-x-[5px]">
-                          {/* Üst Satır: Daima Stok Birimi Cinsinden */}
-                          <span className="font-black text-fg text-xs sm:text-[12px]">
-                            {al.fulfilledStockQty}/{al.totalStockQty} {al.stockUnit}
-                          </span>
-
-                          {/* Alt Satır: Yalnızca Birimler Farklıysa Sipariş Birimi Cinsinden */}
+                      {/* Orta: Belge No (kalın) + meta satırı (Kalem · Tarih · Çevrim) */}
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-1.5 text-sm font-bold text-fg">
+                          <span className="text-[11px] font-extrabold text-subtle">{orderType}</span>
+                          <span className="font-mono truncate">{al.orderNum}</span>
+                        </p>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[11px] text-subtle">
+                          <span>Kalem: <strong className="font-black text-fg">{al.itemNum}</strong></span>
                           {al.purUnit !== al.stockUnit && (
-                            <span className="font-bold text-subtle text-[10.5px] sm:text-[11px]">
-                              {al.fulfilledPurQty}/{al.totalPurQty} {al.purUnit}
-                            </span>
+                            <span>1 {al.purUnit} = {al.factor} {al.stockUnit}</span>
                           )}
                         </div>
+                      </div>
 
-                        {/* Tamamlandı Rozeti */}
-                        {al.isFullyAllocated && (
-                          <span className="chip bg-brand-600 text-white font-black text-[10px] px-1.5 py-0.5 shadow-2xs flex items-center gap-0.5">
-                            <Check className="h-3 w-3" /> Tamamlandı
-                          </span>
+                      {/* Sağ: sipariş birimi (büyük) / toplam, altında stok birimi (küçük) */}
+                      <div className="flex shrink-0 flex-col items-end">
+                        <div className="flex items-baseline gap-1 font-mono">
+                          <span className="text-lg font-black text-fg">{Math.round(al.fulfilledPurQty)}</span>
+                          <span className="text-sm text-subtle">/ {Math.round(al.totalPurQty)}</span>
+                          <span className="text-xs font-bold text-subtle">{al.purUnit}</span>
+                        </div>
+                        {al.purUnit !== al.stockUnit && (
+                          <div className="mt-0.5 font-mono text-[11px] text-subtle">
+                            {al.fulfilledStockQty}/{al.totalStockQty} {al.stockUnit}
+                          </div>
                         )}
                       </div>
                     </div>

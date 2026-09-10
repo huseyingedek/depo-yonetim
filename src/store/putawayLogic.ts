@@ -89,12 +89,23 @@ export interface PlacementDecision {
   ready?: ReadyPlacement;
 }
 
+// Bir satırın gerçek "dolu" miktarı = sunucudan gelen pickedQty ile BU OTURUMDA
+// yerleştirilenin (placed[lineId]) BÜYÜĞÜ. Tazeleme geç kalsa bile kapanan satır
+// tekrar açık görünmez → aynı satıra ikinci kez yazılmaz.
+function satirDolu(l: PickOrder["lines"][number], placed?: Record<string, number>): number {
+  return Math.max(l.pickedQty, placed?.[l.id] ?? 0);
+}
+
 // Aynı malzemenin TÜM açık satırlarındaki toplam kalan miktar.
 // (Bora: aynı malzeme farklı depo/stok yeri/partide 3 ayrı satır gelebilir.)
-export function materialRemaining(order: PickOrder, material: string): number {
+export function materialRemaining(
+  order: PickOrder,
+  material: string,
+  placed?: Record<string, number>
+): number {
   return order.lines
     .filter((l) => l.product.code === material)
-    .reduce((s, l) => s + Math.max(0, l.requestedQty - l.pickedQty), 0);
+    .reduce((s, l) => s + Math.max(0, l.requestedQty - satirDolu(l, placed)), 0);
 }
 
 export interface PlacementAllocation {
@@ -106,20 +117,21 @@ export interface PlacementAllocation {
 
 // Girilen miktarı, aynı malzemenin açık satırlarına SIRAYLA dağıtır:
 // ilk satırı doldur, kalanı sonrakine... (Bora, 05.08).
+// placed: bu oturumda satır başına yerleştirilen miktar — kapanan satır atlanır.
 export function distributePlacement(
   order: PickOrder,
   material: string,
   totalQty: number,
-  fallbackLot = "*"
+  fallbackLot = "*",
+  placed?: Record<string, number>
 ): PlacementAllocation[] {
-  const acikSatirlar = order.lines.filter(
-    (l) => l.product.code === material && l.requestedQty - l.pickedQty > 0
-  );
+  const kalanOf = (l: PickOrder["lines"][number]) => l.requestedQty - satirDolu(l, placed);
+  const acikSatirlar = order.lines.filter((l) => l.product.code === material && kalanOf(l) > 0);
   let kalan = totalQty;
   const allocations: PlacementAllocation[] = [];
   for (const l of acikSatirlar) {
     if (kalan <= 0) break;
-    const satirKalan = l.requestedQty - l.pickedQty;
+    const satirKalan = kalanOf(l);
     const pay = Math.min(kalan, satirKalan);
     if (pay <= 0) continue;
     allocations.push({

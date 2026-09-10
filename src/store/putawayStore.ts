@@ -124,11 +124,16 @@ export const usePutawayStore = create<PutawayState>()(
         if (!order || !source) return { ok: false, message: "Bağlam eksik (emir/kaynak)" };
         if (!ready) return { ok: false, message: "Önce ürünü (ve gerekiyorsa partisini) okutun." };
 
+        // Bu oturumda satır başına yerleştirilen (tazeleme geç kalsa da kapanan satır
+        // tekrar açık görünmesin → aynı satıra ikinci kez yazılmasın).
+        const yerlesen: Record<string, number> = {};
+        for (const rec of get().records) yerlesen[rec.lineId] = (yerlesen[rec.lineId] ?? 0) + rec.qty;
+
         // Girilen miktar (Kaç tane?) yoksa okunan (ready.qty). Açık satırlara ÜSTTEN sırayla
         // dağıtılır: 60 → 24, 24, 12. Toplam kalanı aşarsa HİÇ kaydetme, "fazla" hatası ver.
-        const toplamKalan = materialRemaining(order, ready.material);
+        const toplamKalan = materialRemaining(order, ready.material, yerlesen);
         if (toplamKalan <= 0) return { ok: false, message: "Bu kalem zaten tamamlandı" };
-        const istenen = adet && adet > 0 ? Math.floor(adet) : ready.qty;
+        const istenen = adet && adet > 0 ? Math.floor(adet) : Math.min(ready.qty, toplamKalan);
         if (istenen > toplamKalan) {
           return { ok: false, message: `Fazla mal — en fazla ${toplamKalan} yerleştirebilirsiniz (${istenen - toplamKalan} fazla)` };
         }
@@ -137,8 +142,8 @@ export const usePutawayStore = create<PutawayState>()(
         if (!r.ok) return { ok: false, message: r.message || "Hedef raf okunamadı" };
         const target = { barcode: barcode.trim(), warehouse: r.warehouse, stockPlace: r.stockPlace };
 
-        // Girilen miktarı açık satırlara ÜSTTEN sırayla dağıt; her satır için ayrı SavePlacement.
-        const allocations = distributePlacement(order, ready.material, istenen, ready.lot);
+        // Girilen miktarı açık satırlara ÜSTTEN sırayla dağıt; kapanan satırları atla.
+        const allocations = distributePlacement(order, ready.material, istenen, ready.lot, yerlesen);
         const yeniKayitlar: PlacementRecord[] = [];
         for (const a of allocations) {
           const record = buildPlacementRecord(

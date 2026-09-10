@@ -134,21 +134,18 @@ export default function ReceivingSupplierSelectPage() {
     setHasSearched(true);
     setSelectedSupplier(null);
     try {
-      let orders: Record<string, unknown>[] = [];
-      const res = await api.getOpenOrders({ barcode: query });
-      orders = res.orders || [];
-      if (orders.length === 0) {
-        const allRes = await api.getOpenOrders();
-        const q = trNormalize(query);
-        orders = (allRes.orders || []).filter((r) => {
-          const name = trNormalize(String(r.NAME1 || r.SUPPLIERNAME || r.VENDORNAME || ""));
-          const code = trNormalize(String(r.VENDOR || ""));
-          const po = trNormalize(String(r.ORDERNUM || r.PURORDER || ""));
-          const mat = trNormalize(String(r.MATERIAL || ""));
-          const ean = trNormalize(String(r.BARCODE || r.EAN || ""));
-          return name.includes(q) || code.includes(q) || po.includes(q) || mat.includes(q) || ean.includes(q);
-        });
-      }
+      // TEK istek: tüm açık siparişleri çek, istemci tarafında süz (ad/kod/PO/malzeme/barkod).
+      // (MZYGetOpenOrder'ın PSBARCODE sunucu filtresi güvenilmez — boş dönüp gereksiz 2. isteğe yol açıyordu.)
+      const allRes = await api.getOpenOrders();
+      const q = trNormalize(query);
+      const orders = (allRes.orders || []).filter((r) => {
+        const name = trNormalize(String(r.NAME1 || r.SUPPLIERNAME || r.VENDORNAME || ""));
+        const code = trNormalize(String(r.VENDOR || ""));
+        const po = trNormalize(String(r.ORDERNUM || r.PURORDER || ""));
+        const mat = trNormalize(String(r.MATERIAL || ""));
+        const ean = trNormalize(String(r.BARCODE || r.EAN || ""));
+        return name.includes(q) || code.includes(q) || po.includes(q) || mat.includes(q) || ean.includes(q);
+      });
       setSuppliers(groupOrdersToSuppliers(orders, query));
     } catch (err) {
       setApiError(hataMetni(err, "CANIAS sunucusuna bağlanılamadı. Lütfen ağ bağlantınızı ve sunucu adresini kontrol edin."));

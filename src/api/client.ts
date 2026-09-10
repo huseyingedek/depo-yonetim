@@ -1602,6 +1602,7 @@ export const api = {
     message: string;
     matList: Record<string, unknown>[];
     barcodeList: Record<string, unknown>[];
+    unitList: Record<string, unknown>[];
     matSize: Record<string, unknown> | Record<string, unknown>[];
     image?: string;
   }> {
@@ -1640,6 +1641,18 @@ export const api = {
       barcodeList = rowsOf(r, ["BARCODELIST", "BARCODES"]);
     }
 
+    // CANIAS gerçek barkodları TBLBARCODELIST, birim çevrimlerini TBLUNITLIST altında döndürür
+    // (BARCODELIST çoğu zaman boş gelir). Ham WMSXMLTABLE.ROW üzerinden temiz oku.
+    const wmsRoot: Record<string, unknown> =
+      ((dataObj.WMSXMLTABLE as Record<string, unknown> | undefined)?.ROW as Record<string, unknown> | undefined) ??
+      ((dataObj.WMSMATERIALXML as Record<string, unknown> | undefined)?.ROW as Record<string, unknown> | undefined) ??
+      (rootRow as Record<string, unknown>);
+    const tblBarcodes = unwrapRows(wmsRoot.TBLBARCODELIST ?? dataObj.TBLBARCODELIST);
+    if (tblBarcodes.length) {
+      barcodeList = tblBarcodes;
+    }
+    const unitList = unwrapRows(wmsRoot.TBLUNITLIST ?? dataObj.TBLUNITLIST);
+
     // MatSize
     let matSize: Record<string, unknown> = {};
     if (rootRow.MATSIZE) {
@@ -1663,6 +1676,7 @@ export const api = {
       message: mesaj,
       matList,
       barcodeList,
+      unitList,
       matSize,
       image: typeof rootImage === "string" ? rootImage : undefined,
     };

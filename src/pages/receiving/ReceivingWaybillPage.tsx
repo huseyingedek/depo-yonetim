@@ -93,11 +93,32 @@ export default function ReceivingWaybillPage() {
   if (!supplier) return null;
 
   return (
-    <div className="mx-auto max-w-xl p-4 lg:p-8">
-      <PageHeader title="Mal Kabul — İrsaliye Bilgileri" backTo="/receiving" />
+    <div className="mx-auto max-w-xl p-4 lg:p-8 short:flex short:h-[100dvh] short:max-w-3xl short:flex-col short:justify-center short:overflow-y-auto short:p-3">
+      <PageHeader
+        title="Mal Kabul — İrsaliye Bilgileri"
+        backTo="/receiving"
+        right={
+          <button
+            type="button"
+            onClick={basla}
+            disabled={isValidating}
+            className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-brand-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
+          >
+            {isValidating ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Doğrulanıyor…
+              </>
+            ) : (
+              <>
+                Mal Kabule Başla <ArrowRight className="h-4 w-4" />
+              </>
+            )}
+          </button>
+        }
+      />
 
-      <div className="card mt-2 p-5 sm:p-6">
-        <div className="mb-5 rounded-2xl bg-elevated px-4 py-3">
+      <div className="card mt-2 p-5 sm:p-6 short:mt-0 short:p-3.5">
+        <div className="mb-5 rounded-2xl bg-elevated px-4 py-3 short:mb-3 short:py-2">
           <p className="text-xs text-subtle">Tedarikçi</p>
           <p className="truncate text-base font-bold text-fg">
             {supplier.name}
@@ -105,6 +126,8 @@ export default function ReceivingWaybillPage() {
           </p>
         </div>
 
+        {/* Yatay (short) modda iki alan yan yana; dikey/masaüstünde alt alta */}
+        <div className="short:grid short:grid-cols-2 short:gap-3">
         {/* İrsaliye Numarası */}
         <label className="block">
           <span className="field-label flex items-center gap-1.5">
@@ -130,7 +153,7 @@ export default function ReceivingWaybillPage() {
         </label>
 
         {/* Mal Kabul Deposu */}
-        <label className="mt-4 block">
+        <label className="mt-4 block short:mt-0">
           <span className="field-label flex items-center gap-1.5">
             <Warehouse className="h-4 w-4" /> Mal Kabul Deposu <span className="text-rose-500">*</span>
           </span>
@@ -156,18 +179,7 @@ export default function ReceivingWaybillPage() {
             </span>
           )}
         </label>
-
-        <button type="button" onClick={basla} disabled={isValidating} className="btn-primary btn-lg btn-block mt-6">
-          {isValidating ? (
-            <>
-              <Loader2 className="h-5 w-5 animate-spin" /> Depo doğrulanıyor…
-            </>
-          ) : (
-            <>
-              Mal Kabule Başla <ArrowRight className="h-5 w-5" />
-            </>
-          )}
-        </button>
+        </div>
       </div>
     </div>
   );
