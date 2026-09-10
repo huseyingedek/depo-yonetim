@@ -1121,7 +1121,6 @@ export default function StockTransferPage() {
                   return (
                     <div
                       key={item.id}
-                      className={`rounded-2xl border bg-surface p-3 sm:p-3.5 shadow-card transition-all duration-300 ease-soft ${
                       className={`rounded-2xl border bg-surface p-3 sm:p-3.5 shadow-card transition-all duration-300 ease-soft ${flashing ? "border-brand-400 ring-2 ring-brand-200" : "border-line"
                         }`}
                     >
