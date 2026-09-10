@@ -622,13 +622,12 @@ export default function StockTransferPage() {
                         onClick={git}
                         disabled={!isClickable}
                         title={typeof label === "string" ? label : ""}
-                        className={`flex h-10 w-full items-center justify-center rounded-xl px-0.5 text-xs sm:text-[13px] font-bold tracking-tight transition-all duration-200 ease-soft ${
-                          active
-                            ? "bg-brand-600 text-white shadow-soft font-extrabold cursor-default"
-                            : isClickable
+                        className={`flex h-10 w-full items-center justify-center rounded-xl px-0.5 text-xs sm:text-[13px] font-bold tracking-tight transition-all duration-200 ease-soft ${active
+                          ? "bg-brand-600 text-white shadow-soft font-extrabold cursor-default"
+                          : isClickable
                             ? "bg-elevated text-subtle hover:text-fg hover:bg-line cursor-pointer"
                             : "bg-elevated/60 text-subtle/60 cursor-default opacity-85"
-                        }`}
+                          }`}
                       >
                         <span className="truncate">{label}</span>
                       </button>
@@ -653,7 +652,7 @@ export default function StockTransferPage() {
                   <span className="truncate">
                     Depo: <span className="font-mono font-bold">{sourceShelf.warehouse}</span>
                     {" · "}
-                    Stok yeri: <span className="font-mono font-bold">{sourceShelf.stockPlace}</span>
+                    Stok yeri: <span className="font-mono font-bold">{sourceShelf.stockPlace.toUpperCase()}</span>
                   </span>
                 </span>
                 <button
@@ -1123,8 +1122,8 @@ export default function StockTransferPage() {
                     <div
                       key={item.id}
                       className={`rounded-2xl border bg-surface p-3 sm:p-3.5 shadow-card transition-all duration-300 ease-soft ${
-                        flashing ? "border-brand-400 ring-2 ring-brand-200" : "border-line"
-                      }`}
+                      className={`rounded-2xl border bg-surface p-3 sm:p-3.5 shadow-card transition-all duration-300 ease-soft ${flashing ? "border-brand-400 ring-2 ring-brand-200" : "border-line"
+                        }`}
                     >
                       {/* Üst Kısım: Çöp Kutusu + Malzeme Bilgileri + Miktar */}
                       <div className="flex items-center gap-2.5 sm:gap-3">
