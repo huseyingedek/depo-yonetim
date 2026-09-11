@@ -507,7 +507,7 @@ export default function StockTransferPage() {
           ? ""
           : activeItem
             ? ""
-            : `Malzeme barkodunu okutun (Raf: ${sourceShelf.stockPlace})`;
+            : `Malzeme barkodunu okutun `;
 
   return (
     <div className="mx-auto max-w-6xl p-3 md:p-4 lg:p-8 short:h-[100dvh] short:max-w-none short:flex short:flex-col short:overflow-hidden short:p-2">
@@ -605,11 +605,22 @@ export default function StockTransferPage() {
                   ).map(([s, label]) => {
                     const active =
                       (s === "shelf" && !sourceShelf) ||
-                      (s === "product" && !!sourceShelf && !lotPendingItem && !activeItem) ||
+                      (s === "product" && !lotPendingItem && !activeItem) ||
                       (s === "lot" && !!lotPendingItem) ||
                       (s === "qty" && !!activeItem);
 
                     // 5. Kural: Malzeme okuttuktan sonra raf tabına tıklayıp farklı rafa gidebilsin
+
+
+                    /*                  ).map(([s, label]) => {
+                      const active =
+                        (s === "shelf" && !sourceShelf) ||
+                        (s === "product" && !!sourceShelf && !lotPendingItem && !activeItem) ||
+                        (s === "lot" && !!lotPendingItem) ||
+                        (s === "qty" && !!activeItem);
+                        
+                        */
+
                     const isClickable = s === "shelf" || (s === "product" && (!!lotPendingItem || !!activeItem));
 
                     const git = () => {
