@@ -11,7 +11,6 @@ import {
   Minus,
   Send,
   CheckCircle2,
-  X,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import BarcodeScanner from "../../components/BarcodeScanner";
