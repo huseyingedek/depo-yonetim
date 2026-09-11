@@ -152,36 +152,12 @@ export default function CountDetailPage() {
     warehouse?: string;
   } | undefined;
 
-  const [order, setOrder] = useState<AdjustmentOrder | null>(() => {
-    if (navState?.order) return navState.order;
-    try {
-      const saved = sessionStorage.getItem(`count_session_${id}`);
-      if (saved) return JSON.parse(saved).order || null;
-    } catch { }
-    return null;
-  });
+  const [order, setOrder] = useState<AdjustmentOrder | null>(navState?.order || null);
 
-  const [lines, setLines] = useState<AdjustmentLine[]>(() => {
-    if (navState?.lines && navState.lines.length > 0) return navState.lines;
-    try {
-      const saved = sessionStorage.getItem(`count_session_${id}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.lines && parsed.lines.length > 0) return parsed.lines;
-      }
-    } catch { }
-    return [];
-  });
+  const [lines, setLines] = useState<AdjustmentLine[]>(navState?.lines || []);
 
   const [loading, setLoading] = useState<boolean>(() => {
     if (navState?.lines && navState.lines.length > 0) return false;
-    try {
-      const saved = sessionStorage.getItem(`count_session_${id}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.lines && parsed.lines.length > 0) return false;
-      }
-    } catch { }
     return true;
   });
 
@@ -291,14 +267,6 @@ export default function CountDetailPage() {
       setLoading(false);
     }
   }, [id, orderType, invDocNum, warehouseParam]);
-
-  // Sayım satırlarını sessionStorage'a senkronize et (sayfa yenilense veya geri dönülse bile kaybolmasın)
-  useEffect(() => {
-    if (!id || lines.length === 0) return;
-    try {
-      sessionStorage.setItem(`count_session_${id}`, JSON.stringify({ order, lines }));
-    } catch { }
-  }, [id, order, lines]);
 
   useEffect(() => {
     if (istendi.current) return;
