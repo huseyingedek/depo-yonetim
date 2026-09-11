@@ -17,6 +17,40 @@ import { api } from "../../api/client";
 import { sesBasarili, sesHata } from "../../sound";
 import type { AdjustmentOrder, AdjustmentLine } from "../../types";
 
+function cleanShelfCode(raw?: string | null): string {
+  if (!raw) return "";
+  let s = raw.trim().toUpperCase();
+  if (s.includes("$")) {
+    s = s.split("$").slice(1).join("$").trim();
+  }
+  return s;
+}
+
+function areShelvesEqual(
+  targetSp?: string | null,
+  targetWh?: string | null,
+  enteredSp?: string | null,
+  enteredWh?: string | null
+): boolean {
+  if (!targetSp) return true; // Belgedeki kalemde raf belirtilmemişse okutulan rafı kabul et
+  if (!enteredSp) return false;
+
+  const sp1 = cleanShelfCode(targetSp);
+  const sp2 = cleanShelfCode(enteredSp);
+
+  const wh1 = (targetWh || "").trim().toUpperCase();
+  const wh2 = (enteredWh || "").trim().toUpperCase();
+  if (wh1 && wh2 && wh1 !== wh2) {
+    return false;
+  }
+
+  if (sp1 === sp2) return true;
+
+  const norm1 = sp1.replace(/[^A-Z0-9]/g, "");
+  const norm2 = sp2.replace(/[^A-Z0-9]/g, "");
+  return norm1.length > 0 && norm1 === norm2;
+}
+
 function isoDateToBatch(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((iso ?? "").trim());
   return m ? `${m[1]}${m[2]}${m[3]}` : "";
@@ -161,6 +195,10 @@ export default function CountDetailPage() {
   const [selectedShelf, setSelectedShelf] = useState<string | null>(null);
   const [selectedWarehouse, setSelectedWarehouse] = useState<string | null>(null);
   const [selectedStockPlace, setSelectedStockPlace] = useState<string | null>(null);
+
+  // Sağ taraftan tıklanıp rafı doğrulanması/sorgulanması beklenen ürün
+  const [selectedLineForShelf, setSelectedLineForShelf] = useState<AdjustmentLine | null>(null);
+  const [filterByShelf, setFilterByShelf] = useState(false);
 
   const [activeItem, setActiveItem] = useState<ActiveCountItem | null>(null);
   const [lotPendingItem, setLotPendingItem] = useState<LotPendingItem | null>(null);
@@ -350,11 +388,225 @@ export default function CountDetailPage() {
           return;
         }
 
-        // Başarılı: Rafı seç ve Barkod okutma tabına geç
+        // Başarılı: Rafı seç
         const fullCode = `${confirmedWh}$${confirmedSp}`;
         setSelectedWarehouse(confirmedWh);
         setSelectedStockPlace(confirmedSp);
         setSelectedShelf(fullCode);
+
+        // Kullanıcı sağ taraftan bir ürüne tıklayıp raf okuttuysa:
+        if (selectedLineForShelf) {
+          const targetLine = selectedLineForShelf;
+          const isSameShelf = areShelvesEqual(
+            targetLine.stockPlace,
+            targetLine.warehouse,
+            confirmedSp,
+            confirmedWh
+          );
+
+          const allMatLines = lines.filter((l) => sadelestir(l.material) === sadelestir(targetLine.material));
+          const linesWithBatch = allMatLines.filter((l) => l.batchNum && l.batchNum !== "*");
+          const isLotTracked = Boolean(
+            targetLine.specialStock === "1" ||
+            allMatLines.some((l) => l.specialStock === "1") ||
+            linesWithBatch.length > 0
+          );
+
+          const mult = targetLine.multiplier && targetLine.multiplier > 0 ? targetLine.multiplier : 1;
+          const unit = (targetLine.unit || "AD").toUpperCase();
+          const skunit = (targetLine.skunit || unit).toUpperCase();
+
+          if (isSameShelf) {
+            // KURAL 1: Raf aynı ise o tıklanan rafı saymış olacak (mevcut satır seçilir)
+            if (isLotTracked) {
+              const batchMap = new Map<string, { batchNum: string; availStock: number; unit?: string; lineId?: string }>();
+              for (const l of allMatLines) {
+                if (l.batchNum && l.batchNum !== "*") {
+                  const key = l.batchNum.toUpperCase();
+                  if (!batchMap.has(key)) {
+                    batchMap.set(key, { batchNum: l.batchNum, availStock: l.targetQty, unit: l.unit, lineId: l.id });
+                  }
+                }
+              }
+
+              const cached = prefetchedBatchesRef.current.get(targetLine.material.toUpperCase());
+              let stockBatches = cached;
+              if (!stockBatches) {
+                try {
+                  stockBatches = await api.getStock(
+                    targetLine.material,
+                    confirmedWh,
+                    ""
+                  );
+                  if (stockBatches) {
+                    prefetchedBatchesRef.current.set(
+                      targetLine.material.toUpperCase(),
+                      stockBatches.filter((b) => b.batchNum && b.batchNum !== "*")
+                    );
+                  }
+                } catch { }
+              }
+
+              if (stockBatches && stockBatches.length > 0) {
+                for (const cb of stockBatches) {
+                  if (cb.batchNum && cb.batchNum !== "*") {
+                    const key = cb.batchNum.toUpperCase();
+                    if (!batchMap.has(key)) {
+                      batchMap.set(key, { ...cb });
+                    }
+                  }
+                }
+              }
+
+              setLotPendingItem({
+                material: targetLine.material,
+                name: targetLine.name,
+                barcode: targetLine.barcode || "",
+                unit,
+                skunit,
+                multiplier: mult,
+                specialStock: "1",
+                warehouse: confirmedWh,
+                stockPlace: confirmedSp,
+                batches: Array.from(batchMap.values()),
+              });
+              setActiveItem(null);
+              setSelectedLineForShelf(null);
+              setTab("lot");
+              sesBasarili();
+              show({
+                kind: "ok",
+                text: `Raf (${confirmedSp}) doğrulandı. Lütfen parti seçin.`,
+              });
+              return;
+            }
+
+            const existingCountedInUnit = targetLine.countedQty > 0
+              ? Math.round((targetLine.countedQty / mult) * 100) / 100
+              : 1;
+
+            setActiveItem({
+              lineId: targetLine.id,
+              material: targetLine.material,
+              name: targetLine.name,
+              barcode: targetLine.barcode || "",
+              quantity: existingCountedInUnit,
+              targetQty: targetLine.targetQty,
+              unit,
+              skunit,
+              multiplier: mult,
+              batchNum: targetLine.batchNum,
+              specialStock: targetLine.specialStock || "0",
+              isLotTracked: false,
+              warehouse: confirmedWh,
+              stockPlace: confirmedSp,
+            });
+            setLotPendingItem(null);
+            setSelectedLineForShelf(null);
+            setTab("qty");
+            sesBasarili();
+            show({
+              kind: "ok",
+              text: `Raf (${confirmedSp}) doğrulandı. Miktar girip onaylayın.`,
+            });
+            return;
+          } else {
+            // KURAL 2: Raf farklı ise yeni ürünmüş gibi sağ tarafa eklenecek, tıkladığı kart siyah henüz girilmemiş kalacak!
+            const newLineId = `new-shelf-${Date.now()}`;
+
+            if (isLotTracked) {
+              const batchMap = new Map<string, { batchNum: string; availStock: number; unit?: string }>();
+              for (const l of allMatLines) {
+                if (l.batchNum && l.batchNum !== "*") {
+                  const key = l.batchNum.toUpperCase();
+                  if (!batchMap.has(key)) {
+                    batchMap.set(key, { batchNum: l.batchNum, availStock: l.targetQty, unit: l.unit });
+                  }
+                }
+              }
+
+              const cached = prefetchedBatchesRef.current.get(targetLine.material.toUpperCase());
+              let stockBatches = cached;
+              if (!stockBatches) {
+                try {
+                  stockBatches = await api.getStock(
+                    targetLine.material,
+                    confirmedWh,
+                    ""
+                  );
+                  if (stockBatches) {
+                    prefetchedBatchesRef.current.set(
+                      targetLine.material.toUpperCase(),
+                      stockBatches.filter((b) => b.batchNum && b.batchNum !== "*")
+                    );
+                  }
+                } catch { }
+              }
+
+              if (stockBatches && stockBatches.length > 0) {
+                for (const cb of stockBatches) {
+                  if (cb.batchNum && cb.batchNum !== "*") {
+                    const key = cb.batchNum.toUpperCase();
+                    if (!batchMap.has(key)) {
+                      batchMap.set(key, { ...cb });
+                    }
+                  }
+                }
+              }
+
+              setLotPendingItem({
+                material: targetLine.material,
+                name: targetLine.name,
+                barcode: targetLine.barcode || "",
+                unit,
+                skunit,
+                multiplier: mult,
+                specialStock: "1",
+                warehouse: confirmedWh,
+                stockPlace: confirmedSp,
+                batches: Array.from(batchMap.values()),
+              });
+              setActiveItem(null);
+              setSelectedLineForShelf(null);
+              setTab("lot");
+              sesBasarili();
+              show({
+                kind: "ok",
+                text: `Farklı raf (${confirmedSp}) okutuldu. Yeni raf kalemi için parti seçin.`,
+              });
+              return;
+            }
+
+            // Partisiz ürün: Yeni raf kalemi olarak activeItem açılır
+            setActiveItem({
+              lineId: newLineId,
+              material: targetLine.material,
+              name: targetLine.name,
+              barcode: targetLine.barcode || "",
+              quantity: 1,
+              targetQty: 0, // Belgede bu rafta hedefi yok, yeni ürün gibi eklenecek
+              unit,
+              skunit,
+              multiplier: mult,
+              batchNum: targetLine.batchNum,
+              specialStock: targetLine.specialStock || "0",
+              isLotTracked: false,
+              warehouse: confirmedWh,
+              stockPlace: confirmedSp,
+            });
+            setLotPendingItem(null);
+            setSelectedLineForShelf(null);
+            setTab("qty");
+            sesBasarili();
+            show({
+              kind: "ok",
+              text: `Farklı raf (${confirmedSp}) okutuldu. Yeni raf kalemi için miktar girin.`,
+            });
+            return;
+          }
+        }
+
+        // Genel raf okutma (sağ taraftan ürün seçilmeden doğrudan raf okutulduysa)
         setActiveItem(null);
         setLotPendingItem(null);
         setTab("barcode");
@@ -373,7 +625,7 @@ export default function CountDetailPage() {
         setShelfBusy(false);
       }
     },
-    [order, warehouseParam, shelfBusy, show]
+    [order, warehouseParam, shelfBusy, show, selectedLineForShelf, lines]
   );
 
   const handleSelectBatch = useCallback(
@@ -873,113 +1125,31 @@ export default function CountDetailPage() {
     });
     setActiveItem(null);
     setLotPendingItem(null);
-    setTab("barcode");
+    setSelectedLineForShelf(null);
+    setSelectedShelf(null);
+    setSelectedWarehouse(null);
+    setSelectedStockPlace(null);
+    setTab("shelf");
   };
 
-  const selectLineForCounting = async (line: AdjustmentLine) => {
-    const unit = (line.unit || "AD").toUpperCase();
-    const skunit = (line.skunit || unit).toUpperCase();
-    const mult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
-    const allMatLines = lines.filter((l) => sadelestir(l.material) === sadelestir(line.material));
-    const linesWithBatch = allMatLines.filter((l) => l.batchNum && l.batchNum !== "*");
-    const isLot = Boolean(
-      line.specialStock === "1" ||
-      allMatLines.some((l) => l.specialStock === "1") ||
-      linesWithBatch.length > 0
-    );
-
-    if (line.stockPlace) {
-      const wh = line.warehouse || selectedWarehouse || order?.warehouse || "01";
-      const sp = line.stockPlace.trim().toUpperCase();
-      setSelectedWarehouse(wh);
-      setSelectedStockPlace(sp);
-      setSelectedShelf(`${wh}$${sp}`);
-    }
-
-    if (isLot) {
-      const batchMap = new Map<string, { batchNum: string; availStock: number; unit?: string }>();
-      for (const l of allMatLines) {
-        if (l.batchNum && l.batchNum !== "*") {
-          const key = l.batchNum.toUpperCase();
-          if (!batchMap.has(key)) {
-            batchMap.set(key, { batchNum: l.batchNum, availStock: l.targetQty, unit: l.unit });
-          }
-        }
-      }
-
-      // CANIAS'tan depo genelindeki partileri sorgula ve birleştir (önce cache kontrolü)
-      const cached = prefetchedBatchesRef.current.get(line.material.toUpperCase());
-      let stockBatches = cached;
-      if (!stockBatches) {
-        try {
-          stockBatches = await api.getStock(
-            line.material,
-            line.warehouse || selectedWarehouse || order?.warehouse || "01",
-            ""
-          );
-          if (stockBatches) {
-            prefetchedBatchesRef.current.set(
-              line.material.toUpperCase(),
-              stockBatches.filter((b) => b.batchNum && b.batchNum !== "*")
-            );
-          }
-        } catch { }
-      }
-
-      if (stockBatches && stockBatches.length > 0) {
-        for (const cb of stockBatches) {
-          if (cb.batchNum && cb.batchNum !== "*") {
-            const key = cb.batchNum.toUpperCase();
-            if (!batchMap.has(key)) {
-              batchMap.set(key, { ...cb });
-            }
-          }
-        }
-      }
-
-      setLotPendingItem({
-        material: line.material,
-        name: line.name,
-        barcode: line.barcode || "",
-        unit,
-        skunit,
-        multiplier: mult,
-        specialStock: line.specialStock || "1",
-        warehouse: line.warehouse || selectedWarehouse || order?.warehouse,
-        stockPlace: line.stockPlace || selectedStockPlace || selectedShelf || order?.stockPlace,
-        batches: Array.from(batchMap.values()),
-      });
-      setActiveItem(null);
-      setTab("lot");
+  const selectLineForCounting = (line: AdjustmentLine) => {
+    // Eğer aynı ürün zaten raf bekliyorsa ve raf tabındaysa seçimi kaldır/toggle
+    if (selectedLineForShelf?.id === line.id && tab === "shelf") {
+      setSelectedLineForShelf(null);
       return;
     }
 
-    const existingCountedInUnit = line.countedQty > 0
-      ? Math.round((line.countedQty / mult) * 100) / 100
-      : 1;
-
+    setSelectedLineForShelf(line);
+    setActiveItem(null);
     setLotPendingItem(null);
-    setActiveItem({
-      lineId: line.id,
-      material: line.material,
-      name: line.name,
-      barcode: line.barcode || "",
-      quantity: existingCountedInUnit,
-      targetQty: line.targetQty,
-      unit,
-      skunit,
-      multiplier: mult,
-      batchNum: line.batchNum,
-      specialStock: line.specialStock || "0",
-      isLotTracked: false,
-      warehouse: line.warehouse || selectedWarehouse || order?.warehouse,
-      stockPlace: line.stockPlace || selectedStockPlace || order?.stockPlace,
-    });
-    setTab("qty");
+    setSelectedShelf(null);
+    setSelectedWarehouse(null);
+    setSelectedStockPlace(null);
+    setTab("shelf");
   };
 
   const displayedLines = useMemo(() => {
-    if (tab === "shelf" || !selectedShelf) {
+    if (!filterByShelf || tab === "shelf" || !selectedShelf) {
       return lines;
     }
 
@@ -990,6 +1160,7 @@ export default function CountDetailPage() {
         if (!l.warehouse || l.warehouse.trim().toUpperCase() === selectedWarehouse.trim().toUpperCase()) return true;
         if (activeItem && l.id === activeItem.lineId) return true;
         if (lotPendingItem && sadelestir(l.material) === sadelestir(lotPendingItem.material)) return true;
+        if (selectedLineForShelf && l.id === selectedLineForShelf.id) return true;
         return false;
       });
     }
@@ -1000,18 +1171,21 @@ export default function CountDetailPage() {
       if (l.stockPlace && `${l.warehouse || ""}$${l.stockPlace}`.toUpperCase() === selectedShelf.toUpperCase()) return true;
       if (activeItem && l.id === activeItem.lineId) return true;
       if (lotPendingItem && sadelestir(l.material) === sadelestir(lotPendingItem.material)) return true;
+      if (selectedLineForShelf && l.id === selectedLineForShelf.id) return true;
       return false;
     });
-  }, [lines, tab, selectedShelf, selectedWarehouse, selectedStockPlace, activeItem, lotPendingItem]);
+  }, [lines, tab, selectedShelf, selectedWarehouse, selectedStockPlace, activeItem, lotPendingItem, selectedLineForShelf, filterByShelf]);
 
   const sortedLines = useMemo(() => {
     return [...displayedLines].sort((a, b) => {
       const aIsActive =
         (activeItem && a.id === activeItem.lineId) ||
-        (lotPendingItem && sadelestir(a.material) === sadelestir(lotPendingItem.material));
+        (lotPendingItem && sadelestir(a.material) === sadelestir(lotPendingItem.material)) ||
+        (selectedLineForShelf && a.id === selectedLineForShelf.id);
       const bIsActive =
         (activeItem && b.id === activeItem.lineId) ||
-        (lotPendingItem && sadelestir(b.material) === sadelestir(lotPendingItem.material));
+        (lotPendingItem && sadelestir(b.material) === sadelestir(lotPendingItem.material)) ||
+        (selectedLineForShelf && b.id === selectedLineForShelf.id);
 
       if (aIsActive && !bIsActive) return -1;
       if (!aIsActive && bIsActive) return 1;
@@ -1032,7 +1206,7 @@ export default function CountDetailPage() {
 
       return a.id.localeCompare(b.id, undefined, { numeric: true });
     });
-  }, [displayedLines, activeItem, lotPendingItem]);
+  }, [displayedLines, activeItem, lotPendingItem, selectedLineForShelf]);
 
   const totalCountedLines = lines.filter((l) => l.countedQty > 0).length;
   const isAllComplete = lines.length > 0 && totalCountedLines === lines.length;
@@ -1144,10 +1318,12 @@ export default function CountDetailPage() {
                     setSelectedStockPlace(null);
                     setActiveItem(null);
                     setLotPendingItem(null);
+                    setSelectedLineForShelf(null);
                   } else if (s === "barcode") {
                     setTab("barcode");
                     setActiveItem(null);
                     setLotPendingItem(null);
+                    setSelectedLineForShelf(null);
                   } else if (s === "lot") {
                     if (activeItem) {
                       handleBackToLot(activeItem);
@@ -1196,6 +1372,7 @@ export default function CountDetailPage() {
                     setSelectedStockPlace(null);
                     setActiveItem(null);
                     setLotPendingItem(null);
+                    setSelectedLineForShelf(null);
                   }}
                   className="text-[11.5px] font-bold text-emerald-700 dark:text-emerald-300 underline hover:text-emerald-900 shrink-0"
                 >
@@ -1314,7 +1491,7 @@ export default function CountDetailPage() {
             {/* ADIM 4: MİKTAR GİRİŞİ */}
 
             {tab === "qty" && activeItem && (
-              <div className="space-y-2 animate-fade-in flex-1 flex flex-col justify-between">
+              <div className="space-y-2 animate-fade-in flex-0.01 flex flex-col justify-between">
                 <div>
                   <div className="mb-1.5 flex items-center justify-between gap-1">
                     <label className="text-xs font-bold text-fg block shrink-0">
@@ -1421,6 +1598,22 @@ export default function CountDetailPage() {
         {/* =================================================================== */}
 
         <div className="min-w-0 short:flex-1 short:overflow-y-auto short:pr-1 space-y-2">
+          {/* İsteğe bağlı Raf Filtre Butonu (Eğer raf seçildiyse) */}
+          {selectedShelf && tab !== "shelf" && (
+            <div className="flex items-center justify-between gap-2 px-1 py-0.5 animate-fade-in">
+              <span className="text-xs font-bold text-subtle">
+                {filterByShelf ? `Sadece "${selectedStockPlace || selectedShelf}" Rafı (${displayedLines.length})` : `Tüm Sayım Listesi (${lines.length})`}
+              </span>
+              <button
+                type="button"
+                onClick={() => setFilterByShelf((p) => !p)}
+                className="text-xs font-bold text-brand-600 hover:text-brand-700 underline"
+              >
+                {filterByShelf ? "Tümünü Göster" : "Sadece Bu Rafı Göster"}
+              </button>
+            </div>
+          )}
+
           {/* Yükleniyor Durumu */}
           {loading ? (
             <div className="space-y-2">
@@ -1438,6 +1631,7 @@ export default function CountDetailPage() {
           ) : (
             <div className="space-y-2">
               {sortedLines.map((line) => {
+                const isSelectedForShelf = selectedLineForShelf?.id === line.id;
                 const counted = line.countedQty;
                 const target = line.targetQty;
                 const isUnexpected = target <= 0 && counted > 0;
@@ -1474,7 +1668,10 @@ export default function CountDetailPage() {
                     key={line.id}
                     type="button"
                     onClick={() => selectLineForCounting(line)}
-                    className="w-full text-left rounded-2xl border border-line bg-surface p-2.5 sm:p-3 transition-all shadow-xs hover:border-slate-400/60 active:scale-[0.99]"
+                    className={`w-full text-left rounded-2xl border p-2.5 sm:p-3 transition-all shadow-xs active:scale-[0.99] ${isSelectedForShelf
+                        ? "border-brand-500 bg-surface"
+                        : "border-line bg-surface hover:border-slate-400/60"
+                      }`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
