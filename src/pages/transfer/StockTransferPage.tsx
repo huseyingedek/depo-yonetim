@@ -605,10 +605,10 @@ export default function StockTransferPage() {
                     ] as const
                   ).map(([s, label]) => {
                     const active =
-                      (s === "shelf") ||
-                      (s === "product") ||
-                      (s === "lot") ||
-                      (s === "qty");
+                      (s === "shelf" && !sourceShelf) ||
+                      (s === "product" && !lotPendingItem && !activeItem) ||
+                      (s === "lot" && !!lotPendingItem) ||
+                      (s === "qty" && !!activeItem);
 
                     // 5. Kural: Malzeme okuttuktan sonra raf tabına tıklayıp farklı rafa gidebilsin
 
