@@ -174,7 +174,6 @@ export default function CountDetailPage() {
 
   // Sağ taraftan tıklanıp rafı doğrulanması/sorgulanması beklenen ürün
   const [selectedLineForShelf, setSelectedLineForShelf] = useState<AdjustmentLine | null>(null);
-  const [filterByShelf, setFilterByShelf] = useState(false);
 
   const [activeItem, setActiveItem] = useState<ActiveCountItem | null>(null);
   const [lotPendingItem, setLotPendingItem] = useState<LotPendingItem | null>(null);
@@ -1116,36 +1115,8 @@ export default function CountDetailPage() {
     setTab("shelf");
   };
 
-  const displayedLines = useMemo(() => {
-    if (!filterByShelf || tab === "shelf" || !selectedShelf) {
-      return lines;
-    }
-
-    // 00$* seçildiyse ve depo tanımlıysa depoya göre filtrele
-    if (selectedStockPlace === "*") {
-      if (!selectedWarehouse) return lines;
-      return lines.filter((l) => {
-        if (!l.warehouse || l.warehouse.trim().toUpperCase() === selectedWarehouse.trim().toUpperCase()) return true;
-        if (activeItem && l.id === activeItem.lineId) return true;
-        if (lotPendingItem && sadelestir(l.material) === sadelestir(lotPendingItem.material)) return true;
-        if (selectedLineForShelf && l.id === selectedLineForShelf.id) return true;
-        return false;
-      });
-    }
-
-    const cleanShelf = (selectedStockPlace || selectedShelf).trim().toUpperCase();
-    return lines.filter((l) => {
-      if (l.stockPlace && l.stockPlace.trim().toUpperCase() === cleanShelf) return true;
-      if (l.stockPlace && `${l.warehouse || ""}$${l.stockPlace}`.toUpperCase() === selectedShelf.toUpperCase()) return true;
-      if (activeItem && l.id === activeItem.lineId) return true;
-      if (lotPendingItem && sadelestir(l.material) === sadelestir(lotPendingItem.material)) return true;
-      if (selectedLineForShelf && l.id === selectedLineForShelf.id) return true;
-      return false;
-    });
-  }, [lines, tab, selectedShelf, selectedWarehouse, selectedStockPlace, activeItem, lotPendingItem, selectedLineForShelf, filterByShelf]);
-
   const sortedLines = useMemo(() => {
-    return [...displayedLines].sort((a, b) => {
+    return [...lines].sort((a, b) => {
       const aIsActive =
         (activeItem && a.id === activeItem.lineId) ||
         (lotPendingItem && sadelestir(a.material) === sadelestir(lotPendingItem.material)) ||
@@ -1174,7 +1145,7 @@ export default function CountDetailPage() {
 
       return a.id.localeCompare(b.id, undefined, { numeric: true });
     });
-  }, [displayedLines, activeItem, lotPendingItem, selectedLineForShelf]);
+  }, [lines, activeItem, lotPendingItem, selectedLineForShelf]);
 
   const totalCountedLines = lines.filter((l) => l.countedQty > 0).length;
   const isAllComplete = lines.length > 0 && totalCountedLines === lines.length;
@@ -1264,7 +1235,7 @@ export default function CountDetailPage() {
       )}
 
       {/* ANA İÇERİK: SOL PANEL & SAĞ LİSTE */}
-      <div className="grid min-w-0 gap-2.5 md:gap-3.5 md:grid-cols-[330px_minmax(0,1fr)] lg:grid-cols-[350px_minmax(0,1fr)] xl:grid-cols-[370px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-2.5">
+      <div className="grid min-w-0 items-start gap-2.5 md:gap-3.5 md:grid-cols-[330px_minmax(0,1fr)] lg:grid-cols-[350px_minmax(0,1fr)] xl:grid-cols-[370px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-2.5">
         {/* =================================================================== */}
         {/* SOL KOLON: Sayım İşlem Kartı                                        */}
         {/* =================================================================== */}
@@ -1361,7 +1332,7 @@ export default function CountDetailPage() {
             {/* ADIM 1: RAF OKUTMA */}
             {tab === "shelf" && (
               <div className="space-y-2 animate-fade-in">
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <span className="block text-[13px] font-bold text-fg">Raf Barkodu Okut</span>
                   <BarcodeScanner
                     onDetected={handleSelectShelf}
@@ -1573,25 +1544,7 @@ export default function CountDetailPage() {
         {/* =================================================================== */}
         {/* SAĞ KOLON: Okutulacak Mallar (Aşağı doğru biriken kartlar)         */}
         {/* =================================================================== */}
-
-        <div className="min-w-0 short:flex-1 short:overflow-y-auto short:pr-1 space-y-2">
-          {/* İsteğe bağlı Raf Filtre Butonu (Eğer raf seçildiyse) */}
-          {selectedShelf && tab !== "shelf" && (
-            <div className="flex items-center justify-between gap-2 px-1 py-0.5 animate-fade-in">
-              <span className="text-xs font-bold text-subtle">
-                {filterByShelf ? `Sadece "${selectedStockPlace || selectedShelf}" Rafı (${displayedLines.length})` : `Tüm Sayım Listesi (${lines.length})`}
-              </span>
-              <button
-                type="button"
-                onClick={() => setFilterByShelf((p) => !p)}
-                className="text-xs font-bold text-brand-600 hover:text-brand-700 underline"
-              >
-                {filterByShelf ? "Tümünü Göster" : "Sadece Bu Rafı Göster"}
-              </button>
-            </div>
-          )}
-
-          {/* Yükleniyor Durumu */}
+        <div className="min-w-0 short:flex-1 short:overflow-y-auto short:pr-1">
           {loading ? (
             <div className="space-y-2">
               {[0, 1, 2].map((i) => (
@@ -1599,10 +1552,10 @@ export default function CountDetailPage() {
               ))}
             </div>
           ) : sortedLines.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-surface/50 py-8 text-center text-subtle">
-              <Package className="mb-2 h-7 w-7 text-slate-400" />
-              <p className="text-[15px] font-bold text-fg">
-                {selectedShelf ? `${selectedShelf} rafında sayılacak malzeme bulunamadı` : "Sayılacak malzeme bulunamadı"}
+            <div className="rounded-2xl border border-line bg-surface p-8 text-center">
+              <Package className="mx-auto h-10 w-10 text-subtle opacity-40" />
+              <p className="mt-2 text-sm font-bold text-subtle">
+                {lines.length === 0 ? "Sayım kalemi bulunamadı" : "Bu rafta sayılacak malzeme bulunamadı"}
               </p>
             </div>
           ) : (
@@ -1646,8 +1599,8 @@ export default function CountDetailPage() {
                     type="button"
                     onClick={() => selectLineForCounting(line)}
                     className={`w-full text-left rounded-2xl border p-2.5 sm:p-3 transition-all shadow-xs active:scale-[0.99] ${isSelectedForShelf
-                        ? "border-brand-500 bg-surface"
-                        : "border-line bg-surface hover:border-slate-400/60"
+                      ? "border-brand-500 bg-surface"
+                      : "border-line bg-surface hover:border-slate-400/60"
                       }`}
                   >
                     <div className="flex items-center justify-between gap-2">
