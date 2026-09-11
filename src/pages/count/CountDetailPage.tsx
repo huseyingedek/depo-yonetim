@@ -1115,8 +1115,43 @@ export default function CountDetailPage() {
     setTab("shelf");
   };
 
+  const displayedLines = useMemo(() => {
+    // Henüz raf okutulmadıysa tüm belge listesini göster
+    if (!selectedShelf) {
+      return lines;
+    }
+
+    // 00$* seçildiyse ve depo tanımlıysa depoya göre filtrele
+    if (selectedStockPlace === "*") {
+      if (!selectedWarehouse) return lines;
+      return lines.filter((l) => {
+        if (!l.warehouse || l.warehouse.trim().toUpperCase() === selectedWarehouse.trim().toUpperCase()) return true;
+        if (activeItem && l.id === activeItem.lineId) return true;
+        if (lotPendingItem && sadelestir(l.material) === sadelestir(lotPendingItem.material)) return true;
+        if (selectedLineForShelf && l.id === selectedLineForShelf.id) return true;
+        return false;
+      });
+    }
+
+    const cleanShelf = (selectedStockPlace || selectedShelf).trim().toUpperCase();
+    return lines.filter((l) => {
+      // 1. areShelvesEqual ile tam veya normalize eşleşme
+      if (areShelvesEqual(l.stockPlace, l.warehouse, selectedStockPlace || selectedShelf, selectedWarehouse || undefined)) {
+        return true;
+      }
+      // 2. Klasik string kontrolleri
+      if (l.stockPlace && l.stockPlace.trim().toUpperCase() === cleanShelf) return true;
+      if (l.stockPlace && `${l.warehouse || ""}$${l.stockPlace}`.toUpperCase() === selectedShelf.toUpperCase()) return true;
+      // 3. Şu anda aktif işlemde olan ürünler her zaman listede kalsın
+      if (activeItem && l.id === activeItem.lineId) return true;
+      if (lotPendingItem && sadelestir(l.material) === sadelestir(lotPendingItem.material)) return true;
+      if (selectedLineForShelf && l.id === selectedLineForShelf.id) return true;
+      return false;
+    });
+  }, [lines, selectedShelf, selectedWarehouse, selectedStockPlace, activeItem, lotPendingItem, selectedLineForShelf]);
+
   const sortedLines = useMemo(() => {
-    return [...lines].sort((a, b) => {
+    return [...displayedLines].sort((a, b) => {
       const aIsActive =
         (activeItem && a.id === activeItem.lineId) ||
         (lotPendingItem && sadelestir(a.material) === sadelestir(lotPendingItem.material)) ||
@@ -1145,7 +1180,7 @@ export default function CountDetailPage() {
 
       return a.id.localeCompare(b.id, undefined, { numeric: true });
     });
-  }, [lines, activeItem, lotPendingItem, selectedLineForShelf]);
+  }, [displayedLines, activeItem, lotPendingItem, selectedLineForShelf]);
 
   const totalCountedLines = lines.filter((l) => l.countedQty > 0).length;
   const isAllComplete = lines.length > 0 && totalCountedLines === lines.length;

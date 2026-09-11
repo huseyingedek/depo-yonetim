@@ -250,7 +250,7 @@ let cagriKuyrugu = Promise.resolve();
 function siraya(fn) {
   const p = cagriKuyrugu.then(fn, fn);
 
-  cagriKuyrugu = p.then(() => {}, () => {});
+  cagriKuyrugu = p.then(() => { }, () => { });
   return p;
 }
 
@@ -325,7 +325,7 @@ async function callServiceInner(serviceId, params, retry = true) {
     session = null;
     loginPromise = null;
     clientPromise = null;
-    if (oldSid) logout(oldSid).catch(() => {});
+    if (oldSid) logout(oldSid).catch(() => { });
     return callServiceInner(serviceId, params, false);
   }
 
@@ -413,8 +413,8 @@ app.post("/api/mzy/:service", async (req, res) => {
     const bos = !String(result.raw ?? "").trim();
     log(
       `← ${service} ${bos ? "BOŞ" : "OK"} ${ms}ms` +
-        (mesaj ? ` | mesaj: ${mesaj.replace(/\s+/g, " ").slice(0, 120)}` : "") +
-        ` | ${String(result.raw).replace(/\s+/g, " ").slice(0, 200)}`
+      (mesaj ? ` | mesaj: ${mesaj.replace(/\s+/g, " ").slice(0, 120)}` : "") +
+      ` | ${String(result.raw).replace(/\s+/g, " ").slice(0, 200)}`
     );
     res.json(result);
   } catch (e) {
