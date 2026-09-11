@@ -1235,7 +1235,7 @@ export default function CountDetailPage() {
       )}
 
       {/* ANA İÇERİK: SOL PANEL & SAĞ LİSTE */}
-      <div className="grid min-w-0 items-start gap-2.5 md:gap-3.5 md:grid-cols-[330px_minmax(0,1fr)] lg:grid-cols-[350px_minmax(0,1fr)] xl:grid-cols-[370px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-2.5">
+      <div className="grid min-w-0 gap-2.5 md:gap-3.5 md:grid-cols-[330px_minmax(0,1fr)] lg:grid-cols-[350px_minmax(0,1fr)] xl:grid-cols-[370px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-2.5">
         {/* =================================================================== */}
         {/* SOL KOLON: Sayım İşlem Kartı                                        */}
         {/* =================================================================== */}
@@ -1544,7 +1544,7 @@ export default function CountDetailPage() {
         {/* =================================================================== */}
         {/* SAĞ KOLON: Okutulacak Mallar (Aşağı doğru biriken kartlar)         */}
         {/* =================================================================== */}
-        <div className="min-w-0 short:flex-1 short:overflow-y-auto short:pr-1">
+        <div className="min-w-0 short:flex-1 short:min-h-0 short:self-stretch short:overflow-y-auto short:pr-1">
           {loading ? (
             <div className="space-y-2">
               {[0, 1, 2].map((i) => (
