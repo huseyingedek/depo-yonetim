@@ -90,14 +90,6 @@ export default function CountSummaryPage() {
     [lines]
   );
 
-  // Sayım satırlarını sessionStorage'a senkronize et
-  useEffect(() => {
-    if (!id || lines.length === 0) return;
-    try {
-      sessionStorage.setItem(`count_session_${id}`, JSON.stringify({ order, lines }));
-    } catch {}
-  }, [id, order, lines]);
-
   const handleBack = () => {
     navigate(`/count/${id}`, {
       state: {
@@ -112,6 +104,11 @@ export default function CountSummaryPage() {
 
   // Sağ üstteki "Bitir" butonuna basılınca çalışacak handler
   const handleFinish = () => {
+    if (id) {
+      try {
+        sessionStorage.removeItem(`count_session_${id}`);
+      } catch {}
+    }
     show({
       kind: "ok",
       text: "Sayım tamamlandı. CANIAS onay servisi sonraki adımda bağlanacaktır.",

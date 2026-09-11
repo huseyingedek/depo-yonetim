@@ -1195,6 +1195,15 @@ export default function CountDetailPage() {
     });
   };
 
+  const handleGoBack = () => {
+    if (id) {
+      try {
+        sessionStorage.removeItem(`count_session_${id}`);
+      } catch { }
+    }
+    navigate("/count");
+  };
+
   return (
     <div className="mx-auto max-w-6xl p-3 md:p-4 lg:p-8 short:h-[100dvh] short:max-w-none short:flex short:flex-col short:overflow-hidden short:p-2">
       {/* ÜST BAŞLIK */}
@@ -1202,7 +1211,7 @@ export default function CountDetailPage() {
         <div className="flex items-center gap-2.5">
           <button
             type="button"
-            onClick={() => navigate("/count")}
+            onClick={handleGoBack}
             className="flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-surface text-fg shadow-card transition hover:bg-elevated active:scale-95"
           >
             <ChevronLeft className="h-5 w-5" />
