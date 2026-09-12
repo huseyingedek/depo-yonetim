@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { MapPin, Check, CheckCircle2, AlertTriangle, Loader2, Warehouse, X } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
@@ -15,6 +15,7 @@ export default function PutawayItemPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const orderType = searchParams.get("type") ?? "";
 
   const order = usePutawayStore((s) => s.order);
@@ -45,31 +46,57 @@ export default function PutawayItemPage() {
   // döndürmez, order.lines boşalır → değerleri o an snapshot'layıp gösteririz.
   const [ozet, setOzet] = useState({ emir: "", kalem: 0, toplam: 0 });
 
+  // Bir satırın görünen "yerleşen" miktarı: MALZEME toplamını (sunucu pickedQty ile
+  // oturum kaydının BÜYÜĞÜ) satırlara ÜSTTEN sırayla dağıtır (yedire yedire). Sunucu
+  // tümünü tek kaleme yazsa bile ekranda 24/24 + 12/24 + 0 + 0 gibi doğru görünür.
+  const yerlesenOf = useCallback(
+    (line: { id: string; requestedQty: number; product: { code: string } }) => {
+      if (!order) return 0;
+      const material = line.product.code;
+      const malzemeSatirlari = order.lines.filter((l) => l.product.code === material);
+      const serverSum = malzemeSatirlari.reduce((s, l) => s + l.pickedQty, 0);
+      const sessionSum = records
+        .filter((r) => r.material === material)
+        .reduce((s, r) => s + r.qty, 0);
+      let kalanToplam = Math.max(serverSum, sessionSum);
+      for (const l of malzemeSatirlari) {
+        if (l.id === line.id) return Math.min(kalanToplam, line.requestedQty);
+        kalanToplam = Math.max(0, kalanToplam - l.requestedQty);
+      }
+      return 0;
+    },
+    [order, records]
+  );
+
   const yuklendi = useRef("");
   useEffect(() => {
     if (!id) return;
     const anahtar = `${id}|${orderType}`;
     if (yuklendi.current === anahtar) return;
     yuklendi.current = anahtar;
+
+    // Listeden ön-yükleme yapıldıysa (prefetched) ve emir zaten yüklüyse tekrar istek atma.
+    const st = usePutawayStore.getState();
+    const prefetched = (location.state as { prefetched?: boolean } | null)?.prefetched;
+    if (prefetched && st.order?.id === id && !st.loading) return;
+
     loadOrder(id, orderType);
-  }, [id, orderType, loadOrder]);
+  }, [id, orderType, loadOrder, location.state]);
 
   // Tüm kalemler yerleştirilince (bu oturumda okutma yapıldıysa) kilidi kur ve
   // özeti O AN yakala (sonra order boşalsa bile snapshot korunur).
   useEffect(() => {
     if (tamamGoster) return; // zaten kilitli
     if (!order || order.lines.length === 0 || records.length === 0) return;
-    const yer = (l: (typeof order.lines)[number]) =>
-      Math.max(l.pickedQty, records.filter((r) => r.lineId === l.id).reduce((s, r) => s + r.qty, 0));
-    if (order.lines.every((l) => yer(l) >= l.requestedQty)) {
+    if (order.lines.every((l) => yerlesenOf(l) >= l.requestedQty)) {
       setOzet({
         emir: order.orderType ? `${order.id} · ${order.orderType}` : order.id,
         kalem: order.lines.length,
-        toplam: order.lines.reduce((s, l) => s + yer(l), 0),
+        toplam: order.lines.reduce((s, l) => s + yerlesenOf(l), 0),
       });
       setTamamGoster(true);
     }
-  }, [order, records, tamamGoster]);
+  }, [order, records, tamamGoster, yerlesenOf]);
 
   const showToast = (tst: Toast) => {
     if (tst?.kind === "error") sesHata();
@@ -142,11 +169,6 @@ export default function PutawayItemPage() {
     );
   }
 
-  // Yerleştirilen = CANIAS (pickedQty) ile bu oturum kayıtlarının BÜYÜĞÜ.
-  // EnterPlacement tazelemesi boş dönse bile ilerleme/tamamlanma doğru olur.
-  const yerlesenOf = (l: (typeof order.lines)[number]) =>
-    Math.max(l.pickedQty, records.filter((r) => r.lineId === l.id).reduce((s, r) => s + r.qty, 0));
-
   // TAMAMLANDI (kilitli): snapshot'lanan özeti göster, listeye dön ile yönlendir.
   if (tamamGoster) {
     return (
@@ -211,9 +233,13 @@ export default function PutawayItemPage() {
     { key: "hedef", label: "Hedef", active: !!ready, done: false },
   ];
 
+  // Aktif malzeme: ürün okunur okunmaz (parti beklense bile) o kalem aktif sayılır →
+  // hemen üste gelir ve vurgulanır. ready varsa satır no ile, yoksa pending malzemesiyle.
+  const aktifMaterial = ready?.material ?? pending?.material ?? null;
+  const aktifLineId = ready?.lineId ?? null;
   const aktifKalem = (l: (typeof order.lines)[number]) =>
-    !!ready && (l.id === ready.lineId || l.product.code === ready.material);
-  const siraliLines = ready
+    !!aktifMaterial && (l.id === aktifLineId || l.product.code === aktifMaterial);
+  const siraliLines = aktifMaterial
     ? [...order.lines].sort((a, b) => Number(aktifKalem(b)) - Number(aktifKalem(a)))
     : order.lines;
 

@@ -28,6 +28,7 @@ import ToastView, { useToast } from "../../components/Toast";
 import Dimension3DBoxVisual from "../../components/Dimension3DBoxVisual";
 import { BrowserMultiFormatReader, type IScannerControls } from "@zxing/browser";
 import { api } from "../../api/client";
+import { isoDateToBatch } from "../../store/pickingLogic";
 import { sesBasarili, sesHata } from "../../sound";
 
 export interface ReceivedItem {
@@ -575,13 +576,28 @@ export default function ReceivingDetailPage() {
   const [expiryDate, setExpiryDate] = useState<string>("");
   const [lotError, setLotError] = useState<string>("");
 
-  // Miktar HER ZAMAN stok birimi (adet) bazında girilir — diğer ekranlarla tutarlı.
-  // Barkod hangi birim olursa olsun (KO/PK/KT), girilen sayı doğrudan stok birimidir; çarpan uygulanmaz.
-  const activeBarcodeUnit = useMemo(() => {
-    return String(currentMaterial?.unit || "AD").trim().toUpperCase();
-  }, [currentMaterial?.unit]);
+  // Miktar, OKUTULAN/SEÇİLİ barkodun biriminde girilir; çarpanı stok birimine (AD) çevirir.
+  // Örn: 50'lik KT barkodu → 2 girilirse 2×50 = 100 AD. Etikette barkodun birimi görünür (KT/KO/AD).
+  const selectedBarcodeObj = useMemo(() => {
+    if (!currentMaterial || !currentMaterial.barcodes || currentMaterial.barcodes.length === 0) return undefined;
+    return (
+      currentMaterial.barcodes.find((b) => b.barcode === currentMaterial.selectedBarcode) ||
+      currentMaterial.barcodes[0]
+    );
+  }, [currentMaterial]);
 
-  const activeBarcodeMultiplier: number = 1;
+  const activeBarcodeUnit = useMemo(() => {
+    return String(selectedBarcodeObj?.unit || currentMaterial?.unit || "AD").trim().toUpperCase();
+  }, [selectedBarcodeObj, currentMaterial?.unit]);
+
+  const activeBarcodeMultiplier = useMemo(() => {
+    if (!currentMaterial) return 1;
+    if (currentMaterial.unitMultipliers?.[activeBarcodeUnit]) {
+      return currentMaterial.unitMultipliers[activeBarcodeUnit];
+    }
+    if (activeBarcodeUnit === "AD") return 1;
+    return currentMaterial.packageMultiplier || 1;
+  }, [currentMaterial, activeBarcodeUnit]);
 
   // Açık Siparişler (FIFO Sıralı)
   const [openOrders, setOpenOrders] = useState<Record<string, unknown>[]>([]);
@@ -946,20 +962,24 @@ export default function ReceivingDetailPage() {
           }
         }
 
-        // Eğer tedarikçi filtreli aramada bulunamadıysa tedarikçisiz dene
+        // Barkod+tedarikçi ile bulunamadıysa YALNIZCA tedarikçi (PSVENDOR) ile çek.
+        // İçerdeki GetOpenOrder HER KOŞULDA PSVENDOR gönderir — tedarikçisiz istek atılmaz.
+        // Dönen listeyi okutulan malzemeye göre istemcide süz (alakasız kalemler girmesin).
         if (rawOrders.length === 0 && vendorCode) {
-          const anyVendorRes = await api.getOpenOrders({
-            barcode: targetBarcode,
+          const vendorOnlyRes = await api.getOpenOrders({
+            vendor: vendorCode,
           });
-          if (anyVendorRes.orders && anyVendorRes.orders.length > 0) {
-            rawOrders = anyVendorRes.orders as Record<string, unknown>[];
-          } else if (matCode && matCode !== targetBarcode) {
-            const anyVendorMatRes = await api.getOpenOrders({
-              barcode: matCode,
+          const vendorOrders = (vendorOnlyRes.orders as Record<string, unknown>[]) || [];
+          if (vendorOrders.length > 0) {
+            const kodlar = [targetBarcode, matCode]
+              .map((k) => String(k || "").trim())
+              .filter(Boolean);
+            const eslesen = vendorOrders.filter((o) => {
+              const mat = String(o.MATERIAL || o.PSMATERIAL || o.MATERIALCODE || "").trim();
+              const bc = String(o.BARCODE || o.PSBARCODE || "").trim();
+              return kodlar.some((k) => k === mat || k === bc);
             });
-            if (anyVendorMatRes.orders && anyVendorMatRes.orders.length > 0) {
-              rawOrders = anyVendorMatRes.orders as Record<string, unknown>[];
-            }
+            rawOrders = eslesen;
           }
         }
 
@@ -1637,7 +1657,15 @@ export default function ReceivingDetailPage() {
                   <input
                     type="date"
                     value={expiryDate}
-                    onChange={(e) => setExpiryDate(e.target.value)}
+                    onChange={(e) => {
+                      setExpiryDate(e.target.value);
+                      // Tarih seçilince Parti No'yu ters çevirip yaz (yyyy-mm-dd → YYYYMMDD) — toplamadaki gibi.
+                      const parti = isoDateToBatch(e.target.value);
+                      if (parti) {
+                        setLotNumber(parti);
+                        if (lotError) setLotError("");
+                      }
+                    }}
                     className="field-input w-full font-mono text-xs h-9 py-0.5"
                   />
                 </div>
@@ -2079,16 +2107,16 @@ export default function ReceivingDetailPage() {
                         </div>
                       </div>
 
-                      {/* Sağ: sipariş birimi (büyük) / toplam, altında stok birimi (küçük) */}
+                      {/* Sağ: stok birimi (büyük) / toplam, altında sipariş birimi (küçük) */}
                       <div className="flex shrink-0 flex-col items-end">
                         <div className="flex items-baseline gap-1 font-mono">
-                          <span className="text-lg font-black text-fg">{Math.round(al.fulfilledPurQty)}</span>
-                          <span className="text-sm text-subtle">/ {Math.round(al.totalPurQty)}</span>
-                          <span className="text-xs font-bold text-subtle">{al.purUnit}</span>
+                          <span className="text-lg font-black text-fg">{al.fulfilledStockQty}</span>
+                          <span className="text-sm text-subtle">/ {al.totalStockQty}</span>
+                          <span className="text-xs font-bold text-subtle">{al.stockUnit}</span>
                         </div>
                         {al.purUnit !== al.stockUnit && (
                           <div className="mt-0.5 font-mono text-[11px] text-subtle">
-                            {al.fulfilledStockQty}/{al.totalStockQty} {al.stockUnit}
+                            {Math.round(al.fulfilledPurQty)}/{Math.round(al.totalPurQty)} {al.purUnit}
                           </div>
                         )}
                       </div>

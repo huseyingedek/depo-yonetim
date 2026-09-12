@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Search, ChevronRight, Package, Camera, AlertTriangle, X } from "lucide-react";
+import { Search, ChevronRight, Package, Camera, AlertTriangle, X, Loader2 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import CameraScanOverlay from "../../components/CameraScanOverlay";
 import Pagination, { usePagination } from "../../components/Pagination";
 import { api } from "../../api/client";
+import { usePickingStore } from "../../store/pickingStore";
 import { blockingHigherPriorityOrders } from "../../store/pickingLogic";
 import type { PickOrder } from "../../types";
 
@@ -20,6 +21,10 @@ export default function PickingListPage() {
   const [taramaHatasi, setTaramaHatasi] = useState<string | null>(null);
 
   const [oncelikUyari, setOncelikUyari] = useState<string | null>(null);
+
+  // Hangi emir "önce yükleniyor" — başarılı olursa sayfa açılır.
+  const [giriliyor, setGiriliyor] = useState<string | null>(null);
+  const loadOrder = usePickingStore((s) => s.loadOrder);
 
   const istendi = useRef(false);
 
@@ -47,7 +52,7 @@ export default function PickingListPage() {
 
   const pg = usePagination(filtered, 9, "picking", q);
 
-  const emreGir = (o: PickOrder) => {
+  const emreGir = async (o: PickOrder) => {
     const engel = blockingHigherPriorityOrders(o, orders);
     if (engel.length) {
 
@@ -55,7 +60,20 @@ export default function PickingListPage() {
       return;
     }
     setOncelikUyari(null);
-    navigate(`/picking/${o.id}?type=${encodeURIComponent(o.orderType ?? "")}`);
+    if (giriliyor) return; // çift tık / çift açılış koruması
+
+    // ÖNCE isteği at, başarılıysa sayfayı aç; hata verirse sayfayı HİÇ açma.
+    setGiriliyor(o.id);
+    setError(null);
+    const res = await loadOrder(o.id, o.orderType ?? "");
+    setGiriliyor(null);
+    if (!res.ok) {
+      setError(res.message || "Emir açılamadı, lütfen tekrar deneyin.");
+      return;
+    }
+    navigate(`/picking/${o.id}?type=${encodeURIComponent(o.orderType ?? "")}`, {
+      state: { prefetched: true },
+    });
   };
 
   const barkodOkundu = (code: string) => {
@@ -223,7 +241,8 @@ export default function PickingListPage() {
               <button
                 key={o.id}
                 onClick={() => emreGir(o)}
-                className="rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
+                disabled={giriliyor === o.id}
+                className="rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft disabled:opacity-60 disabled:cursor-wait"
               >
                 <div className="flex items-start justify-between">
                   <div>
@@ -242,7 +261,11 @@ export default function PickingListPage() {
                     </div>
                     {o.customer && <p className="mt-0.5 text-sm text-muted">{o.customer}</p>}
                   </div>
-                  <ChevronRight className="mt-1 h-5 w-5 text-subtle" />
+                  {giriliyor === o.id ? (
+                    <Loader2 className="mt-1 h-5 w-5 animate-spin text-brand-600" />
+                  ) : (
+                    <ChevronRight className="mt-1 h-5 w-5 text-subtle" />
+                  )}
                 </div>
 
                 {}

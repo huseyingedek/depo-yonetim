@@ -97,15 +97,22 @@ function satirDolu(l: PickOrder["lines"][number], placed?: Record<string, number
 }
 
 // Aynı malzemenin TÜM açık satırlarındaki toplam kalan miktar.
-// (Bora: aynı malzeme farklı depo/stok yeri/partide 3 ayrı satır gelebilir.)
+// MALZEME BAZLI: sunucu (MZYSavePlacement) yerleştirmeyi malzeme bazında yapıp
+// tamamını tek kaleme yazabildiği için, kalan = toplam istenen − toplam yerleşen
+// (satır satır değil). Yerleşen = sunucu (pickedQty) ile oturum kaydının BÜYÜĞÜ.
 export function materialRemaining(
   order: PickOrder,
   material: string,
   placed?: Record<string, number>
 ): number {
-  return order.lines
-    .filter((l) => l.product.code === material)
-    .reduce((s, l) => s + Math.max(0, l.requestedQty - satirDolu(l, placed)), 0);
+  const lines = order.lines.filter((l) => l.product.code === material);
+  const totalReq = lines.reduce((s, l) => s + l.requestedQty, 0);
+  const serverSum = lines.reduce((s, l) => s + l.pickedQty, 0);
+  const sessionSum = placed
+    ? lines.reduce((s, l) => s + (placed[l.id] ?? 0), 0)
+    : 0;
+  const totalPlaced = Math.max(serverSum, sessionSum);
+  return Math.max(0, totalReq - totalPlaced);
 }
 
 export interface PlacementAllocation {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   MapPin, Check, AlertTriangle, Loader2, PackagePlus, X, RotateCcw,
@@ -21,6 +21,7 @@ export default function PickingDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const orderType = searchParams.get("type") ?? "";
 
   const order = usePickingStore((s) => s.order);
@@ -67,8 +68,14 @@ export default function PickingDetailPage() {
 
     if (yuklendi.current === anahtar) return;
     yuklendi.current = anahtar;
+
+    // Listeden ön-yükleme yapıldıysa (prefetched) ve emir zaten yüklüyse tekrar istek atma.
+    const st = usePickingStore.getState();
+    const prefetched = (location.state as { prefetched?: boolean } | null)?.prefetched;
+    if (prefetched && st.order?.id === id && !st.loading) return;
+
     loadOrder(id, orderType);
-  }, [id, orderType, loadOrder]);
+  }, [id, orderType, loadOrder, location.state]);
 
   const showToast = (tst: Toast) => {
     // Okutma sesi: hata → uyarı sesi, diğerleri → başarılı bip.

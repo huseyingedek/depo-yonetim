@@ -87,7 +87,7 @@ interface PickingState {
 
   batchLoading: boolean;
 
-  loadOrder: (id: string, orderType?: string) => Promise<void>;
+  loadOrder: (id: string, orderType?: string) => Promise<{ ok: boolean; message?: string }>;
   clear: () => void;
 
   leaveOrder: () => void;
@@ -134,28 +134,31 @@ export const usePickingStore = create<PickingState>()(
     const oncekiShelf = get().order?.id === id ? get().shelf : null;
 
     set({ loading: true, order: oncekiOrder, shelf: oncekiShelf });
+    let order: PickOrder | null = null;
     try {
       const taze = await api.getPickOrder(id, orderType);
 
-      let order = taze ? mergeRecords(taze, oncekiOrder) : oncekiOrder;
+      order = taze ? mergeRecords(taze, oncekiOrder) : oncekiOrder;
 
       if (order && !order.startTime) {
         order = { ...order, startTime: oncekiOrder?.startTime ?? caniasDateTime() };
       }
       set({ order, loading: false });
-      if (!order) return;
-
-      set({ locationsLoading: true });
-      try {
-        const rafli = await api.fillLocations(order);
-
-        if (get().order?.id === rafli.id) set({ order: rafli });
-      } finally {
-        set({ locationsLoading: false });
-      }
-    } catch {
+    } catch (e) {
       set({ order: null, loading: false, locationsLoading: false });
+      return { ok: false, message: e instanceof Error ? e.message : String(e) };
     }
+    if (!order) return { ok: false, message: "Emir bulunamadı" };
+
+    // Raf/öneri bilgileri ARKA PLANDA doldurulur — sayfa hemen açılsın diye await edilmez.
+    set({ locationsLoading: true });
+    api
+      .fillLocations(order)
+      .then((rafli) => { if (get().order?.id === rafli.id) set({ order: rafli }); })
+      .catch(() => {})
+      .finally(() => set({ locationsLoading: false }));
+
+    return { ok: true };
   },
 
   clear: () => set({ order: null, shelf: null, pendingProduct: null, batchList: [], batchError: null, batchLoading: false }),

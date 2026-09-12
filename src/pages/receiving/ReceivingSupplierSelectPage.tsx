@@ -134,9 +134,9 @@ export default function ReceivingSupplierSelectPage() {
     setHasSearched(true);
     setSelectedSupplier(null);
     try {
-      // TEK istek: tüm açık siparişleri çek, istemci tarafında süz (ad/kod/PO/malzeme/barkod).
-      // (MZYGetOpenOrder'ın PSBARCODE sunucu filtresi güvenilmez — boş dönüp gereksiz 2. isteğe yol açıyordu.)
-      const allRes = await api.getOpenOrders();
+      // TEK istek: tedarikçi adına göre sunucu tarafı ara (CANIAS: PSNAME1).
+      // Sunucu süzse de süzmese de dönen sonucu istemcide de süzeriz (ad/kod/PO/malzeme/barkod).
+      const allRes = await api.getOpenOrders({ name: query });
       const q = trNormalize(query);
       const orders = (allRes.orders || []).filter((r) => {
         const name = trNormalize(String(r.NAME1 || r.SUPPLIERNAME || r.VENDORNAME || ""));

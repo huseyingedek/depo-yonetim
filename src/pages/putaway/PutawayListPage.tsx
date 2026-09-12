@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Search, ChevronRight, Warehouse, MapPin, Building2, Camera, X, ScanLine, CornerDownLeft } from "lucide-react";
+import { Search, ChevronRight, Warehouse, MapPin, Building2, Camera, X, ScanLine, CornerDownLeft, Loader2 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import CameraScanOverlay from "../../components/CameraScanOverlay";
 import Pagination, { usePagination } from "../../components/Pagination";
 import { api } from "../../api/client";
+import { usePutawayStore } from "../../store/putawayStore";
 import type { PickOrder } from "../../types";
 
 export default function PutawayListPage() {
@@ -20,6 +21,10 @@ export default function PutawayListPage() {
   const [kamera, setKamera] = useState(false);
   const [barkodFiltre, setBarkodFiltre] = useState("");
   const [taramaHatasi, setTaramaHatasi] = useState<string | null>(null);
+
+  // Hangi emir "önce yükleniyor" — başarılı olursa sayfa açılır.
+  const [giriliyor, setGiriliyor] = useState<string | null>(null);
+  const loadOrder = usePutawayStore((s) => s.loadOrder);
 
   const istendi = useRef(false);
 
@@ -87,7 +92,21 @@ export default function PutawayListPage() {
   // Filtre/arama değişince sayfa 1'e döner (resetKey); ilk açılışta kalıcı sayfa korunur.
   const pg = usePagination(filtered, 9, "putaway", `${barkodFiltre}|${arama}`);
 
-  const emreGir = (o: PickOrder) => navigate(`/putaway/${o.id}?type=${encodeURIComponent(o.orderType ?? "")}`);
+  const emreGir = async (o: PickOrder) => {
+    if (giriliyor) return; // çift tık koruması
+    // ÖNCE isteği at, başarılıysa sayfayı aç; hata verirse sayfayı HİÇ açma.
+    setGiriliyor(o.id);
+    setError(null);
+    const res = await loadOrder(o.id, o.orderType ?? "");
+    setGiriliyor(null);
+    if (!res.ok) {
+      setError(res.message || "Emir açılamadı, lütfen tekrar deneyin.");
+      return;
+    }
+    navigate(`/putaway/${o.id}?type=${encodeURIComponent(o.orderType ?? "")}`, {
+      state: { prefetched: true },
+    });
+  };
 
   // Arama kutusu: yazarken metin filtresi; Enter'da (el tarayıcı) ürün barkodu filtresi.
   const aramaField = (mobil = false) => (
@@ -208,7 +227,8 @@ export default function PutawayListPage() {
                 <button
                   key={o.id}
                   onClick={() => emreGir(o)}
-                  className="rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
+                  disabled={giriliyor === o.id}
+                  className="rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-soft disabled:opacity-60 disabled:cursor-wait"
                 >
                   <div className="flex items-start justify-between">
                     <div className="min-w-0">
@@ -229,7 +249,11 @@ export default function PutawayListPage() {
                         </p>
                       )}
                     </div>
-                    <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-subtle" />
+                    {giriliyor === o.id ? (
+                      <Loader2 className="mt-1 h-5 w-5 shrink-0 animate-spin text-brand-600" />
+                    ) : (
+                      <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-subtle" />
+                    )}
                   </div>
 
                   {(o.reference || o.sourceWarehouse) && (

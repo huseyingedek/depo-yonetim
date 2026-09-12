@@ -960,6 +960,8 @@ export const api = {
     user?: string;
     startDate: string; // "GG.AA.YYYY"
     endDate: string; // "GG.AA.YYYY"
+    sourceType?: string; // PISOURCETYPE — işlem türü filtresi (boş = tümü)
+    srcType?: string; // PISRCTYPE — alt işlem türü filtresi (boş = tümü)
   }): Promise<TransactionRow[]> {
     const c = ctx();
     const r = await call(SERVICES.getTransaction, {
@@ -968,6 +970,8 @@ export const api = {
       PSUSER: opts.user ?? "",
       PDSTARTDATE: opts.startDate,
       PDENDDATE: opts.endDate,
+      PISOURCETYPE: String(opts.sourceType ?? "").trim(),
+      PISRCTYPE: String(opts.srcType ?? "").trim(),
     });
     return rowsOf(r, ["TBLSTOCKTRANSACTION", "TBLTRANSACTION", "TBLTRANS", "TBLGETTRANSACTION", "TBLLOG"]).map((row) => {
       const name = pick(row, ["NAME"]).trim();
@@ -991,6 +995,33 @@ export const api = {
         raw: row as Record<string, string>,
       };
     });
+  },
+
+  // MZYGetSourceType — İşlem türü açıklamalarını getirir.
+  // PISOURCETYPE: 0 → işlem açıklamaları, 2 → alt işlem açıklamaları (Bora, 12.09).
+  async getSourceType(sourceType: 0 | 2): Promise<{ code: string; text: string }[]> {
+    const c = ctx();
+    const isTrace = useAppStore.getState().trace;
+    const r = await call(SERVICES.getSourceType, {
+      PSCOMPANY: String(c.company ?? "").trim(),
+      PISOURCETYPE: sourceType,
+      PITRACESTATUS: isTrace ? 1 : 0,
+    });
+    return rowsOf(r, [
+      "TBLINV003", // CANIAS gerçek tablo adı (PROCESSNUM + STEXT)
+      "TBLSOURCETYPE",
+      "TBLSRCTYPE",
+      "TBLTRANSTYPE",
+      "TBLSOURCE",
+      "TBLTYPE",
+      "TABLE",
+      "ROW",
+    ])
+      .map((row) => ({
+        code: pick(row, ["PROCESSNUM", "SOURCETYPE", "SRCTYPE", "TYPE", "CODE", "ID", "KEY", "VALUE"]).trim(),
+        text: pick(row, ["STEXT", "TEXT", "NAME", "DESCRIPTION", "HSTEXT", "ISTEXT", "DESC"]).trim(),
+      }))
+      .filter((x) => x.code !== "" || x.text !== "");
   },
 
   async getWarehouses(): Promise<{ code: string; name: string }[]> {
@@ -1560,6 +1591,7 @@ export const api = {
     barcode?: string;
     vendor?: string;
     vendorName?: string;
+    name?: string;
     company?: string;
     plant?: string;
   } = {}): Promise<{ ok: boolean; message: string; orders: Record<string, unknown>[] }> {
@@ -1578,6 +1610,10 @@ export const api = {
     if (payload.vendorName?.trim()) {
       params.PSVENDORNAME = payload.vendorName.trim();
       params.PSNAME = payload.vendorName.trim();
+    }
+    // Tedarikçi adına göre sunucu tarafı arama (CANIAS: PSNAME1 — PS önekli, diğerleriyle uyumlu).
+    if (payload.name?.trim()) {
+      params.PSNAME1 = payload.name.trim();
     }
 
     const r = await call(SERVICES.getOpenOrder, params);

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { BarChart3, Loader2, Search, User, Building2, CalendarDays } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BarChart3, Loader2, Search, User, Building2, CalendarDays, ListFilter } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import { api } from "../../api/client";
 import { useAppStore } from "../../store/appStore";
@@ -33,6 +33,12 @@ export default function ReportingPage() {
   const [start, setStart] = useState(def.start);
   const [end, setEnd] = useState(def.end);
 
+  // İşlem türü (PISOURCETYPE) ve alt işlem türü (PISRCTYPE) filtreleri (MZYGetSourceType).
+  const [sourceTypes, setSourceTypes] = useState<{ code: string; text: string }[]>([]);
+  const [srcTypes, setSrcTypes] = useState<{ code: string; text: string }[]>([]);
+  const [sourceType, setSourceType] = useState("");
+  const [srcType, setSrcType] = useState("");
+
   const [rows, setRows] = useState<TransactionRow[]>([]);
   const [queried, setQueried] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -43,8 +49,16 @@ export default function ReportingPage() {
   const SAYFA_BOYUT = 50;
   const KULLANICI_LIMIT = 12;
 
+  // StrictMode (dev) useEffect'i iki kez çalıştırır → fazladan istek atılmasın diye
+  // tek seferlik guard (ayrıca api katmanında da inflight dedup var).
+  const initRef = useRef(false);
   useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
     api.getPlants().then(setPlants).catch(() => {});
+    // İşlem türleri: 0 → işlem açıklamaları, 2 → alt işlem açıklamaları (Bora, 12.09).
+    api.getSourceType(0).then(setSourceTypes).catch(() => {});
+    api.getSourceType(2).then(setSrcTypes).catch(() => {});
   }, []);
 
   const sorgula = async () => {
@@ -56,6 +70,8 @@ export default function ReportingPage() {
         user: user.trim(),
         startDate: isoToCanias(start),
         endDate: isoToCanias(end),
+        sourceType,
+        srcType,
       });
       setRows(r);
       setSayfa(1);
@@ -129,6 +145,24 @@ export default function ReportingPage() {
           <label className="block">
             <span className="field-label flex items-center gap-1.5"><CalendarDays className="h-4 w-4" /> Bitiş</span>
             <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="field-input" />
+          </label>
+          <label className="block">
+            <span className="field-label flex items-center gap-1.5"><ListFilter className="h-4 w-4" /> İşlem Türü</span>
+            <select value={sourceType} onChange={(e) => setSourceType(e.target.value)} className="field-input">
+              <option value="">Tümü</option>
+              {sourceTypes.map((t) => (
+                <option key={t.code} value={t.code}>{t.text || t.code}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="field-label flex items-center gap-1.5"><ListFilter className="h-4 w-4" /> Alt İşlem Türü</span>
+            <select value={srcType} onChange={(e) => setSrcType(e.target.value)} className="field-input">
+              <option value="">Tümü</option>
+              {srcTypes.map((t) => (
+                <option key={t.code} value={t.code}>{t.text || t.code}</option>
+              ))}
+            </select>
           </label>
         </div>
         <div className="mt-4 flex justify-end">

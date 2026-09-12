@@ -29,9 +29,9 @@ interface PutawayState {
 
   records: PlacementRecord[];
 
-  pendingProduct: { barcode: string; adet: number } | null;
+  pendingProduct: { barcode: string; adet: number; material: string; name: string } | null;
 
-  loadOrder: (id: string, orderType?: string) => Promise<void>;
+  loadOrder: (id: string, orderType?: string) => Promise<{ ok: boolean; message?: string }>;
   clear: () => void;
 
   scanSource: (barcode: string) => Promise<{ ok: boolean; message: string }>;
@@ -59,20 +59,24 @@ export const usePutawayStore = create<PutawayState>()(
 
       loadOrder: async (id, orderType = "") => {
         set({ loading: true });
+        let orderWithStart: PickOrder | null = null;
         try {
           const order = await api.enterPutaway(id, orderType);
-
-          const orderWithStart = order ? { ...order, startTime: order.startTime ?? caniasDateTime() } : null;
-
+          orderWithStart = order ? { ...order, startTime: order.startTime ?? caniasDateTime() } : null;
           set({ order: orderWithStart, loading: false, source: null, ready: null, records: [], pendingProduct: null });
-
-          if (orderWithStart) {
-            const rafli = await api.fillPlacementLocations(orderWithStart);
-            if (get().order?.id === rafli.id) set({ order: rafli });
-          }
-        } catch {
+        } catch (e) {
           set({ order: null, loading: false });
+          return { ok: false, message: e instanceof Error ? e.message : String(e) };
         }
+        if (!orderWithStart) return { ok: false, message: "Emir bulunamadı" };
+
+        // Raf/öneri bilgileri ARKA PLANDA doldurulur — sayfa hemen açılsın diye await edilmez.
+        api
+          .fillPlacementLocations(orderWithStart)
+          .then((rafli) => { if (get().order?.id === rafli.id) set({ order: rafli }); })
+          .catch(() => {});
+
+        return { ok: true };
       },
 
       clear: () => set({ order: null, source: null, ready: null, records: [], pendingProduct: null }),
@@ -101,7 +105,7 @@ export const usePutawayStore = create<PutawayState>()(
         const yerlesen = Math.max(order.lines.find((l) => l.product.code === scan.material)?.pickedQty ?? 0, oturumKayit);
         const { outcome, ready } = evaluatePlacementScan({ order, source, scan, adet, alreadyPlaced: yerlesen });
         if (outcome.kind === "needsBatch") {
-          set({ pendingProduct: { barcode: kod, adet } });
+          set({ pendingProduct: { barcode: kod, adet, material: scan.material, name: scan.name } });
           return outcome;
         }
         if (outcome.kind === "ok" && ready) set({ ready, pendingProduct: null });
@@ -180,6 +184,19 @@ export const usePutawayStore = create<PutawayState>()(
             const oncekiOneri = new Map((get().order?.lines ?? []).map((l) => [l.id, l.suggestions]));
             const yeniLines = taze.lines.map((l) => ({ ...l, suggestions: oncekiOneri.get(l.id) }));
             set({ order: { ...taze, startTime: get().order?.startTime, lines: yeniLines } });
+
+            // ÇİFT SAYIMI ÖNLE: sunucu (MOVEDQTY/pickedQty) bu malzemeyi artık yansıttıysa,
+            // oturum kayıtlarını düş. Böylece yerleşen = max(pickedQty, kayıt) toplamı şişmez.
+            // (Tazeleme geç kalırsa — sunucu < oturum — kayıtlar tutulur, ilerleme geri düşmez.)
+            const sunucuYer = yeniLines
+              .filter((l) => l.product.code === ready.material)
+              .reduce((s, l) => s + l.pickedQty, 0);
+            const oturumYer = get().records
+              .filter((r) => r.material === ready.material)
+              .reduce((s, r) => s + r.qty, 0);
+            if (sunucuYer >= oturumYer) {
+              set({ records: get().records.filter((r) => r.material !== ready.material) });
+            }
           }
         } catch {
 
