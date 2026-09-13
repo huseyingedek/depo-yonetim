@@ -120,7 +120,7 @@ export default function ReportingPage() {
 
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8">
-      <PageHeader title="Stok İşlemleri" backTo="/home" />
+      <PageHeader title="Stok Hareket Raporları" backTo="/home" />
 
       {/* Filtreler */}
       <div className="card mb-6 p-4">
