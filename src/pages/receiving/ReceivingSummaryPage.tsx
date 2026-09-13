@@ -120,10 +120,7 @@ export default function ReceivingSummaryPage() {
         localStorage.removeItem(storageKey);
       } catch {}
 
-      // 4 saniye sonra ana ekrana yönlendir
-      setTimeout(() => {
-        navigate("/receiving", { replace: true });
-      }, 4000);
+      // Otomatik yönlendirme YOK — kullanıcı "Ana Sayfaya Dön" butonuna basınca gider.
     } catch (err: unknown) {
       sesHata();
       const msg = err instanceof Error ? err.message : "Kayıt sırasında hata oluştu.";
@@ -137,12 +134,22 @@ export default function ReceivingSummaryPage() {
     }
   };
 
-  // Özet istatistikleri (sipariş toplama özeti ile aynı: ProgressRing + Stat kartları)
+  // Özet istatistikleri — KALEM BAZLI (birim bağımsız).
+  // Farklı birimler (AD, KG, KO, TON...) toplanmaz — "elma ile armut toplanmaz".
+  // Her kalemin KENDİ birimindeki tamamlanma oranı alınır; ilerleme bunların ortalamasıdır.
+  const kalemOrani = (it: ReceivedItem) => {
+    const beklenen = it.expectedQty ?? it.receivedQty ?? 0;
+    const okutulan = it.receivedQty ?? 0;
+    if (beklenen <= 0) return okutulan > 0 ? 1 : 0;
+    return Math.min(1, okutulan / beklenen);
+  };
   const toplamKalem = items.length;
-  const okutulan = items.reduce((s, it) => s + (it.receivedQty || 0), 0);
-  const beklenen = items.reduce((s, it) => s + (it.expectedQty || it.receivedQty || 0), 0);
-  const kalan = Math.max(0, Number((beklenen - okutulan).toFixed(2)));
-  const ilerleme = beklenen > 0 ? Math.min(100, Math.round((okutulan / beklenen) * 100)) : items.length > 0 ? 100 : 0;
+  const tamamlanan = items.filter((it) => kalemOrani(it) >= 1 - 1e-6).length;
+  const kalanKalem = Math.max(0, toplamKalem - tamamlanan);
+  const ilerleme =
+    toplamKalem > 0
+      ? Math.round((items.reduce((s, it) => s + kalemOrani(it), 0) / toplamKalem) * 100)
+      : 0;
 
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8 animate-fade-in space-y-4">
@@ -185,9 +192,16 @@ export default function ReceivingSummaryPage() {
 
       {/* Başarı Bildirimi */}
       {successMessage && (
-        <div className="flex items-center gap-3 rounded-2xl border border-brand-500 bg-brand-500/20 p-4 text-sm font-bold text-brand-800 dark:text-brand-200 animate-slide-up">
+        <div className="flex flex-col gap-3 rounded-2xl border border-brand-500 bg-brand-500/20 p-4 text-sm font-bold text-brand-800 dark:text-brand-200 animate-slide-up sm:flex-row sm:items-center">
           <CheckCircle2 className="h-5 w-5 text-brand-600 dark:text-brand-400 shrink-0" />
           <div className="flex-1 font-extrabold text-sm">{successMessage}</div>
+          <button
+            type="button"
+            onClick={() => navigate("/home", { replace: true })}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-xs sm:text-sm font-extrabold text-white shadow-md transition hover:bg-brand-700 active:scale-95 cursor-pointer"
+          >
+            Ana Sayfaya Dön
+          </button>
         </div>
       )}
 
@@ -206,8 +220,8 @@ export default function ReceivingSummaryPage() {
             <ProgressRing value={ilerleme} label="İlerleme" />
             <div className="grid w-full max-w-xs grid-cols-3 gap-3 sm:w-auto">
               <SummaryStat value={toplamKalem} label="Toplam Kalem" tone="ink" />
-              <SummaryStat value={okutulan} label="Okutulan Adet" tone="brand" />
-              <SummaryStat value={kalan} label="Kalan Adet" tone={kalan > 0 ? "rose" : "emerald"} />
+              <SummaryStat value={tamamlanan} label="Tamamlanan Kalem" tone="emerald" />
+              <SummaryStat value={kalanKalem} label="Kalan Kalem" tone={kalanKalem > 0 ? "rose" : "emerald"} />
             </div>
           </div>
         </div>

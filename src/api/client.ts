@@ -137,7 +137,13 @@ function decodeEntities(s: string): string {
     .replace(/&amp;/g, "&");
 }
 
-const READ_ONLY = new Set<string>([SERVICES.listingPick]);
+// Salt-okunur servisler: aynı anda giden birebir aynı istekler tekilleştirilir
+// (StrictMode/çift-render fazladan istek atmasın). Parametreleri farklıysa ayrı gider.
+const READ_ONLY = new Set<string>([
+  SERVICES.listingPick,
+  SERVICES.getSourceType,
+  SERVICES.getPlant,
+]);
 const inflight = new Map<string, Promise<MzyResult>>();
 
 function call(service: string, params: Record<string, unknown>): Promise<MzyResult> {
@@ -1847,21 +1853,16 @@ export const api = {
       const specialStock = isPartili ? "1" : (rawSpecial !== "" && rawSpecial !== "0" && rawSpecial !== "Serbest" ? rawSpecial : "*");
       const batchNum = isPartili && it.batchNum && it.batchNum !== "*" && it.batchNum !== "—" ? String(it.batchNum).trim() : "*";
 
+      // MZYSaveReceipt spec'i (Bora): yalnızca bu 8 alan.
       return {
         MATERIAL: String(it.material || "").trim(),
         SPECIALSTOCK: specialStock,
-        BATCHNUM: batchNum,
-        READQUANTITY: Number(readQty),
+        BATCHNUM: batchNum, // Stok Birimi bazında
+        READQUANTITY: Number(readQty), // Stok Birimi bazında
         QUNIT: String(it.unit || "AD").trim().toUpperCase(),
-        READPURQTY: it.purQty !== undefined ? Number(it.purQty) : Number(readQty),
-        PURUNIT: String(it.purUnit || it.unit || "AD").trim().toUpperCase(),
         ORDERTYPE: orderType,
         ORDERNUM: String(it.orderNum || "").trim(),
         ITEMNUM: Number(it.itemNum) || 1,
-        // Geriye dönük uyumluluk alanları
-        PURORDER: String(it.orderNum || "").trim(),
-        QUANTITY: Number(readQty),
-        EXPIRYDATE: String(it.expiryDate || "").trim(),
       };
     });
 
@@ -1878,25 +1879,33 @@ export const api = {
     const waybill = String(payload.waybillNo || "").trim();
     const vendorCode = String(payload.vendor || "").trim();
 
+    // MZYSaveReceipt spec'i (Bora): yalnızca bu 9 üst parametre.
     const r = await call(SERVICES.saveReceipt, {
       PSCOMPANY: compCode,
       PSPLANT: plantCode,
       PSVENDOR: vendorCode,
       PSEXTDELNUM: waybill,
-      PSWAYBILL: waybill, // Geriye dönük uyumluluk
       PSWAREHOUSE: whCode || "00",
-      PSTARGETWH: whCode || "00", // Geriye dönük uyumluluk
-      PSSOURCEWH: String(payload.sourceWarehouse || "").trim(),
       PSSTOCKPLACE: spCode || "*",
       PSUSER: userCode,
       PDTSTARTTIME: startTimeStr,
       PSIASPURITEMXML: formattedItems,
-      PSITEMS: formattedItems, // Geriye dönük uyumluluk
     });
 
     const mesaj = serviceMessage(r);
-    if (mesaj && /error|fail|hata/i.test(mesaj)) {
-      return { ok: false, message: mesaj };
+    // MZYSaveReceipt: HATA, data.MESSAGETABLE.ROW içinde TYPE="E" olarak döner
+    // (mesaj Türkçe olduğu için "hata/error/fail" kelimesi GEÇMEYEBİLİR!).
+    // Başarıda ise INVITEMTRNBACKUP döner. O yüzden TYPE'a bakıyoruz.
+    const d = (r.data ?? {}) as Record<string, unknown>;
+    const mt = d.MESSAGETABLE as { ROW?: unknown } | undefined;
+    const mtRows = mt ? (Array.isArray(mt.ROW) ? mt.ROW : mt.ROW ? [mt.ROW] : []) : [];
+    const hataVar =
+      mtRows.some(
+        (row) => String((row as Record<string, unknown>)?.TYPE || "").trim().toUpperCase() === "E"
+      ) || /error|fail|hata/i.test(mesaj);
+
+    if (hataVar) {
+      return { ok: false, message: mesaj || "Mal kabul kaydedilemedi." };
     }
 
     return {

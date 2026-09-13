@@ -134,18 +134,30 @@ export default function ReceivingSupplierSelectPage() {
     setHasSearched(true);
     setSelectedSupplier(null);
     try {
-      // TEK istek: tedarikçi adına göre sunucu tarafı ara (CANIAS: PSNAME1).
-      // Sunucu süzse de süzmese de dönen sonucu istemcide de süzeriz (ad/kod/PO/malzeme/barkod).
-      const allRes = await api.getOpenOrders({ name: query });
-      const q = trNormalize(query);
-      const orders = (allRes.orders || []).filter((r) => {
-        const name = trNormalize(String(r.NAME1 || r.SUPPLIERNAME || r.VENDORNAME || ""));
-        const code = trNormalize(String(r.VENDOR || ""));
-        const po = trNormalize(String(r.ORDERNUM || r.PURORDER || ""));
-        const mat = trNormalize(String(r.MATERIAL || ""));
-        const ean = trNormalize(String(r.BARCODE || r.EAN || ""));
-        return name.includes(q) || code.includes(q) || po.includes(q) || mat.includes(q) || ean.includes(q);
-      });
+      // Girilen değere göre parametre seçimi (Bora, 12.09):
+      //  • Sadece sayı ve ≤6 karakter  → tedarikçi kodu  → PSVENDOR
+      //  • Sadece sayı ve >6 karakter  → barkod          → PSBARCODE
+      //  • Harf içeriyorsa             → yalnız PSCOMPANY/PSPLANT gönder, dönen
+      //    sonucu NAME1 / MATERIAL / STEXT alanlarında istemcide süz.
+      const sadeceRakam = /^[0-9]+$/.test(query);
+      let orders: Record<string, unknown>[] = [];
+
+      if (sadeceRakam && query.length <= 6) {
+        const res = await api.getOpenOrders({ vendor: query });
+        orders = res.orders || [];
+      } else if (sadeceRakam) {
+        const res = await api.getOpenOrders({ barcode: query });
+        orders = res.orders || [];
+      } else {
+        const res = await api.getOpenOrders(); // yalnızca PSCOMPANY + PSPLANT
+        const q = trNormalize(query);
+        orders = (res.orders || []).filter((r) => {
+          const name = trNormalize(String(r.NAME1 || ""));
+          const mat = trNormalize(String(r.MATERIAL || ""));
+          const stext = trNormalize(String(r.STEXT || ""));
+          return name.includes(q) || mat.includes(q) || stext.includes(q);
+        });
+      }
       setSuppliers(groupOrdersToSuppliers(orders, query));
     } catch (err) {
       setApiError(hataMetni(err, "CANIAS sunucusuna bağlanılamadı. Lütfen ağ bağlantınızı ve sunucu adresini kontrol edin."));
