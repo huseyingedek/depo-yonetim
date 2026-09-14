@@ -448,16 +448,12 @@ export default function CountDetailPage() {
               return;
             }
 
-            const existingCountedInUnit = targetLine.countedQty > 0
-              ? Math.round((targetLine.countedQty / mult) * 100) / 100
-              : 1;
-
             setActiveItem({
               lineId: targetLine.id,
               material: targetLine.material,
               name: targetLine.name,
               barcode: targetLine.barcode || "",
-              quantity: existingCountedInUnit,
+              quantity: targetLine.countedQty > 0 ? 0 : 1,
               targetQty: targetLine.targetQty,
               unit,
               skunit,
@@ -637,16 +633,12 @@ export default function CountDetailPage() {
 
       if (matchedLine) {
         flash(matchedLine.id);
-        const existingCountedInUnit = matchedLine.countedQty > 0
-          ? Math.round((matchedLine.countedQty / mult) * 100) / 100
-          : 1;
-
         setActiveItem({
           lineId: matchedLine.id,
           material: matchedLine.material,
           name: matchedLine.name,
           barcode: matchedLine.barcode || barcode,
-          quantity: existingCountedInUnit,
+          quantity: matchedLine.countedQty > 0 ? 0 : 1,
           targetQty: matchedLine.targetQty,
           unit,
           skunit,
@@ -903,17 +895,13 @@ export default function CountDetailPage() {
 
         sesBasarili();
         flash(matchedLine.id);
-        const existingCountedInUnit = matchedLine.countedQty > 0
-          ? Math.round((matchedLine.countedQty / finalMult) * 100) / 100
-          : 1;
-
         setLotPendingItem(null);
         setActiveItem({
           lineId: matchedLine.id,
           material: matchedLine.material,
           name: matchedLine.name,
           barcode: matchedLine.barcode || rawCode,
-          quantity: existingCountedInUnit,
+          quantity: 1,
           targetQty: matchedLine.targetQty,
           unit: finalUnit,
           skunit: finalSkunit,
@@ -1044,18 +1032,66 @@ export default function CountDetailPage() {
     [lines, order, show, activeItem, lotPendingItem, tab, selectedShelf, selectedWarehouse, selectedStockPlace, handleSelectBatch, handleSelectShelf]
   );
 
+  const handleResetLine = (lineId: string) => {
+    let resetMat = "";
+    setLines((prev) => {
+      const targetLine = prev.find((l) => l.id === lineId);
+      if (!targetLine) return prev;
+      resetMat = targetLine.material;
+
+      // Sonradan eklenmiş dinamik satırsa ve belgede hedefi yoksa satırı kaldır
+      if (lineId.startsWith("new-") && targetLine.targetQty <= 0) {
+        return prev.filter((l) => l.id !== lineId);
+      }
+
+      // Orijinal belgedeki satır ise sayılan miktarını 0'a çek
+      return prev.map((l) => {
+        if (l.id === lineId) {
+          return {
+            ...l,
+            countedQty: 0,
+          };
+        }
+        return l;
+      });
+    });
+
+    if (activeItem && activeItem.lineId === lineId) {
+      setActiveItem(null);
+      setTab("shelf");
+    }
+    if (selectedLineForShelf && selectedLineForShelf.id === lineId) {
+      setSelectedLineForShelf(null);
+    }
+    if (lotPendingItem && lines.some((l) => l.id === lineId && sadelestir(l.material) === sadelestir(lotPendingItem.material))) {
+      setLotPendingItem(null);
+      setTab("shelf");
+    }
+
+    sesBasarili();
+    show({
+      kind: "ok",
+      text: `${resetMat || "Malzeme"} sayım miktarı sıfırlandı.`,
+    });
+  };
+
   const handleCommitActiveItem = () => {
     if (!activeItem) return;
     const mult = activeItem.multiplier && activeItem.multiplier > 0 ? activeItem.multiplier : 1;
-    const baseCountedQty = Math.max(0, activeItem.quantity) * mult;
+    const addedBaseQty = Math.max(0, activeItem.quantity) * mult;
+
+    let finalCountedQty = addedBaseQty;
 
     setLines((prev) => {
       const idx = prev.findIndex((l) => l.id === activeItem.lineId);
       if (idx >= 0) {
         const updated = [...prev];
+        const prevCountedQty = updated[idx].countedQty || 0;
+        finalCountedQty = prevCountedQty + addedBaseQty;
+
         updated[idx] = {
           ...updated[idx],
-          countedQty: baseCountedQty,
+          countedQty: finalCountedQty,
           unit: activeItem.unit,
           skunit: activeItem.skunit,
           multiplier: mult,
@@ -1071,7 +1107,7 @@ export default function CountDetailPage() {
           name: activeItem.name,
           barcode: activeItem.barcode,
           targetQty: activeItem.targetQty || 0,
-          countedQty: baseCountedQty,
+          countedQty: addedBaseQty,
           unit: activeItem.unit,
           skunit: activeItem.skunit,
           multiplier: mult,
@@ -1088,7 +1124,7 @@ export default function CountDetailPage() {
     flash(activeItem.lineId);
     show({
       kind: "ok",
-      text: `${activeItem.material} için ${activeItem.quantity} ${activeItem.unit} (${baseCountedQty} ${activeItem.skunit}) kaydedildi.`,
+      text: `${activeItem.material} için +${activeItem.quantity} ${activeItem.unit} eklendi (Toplam: ${finalCountedQty} ${activeItem.skunit}).`,
     });
     setActiveItem(null);
     setLotPendingItem(null);
@@ -1100,7 +1136,42 @@ export default function CountDetailPage() {
   };
 
   const selectLineForCounting = (line: AdjustmentLine) => {
-    // Eğer aynı ürün zaten raf bekliyorsa ve raf tabındaysa seçimi kaldır/toggle
+    // 1. Eğer ürün daha önce okutulmuş/sayılmışsa doğrudan Miktar tabına geçir ve eklenecek miktarı hazırla
+    if (line.countedQty > 0) {
+      const mult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
+      const unit = (line.unit || "AD").toUpperCase();
+      const skunit = (line.skunit || unit).toUpperCase();
+      const wh = line.warehouse || order?.warehouse || selectedWarehouse || "01";
+      const sp = line.stockPlace || selectedStockPlace || order?.stockPlace || "*";
+
+      setSelectedWarehouse(wh);
+      setSelectedStockPlace(sp);
+      setSelectedShelf(sp === "*" ? `${wh}$*` : `${wh}$${sp}`);
+      setSelectedLineForShelf(line);
+      setLotPendingItem(null);
+
+      setActiveItem({
+        lineId: line.id,
+        material: line.material,
+        name: line.name,
+        barcode: line.barcode || "",
+        quantity: 0,
+        targetQty: line.targetQty,
+        unit,
+        skunit,
+        multiplier: mult,
+        batchNum: line.batchNum,
+        specialStock: line.specialStock || "0",
+        isLotTracked: Boolean(line.batchNum && line.batchNum !== "*"),
+        warehouse: wh,
+        stockPlace: sp,
+      });
+
+      setTab("qty");
+      return;
+    }
+
+    // 2. Henüz sayılmamış ürün için raf doğrulama akışı
     if (selectedLineForShelf?.id === line.id && tab === "shelf") {
       setSelectedLineForShelf(null);
       return;
@@ -1473,105 +1544,130 @@ export default function CountDetailPage() {
 
             {/* ADIM 4: MİKTAR GİRİŞİ */}
 
-            {tab === "qty" && activeItem && (
-              <div className="space-y-2 animate-fade-in flex-0.01 flex flex-col justify-between">
-                <div>
-                  <div className="mb-1.5 flex items-center justify-between gap-1">
-                    <label className="text-xs font-bold text-fg block shrink-0">
-                      Sayılacak Miktar ({activeItem.unit}) <span className="text-red-500">*</span>
-                    </label>
-                    {(activeItem.multiplier > 1 || activeItem.unit !== activeItem.skunit) && (
-                      <span className="font-mono text-[11.5px] font-bold text-slate-600 dark:text-slate-300 shrink-0">
-                        1 {activeItem.unit} = {activeItem.multiplier} {activeItem.skunit}
-                      </span>
+            {tab === "qty" && activeItem && (() => {
+              const currentLine = lines.find((l) => l.id === activeItem.lineId);
+              const currentCountedQty = currentLine?.countedQty || 0;
+              const mult = activeItem.multiplier && activeItem.multiplier > 0 ? activeItem.multiplier : 1;
+              const addedBase = Math.max(0, activeItem.quantity) * mult;
+              const newTotalBase = currentCountedQty + addedBase;
+              return (
+                <div className="space-y-2 animate-fade-in flex-0.01 flex flex-col justify-between">
+                  <div>
+                    <div className="mb-1.5 flex items-center justify-between gap-1">
+                      <label className="text-xs font-bold text-fg block shrink-0">
+                        Eklenecek Miktar ({activeItem.unit}) <span className="text-red-500">*</span>
+                      </label>
+                      {(activeItem.multiplier > 1 || activeItem.unit !== activeItem.skunit) && (
+                        <span className="font-mono text-[11.5px] font-bold text-slate-600 dark:text-slate-300 shrink-0">
+                          1 {activeItem.unit} = {activeItem.multiplier} {activeItem.skunit}
+                        </span>
+                      )}
+                    </div>
+
+                    {currentCountedQty > 0 && (
+                      <div className="mb-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-2 text-xs font-mono flex items-center justify-between text-fg">
+                        <div>
+                          <span className="text-subtle">Mevcut: </span>
+                          <span className="font-bold">{currentCountedQty} {activeItem.skunit}</span>
+                        </div>
+                        <div>
+                          <span className="text-subtle">Eklenecek: </span>
+                          <span className="font-bold text-emerald-600">+{addedBase} {activeItem.skunit}</span>
+                        </div>
+                        <div>
+                          <span className="text-subtle">Yeni Toplam: </span>
+                          <span className="font-black text-emerald-700 dark:text-emerald-400">{newTotalBase} {activeItem.skunit}</span>
+                        </div>
+                      </div>
                     )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setActiveItem((p) =>
-                          p ? { ...p, quantity: Math.max(0, p.quantity - 1) } : null
-                        )
-                      }
-                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-elevated text-subtle hover:bg-line transition active:scale-95 shrink-0"
-                    >
-                      <Minus className="h-4 w-4" />
-                    </button>
-                    <input
-                      type="number"
-                      min={0}
-                      step={1}
-                      value={activeItem.quantity}
-                      placeholder="0"
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        if (raw === "") {
-                          setActiveItem((p) => (p ? { ...p, quantity: 0 } : null));
-                          return;
-                        }
-                        const val = parseInt(raw, 10);
-                        setActiveItem((p) =>
-                          p ? { ...p, quantity: isNaN(val) ? 0 : Math.max(0, val) } : null
-                        );
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          handleCommitActiveItem();
-                        }
-                      }}
-                      className="field-input flex-1 text-center font-mono text-base font-extrabold text-emerald-600 h-10"
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setActiveItem((p) =>
-                          p ? { ...p, quantity: p.quantity + 1 } : null
-                        )
-                      }
-                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition active:scale-95 shadow-md shrink-0"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-4 gap-1.5 pt-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setActiveItem((p) => (p ? { ...p, quantity: 0 } : null))}
-                      className="flex items-center justify-center rounded-xl border border-line bg-elevated/50 py-2 text-subtle hover:text-red-500 shadow-xs"
-                      title="Miktarı Sıfırla (0)"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                    {[5, 10].map((inc) => (
+
+                    <div className="flex items-center gap-2">
                       <button
-                        key={inc}
                         type="button"
                         onClick={() =>
                           setActiveItem((p) =>
-                            p ? { ...p, quantity: p.quantity + inc } : null
+                            p ? { ...p, quantity: Math.max(0, p.quantity - 1) } : null
                           )
                         }
-                        className="rounded-xl border border-line bg-elevated/80 py-2 text-xs font-black text-fg hover:bg-emerald-600 hover:text-white transition shadow-xs"
+                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-elevated text-subtle hover:bg-line transition active:scale-95 shrink-0"
                       >
-                        +{inc}
+                        <Minus className="h-4 w-4" />
                       </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={handleCommitActiveItem}
-                      disabled={!activeItem || activeItem.quantity < 0}
-                      className="flex flex-col items-center justify-center rounded-xl bg-emerald-600 py-1 text-[10.5px] sm:text-[11.5px] font-black leading-tight text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <span>Miktarı</span>
-                      <span>Kaydet</span>
-                    </button>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={activeItem.quantity}
+                        placeholder="0"
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          if (raw === "") {
+                            setActiveItem((p) => (p ? { ...p, quantity: 0 } : null));
+                            return;
+                          }
+                          const val = parseInt(raw, 10);
+                          setActiveItem((p) =>
+                            p ? { ...p, quantity: isNaN(val) ? 0 : Math.max(0, val) } : null
+                          );
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleCommitActiveItem();
+                          }
+                        }}
+                        className="field-input flex-1 text-center font-mono text-base font-extrabold text-emerald-600 h-10"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActiveItem((p) =>
+                            p ? { ...p, quantity: p.quantity + 1 } : null
+                          )
+                        }
+                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition active:scale-95 shadow-md shrink-0"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5 pt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setActiveItem((p) => (p ? { ...p, quantity: 0 } : null))}
+                        className="flex items-center justify-center rounded-xl border border-line bg-elevated/50 py-2 text-subtle hover:text-red-500 shadow-xs"
+                        title="Miktarı Sıfırla (0)"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                      {[5, 10].map((inc) => (
+                        <button
+                          key={inc}
+                          type="button"
+                          onClick={() =>
+                            setActiveItem((p) =>
+                              p ? { ...p, quantity: p.quantity + inc } : null
+                            )
+                          }
+                          className="rounded-xl border border-line bg-elevated/80 py-2 text-xs font-black text-fg hover:bg-emerald-600 hover:text-white transition shadow-xs"
+                        >
+                          +{inc}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={handleCommitActiveItem}
+                        disabled={!activeItem || activeItem.quantity < 0}
+                        className="flex flex-col items-center justify-center rounded-xl bg-emerald-600 py-1 text-[10.5px] sm:text-[11.5px] font-black leading-tight text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <span>Miktarı</span>
+                        <span>Kaydet</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         </div>
 
@@ -1661,23 +1757,38 @@ export default function CountDetailPage() {
                           )}
                         </div>
                       </div>
-                      <div className="shrink-0 text-right font-mono flex flex-col items-end justify-center pr-[17px] leading-tight">
-                        {/* Üst satır: Stok birimi cinsinden çevrilmiş miktar (örn: 24 / 24 KT) */}
-                        <div className={`${qtyColorClass} leading-tight`}>
-                          <span className="text-[15px] sm:text-[16px] font-black">
-                            {target > 0 ? `${counted} / ${target}` : counted}
-                          </span>
-                          <span className="ml-1 text-[14px] font-black uppercase">{skunit}</span>
-                        </div>
-                        {/* Alt satır: Okutulan barkod birimi cinsinden miktar (örn: 1 / 1 KO) */}
-                        {isDiffUnit && (
-                          <div className="text-fg leading-tight -mt-0.5">
+                      <div className="shrink-0 flex items-center gap-1.5 sm:gap-2">
+                        <div className="text-right font-mono flex flex-col items-end justify-center leading-tight">
+                          {/* Üst satır: Stok birimi cinsinden çevrilmiş miktar (örn: 24 / 24 KT) */}
+                          <div className={`${qtyColorClass} leading-tight`}>
                             <span className="text-[15px] sm:text-[16px] font-black">
-                              {target > 0 ? `${countedInUnit} / ${targetInUnit}` : countedInUnit}
+                              {target > 0 ? `${counted} / ${target}` : counted}
                             </span>
-                            <span className="ml-1 text-[14px] font-black uppercase">{unit}</span>
+                            <span className="ml-1 text-[14px] font-black uppercase">{skunit}</span>
                           </div>
-                        )}
+                          {/* Alt satır: Okutulan barkod birimi cinsinden miktar (örn: 1 / 1 KO) */}
+                          {isDiffUnit && (
+                            <div className="text-fg leading-tight -mt-0.5">
+                              <span className="text-[15px] sm:text-[16px] font-black">
+                                {target > 0 ? `${countedInUnit} / ${targetInUnit}` : countedInUnit}
+                              </span>
+                              <span className="ml-1 text-[14px] font-black uppercase">{unit}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Kartın en sağı: Sıfırlama (Çöp Kovası) Butonu */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleResetLine(line.id);
+                          }}
+                          className="flex h-8 w-8 items-center justify-center rounded-xl border border-transparent text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-200 dark:hover:border-rose-800/50 transition active:scale-90 shrink-0 ml-1"
+                          title="Sayımı Sıfırla (0)"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
                   </button>

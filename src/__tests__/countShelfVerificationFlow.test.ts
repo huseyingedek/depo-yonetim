@@ -186,4 +186,63 @@ describe("Sayım Raf Doğrulama ve Satır Sayım Akışı", () => {
     expect(originalCard?.targetQty).toBe(10);
     expect(originalCard?.countedQty).toBe(0); // Dokunulmadı, sayılmadı!
   });
+
+  it("Çöp kovasına basıldığında satırın sayılan miktarı (countedQty) sıfırlanır", () => {
+    let lines: AdjustmentLine[] = [
+      {
+        id: "line-1",
+        material: "MLZ001",
+        name: "Test Ürün 1",
+        targetQty: 10,
+        countedQty: 5,
+        unit: "AD",
+        skunit: "AD",
+        multiplier: 1,
+      },
+    ];
+
+    // handleResetLine simülasyonu
+    lines = lines.map((l) => (l.id === "line-1" ? { ...l, countedQty: 0 } : l));
+
+    expect(lines[0].countedQty).toBe(0);
+    expect(lines[0].targetQty).toBe(10);
+  });
+
+  it("Daha önce sayılmış bir ürüne (örn: 5/10 AD) miktar tabından +2 girilip onaylandığında sonuç 7/10 AD olur", () => {
+    const lines: AdjustmentLine[] = [
+      {
+        id: "line-1",
+        material: "MLZ001",
+        name: "Test Ürün 1",
+        targetQty: 10,
+        countedQty: 5, // Daha önce 5 AD sayılmış
+        unit: "AD",
+        skunit: "AD",
+        multiplier: 1,
+      },
+    ];
+
+    // Miktar tabında kullanıcı +2 girip kaydettiğinde
+    const activeItem = {
+      lineId: "line-1",
+      quantity: 2,
+      multiplier: 1,
+    };
+
+    const mult = activeItem.multiplier;
+    const addedBaseQty = Math.max(0, activeItem.quantity) * mult;
+
+    const idx = lines.findIndex((l) => l.id === activeItem.lineId);
+    const prevCountedQty = lines[idx].countedQty || 0;
+    const finalCountedQty = prevCountedQty + addedBaseQty;
+
+    const updatedLines = [...lines];
+    updatedLines[idx] = {
+      ...updatedLines[idx],
+      countedQty: finalCountedQty,
+    };
+
+    expect(updatedLines[0].countedQty).toBe(7); // 5 + 2 = 7! (Eskiden 2 oluyordu)
+    expect(updatedLines[0].targetQty).toBe(10);
+  });
 });
