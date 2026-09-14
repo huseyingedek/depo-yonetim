@@ -369,11 +369,6 @@ export default function PackagingPage() {
         title="Paketleme"
         subtitle="Palet › Koli › Ürün · sürükle-bırak veya Taşı ile düzenle"
         backTo="/home"
-        right={
-          <span className="hidden rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 sm:inline-block dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-            Tasarım aşaması · servis bağlanacak
-          </span>
-        }
       />
 
       {bitti && (
@@ -446,7 +441,7 @@ export default function PackagingPage() {
           </div>
           <div className="ml-auto">
             <button type="button" onClick={bitir} className="btn-primary h-10 px-5">
-              <Truck className="h-4 w-4" /> Paketlemeyi Bitir
+              <Truck className="h-4 w-4" /> Bitir
             </button>
           </div>
         </div>
