@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, Warehouse, Package, MapPin } from "lucide-react";
+import { ChevronLeft, Warehouse, Package, MapPin, Loader2 } from "lucide-react";
 import ToastView, { useToast } from "../../components/Toast";
 import { api } from "../../api/client";
+import { sesBasarili, sesHata } from "../../sound";
 import type { AdjustmentOrder, AdjustmentLine } from "../../types";
 
 export default function CountSummaryPage() {
@@ -24,6 +25,7 @@ export default function CountSummaryPage() {
   const [order, setOrder] = useState<AdjustmentOrder | null>(state?.order ?? null);
   const [lines, setLines] = useState<AdjustmentLine[]>(state?.lines ?? []);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const docNum = order?.invDocNum || order?.id || id || state?.invDocNum || "";
@@ -102,17 +104,58 @@ export default function CountSummaryPage() {
     });
   };
 
-  // Sağ üstteki "Bitir" butonuna basılınca çalışacak handler
-  const handleFinish = () => {
-    if (id) {
-      try {
-        sessionStorage.removeItem(`count_session_${id}`);
-      } catch {}
+  // Sağ üstteki "Bitir" butonuna basılınca çalışacak handler (MZYSaveAdjustment çağrısı)
+  const handleFinish = async () => {
+    if (saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await api.saveAdjustment({
+        company: order?.company,
+        plant: order?.plant,
+        warehouse: warehouse || order?.warehouse,
+        invDocType: docType || order?.docType,
+        invDocNum: docNum,
+        lines,
+      });
+
+      if (!res.ok) {
+        sesHata();
+        show({
+          kind: "error",
+          text: res.message || "Sayım kaydedilemedi.",
+        });
+        setError(res.message);
+        return;
+      }
+
+      sesBasarili();
+      show({
+        kind: "ok",
+        text: res.message || "Sayım başarıyla CANIAS sistemine kaydedildi.",
+      });
+
+      if (id) {
+        try {
+          sessionStorage.removeItem(`count_session_${id}`);
+        } catch {}
+      }
+
+      // Sayım tamamlandığında sayım listesine yönlendir
+      setTimeout(() => {
+        navigate("/count");
+      }, 1200);
+    } catch (e) {
+      sesHata();
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      show({
+        kind: "error",
+        text: msg,
+      });
+    } finally {
+      setSaving(false);
     }
-    show({
-      kind: "ok",
-      text: "Sayım tamamlandı. CANIAS onay servisi sonraki adımda bağlanacaktır.",
-    });
   };
 
 function formatUnitConversionText(line: AdjustmentLine): string | null {
@@ -252,11 +295,13 @@ function formatUnitConversionText(line: AdjustmentLine): string | null {
         <div className="flex items-center gap-2">
           <button
             type="button"
+            disabled={saving}
             onClick={handleFinish}
-            className="flex items-center justify-center rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1 text-xs sm:text-sm font-bold shadow-sm transition active:scale-95 shrink-0"
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-3.5 py-1 text-xs sm:text-sm font-bold shadow-sm transition active:scale-95 shrink-0"
             title="Bitir"
           >
-            <span>Bitir</span>
+            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            <span>{saving ? "Kaydediliyor..." : "Bitir"}</span>
           </button>
           <span className="chip border px-2.5 py-1 text-[13px] sm:text-[14px] font-bold bg-emerald-100 text-emerald-800 border-emerald-300 rounded-xl shrink-0">
             {matchedLines.length} / {targetLinesCount} Tamamlandı

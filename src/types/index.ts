@@ -218,6 +218,8 @@ export interface StockTransferPayload {
 
 export interface AdjustmentOrder {
   id: string; // DOCNUM, INVDOCNUM, ADJUSTMENTNUM, ORDERNUM — Belge Numarası
+  company?: string; // COMPANY, PSCOMPANY — Firma Kodu
+  plant?: string; // PLANT, PSPLANT — Tesis Kodu
   invDocNum?: string; // INVDOCNUM — Sayım Belge Numarası
   docType?: string; // DOCTYPE, ORDERTYPE — Belge Tipi
   docDate?: string; // DOCDATE, CREATEDAT — Belge Tarihi
@@ -250,6 +252,23 @@ export interface AdjustmentLine {
   specialStock?: string;
   warehouse?: string;
   stockPlace?: string;
+}
+
+export interface SaveAdjustmentPayload {
+  company?: string;
+  plant?: string;
+  warehouse?: string;
+  invDocType?: string;
+  invDocNum: string;
+  user?: string;
+  traceStatus?: number;
+  lines: AdjustmentLine[];
+}
+
+export interface SaveAdjustmentResult {
+  ok: boolean;
+  message: string;
+  docNum?: string;
 }
 
 export interface CountLine {
