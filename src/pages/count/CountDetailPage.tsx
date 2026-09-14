@@ -1544,130 +1544,106 @@ export default function CountDetailPage() {
 
             {/* ADIM 4: MİKTAR GİRİŞİ */}
 
-            {tab === "qty" && activeItem && (() => {
-              const currentLine = lines.find((l) => l.id === activeItem.lineId);
-              const currentCountedQty = currentLine?.countedQty || 0;
-              const mult = activeItem.multiplier && activeItem.multiplier > 0 ? activeItem.multiplier : 1;
-              const addedBase = Math.max(0, activeItem.quantity) * mult;
-              const newTotalBase = currentCountedQty + addedBase;
-              return (
-                <div className="space-y-2 animate-fade-in flex-0.01 flex flex-col justify-between">
-                  <div>
-                    <div className="mb-1.5 flex items-center justify-between gap-1">
-                      <label className="text-xs font-bold text-fg block shrink-0">
-                        Eklenecek Miktar ({activeItem.unit}) <span className="text-red-500">*</span>
-                      </label>
-                      {(activeItem.multiplier > 1 || activeItem.unit !== activeItem.skunit) && (
-                        <span className="font-mono text-[11.5px] font-bold text-slate-600 dark:text-slate-300 shrink-0">
-                          1 {activeItem.unit} = {activeItem.multiplier} {activeItem.skunit}
-                        </span>
-                      )}
-                    </div>
-
-                    {currentCountedQty > 0 && (
-                      <div className="mb-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-2 text-xs font-mono flex items-center justify-between text-fg">
-                        <div>
-                          <span className="text-subtle">Mevcut: </span>
-                          <span className="font-bold">{currentCountedQty} {activeItem.skunit}</span>
-                        </div>
-                        <div>
-                          <span className="text-subtle">Eklenecek: </span>
-                          <span className="font-bold text-emerald-600">+{addedBase} {activeItem.skunit}</span>
-                        </div>
-                        <div>
-                          <span className="text-subtle">Yeni Toplam: </span>
-                          <span className="font-black text-emerald-700 dark:text-emerald-400">{newTotalBase} {activeItem.skunit}</span>
-                        </div>
-                      </div>
+            {tab === "qty" && activeItem && (
+              <div className="space-y-2 animate-fade-in flex-0.01 flex flex-col justify-between">
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between gap-1">
+                    <label className="text-xs font-bold text-fg block shrink-0">
+                      Sayılacak Miktar ({activeItem.unit}) <span className="text-red-500">*</span>
+                    </label>
+                    {(activeItem.multiplier > 1 || activeItem.unit !== activeItem.skunit) && (
+                      <span className="font-mono text-[11.5px] font-bold text-slate-600 dark:text-slate-300 shrink-0">
+                        1 {activeItem.unit} = {activeItem.multiplier} {activeItem.skunit}
+                      </span>
                     )}
+                  </div>
 
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setActiveItem((p) =>
+                          p ? { ...p, quantity: Math.max(0, p.quantity - 1) } : null
+                        )
+                      }
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-elevated text-subtle hover:bg-line transition active:scale-95 shrink-0"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={activeItem.quantity}
+                      placeholder="0"
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === "") {
+                          setActiveItem((p) => (p ? { ...p, quantity: 0 } : null));
+                          return;
+                        }
+                        const val = parseInt(raw, 10);
+                        setActiveItem((p) =>
+                          p ? { ...p, quantity: isNaN(val) ? 0 : Math.max(0, val) } : null
+                        );
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleCommitActiveItem();
+                        }
+                      }}
+                      className="field-input flex-1 text-center font-mono text-base font-extrabold text-emerald-600 h-10"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setActiveItem((p) =>
+                          p ? { ...p, quantity: p.quantity + 1 } : null
+                        )
+                      }
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition active:scale-95 shadow-md shrink-0"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5 pt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setActiveItem((p) => (p ? { ...p, quantity: 0 } : null))}
+                      className="flex items-center justify-center rounded-xl border border-line bg-elevated/50 py-2 text-subtle hover:text-red-500 shadow-xs"
+                      title="Miktarı Sıfırla (0)"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                    {[5, 10].map((inc) => (
                       <button
+                        key={inc}
                         type="button"
                         onClick={() =>
                           setActiveItem((p) =>
-                            p ? { ...p, quantity: Math.max(0, p.quantity - 1) } : null
+                            p ? { ...p, quantity: p.quantity + inc } : null
                           )
                         }
-                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-elevated text-subtle hover:bg-line transition active:scale-95 shrink-0"
+                        className="rounded-xl border border-line bg-elevated/80 py-2 text-xs font-black text-fg hover:bg-emerald-600 hover:text-white transition shadow-xs"
                       >
-                        <Minus className="h-4 w-4" />
+                        +{inc}
                       </button>
-                      <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={activeItem.quantity}
-                        placeholder="0"
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          if (raw === "") {
-                            setActiveItem((p) => (p ? { ...p, quantity: 0 } : null));
-                            return;
-                          }
-                          const val = parseInt(raw, 10);
-                          setActiveItem((p) =>
-                            p ? { ...p, quantity: isNaN(val) ? 0 : Math.max(0, val) } : null
-                          );
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleCommitActiveItem();
-                          }
-                        }}
-                        className="field-input flex-1 text-center font-mono text-base font-extrabold text-emerald-600 h-10"
-                        autoFocus
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setActiveItem((p) =>
-                            p ? { ...p, quantity: p.quantity + 1 } : null
-                          )
-                        }
-                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition active:scale-95 shadow-md shrink-0"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-4 gap-1.5 pt-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setActiveItem((p) => (p ? { ...p, quantity: 0 } : null))}
-                        className="flex items-center justify-center rounded-xl border border-line bg-elevated/50 py-2 text-subtle hover:text-red-500 shadow-xs"
-                        title="Miktarı Sıfırla (0)"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                      {[5, 10].map((inc) => (
-                        <button
-                          key={inc}
-                          type="button"
-                          onClick={() =>
-                            setActiveItem((p) =>
-                              p ? { ...p, quantity: p.quantity + inc } : null
-                            )
-                          }
-                          className="rounded-xl border border-line bg-elevated/80 py-2 text-xs font-black text-fg hover:bg-emerald-600 hover:text-white transition shadow-xs"
-                        >
-                          +{inc}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={handleCommitActiveItem}
-                        disabled={!activeItem || activeItem.quantity < 0}
-                        className="flex flex-col items-center justify-center rounded-xl bg-emerald-600 py-1 text-[10.5px] sm:text-[11.5px] font-black leading-tight text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        <span>Miktarı</span>
-                        <span>Kaydet</span>
-                      </button>
-                    </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={handleCommitActiveItem}
+                      disabled={!activeItem || activeItem.quantity < 0}
+                      className="flex flex-col items-center justify-center rounded-xl bg-emerald-600 py-1 text-[10.5px] sm:text-[11.5px] font-black leading-tight text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <span>Miktarı</span>
+                      <span>Kaydet</span>
+                    </button>
                   </div>
                 </div>
-              );
-            })()}
+              </div>
+            )}
           </div>
         </div>
 
