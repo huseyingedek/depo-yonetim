@@ -26,10 +26,25 @@ export default function BarcodeScanner({
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
   const lastScanRef = useRef<{ code: string; at: number }>({ code: "", at: 0 });
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState(false);
   const [value, setValue] = useState("");
+
+  useEffect(() => {
+    // Sayfa veya sekme açıldığında odağı input'a ver, kart butonlarının odak almasını engelle
+    const t1 = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
+    const t2 = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 200);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, []);
 
   useEffect(() => {
     if (prefill) setValue(prefill);
@@ -82,6 +97,7 @@ export default function BarcodeScanner({
       <div className={`flex ${compact ? "gap-1" : "gap-2"}`}>
         <div className="relative min-w-0 flex-1">
           <input
+            ref={inputRef}
             autoFocus
             value={value}
             onChange={(e) => setValue(e.target.value.toUpperCase())}

@@ -54,6 +54,12 @@ body {
   background: rgb(var(--app-to));
 }
 
+/* Butonlarda tarayıcının varsayılan mavi odak çerçevesini kaldır */
+button:focus,
+button:focus-visible {
+  outline: none;
+}
+
 /* Dokunmatik TABLETLERDE arayüzü büyüt (depo kullanımı, kol mesafesi).
    rem tabanlı tüm ölçüler (yazı, boşluk) ölçeklenir. Fareyle kullanılan
    masaüstü (pointer: fine) ETKİLENMEZ. */

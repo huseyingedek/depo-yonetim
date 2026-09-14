@@ -350,4 +350,126 @@ describe("Sayım Servisleri — MZYListingAdjustment & MZYEnterAdjustment", () =
     // Düz alfanümerik parti kodları
     expect(validateBatchTest("PARTI-2026-X").valid).toBe(true);
   });
+
+  it("8. api.saveAdjustment MZYSaveAdjustment parametrelerini (PSCOMPANY, PSPLANT, PSWAREHOUSE, PSINVDOCTYPE, PSINVDOCNUM, PSUSER, PITRACESTATUS, TBLADJUSTMENTLIST) eksiksiz iletir ve miktarı skunit cinsinden gönderir", async () => {
+    let capturedUrl = "";
+    let capturedBody: any = null;
+
+    global.fetch = vi.fn().mockImplementation(async (url: string, init: any) => {
+      capturedUrl = url;
+      capturedBody = JSON.parse(init?.body || "{}");
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            TBLRESULT: {
+              ROW: [{ STATUS: "S", MESSAGE: "Sayım başarıyla kaydedildi" }],
+            },
+          },
+        }),
+      } as Response;
+    });
+
+    const lines = [
+      {
+        id: "1",
+        material: "MLZ001",
+        name: "Fotokopi Kağıdı",
+        barcode: "869001",
+        targetQty: 50, // 5 KO * 10 AD = 50 AD
+        countedQty: 20, // 2 KO * 10 AD = 20 AD sayıldı (stok birimi skunit cinsinden)
+        unit: "KO",
+        docUnit: "KO",
+        skunit: "AD",
+        multiplier: 10,
+        bunit: "KO",
+        bunitMultiplier: 10,
+        batchNum: "PARTI-01",
+        specialStock: "1",
+        warehouse: "01",
+        stockPlace: "A-01-01",
+      },
+      {
+        id: "2",
+        material: "MLZ002",
+        name: "Kalem",
+        barcode: "869002",
+        targetQty: 100,
+        countedQty: 100,
+        unit: "AD",
+        docUnit: "AD",
+        skunit: "AD",
+        multiplier: 1,
+        warehouse: "01",
+        stockPlace: "A-01-02",
+      },
+    ];
+
+    const res = await api.saveAdjustment({
+      company: "01",
+      plant: "100",
+      warehouse: "01",
+      invDocType: "SYM",
+      invDocNum: "SYM-2026-001",
+      user: "depocu1",
+      traceStatus: 1,
+      lines,
+    });
+
+    expect(capturedUrl).toContain(SERVICES.saveAdjustment);
+    expect(capturedBody.PSCOMPANY).toBe("01");
+    expect(capturedBody.PCOMPANY).toBe("01");
+    expect(capturedBody.PSPLANT).toBe("100");
+    expect(capturedBody.PSWAREHOUSE).toBe("01");
+    expect(capturedBody.PSINVDOCTYPE).toBe("SYM");
+    expect(capturedBody.PSINVDOCNUM).toBe("SYM-2026-001");
+    expect(capturedBody.PSUSER).toBe("depocu1");
+    expect(capturedBody.PITRACESTATUS).toBe(1);
+
+    // Tablo parametreleri kontrolü (hem TBLADJUSTMENTLIST hem TBLADJUSMENTLIST)
+    expect(capturedBody.TBLADJUSTMENTLIST).toBeDefined();
+    expect(capturedBody.TBLADJUSTMENTLIST).toHaveLength(2);
+
+    const item1 = capturedBody.TBLADJUSTMENTLIST[0];
+    expect(item1.MATERIAL).toBe("MLZ001");
+    expect(item1.SPECIALSTOCK).toBe("1");
+    expect(item1.BATCHNUM).toBe("PARTI-01");
+    expect(item1.WAREHOUSE).toBe("01");
+    expect(item1.STOCKPLACE).toBe("A-01-01");
+
+    // ADET / MİKTAR BİLGİSİ SKUNIT (AD) CİNSİNDEN GÖNDERİLMELİDİR:
+    expect(item1.QUANTITY).toBe(20); // 2 KO değil, 20 AD (skunit)
+    expect(item1.REVISESTOCKN).toBe(20);
+    expect(item1.COUNTEDQTY).toBe(20);
+    expect(item1.SKUNIT).toBe("AD");
+    expect(item1.QUNIT).toBe("AD");
+
+    expect(res.ok).toBe(true);
+    expect(res.docNum).toBe("SYM-2026-001");
+  });
+
+  it("9. api.saveAdjustment servisten hata geldiğinde ok:false ve hata mesajı döner", async () => {
+    global.fetch = vi.fn().mockImplementation(async () => {
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            MESSAGETABLE: {
+              ROW: [{ TYPE: "E", TEXT: "Sayım belgesi zaten kapatılmış" }],
+            },
+          },
+        }),
+      } as Response;
+    });
+
+    const res = await api.saveAdjustment({
+      company: "01",
+      plant: "100",
+      invDocNum: "SYM-2026-001",
+      lines: [],
+    });
+
+    expect(res.ok).toBe(false);
+    expect(res.message).toContain("Sayım belgesi zaten kapatılmış");
+  });
 });

@@ -246,7 +246,8 @@ export default function CountListPage() {
                   key={o.id}
                   onClick={() => emreGir(o)}
                   type="button"
-                  className="group flex flex-col justify-between gap-1.5 rounded-2xl border border-line bg-surface p-3 text-left shadow-card transition-all hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-soft active:scale-[0.99]"
+                  tabIndex={-1}
+                  className="group flex flex-col justify-between gap-1.5 rounded-2xl border border-line bg-surface p-3 text-left shadow-card transition-all active:scale-[0.99] outline-none focus:outline-none focus-visible:outline-none focus:ring-0"
                 >
                   {/* Üst Satır: Belge No / INVDOCNUM ve Durum Rozeti ("Aktif Sayım") */}
                   <div className="flex items-center justify-between gap-2">
@@ -270,7 +271,7 @@ export default function CountListPage() {
                       <span className={`chip border px-2.5 py-0.5 text-[15px] font-bold ${durumStil}`}>
                         {durumEtiket}
                       </span>
-                      <ChevronRight className="h-5 w-5 text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-brand-600" />
+                      <ChevronRight className="h-5 w-5 text-subtle" />
                     </div>
                   </div>
 

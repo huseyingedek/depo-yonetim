@@ -25,6 +25,8 @@ import type {
   StockRow,
   TransactionRow,
   StockTransferPayload,
+  SaveAdjustmentPayload,
+  SaveAdjustmentResult,
 } from "../types";
 
 interface MzyResult {
@@ -401,9 +403,25 @@ function toAdjustmentLine(row: Row, index: number): AdjustmentLine {
   // Kalan/Hedef miktar her zaman ana stok birimi (SKUNIT / AVAILSTOCKN / AVAILSTOCK) cinsinden alınır
   const targetQty = num(row, ["AVAILSTOCKN", "AVAILSTOCKV", "AVAILSTOCK", "SKQUANTITY", "ACTUALSTOCK", "STOCKQTY", "STOCK", "TARGETQTY", "SYSTEMQTY", "TOTALITEMS", "TOTALQTY", "QUANTITY", "CUAVAILSTOCKN", "AMOUNT"], 0);
   const countedQty = num(row, ["COUNTEDQTY", "READQUANTITY", "READQTY", "ACTUALQTY", "TOTALCOUNTED", "COUNTED", "REVISESTOCKN", "REVISESTOCKV", "CUREVISESTOCKN"], 0);
-  const skunit = pick(row, ["SKUNIT", "STOCKUNIT", "IUNIT", "BUNIT", "UNIT", "CUNIT"]) || "AD";
-  const unit = pick(row, ["SKUNIT", "CUNIT", "BUNIT", "UNIT", "QUNIT", "PURUNIT", "IUNIT", "STOCKUNIT"]) || skunit;
-  const multiplier = num(row, ["MULTIPLIER", "FACTOR", "PACKAGEMULTIPLIER", "CFACTOR"], 1);
+  // Ana stok birimi (SKUNIT)
+  const skunit = (pick(row, ["SKUNIT", "STOCKUNIT", "IUNIT"]) || "AD").toUpperCase();
+
+  // Belge birimi (QUNIT / DOCUNIT / CUNIT / PURUNIT)
+  const docUnit = (pick(row, ["QUNIT", "DOCUNIT", "PURUNIT", "CUNIT", "UNIT", "BUNIT"]) || skunit).toUpperCase();
+
+  // Çarpan (1 docUnit = X skunit)
+  let multiplier = num(row, ["UFACTOR", "CONVFACTOR", "MULTIPLIER", "FACTOR", "PACKAGEMULTIPLIER", "CFACTOR"], 1);
+  if (multiplier <= 1 && docUnit !== skunit) {
+    const skQty = num(row, ["AVAILSTOCKN", "AVAILSTOCKV", "SKQUANTITY"], 0);
+    const docQty = num(row, ["CUAVAILSTOCKN", "QQUANTITY", "DOCQTY", "QUANTITY"], 0);
+    if (docQty > 0 && skQty > docQty) {
+      multiplier = Math.round(skQty / docQty);
+    }
+  }
+
+  const bunitRaw = pick(row, ["BUNIT", "BARCODEUNIT"]);
+  const bunitMultRaw = num(row, ["BMULTIPLIER", "BFACTOR", "BARCODEMULTIPLIER"], 0);
+
   const batchNum = pick(row, ["BATCHNUM", "LOT", "LOTNUM", "PARTI", "BATCH"]);
   const specialStock = pick(row, ["SPECIALSTOCK", "ISLOT", "ISBATCH"]);
   const warehouse = pick(row, ["WAREHOUSE", "SRCWAREHOUSE", "WH", "DEPOT", "PSWAREHOUSE"]);
@@ -418,9 +436,12 @@ function toAdjustmentLine(row: Row, index: number): AdjustmentLine {
     barcode: barcode || undefined,
     targetQty: targetQty > 0 ? targetQty : 0,
     countedQty: countedQty >= 0 ? countedQty : 0,
-    unit: unit.toUpperCase(),
-    skunit: skunit.toUpperCase(),
+    unit: docUnit,
+    docUnit,
+    skunit,
     multiplier: multiplier > 0 ? multiplier : 1,
+    bunit: bunitRaw ? bunitRaw.toUpperCase() : undefined,
+    bunitMultiplier: bunitMultRaw > 0 ? bunitMultRaw : undefined,
     batchNum: batchNum && batchNum !== "*" ? batchNum : undefined,
     specialStock: specialStock || "*",
     warehouse: warehouse && warehouse !== "*" ? warehouse : undefined,
@@ -2151,5 +2172,122 @@ export const api = {
       warehouse: warehouse || order.warehouse,
       lines: lines.length > 0 ? lines : undefined,
     };
+  },
+
+  // 3. MZYSaveAdjustment - Sayım Sonuçlarını CANIAS Sistemine Kaydet / Bitir
+  async saveAdjustment(
+    payload: SaveAdjustmentPayload
+  ): Promise<SaveAdjustmentResult> {
+    const c = ctx();
+    const isTrace = useAppStore.getState().trace;
+    const compCode = String(payload.company ?? c.company ?? "01").trim();
+    const plantCode = String(payload.plant ?? c.plant ?? "100").trim();
+    const whCode = String(payload.warehouse ?? c.warehouse ?? "01").trim();
+    const docType = String(payload.invDocType ?? "").trim();
+    const docNum = String(payload.invDocNum).trim();
+    const userCode = String(payload.user ?? c.worker ?? "").trim();
+    const traceStatus = payload.traceStatus ?? (isTrace ? 1 : 0);
+
+    const formattedItems = (payload.lines || []).map((line, idx) => {
+      const isPartili =
+        line.specialStock === "1" ||
+        (Boolean(line.batchNum) && line.batchNum !== "*" && line.batchNum !== "—");
+      const specialStock = isPartili
+        ? "1"
+        : line.specialStock && line.specialStock !== "0" && line.specialStock !== "Serbest"
+          ? line.specialStock
+          : "*";
+      const batchNum =
+        isPartili && line.batchNum && line.batchNum !== "*" && line.batchNum !== "—"
+          ? String(line.batchNum).trim()
+          : "*";
+
+      // Sayım miktarı her zaman ana STOK BİRİMİ (skunit / adet) cinsinden gönderilir
+      const countedStockQty = Number(line.countedQty ?? 0);
+      const skunit = String(line.skunit || line.unit || "AD").trim().toUpperCase();
+
+      return {
+        COMPANY: compCode,
+        PLANT: plantCode,
+        INVDOCNUM: docNum,
+        INVDOCTYPE: docType,
+        INVDOCITEM: idx + 1,
+        MATERIAL: String(line.material || "").trim(),
+        SPECIALSTOCK: specialStock,
+        BATCHNUM: batchNum,
+        WAREHOUSE: String(line.warehouse || whCode).trim(),
+        STOCKPLACE: String(line.stockPlace || "*").trim(),
+        QUANTITY: countedStockQty, // Stok birimi cinsinden sayım miktarı
+        REVISESTOCKN: countedStockQty, // CANIAS revize stok miktarı
+        COUNTEDQTY: countedStockQty,
+        READQUANTITY: countedStockQty,
+        QUNIT: skunit, // Stok birimi
+        SKUNIT: skunit, // Stok birimi
+        BARCODE: String(line.barcode || "").trim(),
+        TARGETQTY: Number(line.targetQty ?? 0),
+        AVAILSTOCKN: Number(line.targetQty ?? 0),
+      };
+    });
+
+    const params: Record<string, unknown> = {
+      PSCOMPANY: compCode,
+      PCOMPANY: compCode,
+      PSPLANT: plantCode,
+      PPLANT: plantCode,
+      PSWAREHOUSE: whCode,
+      PWAREHOUSE: whCode,
+      PSINVDOCTYPE: docType,
+      PINVDOCTYPE: docType,
+      PSINVDOCNUM: docNum,
+      PINVDOCNUM: docNum,
+      PSUSER: userCode,
+      PUSER: userCode,
+      PITRACESTATUS: traceStatus,
+      PTRACESTATUS: traceStatus,
+      TRACESTATUS: traceStatus,
+      TBLADJUSTMENTLIST: formattedItems,
+      TBLADJUSMENTLIST: formattedItems,
+    };
+
+    console.info("📦 [MZYSaveAdjustment İSTEK PAYLOAD]", {
+      company: compCode,
+      plant: plantCode,
+      warehouse: whCode,
+      invDocType: docType,
+      invDocNum: docNum,
+      user: userCode,
+      traceStatus,
+      itemCount: formattedItems.length,
+      sampleItem: formattedItems[0],
+    });
+
+    try {
+      const r = await call(SERVICES.saveAdjustment, params);
+      console.info("📥 [MZYSaveAdjustment GELEN YANIT]", r);
+
+      const mesaj = serviceMessage(r);
+      if (mesaj && /error|fail|hata/i.test(mesaj)) {
+        return { ok: false, message: mesaj };
+      }
+
+      const d = (r.data ?? {}) as Record<string, unknown>;
+      const mt = d.MESSAGETABLE as { ROW?: unknown } | undefined;
+      const mtRows = mt ? (Array.isArray(mt.ROW) ? mt.ROW : mt.ROW ? [mt.ROW] : []) : [];
+      const hataVar = mtRows.some(
+        (row) => String((row as Record<string, unknown>)?.TYPE || "").trim().toUpperCase() === "E"
+      );
+      if (hataVar) {
+        return { ok: false, message: mesaj || "Sayım kaydedilemedi (CANIAS hata bildirdi)." };
+      }
+
+      return {
+        ok: true,
+        message: mesaj || "Sayım başarıyla CANIAS'a kaydedildi.",
+        docNum,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, message: msg };
+    }
   },
 };

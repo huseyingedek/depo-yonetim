@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, Warehouse, Package, MapPin } from "lucide-react";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { ArrowLeft, Loader2, Package } from "lucide-react";
+import PageHeader from "../../components/PageHeader";
 import ToastView, { useToast } from "../../components/Toast";
 import { api } from "../../api/client";
+import { sesBasarili, sesHata } from "../../sound";
 import type { AdjustmentOrder, AdjustmentLine } from "../../types";
 
 export default function CountSummaryPage() {
@@ -23,7 +25,8 @@ export default function CountSummaryPage() {
 
   const [order, setOrder] = useState<AdjustmentOrder | null>(state?.order ?? null);
   const [lines, setLines] = useState<AdjustmentLine[]>(state?.lines ?? []);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const docNum = order?.invDocNum || order?.id || id || state?.invDocNum || "";
@@ -33,7 +36,7 @@ export default function CountSummaryPage() {
     state?.warehouse ||
     (lines.length > 0 && lines[0].warehouse ? lines[0].warehouse : "");
 
-  // Eğer sayfaya doğrudan linkle / refresh ile girilmişse ve lines state'te yoksa API'den çek
+  // Sayfa doğrudan linkle / yenilemeyle açılmışsa ve lines state'te yoksa API'den çek
   useEffect(() => {
     if (lines.length > 0 || !id) return;
     setLoading(true);
@@ -60,36 +63,70 @@ export default function CountSummaryPage() {
       });
   }, [id, lines.length, state?.invDocNum, state?.orderType, state?.warehouse]);
 
-  // 1. MAVİ: Plana Göre Olmayan / Beklenmeyen Kalemler (targetQty <= 0 && countedQty > 0)
-  const unexpectedLines = useMemo(
-    () => lines.filter((l) => l.targetQty <= 0 && l.countedQty > 0),
-    [lines]
-  );
+  // Satır kategori belirteci ve renkleri
+  const getCategory = (line: AdjustmentLine) => {
+    const { targetQty, countedQty } = line;
 
-  // 2. KIRMIZI: Fazla Sayılan Kalemler (targetQty > 0 && countedQty > targetQty)
-  const excessLines = useMemo(
-    () => lines.filter((l) => l.targetQty > 0 && l.countedQty > l.targetQty),
-    [lines]
-  );
+    // 1. MAVİ: Planda olmayan / beklenmeyen yeni kalemler
+    if (targetQty <= 0 && countedQty > 0) {
+      return {
+        tier: 1,
+        label: "Yeni / Planda Yok",
+        badgeClass: "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-300",
+        textClass: "text-blue-600 dark:text-blue-400",
+      };
+    }
 
-  // 3. SARI / AMBER: Eksik Sayılan Kalemler (targetQty > 0 && countedQty < targetQty)
-  const partialLines = useMemo(
-    () => lines.filter((l) => l.targetQty > 0 && l.countedQty < l.targetQty),
-    [lines]
-  );
+    // 2. KIRMIZI: Fazla sayılan kalemler
+    if (targetQty > 0 && countedQty > targetQty) {
+      return {
+        tier: 2,
+        label: "Fazla Sayım",
+        badgeClass: "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300",
+        textClass: "text-rose-600 dark:text-rose-400",
+      };
+    }
 
-  // 4. YEŞİL: Tam Eşleşen / Tamamlanan Kalemler (targetQty > 0 && countedQty === targetQty)
-  const matchedLines = useMemo(
-    () => lines.filter((l) => l.targetQty > 0 && l.countedQty === l.targetQty),
-    [lines]
-  );
+    // 3. SARI: Eksik sayılan kalemler
+    if (targetQty > 0 && countedQty > 0 && countedQty < targetQty) {
+      return {
+        tier: 3,
+        label: "Eksik Sayım",
+        badgeClass: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300",
+        textClass: "text-amber-500 dark:text-amber-400",
+      };
+    }
 
-  // Hedefli toplam kalem sayısı
-  const targetLinesCount = useMemo(
-    () => lines.filter((l) => l.targetQty > 0).length,
-    [lines]
-  );
+    // 4. OKUTULMAYANLAR: Henüz hiç sayım yapılmamış olanlar
+    if (countedQty === 0) {
+      return {
+        tier: 4,
+        label: "Sayılmadı",
+        badgeClass: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300",
+        textClass: "text-slate-500 dark:text-slate-400",
+      };
+    }
 
+    // 5. YEŞİL: Tam eşleşen kalemler
+    return {
+      tier: 5,
+      label: "Tam Eşleşti",
+      badgeClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300",
+      textClass: "text-emerald-600 dark:text-emerald-400",
+    };
+  };
+
+  // KESİN SIRALAMA: 1. Maviler -> 2. Kırmızılar -> 3. Sarılar -> 4. Okutulmayanlar -> 5. Yeşiller
+  const sortedLines = useMemo(() => {
+    return [...lines].sort((a, b) => {
+      const tierA = getCategory(a).tier;
+      const tierB = getCategory(b).tier;
+      if (tierA !== tierB) return tierA - tierB;
+      return a.material.localeCompare(b.material);
+    });
+  }, [lines]);
+
+  // Sayıma geri dönme (hiçbir veri silinmeden state taşınır)
   const handleBack = () => {
     navigate(`/count/${id}`, {
       state: {
@@ -102,217 +139,236 @@ export default function CountSummaryPage() {
     });
   };
 
-  // Sağ üstteki "Bitir" butonuna basılınca çalışacak handler
-  const handleFinish = () => {
-    if (id) {
-      try {
-        sessionStorage.removeItem(`count_session_${id}`);
-      } catch {}
+  // Sağ üstteki "Bitir" butonuna basılınca çalışacak handler (MZYSaveAdjustment servisi çağrılır)
+  const handleFinish = async () => {
+    if (saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await api.saveAdjustment({
+        company: order?.company,
+        plant: order?.plant,
+        warehouse: warehouse || order?.warehouse,
+        invDocType: docType || order?.docType,
+        invDocNum: docNum,
+        lines,
+      });
+
+      if (!res.ok) {
+        sesHata();
+        show({
+          kind: "error",
+          text: res.message || "Sayım kaydedilemedi.",
+        });
+        setError(res.message);
+        return;
+      }
+
+      sesBasarili();
+      show({
+        kind: "ok",
+        text: res.message || "Sayım başarıyla CANIAS sistemine kaydedildi.",
+      });
+
+      if (id) {
+        try {
+          sessionStorage.removeItem(`count_session_${id}`);
+        } catch {}
+      }
+
+      // Sayım başarıyla tamamlandıktan sonra sayım listesine yönlendir
+      setTimeout(() => {
+        navigate("/count");
+      }, 1200);
+    } catch (e) {
+      sesHata();
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      show({
+        kind: "error",
+        text: msg,
+      });
+    } finally {
+      setSaving(false);
     }
-    show({
-      kind: "ok",
-      text: "Sayım tamamlandı. CANIAS onay servisi sonraki adımda bağlanacaktır.",
-    });
   };
 
-function formatUnitConversionText(line: AdjustmentLine): string | null {
-  const docUnit = (line.docUnit || line.unit || "AD").toUpperCase();
-  const skunit = (line.skunit || docUnit).toUpperCase();
-  const bunit = (line.bunit || docUnit).toUpperCase();
-  const docMult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
-  const bunitMult = line.bunitMultiplier && line.bunitMultiplier > 0 ? line.bunitMultiplier : (bunit === docUnit ? docMult : (bunit === skunit ? 1 : 1));
-
-  const hasDiff = docMult > 1 || docUnit !== skunit || bunit !== docUnit;
-  if (!hasDiff) return null;
-
-  if (bunit === docUnit) {
-    if (docMult > 1 || docUnit !== skunit) {
-      return `1 ${docUnit} = ${docMult} ${skunit}`;
-    }
-    return null;
-  }
-
-  if (skunit === bunit) {
-    const x = docMult;
-    return `1 ${docUnit} = ${x} ${bunit}`;
-  }
-
-  const x = bunitMult > 0 ? docMult / bunitMult : docMult;
-  const y = docMult;
-  return `1 ${docUnit} = ${x} ${bunit} = ${y} ${skunit}`;
-}
-
-  // Malzeme Kartı (CountDetailPage ile 1:1 birebir aynı tasarım)
-  const renderItemCard = (
-    line: AdjustmentLine,
-    qtyColorClass: string
-  ) => {
-    const counted = line.countedQty;
-    const target = line.targetQty;
+  // Miktar metnini kurallara göre biçimlendirme
+  const renderQuantityText = (line: AdjustmentLine) => {
+    const docMult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
     const docUnit = (line.docUnit || line.unit || "AD").toUpperCase();
     const skunit = (line.skunit || docUnit).toUpperCase();
-    const docMult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
-    const countedInDocUnit = docMult > 1 ? counted / docMult : counted;
-    const targetInDocUnit = docMult > 1 ? target / docMult : target;
-    const isDiffUnit = docMult > 1 || docUnit !== skunit || (line.bunit && line.bunit !== docUnit);
-    const conversionText = formatUnitConversionText(line);
+    const bunit = (line.bunit || docUnit).toUpperCase();
+    const bmult = line.bunitMultiplier && line.bunitMultiplier > 0 ? line.bunitMultiplier : 1;
+    const counted = line.countedQty;
 
-    const wh = (line.warehouse || warehouse || "").trim();
-    let sp = (line.stockPlace || "").trim().replace(/\$/g, "");
-    if (sp.includes("$")) {
-      sp = sp.split("$").slice(1).join("$").trim();
+    // Eğer okutulan barkod birimi (bunit) stok biriminden farklıysa: 10 AD (10 AD = 2 PK)
+    if (line.bunit && bunit !== skunit && counted > 0) {
+      const bunitQty = counted / bmult;
+      return (
+        <span>
+          <strong className="font-bold">{counted} {skunit}</strong>{" "}
+          <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+            ({counted} {skunit} = {bunitQty} {bunit})
+          </span>
+        </span>
+      );
     }
-    if (wh && sp.toUpperCase().startsWith(wh.toUpperCase()) && sp.length > wh.length) {
-      sp = sp.slice(wh.length).trim();
+
+    const isDiffUnit = docMult > 1 || docUnit !== skunit;
+    if (isDiffUnit && counted > 0) {
+      const countedInDocUnit = docMult > 1 ? counted / docMult : counted;
+      return (
+        <span>
+          <strong className="font-bold">{counted} {skunit}</strong>{" "}
+          <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+            ({counted} {skunit} = {countedInDocUnit} {docUnit})
+          </span>
+        </span>
+      );
     }
-    const locationStr = wh && sp ? `${wh} ${sp}` : (wh || sp);
 
     return (
-      <div
-        key={line.id}
-        className="w-full text-left rounded-2xl border border-line bg-surface p-2.5 sm:p-3 transition-all shadow-xs"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[15px] font-bold text-fg">{line.name}</p>
-            <div className="mt-0.5 flex items-center gap-2.5 font-mono text-[13px] flex-wrap text-slate-600 dark:text-slate-300">
-              <span className="font-bold text-slate-700 dark:text-slate-200">
-                {line.material}
-              </span>
-              {locationStr && (
-                <span className="inline-flex items-center gap-1 font-semibold text-slate-600 dark:text-slate-400">
-                  <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-                  <span>{locationStr}</span>
-                </span>
-              )}
-              {line.batchNum && line.batchNum !== "*" && (
-                <span className="inline-flex shrink-0 items-center rounded bg-violet-100 dark:bg-violet-950/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-violet-700 dark:text-violet-300">
-                  Parti: {line.batchNum}
-                </span>
-              )}
-              {conversionText && (
-                <span className="font-semibold text-slate-500 dark:text-slate-400">
-                  {conversionText}
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="shrink-0 text-right font-mono flex flex-col items-end justify-center pr-[17px] leading-tight">
-            {/* Üst satır: Sayımda gelen birim cinsinden miktar (örn: 1 / 5 KO veya 0 / 5 KO) */}
-            <div className={`${qtyColorClass} leading-tight`}>
-              <span className="text-[15px] sm:text-[16px] font-black">
-                {targetInDocUnit > 0 ? `${countedInDocUnit} / ${targetInDocUnit}` : countedInDocUnit}
-              </span>
-              <span className="ml-1 text-[14px] font-black uppercase">{docUnit}</span>
-            </div>
-            {/* Alt satır: x/x KO yazısının altında skunit cinsinden toplam değer (örn: 10 AD) */}
-            {isDiffUnit && (
-              <div className="text-slate-500 dark:text-slate-400 font-bold leading-tight -mt-0.5 text-right text-[12px] sm:text-[13px]">
-                <span>{counted} {skunit}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <strong className="font-bold">
+        {counted} {skunit}
+      </strong>
     );
   };
 
+  const totalCountedCount = lines.filter((l) => l.countedQty > 0).length;
+
   return (
-    <div className="mx-auto max-w-6xl p-2.5 sm:p-4 lg:p-6 short:h-[100dvh] short:max-w-none short:flex short:flex-col short:overflow-hidden short:p-2">
-      {/* ÜST BAŞLIK */}
-      <div className="mb-2 flex items-center justify-between gap-2 shrink-0">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleBack}
-            className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border border-line bg-surface text-fg shadow-card transition hover:bg-elevated active:scale-95 shrink-0"
-            title="Geri Dön"
-          >
-            <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
-          </button>
+    <div className="mx-auto max-w-6xl p-4 lg:p-8 animate-fade-in">
+      {/* ÜST BAŞLIK: Sol üstte chevron YOK, Sağ üstte "Sayıma geri dön" ve sağında "Bitir" butonu var */}
+      <PageHeader
+        title="Sayım Özeti"
+        subtitle={`${docNum || id} · ${totalCountedCount} / ${lines.length} Kalem Sayıldı`}
+        right={
           <div className="flex items-center gap-2">
-            <span className="font-mono text-[16px] sm:text-[17px] font-black tracking-tight text-fg">
-              {docNum || "Sayım Özeti"}
-            </span>
-            {docType && (
-              <span className="rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-0.5 font-mono text-[13px] font-bold text-slate-700 dark:text-slate-300">
-                {docType}
-              </span>
-            )}
-            {warehouse && (
-              <div className="flex items-center gap-1 rounded-lg border border-line bg-surface px-2 py-0.5 text-xs font-bold text-slate-800 dark:text-slate-200 shadow-xs">
-                <Warehouse className="h-3.5 w-3.5 text-brand-600 shrink-0" />
-                <span>{warehouse}</span>
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={handleBack}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3.5 py-2 text-xs sm:text-sm font-bold text-fg transition hover:bg-elevated active:scale-95 shadow-xs"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Sayıma geri dön</span>
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={handleFinish}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-2 text-xs sm:text-sm font-bold shadow-sm transition active:scale-95 shrink-0"
+              title="Sayımı Kaydet ve Bitir"
+            >
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              <span>{saving ? "Kaydediliyor..." : "Bitir"}</span>
+            </button>
           </div>
-        </div>
+        }
+      />
 
-        {/* SAĞ ÜST: BİTİR TUŞU VE SAĞINDA YEŞİL ROZET */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleFinish}
-            className="flex items-center justify-center rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1 text-xs sm:text-sm font-bold shadow-sm transition active:scale-95 shrink-0"
-            title="Bitir"
-          >
-            <span>Bitir</span>
-          </button>
-          <span className="chip border px-2.5 py-1 text-[13px] sm:text-[14px] font-bold bg-emerald-100 text-emerald-800 border-emerald-300 rounded-xl shrink-0">
-            {matchedLines.length} / {targetLinesCount} Tamamlandı
-          </span>
-        </div>
-      </div>
-
-      {/* HATA MESAJI */}
+      {/* Hata Mesajı Varsa */}
       {error && (
-        <div className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-2 text-sm font-medium text-rose-600 shrink-0">
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-medium text-rose-600">
           <span>{error}</span>
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="shrink-0 font-bold underline"
+            className="font-bold underline shrink-0"
           >
             Yenile
           </button>
         </div>
       )}
 
-      {/* İÇERİK LİSTESİ: MAVİ -> KIRMIZI -> SARI -> EN ALTTA YEŞİL KART */}
-      <div className="min-w-0 flex-1 overflow-y-auto pr-1 space-y-2">
-        {loading ? (
-          <div className="space-y-2">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="h-16 animate-pulse rounded-2xl bg-elevated"
-              />
-            ))}
-          </div>
-        ) : lines.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-surface/50 py-10 text-center text-subtle">
-            <Package className="mb-2 h-8 w-8 text-slate-400" />
-            <p className="text-base font-bold text-fg">Sayım kalemi bulunamadı</p>
-          </div>
-        ) : (
-          <>
-            {/* 1. MAVİ KALEMLER (Plana Göre Olmayan / Beklenmeyen) */}
-            {unexpectedLines.map((line) =>
-              renderItemCard(line, "text-blue-600 dark:text-blue-400")
-            )}
+      {!lines.length ? (
+        <div className="rounded-2xl border border-line bg-surface p-10 text-center text-sm text-subtle">
+          <Package className="mx-auto h-10 w-10 text-subtle opacity-40" />
+          <p className="mt-2 font-bold">Sayım kalemi bulunamadı.</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-line bg-surface shadow-card">
+          <table className="w-full min-w-[850px] text-left text-xs">
+            <thead className="border-b border-line bg-elevated">
+              <tr>
+                <th className="px-3 py-2.5 font-bold text-muted">Malzeme / Ürün</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-bold text-muted">Depo</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-bold text-muted">Stok Yeri</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-bold text-muted">Parti</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-bold text-muted">Stok Birimi</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-bold text-muted">Okutulan Birim</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-bold text-muted">Sayım Miktarı</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedLines.map((line) => {
+                const cat = getCategory(line);
+                const wh = (line.warehouse || warehouse || "").trim();
+                let sp = (line.stockPlace || "").trim().replace(/\$/g, "");
+                if (sp.includes("$")) {
+                  sp = sp.split("$").slice(1).join("$").trim();
+                }
+                if (wh && sp.toUpperCase().startsWith(wh.toUpperCase()) && sp.length > wh.length) {
+                  sp = sp.slice(wh.length).trim();
+                }
 
-            {/* 2. KIRMIZI KALEMLER (Fazla Sayılan) */}
-            {excessLines.map((line) =>
-              renderItemCard(line, "text-rose-600 dark:text-rose-400")
-            )}
+                return (
+                  <tr
+                    key={line.id}
+                    className="border-b border-line last:border-0 hover:bg-elevated/40 transition"
+                  >
+                    {/* Malzeme / Ürün */}
+                    <td className="max-w-[240px] px-3 py-2.5">
+                      <p className="truncate font-bold text-fg">{line.name}</p>
+                      <p className="font-mono text-[11px] font-semibold text-slate-500">{line.material}</p>
+                    </td>
 
-            {/* 3. SARI KALEMLER (Eksik Sayılan) */}
-            {partialLines.map((line) =>
-              renderItemCard(line, "text-amber-500 dark:text-amber-400")
-            )}
-          </>
-        )}
-      </div>
+                    {/* Depo */}
+                    <td className="whitespace-nowrap px-3 py-2.5 font-mono font-semibold text-fg">
+                      {wh || "—"}
+                    </td>
+
+                    {/* Stok Yeri */}
+                    <td className="whitespace-nowrap px-3 py-2.5 font-mono font-semibold text-fg">
+                      {sp || "—"}
+                    </td>
+
+                    {/* Parti */}
+                    <td className="whitespace-nowrap px-3 py-2.5 font-mono text-fg">
+                      {line.batchNum && line.batchNum !== "*" ? (
+                        <span className="inline-flex rounded bg-violet-100 dark:bg-violet-950/60 px-1.5 py-0.5 text-[11px] font-bold text-violet-700 dark:text-violet-300">
+                          {line.batchNum}
+                        </span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+
+                    {/* Stok Birimi */}
+                    <td className="whitespace-nowrap px-3 py-2.5 font-mono font-bold text-fg uppercase">
+                      {line.skunit || line.unit || "AD"}
+                    </td>
+
+                    {/* Okutulan Birim */}
+                    <td className="whitespace-nowrap px-3 py-2.5 font-mono font-bold text-slate-600 dark:text-slate-300 uppercase">
+                      {line.countedQty > 0 ? (
+                        line.bunit || line.unit || line.skunit || "AD"
+                      ) : (
+                        <span className="text-muted">-</span>
+                      )}
+                    </td>
+
+                    {/* Sayım Miktarı */}
+                    <td className={`whitespace-nowrap px-3 py-2.5 font-mono ${cat.textClass}`}>
+                      {renderQuantityText(line)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <ToastView toast={toast} />
     </div>

@@ -29,6 +29,9 @@ const YAZAN_SERVIS = new Set([
   "MZYSAVEINVPURORDER",
   "MZYStockTransfer",
   "MzyStockTransfer",
+  "MZYSaveAdjustment",
+  "MzySaveAdjustment",
+  "MZYSAVEADJUSTMENT",
 ]);
 
 function val(x) {

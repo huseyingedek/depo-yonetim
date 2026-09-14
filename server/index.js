@@ -316,7 +316,10 @@ async function callServiceInner(serviceId, params, retry = true) {
     serviceId === "MZYSaveReceipt" ||
     serviceId === "MZYSAVEINVPURORDER" ||
     serviceId === "MZYStockTransfer" ||
-    serviceId === "MzyStockTransfer";
+    serviceId === "MzyStockTransfer" ||
+    serviceId === "MZYSaveAdjustment" ||
+    serviceId === "MzySaveAdjustment" ||
+    serviceId === "MZYSAVEADJUSTMENT";
   const bosYanit = !String(rawResponse ?? "").trim();
   const oturumHatasi = /session/i.test(String(sysError) + String(rawResponse));
   const oturumEski = session ? Date.now() - session.at > 3000 : true;
