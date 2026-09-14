@@ -115,6 +115,33 @@ export default function CountSummaryPage() {
     });
   };
 
+function formatUnitConversionText(line: AdjustmentLine): string | null {
+  const docUnit = (line.docUnit || line.unit || "AD").toUpperCase();
+  const skunit = (line.skunit || docUnit).toUpperCase();
+  const bunit = (line.bunit || docUnit).toUpperCase();
+  const docMult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
+  const bunitMult = line.bunitMultiplier && line.bunitMultiplier > 0 ? line.bunitMultiplier : (bunit === docUnit ? docMult : (bunit === skunit ? 1 : 1));
+
+  const hasDiff = docMult > 1 || docUnit !== skunit || bunit !== docUnit;
+  if (!hasDiff) return null;
+
+  if (bunit === docUnit) {
+    if (docMult > 1 || docUnit !== skunit) {
+      return `1 ${docUnit} = ${docMult} ${skunit}`;
+    }
+    return null;
+  }
+
+  if (skunit === bunit) {
+    const x = docMult;
+    return `1 ${docUnit} = ${x} ${bunit}`;
+  }
+
+  const x = bunitMult > 0 ? docMult / bunitMult : docMult;
+  const y = docMult;
+  return `1 ${docUnit} = ${x} ${bunit} = ${y} ${skunit}`;
+}
+
   // Malzeme Kartı (CountDetailPage ile 1:1 birebir aynı tasarım)
   const renderItemCard = (
     line: AdjustmentLine,
@@ -122,14 +149,13 @@ export default function CountSummaryPage() {
   ) => {
     const counted = line.countedQty;
     const target = line.targetQty;
-    const mult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
-    const unit = (line.unit || "AD").toUpperCase();
-    const skunit = (line.skunit || unit).toUpperCase();
-    const isDiffUnit = mult > 1 || unit !== skunit;
-    const countedInUnit =
-      mult > 1 ? Math.round((counted / mult) * 100) / 100 : counted;
-    const targetInUnit =
-      mult > 1 ? Math.round((target / mult) * 100) / 100 : target;
+    const docUnit = (line.docUnit || line.unit || "AD").toUpperCase();
+    const skunit = (line.skunit || docUnit).toUpperCase();
+    const docMult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
+    const countedInDocUnit = docMult > 1 ? counted / docMult : counted;
+    const targetInDocUnit = docMult > 1 ? target / docMult : target;
+    const isDiffUnit = docMult > 1 || docUnit !== skunit || (line.bunit && line.bunit !== docUnit);
+    const conversionText = formatUnitConversionText(line);
 
     const wh = (line.warehouse || warehouse || "").trim();
     let sp = (line.stockPlace || "").trim().replace(/\$/g, "");
@@ -159,33 +185,30 @@ export default function CountSummaryPage() {
                   <span>{locationStr}</span>
                 </span>
               )}
-              {line.batchNum && (
+              {line.batchNum && line.batchNum !== "*" && (
                 <span className="inline-flex shrink-0 items-center rounded bg-violet-100 dark:bg-violet-950/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-violet-700 dark:text-violet-300">
                   Parti: {line.batchNum}
                 </span>
               )}
-              {isDiffUnit && (
+              {conversionText && (
                 <span className="font-semibold text-slate-500 dark:text-slate-400">
-                  1 {unit} = {mult} {skunit}
+                  {conversionText}
                 </span>
               )}
             </div>
           </div>
           <div className="shrink-0 text-right font-mono flex flex-col items-end justify-center pr-[17px] leading-tight">
-            {/* Üst satır: Stok birimi cinsinden çevrilmiş miktar (örn: 24 / 24 KT) */}
+            {/* Üst satır: Sayımda gelen birim cinsinden miktar (örn: 1 / 5 KO veya 0 / 5 KO) */}
             <div className={`${qtyColorClass} leading-tight`}>
               <span className="text-[15px] sm:text-[16px] font-black">
-                {target > 0 ? `${counted} / ${target}` : counted}
+                {targetInDocUnit > 0 ? `${countedInDocUnit} / ${targetInDocUnit}` : countedInDocUnit}
               </span>
-              <span className="ml-1 text-[14px] font-black uppercase">{skunit}</span>
+              <span className="ml-1 text-[14px] font-black uppercase">{docUnit}</span>
             </div>
-            {/* Alt satır: Okutulan barkod birimi cinsinden miktar (örn: 1 / 1 KO) */}
+            {/* Alt satır: x/x KO yazısının altında skunit cinsinden toplam değer (örn: 10 AD) */}
             {isDiffUnit && (
-              <div className="text-fg leading-tight -mt-0.5">
-                <span className="text-[15px] sm:text-[16px] font-black">
-                  {target > 0 ? `${countedInUnit} / ${targetInUnit}` : countedInUnit}
-                </span>
-                <span className="ml-1 text-[14px] font-black uppercase">{unit}</span>
+              <div className="text-slate-500 dark:text-slate-400 font-bold leading-tight -mt-0.5 text-right text-[12px] sm:text-[13px]">
+                <span>{counted} {skunit}</span>
               </div>
             )}
           </div>
