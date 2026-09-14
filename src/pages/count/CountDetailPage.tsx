@@ -1645,6 +1645,28 @@ export default function CountDetailPage() {
               </div>
             )}
           </div>
+
+          {/* SOL ALT: SAYILANLAR BARI */}
+          <div className="card mt-2.5 p-2.5 sm:p-3">
+            <button
+              type="button"
+              onClick={() =>
+                navigate(`/count/${id}/sayilanlar`, {
+                  state: {
+                    order,
+                    lines,
+                    warehouse: documentWarehouseDisplay,
+                    orderType,
+                    invDocNum,
+                  },
+                })
+              }
+              className="flex w-full items-center justify-between text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline cursor-pointer"
+            >
+              <span>Sayılanlar ({lines.filter((l) => l.countedQty > 0).length})</span>
+              <span>Tümünü gör →</span>
+            </button>
+          </div>
         </div>
 
 

@@ -24,6 +24,7 @@ import TransferTaskPage from "./pages/transfer/TransferTaskPage";
 import CountListPage from "./pages/count/CountListPage";
 import CountDetailPage from "./pages/count/CountDetailPage";
 import CountSummaryPage from "./pages/count/CountSummaryPage";
+import CountRecordsPage from "./pages/count/CountRecordsPage";
 import InquiryPage from "./pages/inquiry/InquiryPage";
 import ReportingPage from "./pages/reporting/ReportingPage";
 import LabelPrintingPage from "./pages/label-printing/LabelPrintingPage";
@@ -82,6 +83,7 @@ export default function App() {
         {}
         <Route path="/count" element={<CountListPage />} />
         <Route path="/count/:id" element={<CountDetailPage />} />
+        <Route path="/count/:id/sayilanlar" element={<CountRecordsPage />} />
         <Route path="/count/:id/summary" element={<CountSummaryPage />} />
 
         {}
