@@ -1690,15 +1690,13 @@ export default function CountDetailPage() {
                 const isDiffUnit = mult > 1 || unit !== skunit;
                 const countedInUnit = mult > 1 ? Math.round((counted / mult) * 100) / 100 : counted;
                 const targetInUnit = mult > 1 ? Math.round((target / mult) * 100) / 100 : target;
-                const wh = line.warehouse || order?.warehouse || "";
-                const sp = line.stockPlace || "";
-                let locationStr = "";
-                if (wh && sp) {
-                  locationStr = sp.toUpperCase().startsWith(wh.toUpperCase()) ? sp : `${wh}${sp}`;
-                } else {
-                  locationStr = sp || wh;
+                const wh = (line.warehouse || order?.warehouse || "").trim();
+                let sp = (line.stockPlace || "").trim().replace(/\$/g, "");
+                sp = cleanShelfCode(sp);
+                if (wh && sp.toUpperCase().startsWith(wh.toUpperCase()) && sp.length > wh.length) {
+                  sp = sp.slice(wh.length).trim();
                 }
-                locationStr = locationStr.replace(/\$/g, "");
+                const locationStr = wh && sp ? `${wh} ${sp}` : (wh || sp);
 
                 return (
                   <button
@@ -1716,9 +1714,9 @@ export default function CountDetailPage() {
                         <div className="mt-0.5 flex items-center gap-2.5 font-mono text-[13px] flex-wrap text-slate-600 dark:text-slate-300">
                           <span className="font-bold text-slate-700 dark:text-slate-200">{line.material}</span>
                           {locationStr && (
-                            <span className="inline-flex items-center gap-0.5 font-semibold text-slate-600 dark:text-slate-400">
-                              <Warehouse className="h-3 w-3 shrink-0 text-slate-500" />
-                              {locationStr}
+                            <span className="inline-flex items-center gap-1 font-semibold text-slate-600 dark:text-slate-400">
+                              <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                              <span>{locationStr}</span>
                             </span>
                           )}
                           {line.batchNum && (
