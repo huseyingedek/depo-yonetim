@@ -171,4 +171,45 @@ describe("Sayım Birim Dönüşümü ve Barkod Eşleşmesi Kuralları (Kural 1 &
     const sorted = [...lines].sort((a, b) => getTier(a) - getTier(b));
     expect(sorted.map((l) => l.material)).toEqual(["YENI", "FAZLA", "EKSIK", "SIFIR", "TAM"]);
   });
+
+  it("Okutulmayan ürünlerde 'Okutulan Birim' kolonu '-' göstermeli, okutulan ürünlerde ise birim yazmalıdır", () => {
+    const getOkutulanBirim = (line: AdjustmentLine) => {
+      return line.countedQty > 0 ? (line.bunit || line.unit || line.skunit || "AD") : "-";
+    };
+
+    // Okunmamış/sayılmamış ürün:
+    const uncountedLine: AdjustmentLine = {
+      id: "line-uncounted",
+      material: "MLZ001",
+      name: "Henüz Okutulmayan Ürün",
+      targetQty: 10,
+      countedQty: 0,
+      unit: "KO",
+      skunit: "AD",
+    };
+    expect(getOkutulanBirim(uncountedLine)).toBe("-");
+
+    // Okutulmuş ürün (PK barkoduyla okutuldu):
+    const countedLineWithBunit: AdjustmentLine = {
+      id: "line-counted",
+      material: "MLZ001",
+      name: "Okutulan Ürün",
+      targetQty: 10,
+      countedQty: 5,
+      unit: "KO",
+      skunit: "AD",
+      bunit: "PK",
+      bunitMultiplier: 5,
+    };
+    expect(getOkutulanBirim(countedLineWithBunit)).toBe("PK");
+
+    // Çöp kutusuna basılıp sıfırlanan satır:
+    const resetLine: AdjustmentLine = {
+      ...countedLineWithBunit,
+      countedQty: 0,
+      bunit: undefined,
+      bunitMultiplier: undefined,
+    };
+    expect(getOkutulanBirim(resetLine)).toBe("-");
+  });
 });

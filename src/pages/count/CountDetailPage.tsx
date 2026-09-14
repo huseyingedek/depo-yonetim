@@ -1131,6 +1131,8 @@ export default function CountDetailPage() {
           return {
             ...l,
             countedQty: 0,
+            bunit: undefined,
+            bunitMultiplier: undefined,
           };
         }
         return l;

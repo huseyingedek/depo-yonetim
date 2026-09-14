@@ -143,7 +143,7 @@ export default function CountRecordsPage() {
       }
 
       // Belgedeki orijinal satır ise sayılan miktarını 0 yap
-      return prev.map((l) => (l.id === lineId ? { ...l, countedQty: 0 } : l));
+      return prev.map((l) => (l.id === lineId ? { ...l, countedQty: 0, bunit: undefined, bunitMultiplier: undefined } : l));
     });
   };
 
@@ -280,7 +280,11 @@ export default function CountRecordsPage() {
 
                     {/* Okutulan Birim */}
                     <td className="whitespace-nowrap px-3 py-2.5 font-mono font-bold text-slate-600 dark:text-slate-300 uppercase">
-                      {line.bunit || line.unit || line.skunit || "AD"}
+                      {line.countedQty > 0 ? (
+                        line.bunit || line.unit || line.skunit || "AD"
+                      ) : (
+                        <span className="text-muted">-</span>
+                      )}
                     </td>
 
                     {/* Sayım Miktarı */}
