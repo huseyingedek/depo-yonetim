@@ -27,6 +27,7 @@
       "count": "Stock Count",
       "inquiry": "Product Inquiry",
       "label_printing": "Label Printing",
+      "packaging": "Packaging",
       "reporting": "Stock Movement Reports"
     },
     "operationDesc": {
@@ -36,7 +37,8 @@
       "transfer": "Move between locations",
       "count": "Perform stock count",
       "inquiry": "Query stock and location",
-      "label_printing": "Print barcode and package labels"
+      "label_printing": "Print barcode and package labels",
+      "packaging": "Pack items and prepare for shipment"
     }
   },
   "settings": {

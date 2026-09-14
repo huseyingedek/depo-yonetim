@@ -27,6 +27,7 @@
       "count": "Sayım",
       "inquiry": "Ürün Sorgulama",
       "label_printing": "Etiket Yazdırma",
+      "packaging": "Paketleme",
       "reporting": "Stok Hareket Raporları"
     },
     "operationDesc": {
@@ -36,7 +37,8 @@
       "transfer": "Lokasyonlar arası taşı",
       "count": "Stok sayımı yap",
       "inquiry": "Stok ve lokasyon sorgula",
-      "label_printing": "Ürün ve koli etiketleri yazdır"
+      "label_printing": "Ürün ve koli etiketleri yazdır",
+      "packaging": "Ürünleri kolile ve sevkiyata hazırla"
     }
   },
   "settings": {
