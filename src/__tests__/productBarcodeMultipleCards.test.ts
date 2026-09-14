@@ -84,6 +84,7 @@ describe("ProductBarcodePage - Barkod Türü (KO, PK, AD) ve Çoklu Kart Testler
           { BARCODE: "8690001002", BUNIT: "PK" },
           { BARCODE: "8690001003", BUNIT: "KO" },
         ],
+        unitList: [],
         matSize: {},
       });
 

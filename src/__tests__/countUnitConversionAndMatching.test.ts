@@ -153,11 +153,11 @@ describe("Sayım Birim Dönüşümü ve Barkod Eşleşmesi Kuralları (Kural 1 &
 
   it("Kural 1 - Sayılanlar ekranı sıralaması (Tier 1..5) bozulmadan Durum rozeti olmadan listelenmelidir", () => {
     const lines: AdjustmentLine[] = [
-      { id: "1", material: "TAM", targetQty: 10, countedQty: 10, unit: "AD" },       // Yeşil (Tier 5)
-      { id: "2", material: "SIFIR", targetQty: 10, countedQty: 0, unit: "AD" },      // Siyah/Gri (Tier 4)
-      { id: "3", material: "EKSIK", targetQty: 10, countedQty: 5, unit: "AD" },      // Sarı (Tier 3)
-      { id: "4", material: "FAZLA", targetQty: 10, countedQty: 15, unit: "AD" },     // Kırmızı (Tier 2)
-      { id: "5", material: "YENI", targetQty: 0, countedQty: 3, unit: "AD" },        // Mavi (Tier 1)
+      { id: "1", material: "TAM", name: "Tam Ürün", targetQty: 10, countedQty: 10, unit: "AD" },       // Yeşil (Tier 5)
+      { id: "2", material: "SIFIR", name: "Sıfır Ürün", targetQty: 10, countedQty: 0, unit: "AD" },      // Siyah/Gri (Tier 4)
+      { id: "3", material: "EKSIK", name: "Eksik Ürün", targetQty: 10, countedQty: 5, unit: "AD" },      // Sarı (Tier 3)
+      { id: "4", material: "FAZLA", name: "Fazla Ürün", targetQty: 10, countedQty: 15, unit: "AD" },     // Kırmızı (Tier 2)
+      { id: "5", material: "YENI", name: "Yeni Ürün", targetQty: 0, countedQty: 3, unit: "AD" },        // Mavi (Tier 1)
     ];
 
     const getTier = (l: AdjustmentLine) => {

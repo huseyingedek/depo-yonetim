@@ -96,7 +96,7 @@ describe("Sayım Raf Doğrulama ve Satır Sayım Akışı", () => {
 
     // Raf aynı: line-1'in sayımı yapılır
     const countedQtyInUnit = 2; // 2 koli
-    const baseCounted = countedQtyInUnit * targetLine.multiplier; // 10 paket
+    const baseCounted = countedQtyInUnit * (targetLine.multiplier || 1); // 10 paket
 
     const updatedLines = initialLines.map((l) =>
       l.id === targetLine.id ? { ...l, countedQty: baseCounted } : l
@@ -151,7 +151,7 @@ describe("Sayım Raf Doğrulama ve Satır Sayım Akışı", () => {
     // Farklı raf: yeni ürünmüş gibi yeni satır oluşturulur
     const newLineId = `new-shelf-${Date.now()}`;
     const countedInUnit = 1; // 1 koli
-    const baseCounted = countedInUnit * targetLine.multiplier; // 5 paket
+    const baseCounted = countedInUnit * (targetLine.multiplier || 1); // 5 paket
 
     const newLine: AdjustmentLine = {
       id: newLineId,

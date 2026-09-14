@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { api } from "../api/client";
-import type { StockRow, ShelfLocation } from "../types";
+import type { StockRow } from "../types";
 
 // Integration test verifying that UI selections extract exact product attributes
 // and never use hardcoded/fixed values when calling CANIAS APIs.
@@ -39,6 +39,8 @@ describe("UI Card Printing Integration & Dynamic Data Audit", () => {
       stockPlace: "RAF-01",
       availStock: 100,
       unit: "AD",
+      batchNum: "*",
+      specialStock: "*",
     };
 
     await api.printMaterial({
@@ -60,6 +62,8 @@ describe("UI Card Printing Integration & Dynamic Data Audit", () => {
       stockPlace: "RAF-99",
       availStock: 50,
       unit: "KG",
+      batchNum: "*",
+      specialStock: "*",
     };
 
     await api.printMaterial({
@@ -75,7 +79,7 @@ describe("UI Card Printing Integration & Dynamic Data Audit", () => {
   });
 
   it("2. Raf Etiketi - Seçilen raf koduna göre dinamik raf adresi gitmeli", async () => {
-    const shelf: ShelfLocation = {
+    const shelf = {
       id: "1",
       code: "RAF-Z-100",
       warehouse: "DEPO-SOGUK",

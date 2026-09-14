@@ -178,7 +178,7 @@ describe("CANIAS Label Printing Dynamic Parameter & Product Tests", () => {
 
   // Test 6: GetStockPlace
   it("GetStockPlace - Stok Yeri Listesi Servis Testi", async () => {
-    vi.spyOn(api, "getStockPlaces").mockImplementation(async (warehouse) => {
+    vi.spyOn(api, "getStockPlaces").mockImplementation(async (_warehouse) => {
       return [{ code: "RAF-01", name: "Raf 01" }];
     });
     const result = await api.getStockPlaces("10");
@@ -189,10 +189,10 @@ describe("CANIAS Label Printing Dynamic Parameter & Product Tests", () => {
   it("MZYGetOpenOrder - Açık Sipariş Listesi Parametre Testi", async () => {
     vi.spyOn(api, "getOpenOrders").mockImplementation(async (payload) => {
       const params = {
-        PSCOMPANY: payload.company || "01",
-        PSPLANT: payload.plant || "100",
-        PSBARCODE: payload.barcode || "",
-        PSVENDOR: payload.vendor || "",
+        PSCOMPANY: payload?.company || "01",
+        PSPLANT: payload?.plant || "100",
+        PSBARCODE: payload?.barcode || "",
+        PSVENDOR: payload?.vendor || "",
       };
       capturedCalls.push({ service: SERVICES.getOpenOrder, params });
       return { ok: true, message: "OK", orders: [] };

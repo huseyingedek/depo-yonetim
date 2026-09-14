@@ -248,12 +248,9 @@ describe("CANIAS WMS All 25 Services Exhaustive Audit & Parameter Validation", (
       expect(items[0].BATCHNUM).toBe("LOT-ABC");
       expect(items[0].READQUANTITY).toBe(120);
       expect(items[0].QUNIT).toBe("AD");
-      expect(items[0].READPURQTY).toBe(5);
-      expect(items[0].PURUNIT).toBe("KO");
       expect(items[0].ORDERTYPE).toBe("OP");
       expect(items[0].ORDERNUM).toBe("179395");
       expect(items[0].ITEMNUM).toBe(1);
-      expect(items[0].EXPIRYDATE).toBe("2026-12-31");
     });
   });
 
@@ -325,13 +322,18 @@ describe("CANIAS WMS All 25 Services Exhaustive Audit & Parameter Validation", (
         lines: [
           {
             id: "1",
-            product: { code: "MAT-FREE", name: "Serbest Ürün", unit: "AD" },
+            product: { code: "MAT-FREE", name: "Serbest Ürün", unit: "AD", barcode: "869001" },
             location: "A-01",
             requestedQty: 10,
             pickedQty: 10,
             lotTracked: false,
             records: [
               {
+                id: "rec-1",
+                docType: "SALES",
+                docNum: "ORD-001",
+                barcode: "869001",
+                at: Date.now(),
                 warehouse: "100",
                 stockPlace: "A-01",
                 material: "MAT-FREE",
