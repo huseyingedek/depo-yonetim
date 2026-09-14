@@ -62,27 +62,40 @@ export default function CountSummaryPage() {
       });
   }, [id, lines.length, state?.invDocNum, state?.orderType, state?.warehouse]);
 
+  const sortLines = (arr: AdjustmentLine[]) =>
+    [...arr].sort(
+      (a, b) =>
+        (a.material || "").localeCompare(b.material || "") ||
+        a.id.localeCompare(b.id, undefined, { numeric: true })
+    );
+
   // 1. MAVİ: Plana Göre Olmayan / Beklenmeyen Kalemler (targetQty <= 0 && countedQty > 0)
   const unexpectedLines = useMemo(
-    () => lines.filter((l) => l.targetQty <= 0 && l.countedQty > 0),
+    () => sortLines(lines.filter((l) => l.targetQty <= 0 && l.countedQty > 0)),
     [lines]
   );
 
   // 2. KIRMIZI: Fazla Sayılan Kalemler (targetQty > 0 && countedQty > targetQty)
   const excessLines = useMemo(
-    () => lines.filter((l) => l.targetQty > 0 && l.countedQty > l.targetQty),
+    () => sortLines(lines.filter((l) => l.targetQty > 0 && l.countedQty > l.targetQty)),
     [lines]
   );
 
-  // 3. SARI / AMBER: Eksik Sayılan Kalemler (targetQty > 0 && countedQty < targetQty)
+  // 3. SARI / AMBER: Eksik Sayılan Kalemler (targetQty > 0 && countedQty > 0 && countedQty < targetQty)
   const partialLines = useMemo(
-    () => lines.filter((l) => l.targetQty > 0 && l.countedQty < l.targetQty),
+    () => sortLines(lines.filter((l) => l.targetQty > 0 && l.countedQty > 0 && l.countedQty < l.targetQty)),
     [lines]
   );
 
-  // 4. YEŞİL: Tam Eşleşen / Tamamlanan Kalemler (targetQty > 0 && countedQty === targetQty)
+  // 4. OKUTULMAYAN / SAYILMAYAN KALEMLER (countedQty === 0)
+  const uncountedLines = useMemo(
+    () => sortLines(lines.filter((l) => l.countedQty === 0)),
+    [lines]
+  );
+
+  // 5. YEŞİL: Tam Eşleşen / Tamamlanan Kalemler (targetQty > 0 && countedQty === targetQty)
   const matchedLines = useMemo(
-    () => lines.filter((l) => l.targetQty > 0 && l.countedQty === l.targetQty),
+    () => sortLines(lines.filter((l) => l.targetQty > 0 && l.countedQty === l.targetQty)),
     [lines]
   );
 
@@ -354,6 +367,16 @@ function formatUnitConversionText(line: AdjustmentLine): string | null {
             {/* 3. SARI KALEMLER (Eksik Sayılan) */}
             {partialLines.map((line) =>
               renderItemCard(line, "text-amber-500 dark:text-amber-400")
+            )}
+
+            {/* 4. OKUTULMAYAN / HENÜZ SAYILMAYAN KALEMLER */}
+            {uncountedLines.map((line) =>
+              renderItemCard(line, "text-slate-500 dark:text-slate-400")
+            )}
+
+            {/* 5. YEŞİL KALEMLER (Tam Sayılanlar - En Alttan Aşağı Doğru Sıralı) */}
+            {matchedLines.map((line) =>
+              renderItemCard(line, "text-emerald-600 dark:text-emerald-400")
             )}
           </>
         )}
