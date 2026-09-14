@@ -106,6 +106,38 @@ function validateBatch(batch: string): { valid: boolean; error?: string } {
   return { valid: true };
 }
 
+function formatUnitConversionText(line: AdjustmentLine): string | null {
+  const docUnit = (line.docUnit || line.unit || "AD").toUpperCase();
+  const skunit = (line.skunit || docUnit).toUpperCase();
+  const bunit = (line.bunit || docUnit).toUpperCase();
+  const docMult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
+  const bunitMult = line.bunitMultiplier && line.bunitMultiplier > 0 ? line.bunitMultiplier : (bunit === docUnit ? docMult : (bunit === skunit ? 1 : 1));
+
+  const hasDiff = docMult > 1 || docUnit !== skunit || bunit !== docUnit;
+  if (!hasDiff) return null;
+
+  // Case 0: Eğer okutulan birim ile belge birimi aynıysa
+  if (bunit === docUnit) {
+    if (docMult > 1 || docUnit !== skunit) {
+      return `1 ${docUnit} = ${docMult} ${skunit}`;
+    }
+    return null;
+  }
+
+  // Case 1: skunit === bunit
+  // "skunit bunit aynı ise sadece 1ko(sayımda gelen birim)= xbunit olacak"
+  if (skunit === bunit) {
+    const x = docMult;
+    return `1 ${docUnit} = ${x} ${bunit}`;
+  }
+
+  // Case 2: skunit !== bunit
+  // "misal pk ise 1 ko(sayımda gelen birim) = x bunit = y(eğer skunit buint ile aynı değilse skunit değeri de yazacak)"
+  const x = bunitMult > 0 ? docMult / bunitMult : docMult;
+  const y = docMult;
+  return `1 ${docUnit} = ${x} ${bunit} = ${y} ${skunit}`;
+}
+
 type ActiveCountItem = {
   lineId: string;
   material: string;
@@ -113,9 +145,11 @@ type ActiveCountItem = {
   barcode: string;
   quantity: number; // Kullanıcının o an girdiği / değiştirdiği miktar
   targetQty: number; // Hedef / Sistem miktarı
+  docUnit: string; // Sayımda gelen birim (örn: KO)
   unit: string; // Okutulan birim (KO, PK, AD vb.)
   skunit: string; // Stok birimi (AD)
-  multiplier: number; // Birim çarpanı (örn: 1 KO = 24 AD)
+  docMultiplier: number; // 1 docUnit = X skunit (örn: 1 KO = 10 AD)
+  multiplier: number; // 1 okutulan birim (unit) = X skunit (örn: 1 PK = 5 AD)
   batchNum?: string;
   specialStock?: string;
   isLotTracked?: boolean;
@@ -127,6 +161,8 @@ type LotPendingItem = {
   material: string;
   name: string;
   barcode: string;
+  docUnit?: string;
+  docMultiplier?: number;
   unit: string;
   skunit?: string;
   multiplier?: number;
@@ -198,7 +234,11 @@ export default function CountDetailPage() {
       if (data) {
         setOrder(data);
         if (data.lines && data.lines.length > 0) {
-          setLines(data.lines);
+          const mappedLines = data.lines.map((l) => ({
+            ...l,
+            docUnit: l.docUnit || l.unit,
+          }));
+          setLines(mappedLines);
           // Belgedeki partili malzemeleri arka planda önceden sorgula (prefetch getStock)
           const uniqueMats = Array.from(new Set(data.lines.map((l) => l.material.trim()))).filter(Boolean);
           for (const mat of uniqueMats) {
@@ -379,9 +419,11 @@ export default function CountDetailPage() {
             linesWithBatch.length > 0
           );
 
-          const mult = targetLine.multiplier && targetLine.multiplier > 0 ? targetLine.multiplier : 1;
-          const unit = (targetLine.unit || "AD").toUpperCase();
-          const skunit = (targetLine.skunit || unit).toUpperCase();
+          const docUnit = (targetLine.docUnit || targetLine.unit || "AD").toUpperCase();
+          const docMult = targetLine.multiplier && targetLine.multiplier > 0 ? targetLine.multiplier : 1;
+          const bunit = (targetLine.bunit || docUnit).toUpperCase();
+          const bunitMult = targetLine.bunitMultiplier && targetLine.bunitMultiplier > 0 ? targetLine.bunitMultiplier : (bunit === docUnit ? docMult : 1);
+          const skunit = (targetLine.skunit || docUnit).toUpperCase();
 
           if (isSameShelf) {
             // KURAL 1: Raf aynı ise o tıklanan rafı saymış olacak (mevcut satır seçilir)
@@ -429,9 +471,11 @@ export default function CountDetailPage() {
                 material: targetLine.material,
                 name: targetLine.name,
                 barcode: targetLine.barcode || "",
-                unit,
+                docUnit,
+                docMultiplier: docMult,
+                unit: bunit,
                 skunit,
-                multiplier: mult,
+                multiplier: bunitMult,
                 specialStock: "1",
                 warehouse: confirmedWh,
                 stockPlace: confirmedSp,
@@ -455,9 +499,11 @@ export default function CountDetailPage() {
               barcode: targetLine.barcode || "",
               quantity: targetLine.countedQty > 0 ? 0 : 1,
               targetQty: targetLine.targetQty,
-              unit,
+              docUnit,
+              docMultiplier: docMult,
+              unit: bunit,
               skunit,
-              multiplier: mult,
+              multiplier: bunitMult,
               batchNum: targetLine.batchNum,
               specialStock: targetLine.specialStock || "0",
               isLotTracked: false,
@@ -521,9 +567,11 @@ export default function CountDetailPage() {
                 material: targetLine.material,
                 name: targetLine.name,
                 barcode: targetLine.barcode || "",
-                unit,
+                docUnit,
+                docMultiplier: docMult,
+                unit: bunit,
                 skunit,
-                multiplier: mult,
+                multiplier: bunitMult,
                 specialStock: "1",
                 warehouse: confirmedWh,
                 stockPlace: confirmedSp,
@@ -548,9 +596,11 @@ export default function CountDetailPage() {
               barcode: targetLine.barcode || "",
               quantity: 1,
               targetQty: 0, // Belgede bu rafta hedefi yok, yeni ürün gibi eklenecek
-              unit,
+              docUnit,
+              docMultiplier: docMult,
+              unit: bunit,
               skunit,
-              multiplier: mult,
+              multiplier: bunitMult,
               batchNum: targetLine.batchNum,
               specialStock: targetLine.specialStock || "0",
               isLotTracked: false,
@@ -623,13 +673,15 @@ export default function CountDetailPage() {
           sadelestir(l.material) === sadelestir(mat) &&
           l.batchNum &&
           l.batchNum.trim().toUpperCase() === rawBatch.toUpperCase() &&
-          (!currentShelfUpper || (l.stockPlace && l.stockPlace.trim().toUpperCase() === currentShelfUpper))
+          (!currentShelfUpper || areShelvesEqual(l.stockPlace, l.warehouse, selectedStockPlace, selectedWarehouse))
       );
 
       sesBasarili();
-      const mult = baseMult && baseMult > 0 ? baseMult : (matchedLine?.multiplier || 1);
-      const unit = (baseUnit || matchedLine?.unit || "AD").toUpperCase();
-      const skunit = (baseSkunit || matchedLine?.skunit || unit).toUpperCase();
+      const docUnit = (matchedLine?.docUnit || matchedLine?.unit || currentPending?.docUnit || baseUnit || "AD").toUpperCase();
+      const docMult = matchedLine?.multiplier && matchedLine.multiplier > 0 ? matchedLine.multiplier : (currentPending?.docMultiplier || 1);
+      const bunit = (currentPending?.unit || baseUnit || docUnit).toUpperCase();
+      const bunitMult = currentPending?.multiplier || baseMult || (bunit === docUnit ? docMult : 1);
+      const skunit = (currentPending?.skunit || matchedLine?.skunit || baseSkunit || "AD").toUpperCase();
 
       if (matchedLine) {
         flash(matchedLine.id);
@@ -640,9 +692,11 @@ export default function CountDetailPage() {
           barcode: matchedLine.barcode || barcode,
           quantity: matchedLine.countedQty > 0 ? 0 : 1,
           targetQty: matchedLine.targetQty,
-          unit,
+          docUnit,
+          unit: bunit,
           skunit,
-          multiplier: mult,
+          docMultiplier: docMult,
+          multiplier: bunitMult,
           batchNum: matchedLine.batchNum,
           specialStock: matchedLine.specialStock || "1",
           isLotTracked: true,
@@ -658,9 +712,11 @@ export default function CountDetailPage() {
           barcode,
           quantity: 1,
           targetQty: 0,
-          unit,
+          docUnit,
+          unit: bunit,
           skunit,
-          multiplier: mult,
+          docMultiplier: docMult,
+          multiplier: bunitMult,
           batchNum: rawBatch,
           specialStock: "1",
           isLotTracked: true,
@@ -727,6 +783,8 @@ export default function CountDetailPage() {
         material: item.material,
         name: item.name,
         barcode: item.barcode,
+        docUnit: item.docUnit,
+        docMultiplier: item.docMultiplier,
         unit: item.unit,
         skunit: item.skunit,
         multiplier: item.multiplier,
@@ -805,18 +863,21 @@ export default function CountDetailPage() {
       const hasSpecificShelf = Boolean(selectedStockPlace && selectedStockPlace !== "*");
       const currentShelfUpper = hasSpecificShelf ? selectedStockPlace!.trim().toUpperCase() : null;
 
-      // 1. Seçili raf ile birebir eşleşen kalemler
+      // 1. Seçili raf ile eşleşen kalemler
       const shelfMatched = currentShelfUpper
-        ? matches.filter((l) => l.stockPlace && l.stockPlace.trim().toUpperCase() === currentShelfUpper)
+        ? matches.filter((l) => areShelvesEqual(l.stockPlace, l.warehouse, selectedStockPlace, selectedWarehouse))
         : matches;
 
       // 1a. Seçili rafta ürün kalemi bulunduysa o satırı seç
       if (shelfMatched.length > 0) {
-        const mat = shelfMatched[0].material;
-        const matName = barcodeName || shelfMatched[0].name;
-        const finalUnit = barcodeUnit || shelfMatched[0].unit || "AD";
-        const finalSkunit = barcodeSkunit || shelfMatched[0].skunit || finalUnit;
-        const finalMult = barcodeMult > 1 ? barcodeMult : (shelfMatched[0].multiplier || 1);
+        const refLine = shelfMatched[0];
+        const mat = refLine.material;
+        const matName = barcodeName || refLine.name;
+        const docUnit = (refLine.docUnit || refLine.unit || "AD").toUpperCase();
+        const docMult = refLine.multiplier && refLine.multiplier > 0 ? refLine.multiplier : 1;
+        const bunit = (barcodeUnit || docUnit).toUpperCase();
+        const bunitMult = barcodeMult > 0 ? barcodeMult : (bunit === docUnit ? docMult : 1);
+        const skunit = (barcodeSkunit || refLine.skunit || docUnit).toUpperCase();
 
         // Belgedeki tüm partili satırları bul
         const allMatLines = lines.filter((l) => sadelestir(l.material) === sadelestir(mat));
@@ -870,9 +931,11 @@ export default function CountDetailPage() {
             material: mat,
             name: matName,
             barcode: rawCode,
-            unit: finalUnit,
-            skunit: finalSkunit,
-            multiplier: finalMult,
+            docUnit,
+            docMultiplier: docMult,
+            unit: bunit,
+            skunit,
+            multiplier: bunitMult,
             specialStock: "1",
             warehouse: selectedWarehouse || shelfMatched[0].warehouse || order?.warehouse,
             stockPlace: selectedStockPlace || shelfMatched[0].stockPlace || selectedShelf || order?.stockPlace,
@@ -893,6 +956,9 @@ export default function CountDetailPage() {
           shelfMatched.find((m) => m.targetQty > 0 && m.countedQty < m.targetQty) ||
           shelfMatched[0];
 
+        const lineDocUnit = (matchedLine.docUnit || matchedLine.unit || docUnit).toUpperCase();
+        const lineDocMult = matchedLine.multiplier && matchedLine.multiplier > 0 ? matchedLine.multiplier : docMult;
+
         sesBasarili();
         flash(matchedLine.id);
         setLotPendingItem(null);
@@ -900,12 +966,14 @@ export default function CountDetailPage() {
           lineId: matchedLine.id,
           material: matchedLine.material,
           name: matchedLine.name,
-          barcode: matchedLine.barcode || rawCode,
+          barcode: rawCode || matchedLine.barcode || "",
           quantity: 1,
           targetQty: matchedLine.targetQty,
-          unit: finalUnit,
-          skunit: finalSkunit,
-          multiplier: finalMult,
+          docUnit: lineDocUnit,
+          docMultiplier: lineDocMult,
+          unit: bunit,
+          skunit,
+          multiplier: bunitMult,
           batchNum: barcodeLot || matchedLine.batchNum,
           specialStock: matchedLine.specialStock,
           isLotTracked: Boolean(isLotTracked),
@@ -926,9 +994,6 @@ export default function CountDetailPage() {
         const refLine = matches[0];
         const mat = refLine ? refLine.material : barcodeMat;
         const matName = barcodeName || refLine?.name || mat;
-        const finalUnit = barcodeUnit || refLine?.unit || "AD";
-        const finalSkunit = barcodeSkunit || refLine?.skunit || finalUnit;
-        const finalMult = barcodeMult > 1 ? barcodeMult : (refLine?.multiplier || 1);
         const specialStock = barcodeSpecialStock === "1" || refLine?.specialStock === "1" ? "1" : "0";
 
         // Partili mi kontrol et
@@ -974,13 +1039,21 @@ export default function CountDetailPage() {
           const validBatches = Array.from(batchMap.values());
 
           sesBasarili();
+          const docUnit = (refLine?.docUnit || refLine?.unit || barcodeUnit || "AD").toUpperCase();
+          const docMult = refLine?.multiplier && refLine.multiplier > 0 ? refLine.multiplier : 1;
+          const bunit = (barcodeUnit || docUnit).toUpperCase();
+          const bunitMult = barcodeMult > 0 ? barcodeMult : (bunit === docUnit ? docMult : 1);
+          const skunit = (barcodeSkunit || refLine?.skunit || docUnit).toUpperCase();
+
           setLotPendingItem({
             material: mat,
             name: matName,
             barcode: rawCode,
-            unit: finalUnit,
-            skunit: finalSkunit,
-            multiplier: finalMult,
+            docUnit,
+            docMultiplier: docMult,
+            unit: bunit,
+            skunit,
+            multiplier: bunitMult,
             specialStock: "1",
             warehouse: selectedWarehouse || order?.warehouse,
             stockPlace: selectedStockPlace || selectedShelf || order?.stockPlace,
@@ -996,6 +1069,12 @@ export default function CountDetailPage() {
         }
 
         sesBasarili();
+        const docUnit = (refLine?.docUnit || refLine?.unit || barcodeUnit || "AD").toUpperCase();
+        const docMult = refLine?.multiplier && refLine.multiplier > 0 ? refLine.multiplier : 1;
+        const bunit = (barcodeUnit || docUnit).toUpperCase();
+        const bunitMult = barcodeMult > 0 ? barcodeMult : (bunit === docUnit ? docMult : 1);
+        const skunit = (barcodeSkunit || refLine?.skunit || docUnit).toUpperCase();
+
         const newLineId = `new-${Date.now()}`;
         setLotPendingItem(null);
         setActiveItem({
@@ -1005,9 +1084,11 @@ export default function CountDetailPage() {
           barcode: refLine?.barcode || rawCode,
           quantity: 1,
           targetQty: 0,
-          unit: finalUnit,
-          skunit: finalSkunit,
-          multiplier: finalMult,
+          docUnit,
+          docMultiplier: docMult,
+          unit: bunit,
+          skunit,
+          multiplier: bunitMult,
           batchNum: barcodeLot,
           specialStock,
           isLotTracked: Boolean(isLotTracked),
@@ -1050,6 +1131,8 @@ export default function CountDetailPage() {
           return {
             ...l,
             countedQty: 0,
+            bunit: undefined,
+            bunitMultiplier: undefined,
           };
         }
         return l;
@@ -1089,12 +1172,20 @@ export default function CountDetailPage() {
         const prevCountedQty = updated[idx].countedQty || 0;
         finalCountedQty = prevCountedQty + addedBaseQty;
 
+        // Orijinal belge birimini ve çarpanını koru
+        const originalDocUnit = updated[idx].docUnit || updated[idx].unit;
+        const originalDocMult = updated[idx].multiplier && updated[idx].multiplier > 0 
+          ? updated[idx].multiplier 
+          : (activeItem.docMultiplier || 1);
+
         updated[idx] = {
           ...updated[idx],
           countedQty: finalCountedQty,
-          unit: activeItem.unit,
-          skunit: activeItem.skunit,
-          multiplier: mult,
+          unit: originalDocUnit,
+          docUnit: originalDocUnit,
+          multiplier: originalDocMult,
+          bunit: activeItem.unit,
+          bunitMultiplier: mult,
           batchNum: activeItem.batchNum || updated[idx].batchNum,
           stockPlace: activeItem.stockPlace || updated[idx].stockPlace || selectedStockPlace || undefined,
           warehouse: activeItem.warehouse || updated[idx].warehouse || selectedWarehouse || undefined,
@@ -1108,9 +1199,12 @@ export default function CountDetailPage() {
           barcode: activeItem.barcode,
           targetQty: activeItem.targetQty || 0,
           countedQty: addedBaseQty,
-          unit: activeItem.unit,
+          unit: activeItem.docUnit || activeItem.unit,
+          docUnit: activeItem.docUnit || activeItem.unit,
           skunit: activeItem.skunit,
-          multiplier: mult,
+          multiplier: activeItem.docMultiplier || mult,
+          bunit: activeItem.unit,
+          bunitMultiplier: mult,
           batchNum: activeItem.batchNum,
           specialStock: activeItem.specialStock,
           stockPlace: activeItem.stockPlace || selectedStockPlace || undefined,
@@ -1124,7 +1218,7 @@ export default function CountDetailPage() {
     flash(activeItem.lineId);
     show({
       kind: "ok",
-      text: `${activeItem.material} için +${activeItem.quantity} ${activeItem.unit} eklendi (Toplam: ${finalCountedQty} ${activeItem.skunit}).`,
+      text: `${activeItem.material} için +${activeItem.quantity} ${activeItem.unit} eklendi.`,
     });
     setActiveItem(null);
     setLotPendingItem(null);
@@ -1138,9 +1232,11 @@ export default function CountDetailPage() {
   const selectLineForCounting = (line: AdjustmentLine) => {
     // 1. Eğer ürün daha önce okutulmuş/sayılmışsa doğrudan Miktar tabına geçir ve eklenecek miktarı hazırla
     if (line.countedQty > 0) {
-      const mult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
-      const unit = (line.unit || "AD").toUpperCase();
-      const skunit = (line.skunit || unit).toUpperCase();
+      const docUnit = (line.docUnit || line.unit || "AD").toUpperCase();
+      const docMult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
+      const bunit = (line.bunit || docUnit).toUpperCase();
+      const bunitMult = line.bunitMultiplier && line.bunitMultiplier > 0 ? line.bunitMultiplier : (bunit === docUnit ? docMult : 1);
+      const skunit = (line.skunit || docUnit).toUpperCase();
       const wh = line.warehouse || order?.warehouse || selectedWarehouse || "01";
       const sp = line.stockPlace || selectedStockPlace || order?.stockPlace || "*";
 
@@ -1157,9 +1253,11 @@ export default function CountDetailPage() {
         barcode: line.barcode || "",
         quantity: 0,
         targetQty: line.targetQty,
-        unit,
+        docUnit,
+        unit: bunit,
         skunit,
-        multiplier: mult,
+        docMultiplier: docMult,
+        multiplier: bunitMult,
         batchNum: line.batchNum,
         specialStock: line.specialStock || "0",
         isLotTracked: Boolean(line.batchNum && line.batchNum !== "*"),
@@ -1706,12 +1804,14 @@ export default function CountDetailPage() {
                       : isPartial
                         ? "text-amber-500 dark:text-amber-400"
                         : "text-fg";
-                const mult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
-                const unit = (line.unit || "AD").toUpperCase();
-                const skunit = (line.skunit || unit).toUpperCase();
-                const isDiffUnit = mult > 1 || unit !== skunit;
-                const countedInUnit = mult > 1 ? Math.round((counted / mult) * 100) / 100 : counted;
-                const targetInUnit = mult > 1 ? Math.round((target / mult) * 100) / 100 : target;
+                const docUnit = (line.docUnit || line.unit || "AD").toUpperCase();
+                const skunit = (line.skunit || docUnit).toUpperCase();
+                const docMult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
+                const countedInDocUnit = docMult > 1 ? counted / docMult : counted;
+                const targetInDocUnit = docMult > 1 ? target / docMult : target;
+                const isDiffUnit = docMult > 1 || docUnit !== skunit || (line.bunit && line.bunit !== docUnit);
+                const conversionText = formatUnitConversionText(line);
+
                 const wh = (line.warehouse || order?.warehouse || "").trim();
                 let sp = (line.stockPlace || "").trim().replace(/\$/g, "");
                 sp = cleanShelfCode(sp);
@@ -1741,34 +1841,31 @@ export default function CountDetailPage() {
                               <span>{locationStr}</span>
                             </span>
                           )}
-                          {line.batchNum && (
+                          {line.batchNum && line.batchNum !== "*" && (
                             <span className="inline-flex shrink-0 items-center rounded bg-violet-100 dark:bg-violet-950/60 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-violet-700 dark:text-violet-300">
                               Parti: {line.batchNum}
                             </span>
                           )}
-                          {isDiffUnit && (
+                          {conversionText && (
                             <span className="font-semibold text-slate-500 dark:text-slate-400">
-                              1 {unit} = {mult} {skunit}
+                              {conversionText}
                             </span>
                           )}
                         </div>
                       </div>
                       <div className="shrink-0 flex items-center gap-1.5 sm:gap-2">
                         <div className="text-right font-mono flex flex-col items-end justify-center leading-tight">
-                          {/* Üst satır: Stok birimi cinsinden çevrilmiş miktar (örn: 24 / 24 KT) */}
+                          {/* Üst satır: Sayımda gelen birim cinsinden miktar (örn: 1 / 5 KO veya 0 / 5 KO) */}
                           <div className={`${qtyColorClass} leading-tight`}>
                             <span className="text-[15px] sm:text-[16px] font-black">
-                              {target > 0 ? `${counted} / ${target}` : counted}
+                              {targetInDocUnit > 0 ? `${countedInDocUnit} / ${targetInDocUnit}` : countedInDocUnit}
                             </span>
-                            <span className="ml-1 text-[14px] font-black uppercase">{skunit}</span>
+                            <span className="ml-1 text-[14px] font-black uppercase">{docUnit}</span>
                           </div>
-                          {/* Alt satır: Okutulan barkod birimi cinsinden miktar (örn: 1 / 1 KO) */}
+                          {/* Alt satır: x/x KO yazısının altında skunit cinsinden toplam değer (örn: 10 AD) */}
                           {isDiffUnit && (
-                            <div className="text-fg leading-tight -mt-0.5">
-                              <span className="text-[15px] sm:text-[16px] font-black">
-                                {target > 0 ? `${countedInUnit} / ${targetInUnit}` : countedInUnit}
-                              </span>
-                              <span className="ml-1 text-[14px] font-black uppercase">{unit}</span>
+                            <div className="text-slate-500 dark:text-slate-400 font-bold leading-tight -mt-0.5 text-right text-[12px] sm:text-[13px]">
+                              <span>{counted} {skunit}</span>
                             </div>
                           )}
                         </div>

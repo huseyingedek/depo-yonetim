@@ -242,8 +242,11 @@ export interface AdjustmentLine {
   targetQty: number;
   countedQty: number;
   unit: string;
+  docUnit?: string;
   skunit?: string;
   multiplier?: number;
+  bunit?: string;
+  bunitMultiplier?: number;
   batchNum?: string;
   specialStock?: string;
   warehouse?: string;

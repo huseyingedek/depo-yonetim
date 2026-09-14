@@ -143,25 +143,40 @@ export default function CountRecordsPage() {
       }
 
       // Belgedeki orijinal satır ise sayılan miktarını 0 yap
-      return prev.map((l) => (l.id === lineId ? { ...l, countedQty: 0 } : l));
+      return prev.map((l) => (l.id === lineId ? { ...l, countedQty: 0, bunit: undefined, bunitMultiplier: undefined } : l));
     });
   };
 
   // Miktar metnini kurallara göre biçimlendirme
   const renderQuantityText = (line: AdjustmentLine) => {
-    const mult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
-    const unit = (line.unit || "AD").toUpperCase();
-    const skunit = (line.skunit || unit).toUpperCase();
+    const docMult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
+    const docUnit = (line.docUnit || line.unit || "AD").toUpperCase();
+    const skunit = (line.skunit || docUnit).toUpperCase();
+    const bunit = (line.bunit || docUnit).toUpperCase();
+    const bmult = line.bunitMultiplier && line.bunitMultiplier > 0 ? line.bunitMultiplier : 1;
     const counted = line.countedQty;
 
-    const isDiffUnit = mult > 1 || unit !== skunit;
-    if (isDiffUnit && counted > 0) {
-      const countedInUnit = mult > 1 ? Math.round((counted / mult) * 100) / 100 : counted;
+    // Eğer okutulan barkod birimi (bunit) stok biriminden farklıysa: 10 AD (10 AD = 2 PK)
+    if (line.bunit && bunit !== skunit && counted > 0) {
+      const bunitQty = counted / bmult;
       return (
         <span>
           <strong className="font-bold">{counted} {skunit}</strong>{" "}
           <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-            ({counted} {skunit} = {countedInUnit} {unit})
+            ({counted} {skunit} = {bunitQty} {bunit})
+          </span>
+        </span>
+      );
+    }
+
+    const isDiffUnit = docMult > 1 || docUnit !== skunit;
+    if (isDiffUnit && counted > 0) {
+      const countedInDocUnit = docMult > 1 ? counted / docMult : counted;
+      return (
+        <span>
+          <strong className="font-bold">{counted} {skunit}</strong>{" "}
+          <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+            ({counted} {skunit} = {countedInDocUnit} {docUnit})
           </span>
         </span>
       );
@@ -201,10 +216,9 @@ export default function CountRecordsPage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-line bg-surface shadow-card">
-          <table className="w-full min-w-[950px] text-left text-xs">
+          <table className="w-full min-w-[850px] text-left text-xs">
             <thead className="border-b border-line bg-elevated">
               <tr>
-                <th className="px-3 py-2.5 font-bold text-muted">Durum</th>
                 <th className="px-3 py-2.5 font-bold text-muted">Malzeme / Ürün</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-bold text-muted">Depo</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-bold text-muted">Stok Yeri</th>
@@ -232,13 +246,6 @@ export default function CountRecordsPage() {
                     key={line.id}
                     className="border-b border-line last:border-0 hover:bg-elevated/40 transition"
                   >
-                    {/* Durum Rozeti (Mavi, Kırmızı, Sarı, Gri, Yeşil) */}
-                    <td className="px-3 py-2.5 whitespace-nowrap">
-                      <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-bold ${cat.badgeClass}`}>
-                        {cat.label}
-                      </span>
-                    </td>
-
                     {/* Malzeme / Ürün */}
                     <td className="max-w-[240px] px-3 py-2.5">
                       <p className="truncate font-bold text-fg">{line.name}</p>
@@ -273,7 +280,11 @@ export default function CountRecordsPage() {
 
                     {/* Okutulan Birim */}
                     <td className="whitespace-nowrap px-3 py-2.5 font-mono font-bold text-slate-600 dark:text-slate-300 uppercase">
-                      {line.unit || line.skunit || "AD"}
+                      {line.countedQty > 0 ? (
+                        line.bunit || line.unit || line.skunit || "AD"
+                      ) : (
+                        <span className="text-muted">-</span>
+                      )}
                     </td>
 
                     {/* Sayım Miktarı */}
