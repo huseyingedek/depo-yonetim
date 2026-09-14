@@ -1,777 +1,445 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  Package,
   Box,
+  Boxes,
   Layers,
-  ScanLine,
-  Camera,
   Check,
   Plus,
   Minus,
   Truck,
-  ChevronRight,
-  ChevronDown,
   Weight,
-  PackagePlus,
   Pause,
-  Container,
   Trash2,
-  MapPin,
-  Search,
-  ChevronsDownUp,
-  ChevronsUpDown,
-  Move,
   GripVertical,
-  X,
-  ArrowRight,
+  Flame,
+  Droplets,
+  Skull,
+  Clock,
+  GlassWater,
+  Ruler,
+  PackageCheck,
+  Recycle,
+  ChevronDown,
+  ChevronRight,
+  Package,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import ToastView, { useToast } from "../../components/Toast";
 
 // -----------------------------------------------------------------------------
-// PAKETLEME — TASARIM AŞAMASI (Hibrit: yapı listesi + palet görseli)
-// Palet › Koli › Ürün. Tüm butonlar/alanlar local state ile çalışır (tasarımsal).
-// Taşıma: koli → başka palet, ürün → başka koli (kısmi miktar). Sürükle-bırak +
-// "Taşı" diyaloğu. Aynı ürün aynı koli/palette birden çok satır olabilir.
-// CANIAS AKLPAKET servisi daha sonra bağlanacak.
+// PAKETLEME — TASARIM AŞAMASI · KART SİSTEMİ
+// Üst: kontrol çubuğu · Sol/geniş: PAKETLEME ALANI (gri sahne) · Sağ: ürünler.
+// Sahne › Palet › Koli › Ürün (gri alana direkt ürün/koli de konabilir).
+// Sağdaki ürünler sahneye sürüklenir; paketlendikçe "kalan" düşer.
+// Servis (AKLPAKET) sonra bağlanır.
 // -----------------------------------------------------------------------------
 
-interface Urun {
-  uid: string;
-  code: string;
-  name: string;
-  qty: number;
-  unit: string;
-  desi: number; // birim başı desi
-  kg: number; // birim başı kg
-}
-interface Koli {
-  id: string;
-  no: number;
-  tip: string;
-  renk: RenkKey;
-  beklemede?: boolean;
-  atil?: boolean;
-  urunler: Urun[];
-}
-interface Palet {
-  id: string;
-  ad: string;
-  koliler: Koli[];
-}
-type RenkKey = "blue" | "orange" | "green" | "violet" | "rose" | "cyan";
+type Hazard = "kirilabilir" | "yanici" | "sivi" | "toksik" | "agir" | "bozulur";
 
-type TasiHedef =
-  | { kind: "urun"; paletId: string; koliId: string; uid: string }
-  | { kind: "koli"; paletId: string; koliId: string };
+interface UrunNode {
+  uid: string; tur: "urun"; code: string; name: string; qty: number; unit: string;
+  desi: number; kg: number; paketli?: boolean;
+}
+interface KoliNode {
+  uid: string; tur: "koli"; no: number; atil?: boolean; beklemede?: boolean;
+  hacim: number; hazards: Hazard[]; cocuklar: Node[];
+}
+interface PaletNode { uid: string; tur: "palet"; ad: string; cocuklar: Node[]; }
+type Node = UrunNode | KoliNode | PaletNode;
 
-const RENKLER: Record<RenkKey, { bg: string; ring: string; text: string }> = {
-  blue: { bg: "bg-sky-100 dark:bg-sky-500/20", ring: "ring-sky-400", text: "text-sky-700 dark:text-sky-300" },
-  orange: { bg: "bg-orange-100 dark:bg-orange-500/20", ring: "ring-orange-400", text: "text-orange-700 dark:text-orange-300" },
-  green: { bg: "bg-emerald-100 dark:bg-emerald-500/20", ring: "ring-emerald-400", text: "text-emerald-700 dark:text-emerald-300" },
-  violet: { bg: "bg-violet-100 dark:bg-violet-500/20", ring: "ring-violet-400", text: "text-violet-700 dark:text-violet-300" },
-  rose: { bg: "bg-rose-100 dark:bg-rose-500/20", ring: "ring-rose-400", text: "text-rose-700 dark:text-rose-300" },
-  cyan: { bg: "bg-cyan-100 dark:bg-cyan-500/20", ring: "ring-cyan-400", text: "text-cyan-700 dark:text-cyan-300" },
-};
-const RENK_SIRA: RenkKey[] = ["blue", "orange", "green", "violet", "rose", "cyan"];
+interface KaynakUrun { code: string; name: string; unit: string; siparis: number; desi: number; kg: number; paketli?: boolean; }
 
-function baslangicPaletleri(): Palet[] {
+const HAZARDS: { id: Hazard; label: string; icon: typeof Flame; cls: string }[] = [
+  { id: "kirilabilir", label: "Kırılabilir", icon: GlassWater, cls: "border-yellow-300 bg-yellow-50 text-yellow-800 dark:border-yellow-500/30 dark:bg-yellow-950/40 dark:text-yellow-300" },
+  { id: "yanici", label: "Yanıcı", icon: Flame, cls: "border-rose-400/60 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-950/40 dark:text-rose-300" },
+  { id: "sivi", label: "Sıvı", icon: Droplets, cls: "border-blue-400/60 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-950/40 dark:text-blue-300" },
+  { id: "toksik", label: "Toksik", icon: Skull, cls: "border-purple-400/60 bg-purple-50 text-purple-700 dark:border-purple-500/30 dark:bg-purple-950/40 dark:text-purple-300" },
+  { id: "agir", label: "Ağır Yük", icon: Layers, cls: "border-indigo-400/60 bg-indigo-50 text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-950/40 dark:text-indigo-300" },
+  { id: "bozulur", label: "Bozulur", icon: Clock, cls: "border-green-400/60 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-950/40 dark:text-green-300" },
+];
+
+const KAYNAK: KaynakUrun[] = [
+  { code: "SV101", name: "Fotokopi Kağıdı A4 80Gr Beyaz", unit: "PK", siparis: 20, desi: 1.19, kg: 2.55 },
+  { code: "ZZ2328", name: "Koton Baskılı Koli Bandı 45X100", unit: "AD", siparis: 40, desi: 0.076, kg: 0.0075 },
+  { code: "NC013", name: "Nescafe Gold Kavanoz Kahve 200Gr", unit: "AD", siparis: 120, desi: 0.6, kg: 0.25 },
+  { code: "UL105", name: "Ülker Çubuk Kraker Paketi 40Gr", unit: "PK", siparis: 360, desi: 0.05, kg: 0.04, paketli: true },
+];
+
+// Koli boyutları — 6 seçenek, her biri kendi rengiyle (1..5 + 0=en büyük)
+// ol = koli ölçüsü (örnek değerler; gerçek ölçüler sonra girilecek)
+const BOYUTLAR: { n: number; ol: string; ic: string; txt: string; btn: string }[] = [
+  { n: 1, ol: "20×15", ic: "text-emerald-500", txt: "text-emerald-700 dark:text-emerald-300", btn: "border-emerald-200 bg-emerald-50 hover:bg-emerald-100 dark:border-emerald-500/40 dark:bg-emerald-500/10" },
+  { n: 2, ol: "30×20", ic: "text-sky-500", txt: "text-sky-700 dark:text-sky-300", btn: "border-sky-200 bg-sky-50 hover:bg-sky-100 dark:border-sky-500/40 dark:bg-sky-500/10" },
+  { n: 3, ol: "40×30", ic: "text-amber-500", txt: "text-amber-700 dark:text-amber-300", btn: "border-amber-200 bg-amber-50 hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/10" },
+  { n: 4, ol: "50×40", ic: "text-orange-500", txt: "text-orange-700 dark:text-orange-300", btn: "border-orange-200 bg-orange-50 hover:bg-orange-100 dark:border-orange-500/40 dark:bg-orange-500/10" },
+  { n: 5, ol: "60×40", ic: "text-rose-500", txt: "text-rose-700 dark:text-rose-300", btn: "border-rose-200 bg-rose-50 hover:bg-rose-100 dark:border-rose-500/40 dark:bg-rose-500/10" },
+  { n: 0, ol: "80×60", ic: "text-violet-500", txt: "text-violet-700 dark:text-violet-300", btn: "border-violet-200 bg-violet-50 hover:bg-violet-100 dark:border-violet-500/40 dark:bg-violet-500/10" },
+];
+
+const fmt = (n: number) => new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 }).format(n);
+const boyutHacim = (no: number) => (no === 0 ? 60 : Math.round(no * 6 * 10) / 10);
+const boyutGenislik = (no: number) => Math.round(190 + (no === 0 ? 10 : no) * 14);
+const boyutOl = (no: number) => BOYUTLAR.find((b) => b.n === no)?.ol ?? "";
+
+// --- Ağaç yardımcıları --------------------------------------------------------
+const cocuk = (n: Node): Node[] => (n.tur === "urun" ? [] : n.cocuklar);
+const nodeDesi = (n: Node): number => (n.tur === "urun" ? n.desi * n.qty : cocuk(n).reduce((s, c) => s + nodeDesi(c), 0));
+const nodeKg = (n: Node): number => (n.tur === "urun" ? n.kg * n.qty : cocuk(n).reduce((s, c) => s + nodeKg(c), 0));
+const urunSay = (n: Node): number => (n.tur === "urun" ? 1 : cocuk(n).reduce((s, c) => s + urunSay(c), 0));
+const koliSay = (ns: Node[]): number => ns.reduce((s, n) => s + (n.tur === "koli" ? 1 : 0) + (n.tur === "urun" ? 0 : koliSay(cocuk(n))), 0);
+const paletSay = (ns: Node[]): number => ns.filter((n) => n.tur === "palet").length;
+
+function iceriyorMu(n: Node, uid: string): boolean {
+  return cocuk(n).some((c) => c.uid === uid || iceriyorMu(c, uid));
+}
+function nodeMap(ns: Node[], uid: string, fn: (n: Node) => Node): Node[] {
+  return ns.map((n) => (n.uid === uid ? fn(n) : n.tur === "urun" ? n : ({ ...n, cocuklar: nodeMap(n.cocuklar, uid, fn) } as Node)));
+}
+function nodeRemove(ns: Node[], uid: string): { list: Node[]; alinan: Node | null } {
+  let alinan: Node | null = null;
+  const list: Node[] = [];
+  for (const n of ns) {
+    if (n.uid === uid) { alinan = n; continue; }
+    if (n.tur === "urun") list.push(n);
+    else { const r = nodeRemove(n.cocuklar, uid); if (r.alinan) alinan = r.alinan; list.push({ ...n, cocuklar: r.list } as Node); }
+  }
+  return { list, alinan };
+}
+function nodeAdd(ns: Node[], parentUid: string | null, yeni: Node): Node[] {
+  if (parentUid === null) return [...ns, yeni];
+  return ns.map((n) =>
+    n.uid === parentUid && n.tur !== "urun" ? ({ ...n, cocuklar: [...n.cocuklar, yeni] } as Node)
+      : n.tur === "urun" ? n : ({ ...n, cocuklar: nodeAdd(n.cocuklar, parentUid, yeni) } as Node)
+  );
+}
+function nodeFind(ns: Node[], uid: string): Node | null {
+  for (const n of ns) { if (n.uid === uid) return n; if (n.tur !== "urun") { const f = nodeFind(n.cocuklar, uid); if (f) return f; } }
+  return null;
+}
+// Ürünü hedef kaba koyar: aynı kapta aynı kod varsa ADEDİNİ artırır (yeni kart açmaz).
+function nodeAddUrun(ns: Node[], parentUid: string | null, yeni: UrunNode): Node[] {
+  const ekle = (list: Node[]): Node[] => {
+    const idx = list.findIndex((c) => c.tur === "urun" && c.code === yeni.code);
+    if (idx >= 0) return list.map((c, i) => (i === idx && c.tur === "urun" ? { ...c, qty: c.qty + yeni.qty } : c));
+    return [...list, yeni];
+  };
+  if (parentUid === null) return ekle(ns);
+  return ns.map((n) =>
+    n.uid === parentUid && n.tur !== "urun" ? ({ ...n, cocuklar: ekle(n.cocuklar) } as Node)
+      : n.tur === "urun" ? n : ({ ...n, cocuklar: nodeAddUrun(n.cocuklar, parentUid, yeni) } as Node)
+  );
+}
+function paketlenmis(ns: Node[], code: string): number {
+  return ns.reduce((s, n) => s + (n.tur === "urun" ? (n.code === code ? n.qty : 0) : paketlenmis(cocuk(n), code)), 0);
+}
+function temizle(ns: Node[]): Node[] {
+  return ns.filter((n) => n.tur !== "urun" || n.qty > 0).map((n) => (n.tur === "urun" ? n : ({ ...n, cocuklar: temizle(n.cocuklar) } as Node)));
+}
+
+function baslangic(): Node[] {
   return [
     {
-      id: "PLT-1",
-      ad: "Palet 1",
-      koliler: [
+      uid: "plt1", tur: "palet", ad: "Palet 1",
+      cocuklar: [
         {
-          id: "KOLI-7",
-          no: 7,
-          tip: "İç Kullanım Koli 280×165×170",
-          renk: "blue",
-          urunler: [
-            { uid: "u1", code: "SV101", name: "Fotokopi Kağıdı A4 80Gr", qty: 10, unit: "PK", desi: 1.19, kg: 2.55 },
-            { uid: "u2", code: "ZZ2328", name: "Koton Baskılı Koli Bandı 45×100", qty: 24, unit: "AD", desi: 0.076, kg: 0.0075 },
+          uid: "k1", tur: "koli", no: 7, hacim: boyutHacim(7), hazards: ["kirilabilir"],
+          cocuklar: [
+            { uid: "up1", tur: "urun", code: "SV101", name: "Fotokopi Kağıdı A4 80Gr Beyaz", qty: 6, unit: "PK", desi: 1.19, kg: 2.55 },
           ],
-        },
-        {
-          id: "KOLI-2",
-          no: 2,
-          tip: "İç Kullanım Koli 300×300×330",
-          renk: "orange",
-          urunler: [{ uid: "u3", code: "SV101", name: "Fotokopi Kağıdı A4 80Gr", qty: 5, unit: "PK", desi: 1.19, kg: 2.55 }],
-        },
-        {
-          id: "KOLI-3",
-          no: 3,
-          tip: "İç Kullanım Koli 320×280×170",
-          renk: "green",
-          urunler: [{ uid: "u4", code: "ZZ2328", name: "Koton Baskılı Koli Bandı 45×100", qty: 8, unit: "AD", desi: 0.635, kg: 0.2575 }],
         },
       ],
     },
   ];
 }
 
-const kalemler = [
-  { code: "SV101", name: "Fotokopi Kağıdı A4 80Gr Beyaz", siparis: 20, paketlenen: 15, unit: "PK" },
-  { code: "ZZ2328", name: "Koton Baskılı Koli Bandı 45X100", siparis: 40, paketlenen: 32, unit: "AD" },
-];
-
-const fmt = (n: number) => new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 }).format(n);
-const koliDesi = (k: Koli) => k.urunler.reduce((s, u) => s + u.desi * u.qty, 0);
-const koliKg = (k: Koli) => k.urunler.reduce((s, u) => s + u.kg * u.qty, 0);
-const koliAdet = (k: Koli) => k.urunler.reduce((s, u) => s + u.qty, 0);
-
-// Sürükle-bırak için sürüklenen öğe (modül seviyesi — dataTransfer serileştirme derdi yok)
-let suruklenen: TasiHedef | null = null;
+// sürükleme durumu (modül seviyesi)
+let drag: { kind: "node"; uid: string } | { kind: "kaynak"; code: string } | null = null;
 
 export default function PackagingPage() {
   const { toast, show } = useToast();
   const idRef = useRef(100);
-  const yeniId = () => `x${++idRef.current}`;
+  const yid = () => `x${++idRef.current}`;
 
-  const [paletler, setPaletler] = useState<Palet[]>(baslangicPaletleri);
-  const [aktifPaletId, setAktifPaletId] = useState("PLT-1");
-  const [seciliKoliId, setSeciliKoliId] = useState<string>("KOLI-7");
-  const [acikPalet, setAcikPalet] = useState<Record<string, boolean>>({ "PLT-1": true });
-  const [acikKoli, setAcikKoli] = useState<Record<string, boolean>>({ "KOLI-7": true });
-  const [arama, setArama] = useState("");
-  const [barkod, setBarkod] = useState("");
-  const [bitti, setBitti] = useState(false);
+  const [sahne, setSahne] = useState<Node[]>(baslangic);
+  const [seciliKapId, setSeciliKapId] = useState<string | null>("k1");
+  const [atilMod, setAtilMod] = useState(false);
   const [dropHedef, setDropHedef] = useState<string | null>(null);
+  const [bitti, setBitti] = useState(false);
 
-  // Taşıma diyaloğu
-  const [tasi, setTasi] = useState<TasiHedef | null>(null);
-  const [hedefPaletId, setHedefPaletId] = useState("");
-  const [hedefKoliId, setHedefKoliId] = useState("");
-  const [tasiAdet, setTasiAdet] = useState(1);
+  // Sürükle-bırak sırasında kenara yaklaşınca otomatik kaydırma (tablet + fare).
+  // İmleç hangi kaydırılabilir alanın (sayfa, paketleme alanı, ürün listesi, koli)
+  // üst/alt kenarına yaklaşırsa o alanı yumuşakça kaydırır.
+  useEffect(() => {
+    const KENAR = 70; // kenardan bu kadar px kala tetiklenir
+    const MAKS = 18; // kare başına maksimum kayma (px)
+    let hiz = 0;
+    let hedef: HTMLElement | Window | null = null;
+    let raf = 0;
 
-  const aktifPalet = paletler.find((p) => p.id === aktifPaletId) ?? paletler[0];
-  const seciliKoli = paletler.flatMap((p) => p.koliler).find((k) => k.id === seciliKoliId);
+    const kaydirilabilir = (el: Element | null): HTMLElement | null => {
+      let n = el as HTMLElement | null;
+      while (n && n !== document.body && n !== document.documentElement) {
+        const oy = getComputedStyle(n).overflowY;
+        if ((oy === "auto" || oy === "scroll") && n.scrollHeight > n.clientHeight + 2) return n;
+        n = n.parentElement;
+      }
+      return null;
+    };
 
-  const genelDesi = paletler.reduce((s, p) => s + p.koliler.reduce((a, k) => a + koliDesi(k), 0), 0);
-  const genelKg = paletler.reduce((s, p) => s + p.koliler.reduce((a, k) => a + koliKg(k), 0), 0);
-  const genelKoli = paletler.reduce((s, p) => s + p.koliler.length, 0);
-  const genelPaletSayisi = paletler.length;
+    const dongu = () => {
+      if (hiz !== 0 && hedef) {
+        if (hedef instanceof Window) hedef.scrollBy(0, hiz);
+        else hedef.scrollTop += hiz;
+      }
+      raf = requestAnimationFrame(dongu);
+    };
 
-  const q = arama.trim().toLocaleLowerCase("tr-TR");
-  const koliEsles = (k: Koli) =>
-    !q ||
-    `koli ${k.no}`.includes(q) ||
-    k.tip.toLocaleLowerCase("tr-TR").includes(q) ||
-    k.urunler.some((u) => u.name.toLocaleLowerCase("tr-TR").includes(q) || u.code.toLocaleLowerCase("tr-TR").includes(q));
+    const uzerinde = (e: DragEvent) => {
+      if (!drag) { hiz = 0; return; }
+      const y = e.clientY;
+      const cont = kaydirilabilir(document.elementFromPoint(e.clientX, y));
+      if (cont) {
+        const r = cont.getBoundingClientRect();
+        if (y < r.top + KENAR) { hedef = cont; hiz = -Math.ceil(MAKS * (1 - Math.max(0, y - r.top) / KENAR)); }
+        else if (y > r.bottom - KENAR) { hedef = cont; hiz = Math.ceil(MAKS * (1 - Math.max(0, r.bottom - y) / KENAR)); }
+        else hiz = 0;
+      } else {
+        const h = window.innerHeight;
+        if (y < KENAR) { hedef = window; hiz = -Math.ceil(MAKS * (1 - y / KENAR)); }
+        else if (y > h - KENAR) { hedef = window; hiz = Math.ceil(MAKS * (1 - (h - y) / KENAR)); }
+        else hiz = 0;
+      }
+    };
+    const dur = () => { hiz = 0; hedef = null; };
 
-  // --- Temel aksiyonlar ------------------------------------------------------
-  const paletGuncelle = (paletId: string, fn: (p: Palet) => Palet) =>
-    setPaletler((prev) => prev.map((p) => (p.id === paletId ? fn(p) : p)));
+    window.addEventListener("dragover", uzerinde);
+    window.addEventListener("drop", dur);
+    window.addEventListener("dragend", dur);
+    raf = requestAnimationFrame(dongu);
+    return () => {
+      window.removeEventListener("dragover", uzerinde);
+      window.removeEventListener("drop", dur);
+      window.removeEventListener("dragend", dur);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
 
-  const yeniPalet = () => {
-    const id = `PLT-${yeniId()}`;
-    setPaletler((prev) => [...prev, { id, ad: `Palet ${prev.length + 1}`, koliler: [] }]);
-    setAktifPaletId(id);
-    setAcikPalet((s) => ({ ...s, [id]: true }));
-    show({ kind: "ok", text: "Yeni palet oluşturuldu" });
-    return id;
+  const genelDesi = sahne.reduce((s, n) => s + nodeDesi(n), 0);
+  const genelKg = sahne.reduce((s, n) => s + nodeKg(n), 0);
+  const kSay = koliSay(sahne);
+  const pSay = paletSay(sahne);
+
+  const map = (uid: string, fn: (n: Node) => Node) => setSahne((prev) => nodeMap(prev, uid, fn));
+
+  const paletEkle = () => {
+    const uid = `plt-${yid()}`;
+    setSahne((prev) => [...prev, { uid, tur: "palet", ad: `Palet ${prev.filter((n) => n.tur === "palet").length + 1}`, cocuklar: [] }]);
+    setSeciliKapId(uid);
+    show({ kind: "ok", text: "Palet eklendi" });
   };
 
-  const yeniKoli = (paletId: string, atil = false) => {
-    const id = `KOLI-${yeniId()}`;
-    paletGuncelle(paletId, (p) => {
-      const no = (p.koliler.reduce((m, k) => Math.max(m, k.no), 0) || 0) + 1;
-      const renk = RENK_SIRA[p.koliler.length % RENK_SIRA.length];
-      return { ...p, koliler: [...p.koliler, { id, no, tip: atil ? "Atıl Koli" : "Yeni Koli", renk, atil, urunler: [] }] };
+  const koliEkle = (no: number) => {
+    const uid = yid();
+    const yeni: KoliNode = { uid, tur: "koli", no, hacim: boyutHacim(no), hazards: [], atil: atilMod, cocuklar: [] };
+    const hedef = seciliKapId ? nodeFind(sahne, seciliKapId) : null;
+    const parent = hedef && hedef.tur !== "urun" ? seciliKapId : null;
+    setSahne((prev) => nodeAdd(prev, parent, yeni));
+    setSeciliKapId(uid);
+    show({ kind: "ok", text: `${atilMod ? "Atıl koli" : "Koli"} · Boyut ${no}` });
+  };
+
+  const sil = (uid: string) => { setSahne((prev) => nodeRemove(prev, uid).list); show({ kind: "warn", text: "Kart silindi" }); };
+
+  const urunAdet = (uid: string, delta: number) =>
+    setSahne((prev) => temizle(nodeMap(prev, uid, (n) => (n.tur === "urun" ? { ...n, qty: Math.max(0, n.qty + delta) } : n))));
+
+  const hacim = (uid: string, v: number) => map(uid, (n) => (n.tur === "koli" ? { ...n, hacim: Math.max(0, v) } : n));
+  const hazardToggle = (uid: string, h: Hazard) => map(uid, (n) => (n.tur === "koli" ? { ...n, hazards: n.hazards.includes(h) ? n.hazards.filter((x) => x !== h) : [...n.hazards, h] } : n));
+  const beklet = (uid: string) => map(uid, (n) => (n.tur === "koli" ? { ...n, beklemede: !n.beklemede } : n));
+
+  const kaynakEkle = (code: string, parentUid: string | null) => {
+    const k = KAYNAK.find((x) => x.code === code);
+    if (!k) return;
+    if (k.siparis - paketlenmis(sahne, code) <= 0) return show({ kind: "info", text: "Bu üründen kalmadı" });
+    const yeni: UrunNode = { uid: yid(), tur: "urun", code: k.code, name: k.name, qty: 1, unit: k.unit, desi: k.desi, kg: k.kg, paketli: k.paketli };
+    let parent = parentUid;
+    if (parent) { const p = nodeFind(sahne, parent); if (!p || p.tur === "urun") parent = null; }
+    setSahne((prev) => nodeAddUrun(prev, parent, yeni));
+    show({ kind: "ok", text: `${k.name} +1` });
+  };
+
+  const tasi = (uid: string, parentUid: string | null) => {
+    const src = nodeFind(sahne, uid);
+    if (!src) return;
+    if (parentUid) {
+      if (uid === parentUid) return;
+      const p = nodeFind(sahne, parentUid);
+      if (!p || p.tur === "urun") return;
+      if (src.tur !== "urun" && iceriyorMu(src, parentUid)) return;
+    }
+    setSahne((prev) => {
+      const r = nodeRemove(prev, uid);
+      if (!r.alinan) return prev;
+      return nodeAdd(r.list, parentUid, r.alinan);
     });
-    setAcikPalet((s) => ({ ...s, [paletId]: true }));
-    setAcikKoli((s) => ({ ...s, [id]: true }));
-    setSeciliKoliId(id);
-    setAktifPaletId(paletId);
-    show({ kind: "ok", text: atil ? "Atıl koli eklendi" : "Yeni koli eklendi" });
-    return id;
   };
 
-  const koliSil = (paletId: string, koliId: string) => {
-    paletGuncelle(paletId, (p) => ({ ...p, koliler: p.koliler.filter((k) => k.id !== koliId) }));
-    show({ kind: "warn", text: "Koli silindi" });
-  };
-
-  const urunAdet = (koliId: string, uid: string, delta: number) =>
-    setPaletler((prev) =>
-      prev.map((p) => ({
-        ...p,
-        koliler: p.koliler.map((k) =>
-          k.id !== koliId
-            ? k
-            : { ...k, urunler: k.urunler.map((u) => (u.uid === uid ? { ...u, qty: u.qty + delta } : u)).filter((u) => u.qty > 0) }
-        ),
-      }))
-    );
-
-  const bekletToggle = (koliId?: string) => {
-    if (!koliId) return show({ kind: "info", text: "Önce bir koli seçin" });
-    setPaletler((prev) => prev.map((p) => ({ ...p, koliler: p.koliler.map((k) => (k.id === koliId ? { ...k, beklemede: !k.beklemede } : k)) })));
-  };
-
-  const barkodOkut = () => {
-    const kod = barkod.trim();
-    if (!kod) return;
-    if (!seciliKoli) return show({ kind: "info", text: "Önce bir koli seçin" });
-    setPaletler((prev) =>
-      prev.map((p) => ({
-        ...p,
-        koliler: p.koliler.map((k) =>
-          k.id !== seciliKoliId
-            ? k
-            : { ...k, urunler: [...k.urunler, { uid: yeniId(), code: kod, name: "Fotokopi Kağıdı A4 80Gr", qty: 1, unit: "PK", desi: 1.19, kg: 2.55 }] }
-        ),
-      }))
-    );
-    setBarkod("");
-    show({ kind: "ok", text: `${kod} · koliye eklendi` });
-  };
-
-  const koliNoSec = (no: number) => {
-    const k = aktifPalet?.koliler.find((x) => x.no === no);
-    if (k) {
-      setSeciliKoliId(k.id);
-      setAcikKoli((s) => ({ ...s, [k.id]: true }));
-    } else show({ kind: "info", text: `Koli ${no} yok` });
-  };
-
-  const hepsiKatla = (ac: boolean) => {
-    const kMap: Record<string, boolean> = {};
-    const pMap: Record<string, boolean> = {};
-    paletler.forEach((p) => {
-      pMap[p.id] = ac;
-      p.koliler.forEach((k) => (kMap[k.id] = ac));
-    });
-    setAcikPalet(pMap);
-    setAcikKoli(kMap);
+  const birak = (parentUid: string | null) => {
+    setDropHedef(null);
+    if (!drag) return;
+    if (drag.kind === "kaynak") kaynakEkle(drag.code, parentUid);
+    else { tasi(drag.uid, parentUid); show({ kind: "ok", text: "Taşındı" }); }
+    drag = null;
   };
 
   const bitir = () => {
+    let bos = false;
+    const kontrol = (ns: Node[]) => ns.forEach((n) => { if (n.tur === "koli") { if (urunSay(n) === 0) bos = true; kontrol(n.cocuklar); } else if (n.tur === "palet") kontrol(n.cocuklar); });
+    kontrol(sahne);
+    if (bos) return show({ kind: "warn", text: "Boş koli var — kaydedilemez" });
+    if (kSay === 0) return show({ kind: "info", text: "Paketlenecek koli yok" });
     setBitti(true);
-    show({ kind: "done", text: `${genelKoli} koli · ${genelPaletSayisi} palet paketlendi` });
+    show({ kind: "done", text: `${kSay} koli · ${pSay} palet paketlendi` });
   };
 
-  // --- TAŞIMA: ürün → başka koli (kısmi miktar destekli) ---------------------
-  const urunTasi = (kaynak: { koliId: string; uid: string }, hedefKoli: string, adet: number, yeniPaletId?: string) => {
-    setPaletler((prev) => {
-      let tasinan: Urun | null = null;
-      let next = prev.map((p) => ({
-        ...p,
-        koliler: p.koliler.map((k) => {
-          if (k.id !== kaynak.koliId) return k;
-          const u = k.urunler.find((x) => x.uid === kaynak.uid);
-          if (u) tasinan = { ...u };
-          return { ...k, urunler: k.urunler.map((x) => (x.uid === kaynak.uid ? { ...x, qty: x.qty - adet } : x)).filter((x) => x.qty > 0) };
-        }),
-      }));
-      if (!tasinan) return prev;
-      const eklenecek: Urun = { ...(tasinan as Urun), uid: yeniId(), qty: adet };
-      if (hedefKoli === "__new__" && yeniPaletId) {
-        next = next.map((p) =>
-          p.id !== yeniPaletId
-            ? p
-            : {
-                ...p,
-                koliler: [
-                  ...p.koliler,
-                  {
-                    id: `KOLI-${yeniId()}`,
-                    no: (p.koliler.reduce((m, k) => Math.max(m, k.no), 0) || 0) + 1,
-                    tip: "Yeni Koli",
-                    renk: RENK_SIRA[p.koliler.length % RENK_SIRA.length],
-                    urunler: [eklenecek],
-                  },
-                ],
-              }
-        );
-      } else {
-        // Hedefte AYNI ürün olsa bile YENİ satır olarak eklenir (duplike desteklenir).
-        next = next.map((p) => ({ ...p, koliler: p.koliler.map((k) => (k.id === hedefKoli ? { ...k, urunler: [...k.urunler, eklenecek] } : k)) }));
-      }
-      return next;
-    });
-  };
+  function koliIcineKoli(parentUid: string) {
+    const uid = yid();
+    const yeni: KoliNode = { uid, tur: "koli", no: 1, hacim: boyutHacim(1), hazards: [], cocuklar: [] };
+    setSahne((prev) => nodeAdd(prev, parentUid, yeni));
+    setSeciliKapId(uid);
+    show({ kind: "ok", text: "Koli içine koli eklendi" });
+  }
 
-  // --- TAŞIMA: koli → başka palet -------------------------------------------
-  const koliTasi = (kaynak: { paletId: string; koliId: string }, hedefPalet: string) => {
-    const yeni = hedefPalet === "__new__";
-    const yeniPid = yeni ? `PLT-${yeniId()}` : hedefPalet;
-    setPaletler((prev) => {
-      let tasinan: Koli | null = null;
-      let next = prev.map((p) => {
-        if (p.id !== kaynak.paletId) return p;
-        const k = p.koliler.find((x) => x.id === kaynak.koliId);
-        if (k) tasinan = { ...k };
-        return { ...p, koliler: p.koliler.filter((x) => x.id !== kaynak.koliId) };
-      });
-      if (!tasinan) return prev;
-      if (yeni) {
-        next = [...next, { id: yeniPid, ad: `Palet ${next.length + 1}`, koliler: [{ ...(tasinan as Koli), no: 1 }] }];
-      } else {
-        next = next.map((p) =>
-          p.id !== hedefPalet ? p : { ...p, koliler: [...p.koliler, { ...(tasinan as Koli), no: (p.koliler.reduce((m, k) => Math.max(m, k.no), 0) || 0) + 1 }] }
-        );
-      }
-      return next;
-    });
-    if (yeni) {
-      setAcikPalet((s) => ({ ...s, [yeniPid]: true }));
-      setAktifPaletId(yeniPid);
-    }
-  };
-
-  // --- Taşı diyaloğunu aç ----------------------------------------------------
-  const tasiAc = (hedef: TasiHedef) => {
-    setTasi(hedef);
-    if (hedef.kind === "urun") {
-      const src = paletler.flatMap((p) => p.koliler).find((k) => k.id === hedef.koliId);
-      const u = src?.urunler.find((x) => x.uid === hedef.uid);
-      setTasiAdet(u?.qty ?? 1);
-      setHedefPaletId(hedef.paletId);
-      const digerKoli = paletler.find((p) => p.id === hedef.paletId)?.koliler.find((k) => k.id !== hedef.koliId);
-      setHedefKoliId(digerKoli?.id ?? "__new__");
-    } else {
-      const digerPalet = paletler.find((p) => p.id !== hedef.paletId);
-      setHedefPaletId(digerPalet?.id ?? "__new__");
-    }
-  };
-
-  const tasiOnayla = () => {
-    if (!tasi) return;
-    if (tasi.kind === "urun") {
-      const src = paletler.flatMap((p) => p.koliler).find((k) => k.id === tasi.koliId);
-      const u = src?.urunler.find((x) => x.uid === tasi.uid);
-      const max = u?.qty ?? 0;
-      const adet = Math.max(1, Math.min(tasiAdet, max));
-      urunTasi({ koliId: tasi.koliId, uid: tasi.uid }, hedefKoliId, adet, hedefKoliId === "__new__" ? hedefPaletId : undefined);
-      show({ kind: "ok", text: `${adet} ${u?.unit ?? ""} taşındı` });
-    } else {
-      koliTasi({ paletId: tasi.paletId, koliId: tasi.koliId }, hedefPaletId);
-      show({ kind: "ok", text: "Koli taşındı" });
-    }
-    setTasi(null);
-  };
-
-  // --- Sürükle-bırak: ürün → koli (tam miktar) ------------------------------
-  const koliyeBirak = (koliId: string) => {
-    setDropHedef(null);
-    if (!suruklenen || suruklenen.kind !== "urun" || suruklenen.koliId === koliId) return;
-    const src = paletler.flatMap((p) => p.koliler).find((k) => k.id === suruklenen!.koliId);
-    const u = src?.urunler.find((x) => x.uid === (suruklenen as { uid: string }).uid);
-    urunTasi({ koliId: suruklenen.koliId, uid: suruklenen.uid }, koliId, u?.qty ?? 1);
-    show({ kind: "ok", text: "Ürün taşındı" });
-    suruklenen = null;
-  };
+  const api: Api = { seciliKapId, setSeciliKapId, sil, urunAdet, hacim, hazardToggle, beklet, koliIcineEkle: koliIcineKoli, dropHedef, setDropHedef, birak };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-4 p-4 lg:p-6">
-      <PageHeader
-        title="Paketleme"
-        subtitle="Palet › Koli › Ürün · sürükle-bırak veya Taşı ile düzenle"
-        backTo="/home"
-      />
+    <div className="mx-auto max-w-[1700px] p-3 lg:p-5">
+      <PageHeader title="Paketleme" subtitle="Paketleme alanı › Palet › Koli › Ürün" backTo="/home" />
 
       {bitti && (
-        <div className="flex flex-col items-start gap-3 rounded-2xl border border-emerald-400 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10 sm:flex-row sm:items-center">
+        <div className="mt-3 flex flex-col items-start gap-3 rounded-2xl border border-emerald-400 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10 sm:flex-row sm:items-center">
           <Check className="h-5 w-5 shrink-0 text-emerald-600" />
-          <p className="flex-1 text-sm font-bold text-emerald-800 dark:text-emerald-200">
-            Paketleme tamamlandı — {genelKoli} koli, {genelPaletSayisi} palet, {fmt(genelKg)} kg.
-          </p>
-          <button type="button" onClick={() => setBitti(false)} className="btn-ghost btn-sm">
-            Devam et
-          </button>
+          <p className="flex-1 text-sm font-bold text-emerald-800 dark:text-emerald-200">Paketleme tamamlandı — {kSay} koli, {pSay} palet, {fmt(genelKg)} kg.</p>
+          <button type="button" onClick={() => setBitti(false)} className="btn-ghost btn-sm">Devam et</button>
         </div>
       )}
 
-      {/* Sevkiyat + barkod + aksiyonlar */}
-      <div className="card p-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div className="min-w-0 flex-1">
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-extrabold text-fg">
-              <span className="rounded-md bg-brand-100 px-1.5 py-0.5 text-[11px] font-black text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">SO-847786</span>
-              KOTON MAĞAZACILIK
-            </p>
-            <p className="mt-1 flex items-center gap-1.5 text-xs text-subtle">
-              <MapPin className="h-3.5 w-3.5 shrink-0" />
-              Semerciler Mah. Çark Cad. No:51 · Adapazarı / Sakarya
-            </p>
-          </div>
+      {/* ÜST ARAÇ ÇUBUĞU — tek satır */}
+      <div className="card mt-3 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 xl:flex-nowrap">
+          {/* Sevkiyat */}
+          <p className="flex min-w-0 items-center gap-1.5 text-sm font-extrabold text-fg">
+            <span className="rounded-md bg-brand-100 px-1.5 py-0.5 text-[11px] font-black text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">SO-847786</span>
+            <span className="truncate">KOTON MAĞAZACILIK</span>
+          </p>
 
-          <div className="flex items-center gap-2 xl:w-[380px]">
-            <div className="relative flex-1">
-              <ScanLine className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
-              <input
-                value={barkod}
-                onChange={(e) => setBarkod(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && barkodOkut()}
-                placeholder="Ürün / koli barkodu okut"
-                className="field-input pl-12 font-mono text-sm"
-                autoComplete="off"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => show({ kind: "info", text: "Kamera (tasarım)" })}
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-line bg-surface text-muted transition hover:bg-elevated"
-              aria-label="Kamera ile okut"
-            >
-              <Camera className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
+          <span className="hidden h-6 w-px shrink-0 bg-line xl:block" />
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
-          <ToolbarBtn icon={Layers} label="Palet Kullan" onClick={yeniPalet} />
-          <ToolbarBtn icon={Container} label="Atıl Koli" onClick={() => yeniKoli(aktifPaletId, true)} />
-          <ToolbarBtn icon={Box} label="Paket Seç" onClick={() => show({ kind: "info", text: "Paket seçimi (tasarım)" })} />
-          <ToolbarBtn icon={Pause} label="Beklet" onClick={() => bekletToggle(seciliKoliId)} />
-          <div className="mx-1 hidden h-6 w-px bg-line sm:block" />
-          <div className="flex items-center gap-1">
-            <span className="mr-1 text-[11px] font-bold text-subtle">Koli No</span>
-            {[1, 2, 3, 4, 5, 0].map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => koliNoSec(n)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-surface text-sm font-bold text-muted transition hover:border-brand-400 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10"
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-          <div className="ml-auto">
-            <button type="button" onClick={bitir} className="btn-primary h-10 px-5">
-              <Truck className="h-4 w-4" /> Bitir
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Paketlenecek kalemler */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {kalemler.map((k) => {
-          const bittiK = k.paketlenen >= k.siparis;
-          return (
-            <div key={k.code} className={`w-60 shrink-0 rounded-xl border p-3 ${bittiK ? "border-emerald-300 bg-emerald-50/60 dark:border-emerald-500/30 dark:bg-emerald-500/10" : "border-line bg-surface"}`}>
-              <div className="flex items-start justify-between gap-2">
-                <p className="line-clamp-2 text-xs font-bold text-fg">{k.name}</p>
-                {bittiK && <Check className="h-4 w-4 shrink-0 text-emerald-600" />}
-              </div>
-              <div className="mt-2 flex items-baseline justify-between font-mono">
-                <span className="text-sm font-black text-fg">
-                  {k.paketlenen}
-                  <span className="text-subtle"> / {k.siparis}</span>
-                </span>
-                <span className="text-[11px] font-bold text-subtle">{k.unit}</span>
-              </div>
-              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-elevated">
-                <div className={`h-full rounded-full ${bittiK ? "bg-emerald-500" : "bg-brand-500"}`} style={{ width: `${(k.paketlenen / k.siparis) * 100}%` }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Ana alan */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* SOL: Paket Yapısı */}
-        <div className="flex min-h-0 flex-col rounded-2xl border border-line bg-surface shadow-card">
-          <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
-            <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
-              <Layers className="h-4 w-4 text-subtle" /> Paket Yapısı
-              <span className="rounded-full bg-elevated px-2 py-0.5 text-[10px] font-bold text-subtle">{genelPaletSayisi} palet · {genelKoli} koli</span>
-            </h2>
-            <div className="flex items-center gap-1">
-              <button type="button" onClick={() => hepsiKatla(false)} className="rounded-lg p-1.5 text-subtle transition hover:bg-elevated" title="Hepsini kapat">
-                <ChevronsDownUp className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={() => hepsiKatla(true)} className="rounded-lg p-1.5 text-subtle transition hover:bg-elevated" title="Hepsini aç">
-                <ChevronsUpDown className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={yeniPalet} className="btn-ghost btn-sm ml-1 text-brand-600">
-                <PackagePlus className="h-4 w-4" /> Palet
-              </button>
-            </div>
-          </div>
-
-          <div className="border-b border-line p-2.5">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
-              <input
-                value={arama}
-                onChange={(e) => setArama(e.target.value)}
-                placeholder="Koli / ürün / kod ara…"
-                className="h-10 w-full rounded-xl border border-line bg-elevated/40 pl-10 pr-3 text-sm text-fg outline-none transition placeholder:text-subtle focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
-              />
-            </div>
-          </div>
-
-          <div className="max-h-[560px] flex-1 overflow-y-auto p-2">
-            {paletler.map((p) => {
-              const pAcik = acikPalet[p.id] ?? true;
-              const gorunen = p.koliler.filter(koliEsles);
-              if (q && gorunen.length === 0) return null;
-              const pDesi = p.koliler.reduce((s, k) => s + koliDesi(k), 0);
-              const pKg = p.koliler.reduce((s, k) => s + koliKg(k), 0);
-              const paletDrop = dropHedef === p.id;
+          {/* Koli Boyutu — 6 renkli boyut butonu; altında ölçüsü yazılı */}
+          <div className="flex shrink-0 items-start gap-1.5">
+            <Ruler className="mt-3.5 h-4 w-4 shrink-0 text-subtle" />
+            {BOYUTLAR.map((b) => {
+              const ik = 14 + (b.n === 0 ? 10 : b.n) * 1.6;
               return (
-                <div key={p.id} className="mb-1">
-                  <div
-                    onClick={() => setAktifPaletId(p.id)}
-                    onDragOver={(e) => {
-                      if (suruklenen?.kind === "koli") {
-                        e.preventDefault();
-                        setDropHedef(p.id);
-                      }
-                    }}
-                    onDragLeave={() => paletDrop && setDropHedef(null)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setDropHedef(null);
-                      if (suruklenen?.kind === "koli" && suruklenen.paletId !== p.id) {
-                        koliTasi({ paletId: suruklenen.paletId, koliId: suruklenen.koliId }, p.id);
-                        show({ kind: "ok", text: "Koli taşındı" });
-                        suruklenen = null;
-                      }
-                    }}
-                    className={`flex cursor-pointer items-center gap-2 rounded-xl px-2 py-2.5 transition ${
-                      paletDrop ? "bg-brand-50 ring-2 ring-brand-400 dark:bg-brand-500/10" : aktifPaletId === p.id ? "bg-amber-50 ring-1 ring-amber-300 dark:bg-amber-500/10" : "hover:bg-elevated"
-                    }`}
-                  >
-                    <button type="button" onClick={(e) => { e.stopPropagation(); setAcikPalet((s) => ({ ...s, [p.id]: !pAcik })); }} className="shrink-0 text-subtle">
-                      {pAcik ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    </button>
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
-                      <Layers className="h-4 w-4" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-extrabold text-fg">{p.ad}</span>
-                      <span className="block text-[11px] text-subtle">{p.koliler.length} koli</span>
-                    </span>
-                    <span className="text-right font-mono text-[11px]">
-                      <span className="block font-bold text-fg">{fmt(pDesi)} ds</span>
-                      <span className="block text-subtle">{fmt(pKg)} kg</span>
-                    </span>
-                  </div>
-
-                  {pAcik && (
-                    <div className="ml-3 space-y-1 border-l border-line pl-3">
-                      {gorunen.length === 0 && <p className="px-2 py-3 text-center text-xs text-subtle">Bu palette koli yok</p>}
-                      {gorunen.map((k) => {
-                        const kAcik = acikKoli[k.id] ?? false;
-                        const secili = seciliKoliId === k.id;
-                        const renk = RENKLER[k.renk];
-                        const koliDrop = dropHedef === k.id;
-                        return (
-                          <div key={k.id}>
-                            <div
-                              draggable
-                              onDragStart={(e) => { e.stopPropagation(); suruklenen = { kind: "koli", paletId: p.id, koliId: k.id }; }}
-                              onDragOver={(e) => { if (suruklenen?.kind === "urun") { e.preventDefault(); setDropHedef(k.id); } }}
-                              onDragLeave={() => koliDrop && setDropHedef(null)}
-                              onDrop={(e) => { e.preventDefault(); koliyeBirak(k.id); }}
-                              onClick={() => { setSeciliKoliId(k.id); setAktifPaletId(p.id); }}
-                              className={`flex cursor-pointer items-center gap-1.5 rounded-xl px-2 py-2 transition ${
-                                koliDrop ? "bg-emerald-50 ring-2 ring-emerald-400 dark:bg-emerald-500/10" : secili ? "bg-brand-50 ring-1 ring-brand-300 dark:bg-brand-500/10" : "hover:bg-elevated"
-                              }`}
-                            >
-                              <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-subtle/60" />
-                              <button type="button" onClick={(e) => { e.stopPropagation(); setAcikKoli((s) => ({ ...s, [k.id]: !kAcik })); }} className="shrink-0 text-subtle">
-                                {kAcik ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                              </button>
-                              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${renk.bg} ${renk.text}`}>
-                                <Box className="h-4 w-4" />
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="flex flex-wrap items-center gap-1.5">
-                                  <span className="text-sm font-bold text-fg">Koli {k.no}</span>
-                                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${renk.bg} ${renk.text}`}>{k.urunler.length} kalem</span>
-                                  {k.atil && <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-600/40 dark:text-slate-300">atıl</span>}
-                                  {k.beklemede && <span className="rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-500/30 dark:text-amber-200">beklemede</span>}
-                                </span>
-                                <span className="block truncate text-[11px] text-subtle">{k.tip}</span>
-                              </span>
-                              <span className="text-right font-mono text-[11px]">
-                                <span className="block font-bold text-fg">{fmt(koliDesi(k))} ds</span>
-                                <span className="block text-subtle">{fmt(koliKg(k))} kg</span>
-                              </span>
-                              <button type="button" onClick={(e) => { e.stopPropagation(); tasiAc({ kind: "koli", paletId: p.id, koliId: k.id }); }} className="shrink-0 rounded-lg p-1 text-subtle transition hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10" title="Koliyi taşı">
-                                <Move className="h-4 w-4" />
-                              </button>
-                              <button type="button" onClick={(e) => { e.stopPropagation(); koliSil(p.id, k.id); }} className="shrink-0 rounded-lg p-1 text-subtle transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10" title="Koliyi sil">
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-
-                            {kAcik && (
-                              <div className="ml-4 mt-0.5 space-y-0.5 border-l border-line pl-3">
-                                {k.urunler.length === 0 && <p className="px-2 py-2 text-[11px] text-subtle">Ürün yok — buraya sürükleyin ya da barkod okutun</p>}
-                                {k.urunler.map((u) => (
-                                  <div
-                                    key={u.uid}
-                                    draggable
-                                    onDragStart={(e) => { e.stopPropagation(); suruklenen = { kind: "urun", paletId: p.id, koliId: k.id, uid: u.uid }; }}
-                                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-elevated"
-                                  >
-                                    <GripVertical className="h-3.5 w-3.5 shrink-0 cursor-grab text-subtle/50" />
-                                    <span className="min-w-0 flex-1">
-                                      <span className="block truncate text-xs font-semibold text-fg">{u.name}</span>
-                                      <span className="block font-mono text-[10px] text-subtle">{u.code}</span>
-                                    </span>
-                                    <span className="w-14 text-right font-mono text-xs font-bold text-fg">
-                                      {u.qty} <span className="text-[10px] font-semibold text-subtle">{u.unit}</span>
-                                    </span>
-                                    <div className="flex items-center gap-1">
-                                      <StepBtn icon={Minus} tone="down" onClick={() => urunAdet(k.id, u.uid, -1)} />
-                                      <StepBtn icon={Plus} tone="up" onClick={() => urunAdet(k.id, u.uid, +1)} />
-                                      <button type="button" onClick={() => tasiAc({ kind: "urun", paletId: p.id, koliId: k.id, uid: u.uid })} className="flex h-6 w-6 items-center justify-center rounded-md border border-brand-300 text-brand-600 transition hover:bg-brand-50 dark:hover:bg-brand-500/10" title="Ürünü taşı (kısmi)">
-                                        <Move className="h-3.5 w-3.5" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                      <button type="button" onClick={() => yeniKoli(p.id)} className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line py-2 text-xs font-semibold text-subtle transition hover:border-brand-400 hover:text-brand-600">
-                        <Plus className="h-4 w-4" /> Bu palete koli ekle
-                      </button>
-                    </div>
-                  )}
+                <div key={b.n} className="flex flex-col items-center gap-0.5">
+                  <button type="button" onClick={() => koliEkle(b.n)} title={`Boyut ${b.n} · ${b.ol} cm · ~${boyutHacim(b.n)} ds`} className={`group relative flex h-11 w-11 items-center justify-center rounded-xl border-2 transition active:scale-95 ${atilMod ? "border-slate-300 bg-slate-50 hover:bg-slate-100 dark:border-slate-500/40 dark:bg-slate-600/20" : b.btn}`}>
+                    <Box strokeWidth={2.25} style={{ width: ik, height: ik }} className={atilMod ? "text-slate-400 dark:text-slate-300" : b.ic} />
+                    <span className={`absolute bottom-0.5 right-1 text-[10px] font-black ${atilMod ? "text-slate-500 dark:text-slate-300" : b.txt}`}>{b.n}</span>
+                  </button>
+                  <span className={`font-mono text-[9px] font-bold leading-none ${atilMod ? "text-slate-500 dark:text-slate-300" : b.txt}`}>{b.ol}</span>
                 </div>
               );
             })}
-          </div>
-        </div>
-
-        {/* SAĞ: Palet Görseli */}
-        <div className="flex flex-col rounded-2xl border border-line bg-surface shadow-card">
-          <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
-            <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
-              <Container className="h-4 w-4 text-subtle" /> Palet Görseli
-            </h2>
-            <span className="font-mono text-[11px] font-semibold text-subtle">{fmt(genelDesi)} ds · {fmt(genelKg)} kg</span>
+            <button type="button" onClick={() => setAtilMod((v) => !v)} className={`inline-flex h-11 items-center gap-1 rounded-xl border-2 px-2.5 text-[11px] font-bold transition ${atilMod ? "border-slate-400 bg-slate-200 text-slate-700 dark:border-slate-500 dark:bg-slate-600/40 dark:text-slate-200" : "border-line bg-surface text-subtle hover:text-fg"}`} title="Atıl koli"><Recycle className="h-4 w-4" /> Atıl</button>
           </div>
 
-          {paletler.length > 1 && (
-            <div className="flex gap-1.5 overflow-x-auto border-b border-line p-2">
-              {paletler.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setAktifPaletId(p.id)}
-                  onDragOver={(e) => suruklenen?.kind === "koli" && e.preventDefault()}
-                  onDrop={() => {
-                    if (suruklenen?.kind === "koli" && suruklenen.paletId !== p.id) {
-                      koliTasi({ paletId: suruklenen.paletId, koliId: suruklenen.koliId }, p.id);
-                      show({ kind: "ok", text: "Koli taşındı" });
-                      suruklenen = null;
-                    }
-                  }}
-                  className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold transition ${aktifPaletId === p.id ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" : "bg-elevated text-subtle hover:text-fg"}`}
-                >
-                  {p.ad}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="p-5">
-            <div className="rounded-2xl border-2 border-dashed border-line bg-elevated/40 p-3">
-              <div className="flex flex-wrap content-start items-end gap-2 overflow-y-auto" style={{ minHeight: 200, maxHeight: 320 }}>
-                {aktifPalet?.koliler.length === 0 && (
-                  <div className="flex w-full flex-col items-center justify-center gap-2 py-10 text-subtle">
-                    <Package className="h-8 w-8" />
-                    <p className="text-xs">Bu palette koli yok</p>
-                    <button type="button" onClick={() => yeniKoli(aktifPaletId)} className="btn-ghost btn-sm text-brand-600">
-                      <Plus className="h-4 w-4" /> Koli ekle
-                    </button>
-                  </div>
-                )}
-                {aktifPalet?.koliler.map((k) => {
-                  const renk = RENKLER[k.renk];
-                  const secili = seciliKoliId === k.id;
-                  const d = koliDesi(k);
-                  const boyut = Math.max(88, Math.min(172, 74 + d * 10));
-                  const koliDrop = dropHedef === "vis-" + k.id;
-                  return (
-                    <button
-                      key={k.id}
-                      type="button"
-                      onClick={() => setSeciliKoliId(k.id)}
-                      onDragOver={(e) => { if (suruklenen?.kind === "urun") { e.preventDefault(); setDropHedef("vis-" + k.id); } }}
-                      onDragLeave={() => koliDrop && setDropHedef(null)}
-                      onDrop={(e) => { e.preventDefault(); setDropHedef(null); koliyeBirak(k.id); }}
-                      style={{ width: boyut, height: boyut }}
-                      className={`relative flex flex-col justify-between rounded-xl p-2.5 text-left transition-all ${renk.bg} ${
-                        koliDrop ? "ring-2 ring-emerald-500 shadow-lg" : secili ? `ring-2 ${renk.ring} shadow-lg` : `ring-1 ring-black/5 hover:ring-2 ${renk.ring}`
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className={`flex h-6 w-6 items-center justify-center rounded-md bg-white/60 text-[11px] font-black ${renk.text} dark:bg-black/20`}>{k.no}</span>
-                        {k.beklemede ? <Pause className={`h-4 w-4 ${renk.text}`} /> : <Box className={`h-4 w-4 ${renk.text}`} />}
-                      </div>
-                      <div>
-                        <p className={`font-mono text-xs font-black ${renk.text}`}>{fmt(d)} ds</p>
-                        <p className={`font-mono text-[10px] font-semibold ${renk.text} opacity-80`}>{fmt(koliKg(k))} kg</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="mt-1.5">
-              <div className="h-3 rounded-b-md bg-gradient-to-b from-amber-700/70 to-amber-800/70" />
-              <div className="flex justify-between px-2">
-                {[0, 1, 2, 3].map((i) => (
-                  <div key={i} className="h-3 w-6 rounded-b-md bg-amber-800/70" />
-                ))}
-              </div>
-              <p className="mt-2 text-center text-[11px] font-bold uppercase tracking-wide text-subtle">{aktifPalet?.ad}</p>
-            </div>
-
-            {seciliKoli && (
-              <div className="mt-4 rounded-xl border border-line bg-elevated/40 p-3">
-                <div className="flex items-center justify-between">
-                  <p className="flex items-center gap-2 text-sm font-bold text-fg">
-                    <span className={`flex h-6 w-6 items-center justify-center rounded-md ${RENKLER[seciliKoli.renk].bg} ${RENKLER[seciliKoli.renk].text} text-[11px] font-black`}>{seciliKoli.no}</span>
-                    Koli {seciliKoli.no}
-                  </p>
-                  <button type="button" onClick={() => bekletToggle(seciliKoli.id)} className="btn-ghost btn-sm">
-                    <Pause className="h-3.5 w-3.5" /> {seciliKoli.beklemede ? "Devam" : "Beklet"}
-                  </button>
-                </div>
-                <p className="mt-0.5 text-[11px] text-subtle">{seciliKoli.tip}</p>
-                <div className="mt-2 flex flex-wrap items-center gap-4 font-mono text-xs">
-                  <span className="flex items-center gap-1 text-fg"><Box className="h-3.5 w-3.5 text-subtle" /> {koliAdet(seciliKoli)} adet</span>
-                  <span className="text-fg">{fmt(koliDesi(seciliKoli))} ds</span>
-                  <span className="flex items-center gap-1 text-fg"><Weight className="h-3.5 w-3.5 text-subtle" /> {fmt(koliKg(seciliKoli))} kg</span>
-                </div>
-              </div>
-            )}
+          {/* Aksiyonlar */}
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <button type="button" onClick={paletEkle} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-elevated px-3 text-sm font-semibold text-brand-600 transition hover:bg-line"><Layers className="h-4 w-4" /> Palet Ekle</button>
+            <button type="button" onClick={bitir} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-700"><Truck className="h-4 w-4" /> Paketlemeyi Bitir</button>
           </div>
         </div>
       </div>
 
-      {/* Taşı diyaloğu */}
-      {tasi && (
-        <TasiDialog
-          tasi={tasi}
-          paletler={paletler}
-          hedefPaletId={hedefPaletId}
-          setHedefPaletId={setHedefPaletId}
-          hedefKoliId={hedefKoliId}
-          setHedefKoliId={setHedefKoliId}
-          tasiAdet={tasiAdet}
-          setTasiAdet={setTasiAdet}
-          onIptal={() => setTasi(null)}
-          onOnayla={tasiOnayla}
-        />
-      )}
+      {/* İÇERİK: geniş paketleme alanı (sol) + ürün listesi (sağ) */}
+      <div className="mt-3 flex flex-col gap-4 xl:flex-row">
+        {/* ORTA: PAKETLEME ALANI (gri sahne) */}
+        <main className="min-w-0 flex-1">
+          <div
+            onClick={() => setSeciliKapId(null)}
+            onDragOver={(e) => { if (drag) { e.preventDefault(); setDropHedef("sahne"); } }}
+            onDragLeave={() => dropHedef === "sahne" && setDropHedef(null)}
+            onDrop={(e) => { e.preventDefault(); birak(null); }}
+            className={`min-h-[60vh] rounded-2xl border-2 p-3 transition ${dropHedef === "sahne" ? "border-brand-400 bg-brand-100/60 dark:bg-brand-500/10" : seciliKapId === null ? "border-brand-300 bg-slate-100/80 dark:border-brand-500/30 dark:bg-slate-800/40" : "border-line bg-slate-100/70 dark:bg-slate-800/40"}`}
+          >
+            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 px-1">
+              <h2 className="flex items-center gap-1.5 text-sm font-bold text-fg"><Boxes className="h-4 w-4 text-subtle" /> Paketleme Alanı</h2>
+              <div className="flex items-center gap-2.5 text-xs font-medium text-subtle">
+                <span><b className="font-mono text-sm font-extrabold text-fg">{kSay}</b> koli</span>
+                <span><b className="font-mono text-sm font-extrabold text-fg">{pSay}</b> palet</span>
+                <span><b className="font-mono text-sm font-extrabold text-fg">{fmt(genelDesi)}</b> desi</span>
+                <span><b className="font-mono text-sm font-extrabold text-fg">{fmt(genelKg)}</b> kg</span>
+              </div>
+              {seciliKapId === null && <span className="ml-auto rounded bg-brand-100 px-2 py-0.5 text-[10px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">hedef: alan</span>}
+            </div>
+
+            <div className="max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
+              <div className="flex flex-wrap gap-3">
+                {sahne.length === 0 && (
+                  <div className="flex w-full flex-col items-center justify-center gap-2 py-16 text-subtle">
+                    <Package className="h-9 w-9" />
+                    <p className="text-sm">Boş — soldan palet/koli ekle ya da sağdan ürün sürükle</p>
+                  </div>
+                )}
+                {sahne.map((n) => <KartNode key={n.uid} node={n} api={api} />)}
+              </div>
+            </div>
+          </div>
+        </main>
+
+        {/* SAĞ: PAKETLENECEK ÜRÜNLER */}
+        <aside className="xl:w-80 xl:shrink-0">
+          <div className="flex flex-col rounded-2xl border border-line bg-surface shadow-card xl:sticky xl:top-4">
+            <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+              <Package className="h-4 w-4 text-subtle" />
+              <h2 className="text-sm font-bold text-fg">Paketlenecek Ürünler</h2>
+              <span className="ml-auto rounded-full bg-elevated px-2 py-0.5 text-[10px] font-bold text-subtle">{KAYNAK.length} kalem</span>
+            </div>
+            <div className="max-h-[calc(100vh-200px)] space-y-2 overflow-y-auto p-2.5">
+              {KAYNAK.map((k) => {
+                const pk = paketlenmis(sahne, k.code);
+                const kalan = Math.max(0, k.siparis - pk);
+                const bittiK = kalan === 0;
+                return (
+                  <div
+                    key={k.code}
+                    draggable={!bittiK}
+                    onDragStart={() => { if (!bittiK) drag = { kind: "kaynak", code: k.code }; }}
+                    className={`rounded-xl border p-3 transition ${bittiK ? "border-emerald-300 bg-emerald-50/60 opacity-70 dark:border-emerald-500/30 dark:bg-emerald-500/10" : "cursor-grab border-line bg-surface hover:border-brand-300 active:cursor-grabbing"}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      {!bittiK && <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-subtle/50" />}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-fg">{k.name}</p>
+                        <p className="font-mono text-[10px] text-subtle">{k.code}{k.paketli && " · paketli"}</p>
+                      </div>
+                      {bittiK && <Check className="h-4 w-4 shrink-0 text-emerald-600" />}
+                    </div>
+                    <div className="mt-2 flex items-center justify-between">
+                      <span className="font-mono text-sm font-black text-fg">{pk}<span className="text-subtle"> / {k.siparis}</span> <span className="text-[10px] font-semibold text-subtle">{k.unit}</span></span>
+                      <button type="button" disabled={bittiK} onClick={() => kaynakEkle(k.code, seciliKapId)} className="inline-flex items-center gap-1 rounded-lg border border-brand-300 px-2 py-1 text-[11px] font-bold text-brand-600 transition hover:bg-brand-50 disabled:opacity-40 dark:hover:bg-brand-500/10"><Plus className="h-3.5 w-3.5" /> Ekle</button>
+                    </div>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-elevated">
+                      <div className={`h-full rounded-full ${bittiK ? "bg-emerald-500" : "bg-brand-500"}`} style={{ width: `${(pk / k.siparis) * 100}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="border-t border-line px-4 py-2 text-center text-[11px] text-subtle">Sürükle → sahneye/koliye bırak, ya da "Ekle"</p>
+          </div>
+        </aside>
+      </div>
 
       <ToastView toast={toast} />
     </div>
@@ -779,124 +447,175 @@ export default function PackagingPage() {
 }
 
 // -----------------------------------------------------------------------------
+interface Api {
+  seciliKapId: string | null;
+  setSeciliKapId: (v: string | null) => void;
+  sil: (uid: string) => void;
+  urunAdet: (uid: string, d: number) => void;
+  hacim: (uid: string, v: number) => void;
+  hazardToggle: (uid: string, h: Hazard) => void;
+  beklet: (uid: string) => void;
+  koliIcineEkle: (pid: string) => void;
+  dropHedef: string | null;
+  setDropHedef: (v: string | null) => void;
+  birak: (parentUid: string | null) => void;
+}
 
-function TasiDialog({
-  tasi,
-  paletler,
-  hedefPaletId,
-  setHedefPaletId,
-  hedefKoliId,
-  setHedefKoliId,
-  tasiAdet,
-  setTasiAdet,
-  onIptal,
-  onOnayla,
-}: {
-  tasi: TasiHedef;
-  paletler: Palet[];
-  hedefPaletId: string;
-  setHedefPaletId: (v: string) => void;
-  hedefKoliId: string;
-  setHedefKoliId: (v: string) => void;
-  tasiAdet: number;
-  setTasiAdet: (v: number) => void;
-  onIptal: () => void;
-  onOnayla: () => void;
-}) {
-  const kaynakKoli = paletler.flatMap((p) => p.koliler).find((k) => k.id === tasi.koliId);
-  const urun = tasi.kind === "urun" ? kaynakKoli?.urunler.find((u) => u.uid === tasi.uid) : undefined;
-  const hedefPalet = paletler.find((p) => p.id === hedefPaletId);
+function KartNode({ node, api }: { node: Node; api: Api }) {
+  if (node.tur === "urun") return <UrunKart urun={node} api={api} />;
+  if (node.tur === "palet") return <PaletKart palet={node} api={api} />;
+  return <KoliKart koli={node} api={api} />;
+}
 
+function PaletKart({ palet, api }: { palet: PaletNode; api: Api }) {
+  const [acik, setAcik] = useState(true);
+  const secili = api.seciliKapId === palet.uid;
+  const drop = api.dropHedef === palet.uid;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onIptal}>
-      <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-5 shadow-card" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="flex items-center gap-2 text-base font-extrabold text-fg">
-            <Move className="h-5 w-5 text-brand-600" /> {tasi.kind === "urun" ? "Ürünü Taşı" : "Koliyi Taşı"}
-          </h3>
-          <button type="button" onClick={onIptal} className="rounded-lg p-1 text-subtle hover:bg-elevated"><X className="h-5 w-5" /></button>
+    <div
+      draggable
+      onDragStart={(e) => { e.stopPropagation(); drag = { kind: "node", uid: palet.uid }; }}
+      onDragOver={(e) => { if (drag) { e.preventDefault(); e.stopPropagation(); api.setDropHedef(palet.uid); } }}
+      onDragLeave={() => drop && api.setDropHedef(null)}
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); api.birak(palet.uid); }}
+      onClick={(e) => { e.stopPropagation(); api.setSeciliKapId(palet.uid); }}
+      className={`flex w-full flex-col rounded-2xl border-2 p-3 transition ${drop ? "border-brand-500 bg-brand-50/60 dark:bg-brand-500/10" : secili ? "border-amber-400 bg-amber-50/60 ring-2 ring-amber-200 dark:bg-amber-500/5 dark:ring-amber-500/20" : "border-amber-300/70 bg-amber-50/40 dark:border-amber-500/30 dark:bg-amber-500/5"}`}
+    >
+      <div className="flex items-center gap-2">
+        <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-subtle/50" />
+        <button type="button" onClick={(e) => { e.stopPropagation(); setAcik((v) => !v); }} className="shrink-0 text-subtle">{acik ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</button>
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"><Layers className="h-5 w-5" /></span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-extrabold text-fg">{palet.ad}{secili && <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-500/30 dark:text-amber-200">hedef</span>}</p>
+          <p className="font-mono text-[11px] text-subtle">{koliSay(palet.cocuklar)} koli · {fmt(nodeDesi(palet))} ds · {fmt(nodeKg(palet))} kg</p>
         </div>
+        <SilButon onSil={() => api.sil(palet.uid)} className="rounded-lg p-1.5 text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-4 w-4" />
+      </div>
+      {acik && (
+        <div className="mt-2 flex flex-wrap gap-3 rounded-xl border border-dashed border-amber-300/60 bg-white/40 p-2.5 dark:bg-black/10">
+          {palet.cocuklar.length === 0 && <p className="w-full py-4 text-center text-[11px] text-subtle">Boş palet — koli ekle ya da ürün sürükle</p>}
+          {palet.cocuklar.map((c) => <KartNode key={c.uid} node={c} api={api} />)}
+        </div>
+      )}
+    </div>
+  );
+}
 
-        {tasi.kind === "urun" ? (
-          <>
-            <div className="mb-3 rounded-xl bg-elevated/50 p-3">
-              <p className="text-sm font-bold text-fg">{urun?.name}</p>
-              <p className="mt-0.5 font-mono text-xs text-subtle">{urun?.code} · Koli {kaynakKoli?.no} · Mevcut {urun?.qty} {urun?.unit}</p>
-            </div>
+function KoliKart({ koli, api }: { koli: KoliNode; api: Api }) {
+  const [acik, setAcik] = useState(true);
+  const secili = api.seciliKapId === koli.uid;
+  const drop = api.dropHedef === koli.uid;
+  const desi = nodeDesi(koli), kg = nodeKg(koli);
+  const dolu = Math.min(100, koli.hacim > 0 ? (desi / koli.hacim) * 100 : 0);
+  const atil = koli.atil;
+  return (
+    <div
+      draggable
+      onDragStart={(e) => { e.stopPropagation(); drag = { kind: "node", uid: koli.uid }; }}
+      onDragOver={(e) => { if (drag) { e.preventDefault(); e.stopPropagation(); api.setDropHedef(koli.uid); } }}
+      onDragLeave={() => drop && api.setDropHedef(null)}
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); api.birak(koli.uid); }}
+      onClick={(e) => { e.stopPropagation(); api.setSeciliKapId(koli.uid); }}
+      style={{ minWidth: boyutGenislik(koli.no), maxWidth: Math.max(boyutGenislik(koli.no), 380) }}
+      className={`flex flex-col rounded-2xl border-2 p-2.5 shadow-sm transition ${drop ? "border-brand-500 bg-brand-50/60 dark:bg-brand-500/10" : secili ? "border-brand-400 ring-2 ring-brand-200 dark:ring-brand-500/30" : atil ? "border-slate-300 bg-slate-100/70 dark:border-slate-600 dark:bg-slate-700/30" : "border-line bg-surface"}`}
+    >
+      <div className="flex items-start gap-2">
+        <GripVertical className="mt-1 h-4 w-4 shrink-0 cursor-grab text-subtle/50" />
+        <button type="button" onClick={(e) => { e.stopPropagation(); setAcik((v) => !v); }} className="mt-0.5 shrink-0 text-subtle">{acik ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</button>
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-black ${atil ? "bg-slate-200 text-slate-600 dark:bg-slate-600/50 dark:text-slate-200" : "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300"}`}>{koli.no}</span>
+        <div className="min-w-0 flex-1">
+          <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-fg">
+            {atil ? "Atıl Koli" : "Koli"} <span className="text-xs font-semibold text-subtle">· Boyut {koli.no} · {boyutOl(koli.no)} cm</span>
+            {koli.beklemede &&<span className="rounded bg-amber-200 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 dark:bg-amber-500/30 dark:text-amber-200">beklemede</span>}
+          </p>
+          <p className="font-mono text-[11px] text-subtle">{urunSay(koli)} ürün · {fmt(desi)} ds · {fmt(kg)} kg</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button type="button" onClick={(e) => { e.stopPropagation(); api.beklet(koli.uid); }} className="rounded-lg p-1.5 text-subtle transition hover:bg-amber-50 hover:text-amber-600 active:scale-95 dark:hover:bg-amber-500/10" title="Beklet"><Pause className="h-4 w-4" /></button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); api.koliIcineEkle(koli.uid); }} className="rounded-lg p-1.5 text-subtle transition hover:bg-brand-50 hover:text-brand-600 active:scale-95 dark:hover:bg-brand-500/10" title="İçine koli ekle"><Box className="h-4 w-4" /></button>
+          <SilButon onSil={() => api.sil(koli.uid)} className="rounded-lg p-1.5 text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-4 w-4" />
+        </div>
+      </div>
 
-            <label className="mb-3 block">
-              <span className="field-label">Miktar</span>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={urun?.qty ?? 1}
-                  value={tasiAdet}
-                  onChange={(e) => setTasiAdet(Math.max(1, Math.min(Number(e.target.value) || 1, urun?.qty ?? 1)))}
-                  className="field-input flex-1 font-mono"
-                />
-                <button type="button" onClick={() => setTasiAdet(urun?.qty ?? 1)} className="btn-ghost btn-sm shrink-0">Tümü</button>
-              </div>
-            </label>
+      <div className="mt-2 flex items-center gap-2">
+        <span className="flex items-center gap-1 text-[11px] font-semibold text-subtle"><Weight className="h-3.5 w-3.5" /> Hacim</span>
+        <input type="number" min={0} value={koli.hacim} onClick={(e) => e.stopPropagation()} onChange={(e) => api.hacim(koli.uid, Number(e.target.value) || 0)} className="h-7 w-16 rounded-lg border border-line bg-surface px-2 text-right font-mono text-xs text-fg outline-none focus:border-brand-500" />
+        <span className="text-[11px] text-subtle">ds</span>
+        <div className="ml-auto h-1.5 w-20 overflow-hidden rounded-full bg-elevated"><div className={`h-full rounded-full ${dolu > 100 ? "bg-rose-500" : dolu > 85 ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${dolu}%` }} /></div>
+      </div>
 
-            <label className="mb-3 block">
-              <span className="field-label">Hedef palet</span>
-              <select value={hedefPaletId} onChange={(e) => setHedefPaletId(e.target.value)} className="field-input">
-                {paletler.map((p) => (<option key={p.id} value={p.id}>{p.ad}</option>))}
-              </select>
-            </label>
+      <div className="mt-2 flex flex-wrap gap-1">
+        {HAZARDS.map((h) => {
+          const on = koli.hazards.includes(h.id);
+          const Icon = h.icon;
+          return (
+            <button key={h.id} type="button" onClick={(e) => { e.stopPropagation(); api.hazardToggle(koli.uid, h.id); }} title={h.label} className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold transition ${on ? h.cls : "border-line bg-surface text-subtle/60 hover:text-fg"}`}>
+              <Icon className="h-3 w-3" /> {on ? h.label : ""}
+            </button>
+          );
+        })}
+      </div>
 
-            <label className="mb-4 block">
-              <span className="field-label">Hedef koli</span>
-              <select value={hedefKoliId} onChange={(e) => setHedefKoliId(e.target.value)} className="field-input">
-                {hedefPalet?.koliler.filter((k) => k.id !== tasi.koliId).map((k) => (
-                  <option key={k.id} value={k.id}>Koli {k.no} · {k.urunler.length} kalem</option>
-                ))}
-                <option value="__new__">+ Yeni koli oluştur</option>
-              </select>
-            </label>
+      {acik && (
+        <div className="mt-2 flex max-h-[320px] flex-wrap gap-2 overflow-y-auto rounded-xl border border-dashed border-line bg-elevated/30 p-2">
+          {koli.cocuklar.length === 0 && <p className="w-full py-3 text-center text-[11px] text-subtle">Boş — ürün/koli sürükle</p>}
+          {koli.cocuklar.map((c) => <KartNode key={c.uid} node={c} api={api} />)}
+        </div>
+      )}
+    </div>
+  );
+}
 
-            <p className="mb-4 flex items-center justify-center gap-2 rounded-lg bg-elevated/50 py-2 text-xs font-semibold text-subtle">
-              Koli {kaynakKoli?.no} <ArrowRight className="h-3.5 w-3.5" /> {hedefKoliId === "__new__" ? "Yeni koli" : `Koli ${hedefPalet?.koliler.find((k) => k.id === hedefKoliId)?.no ?? "?"}`} · {tasiAdet} {urun?.unit}
-            </p>
-          </>
-        ) : (
-          <>
-            <div className="mb-3 rounded-xl bg-elevated/50 p-3">
-              <p className="text-sm font-bold text-fg">Koli {kaynakKoli?.no}</p>
-              <p className="mt-0.5 text-xs text-subtle">{kaynakKoli?.tip} · {kaynakKoli?.urunler.length} kalem</p>
-            </div>
-            <label className="mb-4 block">
-              <span className="field-label">Hedef palet</span>
-              <select value={hedefPaletId} onChange={(e) => setHedefPaletId(e.target.value)} className="field-input">
-                {paletler.filter((p) => p.id !== tasi.paletId).map((p) => (<option key={p.id} value={p.id}>{p.ad}</option>))}
-                <option value="__new__">+ Yeni palet oluştur</option>
-              </select>
-            </label>
-          </>
-        )}
-
-        <div className="flex gap-2">
-          <button type="button" onClick={onIptal} className="btn-ghost flex-1 justify-center py-2.5">İptal</button>
-          <button type="button" onClick={onOnayla} className="btn-primary flex-1 justify-center py-2.5">Taşı</button>
+function UrunKart({ urun, api }: { urun: UrunNode; api: Api }) {
+  return (
+    <div
+      draggable
+      onDragStart={(e) => { e.stopPropagation(); drag = { kind: "node", uid: urun.uid }; }}
+      onClick={(e) => e.stopPropagation()}
+      className={`flex w-36 cursor-grab flex-col rounded-xl border p-1.5 transition active:cursor-grabbing ${urun.paketli ? "border-slate-200 bg-white text-slate-900" : "border-line bg-surface"}`}
+    >
+      <div className="flex items-start gap-1">
+        <div className="min-w-0 flex-1">
+          <p className={`truncate text-[11px] font-bold leading-tight ${urun.paketli ? "text-slate-900" : "text-fg"}`}>{urun.name}</p>
+          <p className={`font-mono text-[9px] ${urun.paketli ? "text-slate-500" : "text-subtle"}`}>{urun.code}{urun.paketli && " · pk"}</p>
+        </div>
+        {urun.paketli && <PackageCheck className="h-3 w-3 shrink-0 text-emerald-600" />}
+      </div>
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-1">
+        <span className={`font-mono text-sm font-black ${urun.paketli ? "text-slate-900" : "text-fg"}`}>{urun.qty}<span className="ml-0.5 text-[9px] font-semibold text-subtle">{urun.unit}</span></span>
+        <div className="flex flex-wrap items-center justify-end gap-0.5">
+          <button type="button" onClick={(e) => { e.stopPropagation(); api.urunAdet(urun.uid, -1); }} className="flex h-7 w-7 items-center justify-center rounded-md border border-rose-300 text-rose-500 transition hover:bg-rose-50 active:scale-95 dark:hover:bg-rose-500/10"><Minus className="h-4 w-4" /></button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); api.urunAdet(urun.uid, +1); }} className="flex h-7 w-7 items-center justify-center rounded-md border border-emerald-300 text-emerald-600 transition hover:bg-emerald-50 active:scale-95 dark:hover:bg-emerald-500/10"><Plus className="h-4 w-4" /></button>
+          <SilButon onSil={() => api.sil(urun.uid)} />
         </div>
       </div>
     </div>
   );
 }
 
-function ToolbarBtn({ icon: Icon, label, onClick }: { icon: typeof Box; label: string; onClick: () => void }) {
+// Silmeden önce onay + 3 sn geri sayım (yanlışlıkla silmeyi önler)
+function SilButon({ onSil, className, iconCls = "h-3.5 w-3.5" }: { onSil: () => void; className?: string; iconCls?: string }) {
+  const [onay, setOnay] = useState(false);
+  const [kalan, setKalan] = useState(3);
+  useEffect(() => {
+    if (!onay) return;
+    setKalan(3);
+    const t = setInterval(() => setKalan((k) => (k <= 1 ? 0 : k - 1)), 1000);
+    return () => clearInterval(t);
+  }, [onay]);
+  if (!onay) {
+    return (
+      <button type="button" title="Sil" onClick={(e) => { e.stopPropagation(); setOnay(true); }} className={className ?? "flex h-7 w-7 items-center justify-center rounded-md text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10"}>
+        <Trash2 className={iconCls} />
+      </button>
+    );
+  }
   return (
-    <button type="button" onClick={onClick} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-muted transition hover:border-brand-400 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10">
-      <Icon className="h-4 w-4" /> {label}
-    </button>
-  );
-}
-
-function StepBtn({ icon: Icon, tone, onClick }: { icon: typeof Plus; tone: "up" | "down"; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} className={`flex h-6 w-6 items-center justify-center rounded-md border transition active:scale-90 ${tone === "up" ? "border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10" : "border-rose-300 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10"}`}>
-      <Icon className="h-3.5 w-3.5" />
-    </button>
+    <span className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+      <button type="button" disabled={kalan > 0} title={kalan > 0 ? `${kalan} sn bekle` : "Sil"} onClick={(e) => { e.stopPropagation(); onSil(); setOnay(false); }} className="inline-flex h-7 items-center gap-1 rounded-md bg-rose-600 px-2.5 text-[11px] font-bold text-white transition enabled:hover:bg-rose-700 enabled:active:scale-95 disabled:cursor-not-allowed disabled:opacity-60">
+        <Check className="h-3.5 w-3.5" /> {kalan > 0 ? kalan : "Evet"}
+      </button>
+      <button type="button" onClick={(e) => { e.stopPropagation(); setOnay(false); }} className="inline-flex h-7 items-center rounded-md border border-line bg-surface px-2.5 text-[11px] font-bold text-subtle transition hover:text-fg active:scale-95">İptal</button>
+    </span>
   );
 }
