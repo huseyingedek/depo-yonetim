@@ -108,7 +108,7 @@ function nodeRemove(ns: Node[], uid: string): { list: Node[]; alinan: Node | nul
 function nodeAdd(ns: Node[], parentUid: string | null, yeni: Node): Node[] {
   if (parentUid === null) return [...ns, yeni];
   return ns.map((n) =>
-    n.uid === parentUid && n.tur !== "urun" ? ({ ...n, cocuklar: [...n.cocuklar, yeni] } as Node)
+    n.uid === parentUid && n.tur !== "urun" ? ({ ...n, cocuklar: n.cocuklar.concat(yeni) } as Node)
       : n.tur === "urun" ? n : ({ ...n, cocuklar: nodeAdd(n.cocuklar, parentUid, yeni) } as Node)
   );
 }
@@ -254,7 +254,7 @@ export default function PackagingPage() {
     setSahne((prev) => temizle(nodeMap(prev, uid, (n) => (n.tur === "urun" ? { ...n, qty: Math.max(0, n.qty + delta) } : n))));
 
   const hacim = (uid: string, v: number) => map(uid, (n) => (n.tur === "koli" ? { ...n, hacim: Math.max(0, v) } : n));
-  const hazardToggle = (uid: string, h: Hazard) => map(uid, (n) => (n.tur === "koli" ? { ...n, hazards: n.hazards.includes(h) ? n.hazards.filter((x) => x !== h) : [...n.hazards, h] } : n));
+  const hazardToggle = (uid: string, h: Hazard) => map(uid, (n) => (n.tur === "koli" ? { ...n, hazards: n.hazards.includes(h) ? n.hazards.filter((x) => x !== h) : n.hazards.concat(h) } : n));
   const beklet = (uid: string) => map(uid, (n) => (n.tur === "koli" ? { ...n, beklemede: !n.beklemede } : n));
 
   const kaynakEkle = (code: string, parentUid: string | null) => {
