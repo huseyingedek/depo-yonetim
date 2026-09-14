@@ -308,6 +308,13 @@ export default function CountDetailPage() {
   }, [id, orderType, invDocNum, warehouseParam]);
 
   useEffect(() => {
+    // Sayfa açıldığında veya id değiştiğinde seçimleri sıfırla, hiçbir kart otomatik seçili/vurgulu kalmasın
+    setSelectedLineForShelf(null);
+    setActiveItem(null);
+    setLotPendingItem(null);
+  }, [id]);
+
+  useEffect(() => {
     if (istendi.current) return;
     istendi.current = true;
     if (lines.length > 0) {
@@ -1824,10 +1831,11 @@ export default function CountDetailPage() {
                   <button
                     key={line.id}
                     type="button"
+                    tabIndex={-1}
                     onClick={() => selectLineForCounting(line)}
-                    className={`w-full text-left rounded-2xl border p-2.5 sm:p-3 transition-all shadow-xs active:scale-[0.99] ${isSelectedForShelf
+                    className={`w-full text-left rounded-2xl border p-2.5 sm:p-3 transition-all shadow-xs active:scale-[0.99] outline-none focus:outline-none focus-visible:outline-none focus:ring-0 ${isSelectedForShelf
                       ? "border-brand-500 bg-surface"
-                      : "border-line bg-surface hover:border-slate-400/60"
+                      : "border-line bg-surface"
                       }`}
                   >
                     <div className="flex items-center justify-between gap-2">
