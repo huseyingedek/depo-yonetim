@@ -5,40 +5,24 @@ import type { AdjustmentLine } from "../types";
 function formatUnitConversionText(line: AdjustmentLine): string | null {
   const docUnit = (line.docUnit || line.unit || "AD").toUpperCase();
   const skunit = (line.skunit || docUnit).toUpperCase();
-  const bunit = (line.bunit || docUnit).toUpperCase();
-  const docMult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
-  const bunitMult =
+  const bunit = (line.bunit || (docUnit !== skunit ? docUnit : null))?.toUpperCase();
+  const quantity =
     line.bunitMultiplier && line.bunitMultiplier > 0
       ? line.bunitMultiplier
-      : bunit === docUnit
-      ? docMult
-      : bunit === skunit
-      ? 1
+      : line.multiplier && line.multiplier > 0
+      ? line.multiplier
       : 1;
 
-  const hasDiff = docMult > 1 || docUnit !== skunit || bunit !== docUnit;
-  if (!hasDiff) return null;
-
-  // Case 0: Eğer okutulan birim ile belge birimi aynıysa
-  if (bunit === docUnit) {
-    if (docMult > 1 || docUnit !== skunit) {
-      return `1 ${docUnit} = ${docMult} ${skunit}`;
-    }
-    return null;
+  // Çevrim kuralı: 1 bunit = quantity x skunit (örn: 1 PK = 10 AD veya 1 KO = 50 AD)
+  if (bunit && bunit !== skunit && quantity > 1) {
+    return `1 ${bunit} = ${quantity} ${skunit}`;
   }
 
-  // Case 1: skunit === bunit
-  // "skunit bunit aynı ise sadece 1ko(sayımda gelen birim)= xbunit olacak"
-  if (skunit === bunit) {
-    const x = docMult;
-    return `1 ${docUnit} = ${x} ${bunit}`;
+  if (docUnit !== skunit && line.multiplier && line.multiplier > 1) {
+    return `1 ${docUnit} = ${line.multiplier} ${skunit}`;
   }
 
-  // Case 2: skunit !== bunit
-  // "misal pk ise 1 ko(sayımda gelen birim) = x bunit = y(eğer skunit buint ile aynı değilse skunit değeri de yazacak)"
-  const x = bunitMult > 0 ? docMult / bunitMult : docMult;
-  const y = docMult;
-  return `1 ${docUnit} = ${x} ${bunit} = ${y} ${skunit}`;
+  return null;
 }
 
 describe("Sayım Birim Dönüşümü ve Barkod Eşleşmesi Kuralları (Kural 1 & 2)", () => {
@@ -61,23 +45,42 @@ describe("Sayım Birim Dönüşümü ve Barkod Eşleşmesi Kuralları (Kural 1 &
     expect(text).toBe("1 KO = 10 AD");
   });
 
-  it("Kural 2 - Durum B: bunit skunit ile farklı ise (Örn: KO belge birimi, PK barkodu okutuldu, skunit AD) -> 1 KO = 2 PK = 10 AD", () => {
+  it("Kural 2 - Durum B: bunit = quantity x skunit (Örn: PK barkodu okutuldu, quantity: 5, skunit: AD) -> 1 PK = 5 AD", () => {
     const line: AdjustmentLine = {
       id: "1",
       material: "MLZ001",
       name: "Ürün X",
       targetQty: 50, // 5 KO
-      countedQty: 10, // 1 KO = 2 PK = 10 AD sayıldı
+      countedQty: 10,
       unit: "KO",
       docUnit: "KO",
       skunit: "AD",
       multiplier: 10, // 1 KO = 10 AD
       bunit: "PK",
-      bunitMultiplier: 5, // 1 PK = 5 AD -> 1 KO = 2 PK
+      bunitMultiplier: 5, // 1 PK = 5 AD
     };
 
     const text = formatUnitConversionText(line);
-    expect(text).toBe("1 KO = 2 PK = 10 AD");
+    expect(text).toBe("1 PK = 5 AD");
+  });
+
+  it("Kural 2 - Durum C: Belge AD iken PK barkodu okutulduğunda ters çevrim (0.1 PK) yapılmamalı, 1 PK = 10 AD gösterilmeli", () => {
+    const line: AdjustmentLine = {
+      id: "2",
+      material: "MLZ002",
+      name: "Ürün Y",
+      targetQty: 100,
+      countedQty: 20,
+      unit: "AD",
+      docUnit: "AD",
+      skunit: "AD",
+      multiplier: 1,
+      bunit: "PK",
+      bunitMultiplier: 10, // 1 PK = 10 AD
+    };
+
+    const text = formatUnitConversionText(line);
+    expect(text).toBe("1 PK = 10 AD");
   });
 
   it("Kural 2 - Kartın Sağındaki Miktar Gösterimi: Üst satırda x/x docUnit (örn: 1 / 5 KO), alt satırda skunit cinsinden toplam değer (örn: 10 AD)", () => {
@@ -212,4 +215,54 @@ describe("Sayım Birim Dönüşümü ve Barkod Eşleşmesi Kuralları (Kural 1 &
     };
     expect(getOkutulanBirim(resetLine)).toBe("-");
   });
+
+  it("Kural 3 - KO barkodu ile 3 koli okutulduğunda sağ kartta üstte 3 KO, altta (3 x quantity) skunit (150 AD) hesaplanmalıdır", () => {
+    // 1 KO = 50 AD dönüşümü olan koli barkodu:
+    const scannedQty = 3; // 3 KO girildi
+    const bunitMult = 50; // quantity / multiplier
+    const skunit = "AD";
+
+    const line: AdjustmentLine = {
+      id: "new-123",
+      material: "MLZ999",
+      name: "Koli Ürünü",
+      targetQty: 0, // Belgede olmayan / serbest sayım
+      countedQty: scannedQty * bunitMult, // 150 AD ana stok birimi
+      unit: "KO",
+      docUnit: "KO",
+      skunit: "AD",
+      multiplier: 50,
+      bunit: "KO",
+      bunitMultiplier: 50,
+    };
+
+    const docUnit = (line.docUnit || line.unit || "AD").toUpperCase();
+    const docMult = line.multiplier && line.multiplier > 0 ? line.multiplier : 1;
+    const lineBunit = line.bunit ? line.bunit.toUpperCase() : undefined;
+    const lineBunitMult = line.bunitMultiplier && line.bunitMultiplier > 0 ? line.bunitMultiplier : 1;
+
+    let displayUnit = docUnit;
+    let displayMult = docMult;
+    if (lineBunit && lineBunitMult > 1) {
+      displayUnit = lineBunit;
+      displayMult = lineBunitMult;
+    } else if (docMult > 1) {
+      displayUnit = docUnit;
+      displayMult = docMult;
+    }
+
+    const countedInDisplayUnit = displayMult > 1 ? line.countedQty / displayMult : line.countedQty;
+    const isUnexpected = line.targetQty <= 0 && line.countedQty > 0;
+    const showSkunitSubtext = (displayMult > 1 || displayUnit !== skunit) && line.countedQty > 0;
+
+    // Üst satır: 3 KO
+    expect(countedInDisplayUnit).toBe(3);
+    expect(displayUnit).toBe("KO");
+    expect(isUnexpected).toBe(true); // Mavi rozet
+
+    // Alt satır: (3 x quantity) skunit = 150 AD
+    expect(showSkunitSubtext).toBe(true);
+    expect(`${line.countedQty} ${skunit}`).toBe("150 AD");
+  });
 });
+

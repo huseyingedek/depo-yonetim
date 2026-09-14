@@ -403,9 +403,25 @@ function toAdjustmentLine(row: Row, index: number): AdjustmentLine {
   // Kalan/Hedef miktar her zaman ana stok birimi (SKUNIT / AVAILSTOCKN / AVAILSTOCK) cinsinden alınır
   const targetQty = num(row, ["AVAILSTOCKN", "AVAILSTOCKV", "AVAILSTOCK", "SKQUANTITY", "ACTUALSTOCK", "STOCKQTY", "STOCK", "TARGETQTY", "SYSTEMQTY", "TOTALITEMS", "TOTALQTY", "QUANTITY", "CUAVAILSTOCKN", "AMOUNT"], 0);
   const countedQty = num(row, ["COUNTEDQTY", "READQUANTITY", "READQTY", "ACTUALQTY", "TOTALCOUNTED", "COUNTED", "REVISESTOCKN", "REVISESTOCKV", "CUREVISESTOCKN"], 0);
-  const skunit = pick(row, ["SKUNIT", "STOCKUNIT", "IUNIT", "BUNIT", "UNIT", "CUNIT"]) || "AD";
-  const unit = pick(row, ["SKUNIT", "CUNIT", "BUNIT", "UNIT", "QUNIT", "PURUNIT", "IUNIT", "STOCKUNIT"]) || skunit;
-  const multiplier = num(row, ["MULTIPLIER", "FACTOR", "PACKAGEMULTIPLIER", "CFACTOR"], 1);
+  // Ana stok birimi (SKUNIT)
+  const skunit = (pick(row, ["SKUNIT", "STOCKUNIT", "IUNIT"]) || "AD").toUpperCase();
+
+  // Belge birimi (QUNIT / DOCUNIT / CUNIT / PURUNIT)
+  const docUnit = (pick(row, ["QUNIT", "DOCUNIT", "PURUNIT", "CUNIT", "UNIT", "BUNIT"]) || skunit).toUpperCase();
+
+  // Çarpan (1 docUnit = X skunit)
+  let multiplier = num(row, ["UFACTOR", "CONVFACTOR", "MULTIPLIER", "FACTOR", "PACKAGEMULTIPLIER", "CFACTOR"], 1);
+  if (multiplier <= 1 && docUnit !== skunit) {
+    const skQty = num(row, ["AVAILSTOCKN", "AVAILSTOCKV", "SKQUANTITY"], 0);
+    const docQty = num(row, ["CUAVAILSTOCKN", "QQUANTITY", "DOCQTY", "QUANTITY"], 0);
+    if (docQty > 0 && skQty > docQty) {
+      multiplier = Math.round(skQty / docQty);
+    }
+  }
+
+  const bunitRaw = pick(row, ["BUNIT", "BARCODEUNIT"]);
+  const bunitMultRaw = num(row, ["BMULTIPLIER", "BFACTOR", "BARCODEMULTIPLIER"], 0);
+
   const batchNum = pick(row, ["BATCHNUM", "LOT", "LOTNUM", "PARTI", "BATCH"]);
   const specialStock = pick(row, ["SPECIALSTOCK", "ISLOT", "ISBATCH"]);
   const warehouse = pick(row, ["WAREHOUSE", "SRCWAREHOUSE", "WH", "DEPOT", "PSWAREHOUSE"]);
@@ -420,9 +436,12 @@ function toAdjustmentLine(row: Row, index: number): AdjustmentLine {
     barcode: barcode || undefined,
     targetQty: targetQty > 0 ? targetQty : 0,
     countedQty: countedQty >= 0 ? countedQty : 0,
-    unit: unit.toUpperCase(),
-    skunit: skunit.toUpperCase(),
+    unit: docUnit,
+    docUnit,
+    skunit,
     multiplier: multiplier > 0 ? multiplier : 1,
+    bunit: bunitRaw ? bunitRaw.toUpperCase() : undefined,
+    bunitMultiplier: bunitMultRaw > 0 ? bunitMultRaw : undefined,
     batchNum: batchNum && batchNum !== "*" ? batchNum : undefined,
     specialStock: specialStock || "*",
     warehouse: warehouse && warehouse !== "*" ? warehouse : undefined,
@@ -2176,8 +2195,8 @@ export const api = {
       const specialStock = isPartili
         ? "1"
         : line.specialStock && line.specialStock !== "0" && line.specialStock !== "Serbest"
-        ? line.specialStock
-        : "*";
+          ? line.specialStock
+          : "*";
       const batchNum =
         isPartili && line.batchNum && line.batchNum !== "*" && line.batchNum !== "—"
           ? String(line.batchNum).trim()
