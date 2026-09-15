@@ -24,5 +24,16 @@ services-raw.json
 services-raw.xml
 v1-services.json
 v1-services-raw.xml
-server/test_ping.mjs
-server/test_login.mjs
+# Test ve deneme klasörleri / scriptleri (asla git'e pushlanmaz)
+tests/
+server/tests/
+__tests__/
+test_*
+test_*.mjs
+test_*.js
+server/test_*
+server/test_*.mjs
+server/test_*.js
+*.test.local.*
+scratch/
+
