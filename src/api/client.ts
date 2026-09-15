@@ -1716,14 +1716,24 @@ export const api = {
     }
     const unitList = unwrapRows(wmsRoot.TBLUNITLIST ?? dataObj.TBLUNITLIST);
 
-    // MatSize
+    // MatSize (CANIAS ölçüleri TBLMATSIZ veya TBLMATSIZE altında döndürür)
+    const tblMatSize = unwrapRows(
+      wmsRoot.TBLMATSIZ ??
+      wmsRoot.TBLMATSIZE ??
+      dataObj.TBLMATSIZ ??
+      dataObj.TBLMATSIZE ??
+      rootRow.TBLMATSIZ ??
+      rootRow.TBLMATSIZE
+    );
     let matSize: Record<string, unknown> = {};
-    if (rootRow.MATSIZE) {
+    if (tblMatSize.length) {
+      matSize = tblMatSize[0];
+    } else if (rootRow.MATSIZE) {
       const ms = rootRow.MATSIZE as Record<string, unknown>;
       matSize = (ms.ROW || ms) as Record<string, unknown>;
     } else {
-      const matSizeList = rowsOf(r, ["MATSIZE", "MATSIZELIST", "SIZE", "IASMATSIZE"]);
-      matSize = matSizeList.length > 0 ? matSizeList[0] : ((dataObj.MATSIZE || dataObj.SIZE || {}) as Record<string, unknown>);
+      const matSizeList = rowsOf(r, ["TBLMATSIZ", "TBLMATSIZE", "MATSIZE", "MATSIZELIST", "SIZE", "IASMATSIZE"]);
+      matSize = matSizeList.length > 0 ? matSizeList[0] : ((dataObj.TBLMATSIZ || dataObj.TBLMATSIZE || dataObj.MATSIZE || dataObj.SIZE || {}) as Record<string, unknown>);
     }
 
     const imageList = (dataObj.MATIMAGES as Record<string, unknown>[]) || (dataObj.IMAGES as Record<string, unknown>[]) || (dataObj.PICTURELIST as Record<string, unknown>[]) || [];

@@ -250,12 +250,18 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
         const matListRows = Array.isArray(matRes.matList) ? matRes.matList : [];
         const matListRow = (matListRows[0] as Record<string, unknown>) || {};
 
-        const rawSize = matRes.matSize;
+        const rawSize =
+          matRes.matSize ||
+          (matRes as unknown as Record<string, unknown>).TBLMATSIZ ||
+          (matRes as unknown as Record<string, unknown>).TBLMATSIZE ||
+          ((matRes as unknown as Record<string, unknown>).raw as Record<string, unknown> | undefined)?.TBLMATSIZ ||
+          ((matRes as unknown as Record<string, unknown>).raw as Record<string, unknown> | undefined)?.TBLMATSIZE;
+
         const matSizeRow: Record<string, unknown> = Array.isArray(rawSize)
           ? (rawSize[0] as Record<string, unknown>) || {}
           : rawSize && typeof rawSize === "object" && "ROW" in rawSize
-          ? ((Array.isArray(rawSize.ROW) ? rawSize.ROW[0] : rawSize.ROW) as Record<string, unknown>) || {}
-          : (rawSize as Record<string, unknown>) || {};
+            ? ((Array.isArray(rawSize.ROW) ? rawSize.ROW[0] : rawSize.ROW) as Record<string, unknown>) || {}
+            : (rawSize as Record<string, unknown>) || {};
 
         const matCode = String(matListRow.MATERIAL || matListRow.STOKKODU || trimmed);
         const matName = String(
@@ -275,55 +281,86 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
           matRes.image;
         const matImage = formatImageSrc(rawImg);
 
-        const nestedSize = (matListRow.MATSIZE as Record<string, unknown>)?.ROW || matListRow.MATSIZE;
+        const nestedSize =
+          (matListRow.TBLMATSIZ as Record<string, unknown>)?.ROW ||
+          matListRow.TBLMATSIZ ||
+          (matListRow.TBLMATSIZE as Record<string, unknown>)?.ROW ||
+          matListRow.TBLMATSIZE ||
+          (matListRow.MATSIZE as Record<string, unknown>)?.ROW ||
+          matListRow.MATSIZE;
         const nestedSizeRow: Record<string, unknown> =
           nestedSize && typeof nestedSize === "object" ? (nestedSize as Record<string, unknown>) : {};
 
-        const dimSources = [nestedSizeRow, matSizeRow, matListRow, ...(matListRows as Record<string, unknown>[])];
+        const dimSources = [
+          nestedSizeRow,
+          matSizeRow,
+          matListRow,
+          ...(matListRows as Record<string, unknown>[]),
+          ...(Array.isArray(rawSize) ? (rawSize as Record<string, unknown>[]) : []),
+        ];
 
         const plength = extractDimensionValue(
           dimSources,
-          ["PLENGTH", "LENGTH", "UZUNLUK", "BOY", "DERINLIK", "DEPTH", "PDEPTH", "PBOY", "MLENGTH", "ILENGTH"],
+          [
+            "PLENGTH", "LENGTH", "UZUNLUK", "BOY", "DERINLIK", "DEPTH", "PDEPTH", "LENGHT", "PLENGHT",
+            "PBOY", "PUZUNLUK", "MLENGTH", "ILENGTH", "SIZEL", "DIML", "P_LENGTH", "P_BOY", "P_UZUNLUK",
+            "BOYU", "UZUNLUGU", "LONGITUDE", "LONG"
+          ],
           /^(p_?)?(length|lenght|boy|uzunluk|depth|derinlik)/i
         );
 
         const pwidth = extractDimensionValue(
           dimSources,
-          ["PWIDTH", "WIDTH", "EN", "GENISLIK", "PGENISLIK", "PEN", "MWIDTH", "IWIDTH"],
+          [
+            "PWIDTH", "WIDTH", "EN", "GENISLIK", "PGENISLIK", "PEN", "MWIDTH", "IWIDTH", "WIDHT", "PWIDHT",
+            "SIZEW", "DIMW", "P_WIDTH", "P_EN", "P_GENISLIK", "ENI", "GENISLIGI"
+          ],
           /^(p_?)?(width|widht|en|genislik)/i
         );
 
         const pheight = extractDimensionValue(
           dimSources,
-          ["PHEIGHT", "HEIGHT", "YUKSEKLIK", "PYUKSEKLIK", "MHEIGHT", "IHEIGHT"],
+          [
+            "PHEIGHT", "HEIGHT", "YUKSEKLIK", "PYUKSEKLIK", "MHEIGHT", "IHEIGHT", "HEIGTH", "PHEIGTH",
+            "SIZEH", "DIMH", "P_HEIGHT", "P_YUKSEKLIK", "YUKSEKLIGI"
+          ],
           /^(p_?)?(height|heigth|yukseklik)/i
         );
 
         const netweight = extractDimensionValue(
           dimSources,
-          ["NETWEIGHT", "NETAGIRLIK", "NET_WEIGHT", "NET_AGIRLIK", "NWEIGHT", "NETW"],
+          [
+            "NETWEIGHT", "NETAGIRLIK", "NET_WEIGHT", "NET_AGIRLIK", "NWEIGHT", "NETW", "NETAGIRLIGI", "NET"
+          ],
           /^net(weight|agirlik|w)?$/i
         );
 
         const brutweight = extractDimensionValue(
           dimSources,
-          ["BRUTWEIGHT", "GROSSWEIGHT", "BRUTAGIRLIK", "BRUT_WEIGHT", "BWEIGHT", "GWEIGHT"],
+          [
+            "BRUTWEIGHT", "GROSSWEIGHT", "BRUTAGIRLIK", "BRUT_WEIGHT", "BRUT_AGIRLIK", "BWEIGHT", "GWEIGHT",
+            "BRUTW", "GROSSW", "BRUTAGIRLIGI", "GROSSAGIRLIK", "BRUT", "GROSS"
+          ],
           /^(brut|gross)(weight|agirlik|w)?$/i
         );
 
         const volume =
-          extractDimensionValue(dimSources, ["VOLUME", "HACIM", "PVOLUME", "VOL", "DS", "DESI"], /^(p_?)?(volume|hacim|vol|desi)$/i) ||
+          extractDimensionValue(
+            dimSources,
+            ["VOLUME", "HACIM", "PVOLUME", "VOL", "HACMI", "DS", "DESI"],
+            /^(p_?)?(volume|hacim|vol|desi)$/i
+          ) ||
           (pwidth > 0 && plength > 0 && pheight > 0 ? Number(((pwidth * plength * pheight) / 3000).toFixed(2)) : 0);
 
         const nwunit = extractUnitValue(
           dimSources,
-          ["NWUNIT", "WUNIT", "WEIGHTUNIT", "NETWUNIT", "NETUNIT"],
+          ["NWUNIT", "WUNIT", "WEIGHTUNIT", "NETWUNIT", "NETUNIT", "NUNIT", "P_NWUNIT", "UNIT_NET"],
           String(matSizeRow.NWUNIT || nestedSizeRow.NWUNIT || "KG")
         );
 
         const bwunit = extractUnitValue(
           dimSources,
-          ["BWUNIT", "WUNIT", "WEIGHTUNIT", "BRUTWUNIT", "BRUTUNIT"],
+          ["BWUNIT", "WUNIT", "WEIGHTUNIT", "BRUTWUNIT", "BRUTUNIT", "BUNIT_WEIGHT", "P_BWUNIT", "UNIT_BRUT"],
           String(matSizeRow.BWUNIT || nestedSizeRow.BWUNIT || "KG")
         );
 
@@ -536,16 +573,15 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
     dims?.volume && dims.volume > 0
       ? dims.volume
       : dims?.width && dims.length && dims.height
-      ? Number(((dims.width * dims.length * dims.height) / 3000).toFixed(2))
-      : 0;
+        ? Number(((dims.width * dims.length * dims.height) / 3000).toFixed(2))
+        : 0;
 
   return (
     <div
-      className={`rounded-3xl border border-line bg-surface pt-1.5 pb-1.5 px-3 sm:pt-1.5 sm:pb-2 sm:px-3.5 shadow-card flex flex-col justify-start min-w-0 h-full ${
-        activeMaterial.isSpecialLot ? "min-h-[290px] sm:min-h-[300px]" : "min-h-[205px] sm:min-h-[215px]"
-      } ${className}`}
+      className={`rounded-3xl border border-line bg-surface pt-0.5 pb-0.5 px-2 sm:pt-0.5 sm:pb-0.5 sm:px-1.5 shadow-card flex flex-col justify-start min-w-0 h-full ${activeMaterial.isSpecialLot ? "min-h-[190px] sm:min-h-[200px]" : "min-h-[190px] sm:min-h-[200px]"
+        } ${className}`}
     >
-      <div className="w-full flex-1 flex flex-col justify-start gap-1 sm:gap-1.5">
+      <div className="w-full flex-1 flex flex-col justify-start gap-0.5 sm:gap-0.5">
         {/* 1. Satır: En Üstte Malzeme İsmi */}
         <div className="flex items-center justify-between gap-2 border-b border-line/40 pt-0 pb-1 min-w-0">
           <h4
@@ -652,7 +688,7 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
               </div>
 
               <div className="flex items-center gap-1 min-w-0">
-                <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Desi:</span>
+                <span className="text-subtle font-bold text-[11.5px] sm:text-[11.5px] shrink-0">Desi:</span>
                 <span className="font-mono font-black text-fg text-xs sm:text-[12.5px] truncate">
                   {desiCalculated} DS
                 </span>
@@ -668,7 +704,7 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
 
             {/* Orta Kısım: Güvenlik / Nitelik Rozetleri */}
             {activeSpecialAttrs.length > 0 && (
-              <div className="grid grid-cols-3 gap-1 my-1 pt-1 border-t border-line/40">
+              <div className="flex flex-wrap items-center gap-1 my-1 pt-1 border-t border-line/40">
                 {activeSpecialAttrs.map((attr) => (
                   <span
                     key={attr.id}
