@@ -24,3 +24,5 @@ services-raw.json
 services-raw.xml
 v1-services.json
 v1-services-raw.xml
+server/test_ping.mjs
+server/test_login.mjs
