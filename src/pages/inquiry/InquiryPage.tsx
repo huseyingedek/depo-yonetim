@@ -259,7 +259,7 @@ export default function InquiryPage() {
           </div>
         </div>
 
-        {/* Sağ: sonuçlar */}
+        {/* Sağ: sonuçlar DetailPage */}
         <div className="min-w-0">
           {!queried ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-surface py-16 text-center">
@@ -326,8 +326,8 @@ export default function InquiryPage() {
               {toastMsg && (
                 <div
                   className={`flex items-center justify-between gap-2.5 rounded-xl border p-3.5 text-xs ${toastMsg.type === "success"
-                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                      : "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300"
+                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                    : "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300"
                     }`}
                 >
                   <div className="flex items-center gap-2">
@@ -357,15 +357,15 @@ export default function InquiryPage() {
                         key={`${b.material}|${b.warehouse}|${b.stockPlace}|${b.batchNum || i}`}
                         onClick={() => setSelectedMaterial(b.material)}
                         className={`flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer transition-all ${isSelectedRow
-                            ? "bg-brand-500/10 border border-brand-500/35 shadow-xs ring-1 ring-brand-500/20"
-                            : "bg-elevated hover:bg-elevated/80 border border-transparent"
+                          ? "bg-brand-500/10 border border-brand-500/35 shadow-xs ring-1 ring-brand-500/20"
+                          : "bg-elevated hover:bg-elevated/80 border border-transparent"
                           }`}
                         title="Bu ürünün detaylarını kartta göster"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <p className="truncate text-sm font-semibold text-fg">{b.name || b.material || "—"}</p>
-                            {b.specialStock === "0" && (
+                            {b.specialStock === "1" && (
                               <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">SKT</span>
                             )}
                           </div>
@@ -389,7 +389,7 @@ export default function InquiryPage() {
                             )}
                           </div>
 
-                          {/* Etiket Yazdır Butonu (Bora spec: MZYPrintWHSP) */}
+                          {/* Etiket Yazdır Butonu */}
                           <button
                             type="button"
                             disabled={printingIndex === i}
