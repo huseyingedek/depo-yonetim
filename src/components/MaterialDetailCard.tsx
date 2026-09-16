@@ -84,6 +84,11 @@ export interface MaterialDetailCardProps {
   materialCode?: string;
 
   /**
+   * Seçili veya gösterilmesi istenen spesifik barkod (isteğe bağlı).
+   */
+  barcode?: string;
+
+  /**
    * Önceden hazırlanmış veya üst bileşenden gelen malzeme verisi.
    * Verilirse doğrudan bu veri kullanılır (tekrar servis isteği atılmaz).
    */
@@ -233,6 +238,7 @@ function extractUnitValue(
 
 export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
   materialCode,
+  barcode,
   data,
   onEditDimensions,
   onBarcodeSelect,
@@ -244,7 +250,14 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedBarcodeState, setSelectedBarcodeState] = useState<string>("");
 
-  // materialCode değiştiğinde CANIAS servisinden verileri otomatik çek
+  // Üst bileşenden barcode prop'u değişirse seçili barkodu senkronize et
+  useEffect(() => {
+    if (barcode) {
+      setSelectedBarcodeState(barcode);
+    }
+  }, [barcode]);
+
+  // materialCode veya barcode değiştiğinde CANIAS servisinden verileri otomatik çek
   useEffect(() => {
     if (data) {
       setInternalData(data);
@@ -252,8 +265,10 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
       return;
     }
 
-    const trimmed = (materialCode || "").trim();
-    if (!trimmed) {
+    const activeBc = (selectedBarcodeState || barcode || "").trim();
+    const queryTarget = activeBc || (materialCode || "").trim();
+
+    if (!queryTarget) {
       setInternalData(null);
       setSelectedBarcodeState("");
       return;
@@ -263,7 +278,7 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
     setLoading(true);
 
     api
-      .getMaterialDetail(trimmed)
+      .getMaterialDetail(queryTarget)
       .then((matRes) => {
         if (!isSubscribed) return;
 
@@ -283,7 +298,7 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
             ? ((Array.isArray(rawSize.ROW) ? rawSize.ROW[0] : rawSize.ROW) as Record<string, unknown>) || {}
             : (rawSize as Record<string, unknown>) || {};
 
-        const matCode = String(matListRow.MATERIAL || matListRow.STOKKODU || trimmed);
+        const matCode = String(matListRow.MATERIAL || matListRow.STOKKODU || (materialCode || "").trim() || queryTarget);
         const matName = String(
           matListRow.NAME1 || matListRow.STEXT || matListRow.AÇIKLAMA || matListRow.MTEXT || "Malzeme"
         );
@@ -397,17 +412,6 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
           if (uCode && uFct > 0) unitMultipliers[uCode] = uFct;
         }
 
-        const scannedBarcodeRow = rawBarcodeList.find(
-          (b) => String(b.BARCODE || b.barcode || "").trim() === trimmed
-        );
-        const scannedUnit = String(
-          scannedBarcodeRow?.BUNIT || scannedBarcodeRow?.UNIT || matUnit || "AD"
-        ).trim().toUpperCase();
-        const scannedMultiplier = parseNum(matListRow.QUANTITY || 1) || 1;
-        if (scannedUnit && scannedMultiplier > 0 && !unitMultipliers[scannedUnit]) {
-          unitMultipliers[scannedUnit] = scannedMultiplier;
-        }
-
         for (const b of rawBarcodeList) {
           const bCode = String(b.BARCODE || b.barcode || "").trim();
           const bUnit = String(b.BUNIT || b.UNIT || b.BARCODEUNIT || b.unit || matUnit || "AD").trim().toUpperCase();
@@ -417,9 +421,73 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
           }
         }
 
-        if (trimmed && !seenBarcodes.has(trimmed)) {
-          seenBarcodes.add(trimmed);
-          barcodes.push({ barcode: trimmed, unit: scannedUnit || matUnit || "AD" });
+        // Aktif seçilen barkodu ve birimini belirle
+        const currentActiveBarcode = (activeBc || queryTarget || barcodes[0]?.barcode || "").trim();
+        const matchedBcRow = rawBarcodeList.find(
+          (b) => String(b.BARCODE || b.barcode || "").trim().toLowerCase() === currentActiveBarcode.toLowerCase()
+        );
+        const currentUnit = String(
+          matchedBcRow?.BUNIT || matchedBcRow?.UNIT || matListRow.BUNIT || matListRow.UNIT || matUnit || "AD"
+        ).trim().toUpperCase();
+
+        // Birim çarpanı
+        const unitRow = rawUnitList.find(
+          (u) => String(u.QUNIT || u.UNIT || "").trim().toUpperCase() === currentUnit
+        );
+        const multiplier = parseNum(unitRow?.PERUNIT ?? unitRow?.FCT ?? matListRow.QUANTITY) || 1;
+        if (currentUnit && multiplier > 0 && !unitMultipliers[currentUnit]) {
+          unitMultipliers[currentUnit] = multiplier;
+        }
+
+        if (currentActiveBarcode && !seenBarcodes.has(currentActiveBarcode)) {
+          seenBarcodes.add(currentActiveBarcode);
+          barcodes.push({ barcode: currentActiveBarcode, unit: currentUnit });
+        }
+
+        // Birime özel boyut / ağırlık değerlerini kontrol et
+        const uW = parseNum(unitRow?.AKLPWIDTH);
+        const uL = parseNum(unitRow?.AKLPLENGTH);
+        const uH = parseNum(unitRow?.AKLPHEIGHT);
+        const uVol = parseNum(unitRow?.AKLPVOLUME);
+        const uNW = parseNum(unitRow?.AKLPNETWEIGHT);
+
+        let finalWidth = pwidth;
+        let finalLength = plength;
+        let finalHeight = pheight;
+        let finalVolume = volume;
+        let finalNetWeight = netweight;
+        let finalBrutWeight = brutweight;
+
+        // 1. Boyutlar (Genişlik, Uzunluk, Yükseklik)
+        if (uW > 0 && uL > 0 && uH > 0) {
+          finalWidth = uW;
+          finalLength = uL;
+          finalHeight = uH;
+        } else if (multiplier > 1 && pwidth > 0 && plength > 0 && pheight > 0) {
+          const scale = Math.cbrt(multiplier);
+          finalWidth = Number((pwidth * scale).toFixed(1));
+          finalLength = Number((plength * scale).toFixed(1));
+          finalHeight = Number((pheight * scale).toFixed(1));
+        }
+
+        // 2. Hacim / Desi
+        if (uVol > 0) {
+          finalVolume = uVol;
+        } else if (multiplier > 1 && volume > 0) {
+          finalVolume = Number((volume * multiplier).toFixed(2));
+        } else if (finalWidth > 0 && finalLength > 0 && finalHeight > 0) {
+          finalVolume = Number(((finalWidth * finalLength * finalHeight) / 3000).toFixed(2));
+        }
+
+        // 3. Ağırlıklar
+        if (uNW > 0) {
+          finalNetWeight = uNW;
+        } else if (multiplier > 1 && netweight > 0) {
+          finalNetWeight = Number((netweight * multiplier).toFixed(2));
+        }
+
+        if (multiplier > 1 && brutweight > 0) {
+          finalBrutWeight = Number((brutweight * multiplier).toFixed(2));
         }
 
         const specialAttributes = {
@@ -436,21 +504,21 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
           material: matCode,
           name: matName,
           image: matImage,
-          unit: matUnit,
+          unit: currentUnit || matUnit || "AD",
           isSpecialLot,
           barcodes,
-          selectedBarcode: trimmed || barcodes[0]?.barcode || "",
-          packageMultiplier: scannedMultiplier,
+          selectedBarcode: currentActiveBarcode || barcodes[0]?.barcode || "",
+          packageMultiplier: multiplier,
           unitMultipliers,
           specialAttributes,
           dimensions: {
-            width: pwidth,
-            length: plength,
-            height: pheight,
-            volume,
-            netWeight: netweight,
+            width: finalWidth,
+            length: finalLength,
+            height: finalHeight,
+            volume: finalVolume,
+            netWeight: finalNetWeight,
             netWeightUnit: nwunit,
-            brutWeight: brutweight,
+            brutWeight: finalBrutWeight,
             brutWeightUnit: bwunit,
           },
         };
@@ -468,7 +536,7 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
     return () => {
       isSubscribed = false;
     };
-  }, [materialCode, data]);
+  }, [materialCode, barcode, selectedBarcodeState, data]);
 
   const activeMaterial = data || internalData;
 
@@ -565,7 +633,7 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
     }
   };
 
-  if (loading) {
+  if (loading && !activeMaterial) {
     return (
       <div
         className={`rounded-3xl border border-line bg-surface p-4 shadow-card flex flex-col items-center justify-center min-h-[205px] ${className}`}
@@ -605,10 +673,11 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
         {/* 1. Satır: En Üstte Malzeme İsmi */}
         <div className="flex items-center justify-between gap-2 border-b border-line/40 pt-0 pb-1 min-w-0">
           <h4
-            className="font-black text-fg text-[15px] sm:text-base leading-snug truncate flex-1 min-w-0 tracking-tight"
+            className="font-black text-fg text-[15px] sm:text-base leading-snug truncate flex-1 min-w-0 tracking-tight flex items-center gap-1.5"
             title={activeMaterial.name}
           >
-            {activeMaterial.name}
+            <span className="truncate">{activeMaterial.name}</span>
+            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-600 shrink-0" />}
           </h4>
         </div>
 

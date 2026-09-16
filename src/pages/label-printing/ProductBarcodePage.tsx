@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Search, Printer, Check, Loader2, Package, Tag, FileText } from "lucide-react";
 import { api } from "../../api/client";
 import PageHeader from "../../components/PageHeader";
+import MaterialDetailCard from "../../components/MaterialDetailCard";
 
 type TabType = "materialCode" | "barcode" | "description";
 
@@ -174,6 +175,10 @@ export default function ProductBarcodePage() {
   const [printing, setPrinting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+
+  const activeMaterialCode = selectedCards[0]?.material || searchResults[0]?.material || "";
+  const activeBarcode = selectedCards[0]?.barcode || searchResults[0]?.barcode || "";
+  const detailCardRef = useRef<HTMLDivElement>(null);
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
@@ -356,12 +361,44 @@ export default function ProductBarcodePage() {
     }
   };
 
-  const toggleSelectCard = (item: ProductBarcodeCardItem) => {
-    setSelectedCards((prev) => {
-      const exists = prev.some((c) => c.id === item.id);
-      if (exists) return [];
-      return [item];
+  const selectAndBringToTop = (item: ProductBarcodeCardItem) => {
+    setSelectedCards([item]);
+
+    // Seçilen kartı sonuç listesinin en üstüne taşı
+    setSearchResults((prev) => {
+      const idx = prev.findIndex((c) => c.id === item.id);
+      if (idx <= 0) return prev;
+      const copy = [...prev];
+      const [moved] = copy.splice(idx, 1);
+      return [moved, ...copy];
     });
+
+    // Kullanıcı aşağıda ise yukarıdaki detay kartına ve yeni seçilen karta yumuşakça kaydır
+    setTimeout(() => {
+      detailCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  };
+
+  const toggleSelectCard = (item: ProductBarcodeCardItem) => {
+    selectAndBringToTop(item);
+  };
+
+  const handleCardBarcodeSelect = (barcode: string) => {
+    const trimmed = (barcode || "").trim().toLowerCase();
+    if (!trimmed) return;
+
+    // Önce aktif malzemenin bu barkoduna ait kartı bul, yoksa listedeki eşleşen kartı seç
+    const matchingCard =
+      searchResults.find(
+        (c) =>
+          c.material.toLowerCase() === activeMaterialCode.toLowerCase() &&
+          c.barcode.toLowerCase() === trimmed
+      ) ||
+      searchResults.find((c) => c.barcode.toLowerCase() === trimmed);
+
+    if (matchingCard) {
+      selectAndBringToTop(matchingCard);
+    }
   };
 
   const isCardSelected = (item: ProductBarcodeCardItem) => {
@@ -645,40 +682,50 @@ export default function ProductBarcodePage() {
         {searching ? (
           <div className="h-24 animate-pulse rounded-2xl bg-elevated mt-2" />
         ) : searchResults.length > 0 ? (
-          <div className="pt-2 border-t border-line space-y-3">
-            {searchResults.map((r) => {
-              const selected = isCardSelected(r);
-              return (
-                <div
-                  key={r.id}
-                  onClick={() => toggleSelectCard(r)}
-                  className={`relative flex cursor-pointer items-center justify-between rounded-2xl border p-5 text-left shadow-card transition-all ${selected
-                    ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
-                    : "border-line bg-bg hover:border-emerald-300"
-                    }`}
-                >
+          <div ref={detailCardRef} className="pt-2 border-t border-line space-y-4 scroll-mt-20">
+            {/* Seçili Malzemenin 3D ve Detay Kartı */}
+            {activeMaterialCode && (
+              <MaterialDetailCard
+                materialCode={activeMaterialCode}
+                barcode={activeBarcode}
+                onBarcodeSelect={handleCardBarcodeSelect}
+              />
+            )}
 
-                  <div>
-                    <div className="flex items-center gap-8">
-                      <p>{r.barcode}</p>
-                      <p>{r.unit}</p>
-                      <p>{r.material}</p>
-                      <p>{r.name}</p>
-                    </div>
-                  </div>
-
-
-
-                  <span
-                    className={`chip text-xs font-bold ${selected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
+            {/* Arama Sonuçları Listesi */}
+            <div className="space-y-3">
+              {searchResults.map((r) => {
+                const selected = isCardSelected(r);
+                return (
+                  <div
+                    key={r.id}
+                    id={`product-card-${r.id}`}
+                    onClick={() => toggleSelectCard(r)}
+                    className={`relative flex cursor-pointer items-center justify-between rounded-2xl border p-5 text-left shadow-card transition-all ${selected
+                      ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
+                      : "border-line bg-bg hover:border-emerald-300"
                       }`}
                   >
-                    {selected ? <Check className="h-4 w-4 inline mr-1" /> : null}
-                    {selected ? "Seçildi" : "Seç"}
-                  </span>
-                </div>
-              );
-            })}
+                    <div>
+                      <div className="flex items-center gap-8">
+                        <p>{r.barcode}</p>
+                        <p>{r.unit}</p>
+                        <p>{r.material}</p>
+                        <p>{r.name}</p>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`chip text-xs font-bold ${selected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
+                        }`}
+                    >
+                      {selected ? <Check className="h-4 w-4 inline mr-1" /> : null}
+                      {selected ? "Seçildi" : "Seç"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ) : searchDone ? (
           <p className="text-xs text-subtle py-4 text-center">Aranan kriterde ürün kaydı bulunamadı.</p>
