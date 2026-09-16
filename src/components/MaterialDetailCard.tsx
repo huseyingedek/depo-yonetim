@@ -1,3 +1,23 @@
+/**
+IMPORT:
+ * import MaterialDetailCard from "../../components/MaterialDetailCard";
+
+ * // Standart Kullanım (Sadece malzeme kodu veya barkod vermeniz yeterlidir):
+ * <MaterialDetailCard materialCode={urunKoduVeyaBarkod} />
+
+ * // Şartlı Kullanım (Sadece ürün kodu seçiliyse çıksın, boşken hiç görünmesin):
+ * {urunKodu && (
+ *   <MaterialDetailCard materialCode={urunKodu} />
+ * )}
+ 
+ * // Opsiyonel Parametrelerle Kullanım:
+ * <MaterialDetailCard 
+ *   materialCode={urunKodu} 
+ *   showEditButton={false}  // "Ölçüm Değiştir" butonunu gizlemek için
+ *   compact={true}          // Kompakt 3D kutu görünümü
+ *   className="w-full"      // Özel CSS sınıfları
+ */
+
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Package,
