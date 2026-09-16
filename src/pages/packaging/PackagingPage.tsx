@@ -23,6 +23,7 @@ import {
   ChevronDown,
   ChevronRight,
   Package,
+  Pencil,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import ToastView, { useToast } from "../../components/Toast";
@@ -441,7 +442,7 @@ export default function PackagingPage() {
                 return (
                   <div
                     key={k.code}
-                    className={`rounded-xl border p-3 transition ${bittiK ? "border-emerald-300 bg-emerald-50/60 opacity-70 dark:border-emerald-500/30 dark:bg-emerald-500/10" : "border-line bg-surface hover:border-brand-300"}`}
+                    className={`rounded-xl border p-3 transition ${bittiK ? "border-emerald-300 bg-emerald-50/60 opacity-70 dark:border-emerald-500/30 dark:bg-emerald-500/10" : "border-slate-400 dark:border-slate-400 bg-surface hover:border-brand-400"}`}
                   >
                     <div className="flex items-start gap-2">
                       <div className="min-w-0 flex-1">
@@ -486,9 +487,55 @@ interface Api {
 }
 
 function KartNode({ node, api, parentTur }: { node: Node; api: Api; parentTur?: "sahne" | "palet" | "koli" }) {
-  if (node.tur === "urun") return <UrunKart urun={node} api={api} />;
+  if (node.tur === "urun") return <UrunKart urun={node} api={api} parentTur={parentTur} />;
   if (node.tur === "palet") return <PaletKart palet={node} api={api} />;
   return <KoliKart koli={node} api={api} parentTur={parentTur} />;
+}
+
+// Palet içi akıllı yerleşim algoritması:
+// - Palet sağ ve sol olmak üzere 2 ana bölüme ayrılır.
+// - Koli: 2 birim genişlik kaplar (kolonun tamamı, yani paletin 1/2'si).
+// - Malzeme (kolisiz): 1 birim genişlik kaplar (kolonun yarısı, yani paletin 1/4'ü).
+//   Böylece paletin sağında ve solunda ikişer malzeme, toplamda tek satırda 4 malzeme yan yana yerleşir.
+// - Malzemeler yerleştirilirken yarım kalan kolonlar önce 2'ye tamamlanır, ardından satırlar dengeli doldurulur.
+function paletKolonlaraAyir(cocuklar: Node[]): { solKolon: Node[]; sagKolon: Node[] } {
+  const solKolon: Node[] = [];
+  const sagKolon: Node[] = [];
+  let solBirim = 0;
+  let sagBirim = 0;
+
+  for (const item of cocuklar) {
+    if (item.tur === "urun") {
+      // Eğer bir tarafta tek kalmış (çiftlenmemiş) malzeme varsa, önce orayı 2'ye tamamla
+      if (solBirim % 2 !== 0) {
+        solKolon.push(item);
+        solBirim += 1;
+      } else if (sagBirim % 2 !== 0) {
+        sagKolon.push(item);
+        sagBirim += 1;
+      } else if (solBirim <= sagBirim) {
+        solKolon.push(item);
+        solBirim += 1;
+      } else {
+        sagKolon.push(item);
+        sagBirim += 1;
+      }
+    } else {
+      // Koli tam kolon (2 birim) kaplar; tek kalan yarım satır varsa satır sonuna yuvarlanır
+      const solDolu = solBirim % 2 !== 0 ? solBirim + 1 : solBirim;
+      const sagDolu = sagBirim % 2 !== 0 ? sagBirim + 1 : sagBirim;
+
+      if (solDolu <= sagDolu) {
+        solKolon.push(item);
+        solBirim = solDolu + 2;
+      } else {
+        sagKolon.push(item);
+        sagBirim = sagDolu + 2;
+      }
+    }
+  }
+
+  return { solKolon, sagKolon };
 }
 
 function PaletKart({ palet, api }: { palet: PaletNode; api: Api }) {
@@ -496,9 +543,8 @@ function PaletKart({ palet, api }: { palet: PaletNode; api: Api }) {
   const secili = api.seciliKapId === palet.uid;
   const drop = api.dropHedef === palet.uid;
 
-  // Sağ ve sol sütunları birbirinden bağımsız akacak şekilde iki kolona ayırıyoruz
-  const solKolon = palet.cocuklar.filter((_, i) => i % 2 === 0);
-  const sagKolon = palet.cocuklar.filter((_, i) => i % 2 !== 0);
+  // Sağ ve sol sütunları bağımsız akacak şekilde akıllı palet yerleşimiyle ayırıyoruz
+  const { solKolon, sagKolon } = paletKolonlaraAyir(palet.cocuklar);
 
   return (
     <div
@@ -517,22 +563,27 @@ function PaletKart({ palet, api }: { palet: PaletNode; api: Api }) {
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-1">
           <p className="text-sm font-extrabold text-fg">{palet.ad}</p>
           {secili && <span className="rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-500/30 dark:text-amber-200">hedef</span>}
-          <span className="font-mono text-xs text-subtle">· {koliSay(palet.cocuklar)} koli · {fmt(nodeDesi(palet))} desi · {fmt(nodeKg(palet))} kg</span>
+          <div className="inline-flex items-center gap-1">
+            <span className="font-mono text-xs text-subtle">· {koliSay(palet.cocuklar)} koli · {fmt(nodeDesi(palet))} desi · {fmt(nodeKg(palet))} kg</span>
+            <button type="button" onClick={(e) => e.stopPropagation()} className="rounded p-0.5 text-subtle transition hover:bg-amber-100 hover:text-fg active:scale-95 dark:hover:bg-amber-500/20" title="Düzenle">
+              <Pencil className="h-3 w-3" />
+            </button>
+          </div>
         </div>
         <SilButon onSil={() => api.sil(palet.uid)} className="rounded-lg p-1.5 text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-4 w-4" />
       </div>
       {acik && (
-        <div className="mt-1.5 rounded-xl border border-dashed border-amber-300/60 bg-white/40 p-1 dark:bg-black/10">
+        <div className="mt-1.5 rounded-xl border border-dashed border-amber-400 dark:border-amber-500/70 bg-white/40 p-1 dark:bg-black/10">
           {palet.cocuklar.length === 0 ? (
             <p className="w-full py-4 text-center text-[11px] text-subtle">Boş palet — koli ekle</p>
           ) : (
             <div className="flex items-start gap-[4px]">
               {/* Sol Sütun (Bağımsız) */}
-              <div className="flex flex-1 min-w-0 flex-col gap-[4px]">
+              <div className="flex flex-1 min-w-0 flex-row flex-wrap content-start items-start gap-[4px]">
                 {solKolon.map((c) => <KartNode key={c.uid} node={c} api={api} parentTur="palet" />)}
               </div>
               {/* Sağ Sütun (Bağımsız) */}
-              <div className="flex flex-1 min-w-0 flex-col gap-[4px]">
+              <div className="flex flex-1 min-w-0 flex-row flex-wrap content-start items-start gap-[4px]">
                 {sagKolon.map((c) => <KartNode key={c.uid} node={c} api={api} parentTur="palet" />)}
               </div>
             </div>
@@ -603,6 +654,8 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
   const atil = koli.atil;
   const inContainer = parentTur === "palet" || parentTur === "koli";
 
+  const isNestedKoli = parentTur === "koli";
+
   // Koli içi sağ ve sol sütunları akıllı dengeleme algoritmasıyla ayırıyoruz
   const { solKolon, sagKolon } = koliKolonlaraAyir(koli.cocuklar);
 
@@ -615,45 +668,98 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); api.birak(koli.uid); }}
       onClick={(e) => { e.stopPropagation(); api.setSeciliKapId(koli.uid); }}
       style={!inContainer ? { minWidth: boyutGenislik(koli.no), maxWidth: Math.max(boyutGenislik(koli.no), 380) } : undefined}
-      className={`flex min-w-0 w-full flex-col rounded-2xl border-2 p-2.5 shadow-sm transition ${drop ? "border-brand-500 bg-brand-50/60 dark:bg-brand-500/10" : secili ? "border-brand-400 ring-2 ring-brand-200 dark:ring-brand-500/30" : atil ? "border-slate-300 bg-slate-100/70 dark:border-slate-600 dark:bg-slate-700/30" : "border-line bg-surface"}`}
+      className={`flex min-w-0 w-full flex-col rounded-2xl border-2 p-[2px] shadow-sm transition ${drop ? "border-brand-500 bg-brand-50/60 dark:bg-brand-500/10" : secili ? "border-brand-400 ring-2 ring-brand-200 dark:ring-brand-500/30" : atil ? "border-slate-500 bg-slate-100/70 dark:border-slate-400 dark:bg-slate-700/30" : "border-slate-400 dark:border-slate-400 bg-surface"}`}
     >
-      <div className="flex items-start gap-2">
-        <GripVertical className="mt-1 h-4 w-4 shrink-0 cursor-grab text-subtle/50" />
-        <button type="button" onClick={(e) => { e.stopPropagation(); setAcik((v) => !v); }} className="mt-0.5 shrink-0 text-subtle">{acik ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</button>
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-black ${atil ? "bg-slate-200 text-slate-600 dark:bg-slate-600/50 dark:text-slate-200" : "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300"}`}>{koli.no}</span>
-        <div className="min-w-0 flex-1">
-          <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-fg">
-            {atil ? "Atıl Koli" : "Koli"} <span className="text-xs font-semibold text-subtle">· Boyut {koli.no} · {boyutOl(koli.no)} cm</span>
-          </p>
-          <p className="font-mono text-[11px] text-subtle">{urunSay(koli)} ürün · {fmt(desi)} ds · {fmt(kg)} kg</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-0.5">
-          <button type="button" onClick={(e) => { e.stopPropagation(); api.koliIcineEkle(koli.uid); }} className="rounded-lg p-1.5 text-subtle transition hover:bg-brand-50 hover:text-brand-600 active:scale-95 dark:hover:bg-brand-500/10" title="İçine koli ekle"><Box className="h-4 w-4" /></button>
-          <SilButon onSil={() => api.sil(koli.uid)} className="rounded-lg p-1.5 text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-4 w-4" />
-        </div>
-      </div>
+      <div className="px-2 pt-1.5 pb-0.5">
+        {isNestedKoli ? (
+          <>
+            <div className="flex items-center justify-between gap-1">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-subtle/50" />
+                <button type="button" onClick={(e) => { e.stopPropagation(); setAcik((v) => !v); }} className="shrink-0 text-subtle">
+                  {acik ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </button>
+                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-black ${atil ? "bg-slate-200 text-slate-600 dark:bg-slate-600/50 dark:text-slate-200" : "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300"}`}>
+                  {koli.no}
+                </span>
+                <span className="truncate text-xs font-bold text-fg">{atil ? "Atıl Koli" : "Koli"}</span>
+              </div>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <button type="button" onClick={(e) => { e.stopPropagation(); api.koliIcineEkle(koli.uid); }} className="rounded-lg p-1.5 text-subtle transition hover:bg-brand-50 hover:text-brand-600 active:scale-95 dark:hover:bg-brand-500/10" title="İçine koli ekle">
+                  <Box className="h-4 w-4" />
+                </button>
+                <SilButon onSil={() => api.sil(koli.uid)} className="rounded-lg p-1.5 text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-4 w-4" />
+              </div>
+            </div>
 
-      <div className="mt-2 flex items-center gap-2">
-        <span className="flex items-center gap-1 text-[11px] font-semibold text-subtle"><Weight className="h-3.5 w-3.5" /> Hacim</span>
-        <input type="number" min={0} value={koli.hacim} onClick={(e) => e.stopPropagation()} onChange={(e) => api.hacim(koli.uid, Number(e.target.value) || 0)} className="h-7 w-16 rounded-lg border border-line bg-surface px-2 text-right font-mono text-xs text-fg outline-none focus:border-brand-500" />
-        <span className="text-[11px] text-subtle">ds</span>
-        <div className="ml-auto h-1.5 w-20 overflow-hidden rounded-full bg-elevated"><div className={`h-full rounded-full ${dolu > 100 ? "bg-rose-500" : dolu > 85 ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${dolu}%` }} /></div>
-      </div>
+            <div className="mt-1 flex flex-col gap-0.5">
+              <p className="flex flex-wrap items-center gap-1 text-[11px] font-semibold text-subtle">
+                Boyut {koli.no} · {boyutOl(koli.no)} cm · Hacim {koli.hacim} desi
+              </p>
+              <div className="flex items-center gap-1">
+                <p className="font-mono text-[10px] text-subtle">{urunSay(koli)} ürün · {fmt(desi)} ds · {fmt(kg)} kg</p>
+                <button
+                  type="button"
+                  onClick={(e) => e.stopPropagation()}
+                  className="rounded p-0.5 text-subtle transition hover:bg-elevated hover:text-fg active:scale-95"
+                  title="Düzenle"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-start gap-2">
+            <GripVertical className="mt-1 h-4 w-4 shrink-0 cursor-grab text-subtle/50" />
+            <button type="button" onClick={(e) => { e.stopPropagation(); setAcik((v) => !v); }} className="mt-0.5 shrink-0 text-subtle">{acik ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</button>
+            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-black ${atil ? "bg-slate-200 text-slate-600 dark:bg-slate-600/50 dark:text-slate-200" : "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300"}`}>{koli.no}</span>
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-fg">
+                {atil ? "Atıl Koli" : "Koli"} <span className="text-xs font-semibold text-subtle">· Boyut {koli.no} · {boyutOl(koli.no)} cm · Hacim {koli.hacim} desi</span>
+              </p>
+              <div className="flex items-center gap-1">
+                <p className="font-mono text-[11px] text-subtle">{urunSay(koli)} ürün · {fmt(desi)} ds · {fmt(kg)} kg</p>
+                <button
+                  type="button"
+                  onClick={(e) => e.stopPropagation()}
+                  className="rounded p-0.5 text-subtle transition hover:bg-elevated hover:text-fg active:scale-95"
+                  title="Düzenle"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-0.5">
+              <button type="button" onClick={(e) => { e.stopPropagation(); api.koliIcineEkle(koli.uid); }} className="rounded-lg p-1.5 text-subtle transition hover:bg-brand-50 hover:text-brand-600 active:scale-95 dark:hover:bg-brand-500/10" title="İçine koli ekle"><Box className="h-4 w-4" /></button>
+              <SilButon onSil={() => api.sil(koli.uid)} className="rounded-lg p-1.5 text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-4 w-4" />
+            </div>
+          </div>
+        )}
 
-      <div className="mt-2 flex flex-wrap gap-1">
-        {HAZARDS.map((h) => {
-          const on = koli.hazards.includes(h.id);
-          const Icon = h.icon;
-          return (
-            <button key={h.id} type="button" onClick={(e) => { e.stopPropagation(); api.hazardToggle(koli.uid, h.id); }} title={h.label} className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold transition ${on ? h.cls : "border-line bg-surface text-subtle/60 hover:text-fg"}`}>
-              <Icon className="h-3 w-3" /> {on ? h.label : ""}
-            </button>
-          );
-        })}
+        <div className="mt-1.5 flex items-center gap-2">
+          <span className="flex items-center gap-1 text-[11px] font-semibold text-subtle"><Weight className="h-3.5 w-3.5" /> Doluluk</span>
+          <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-elevated">
+            <div className={`h-full rounded-full ${dolu > 100 ? "bg-rose-500" : dolu > 85 ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${dolu}%` }} />
+          </div>
+          <span className="font-mono text-[10px] font-bold text-subtle">%{Math.round(dolu)}</span>
+        </div>
+
+        <div className="mt-2 flex flex-wrap gap-1">
+          {HAZARDS.map((h) => {
+            const on = koli.hazards.includes(h.id);
+            const Icon = h.icon;
+            return (
+              <button key={h.id} type="button" onClick={(e) => { e.stopPropagation(); api.hazardToggle(koli.uid, h.id); }} title={h.label} className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold transition ${on ? h.cls : "border-line bg-surface text-subtle/60 hover:text-fg"}`}>
+                <Icon className="h-3 w-3" /> {on ? h.label : ""}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {acik && (
-        <div className="mt-2 max-h-[360px] overflow-y-auto rounded-xl border border-dashed border-line bg-elevated/30 px-[3px] py-1.5">
+        <div className="mt-[2px] max-h-[360px] overflow-y-auto rounded-xl border border-dashed border-slate-400 dark:border-slate-500 bg-elevated/30 px-[3px] py-1.5">
           {koli.cocuklar.length === 0 ? (
             <p className="w-full py-3 text-center text-[11px] text-subtle">Boş koli</p>
           ) : (
@@ -674,13 +780,14 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
   );
 }
 
-function UrunKart({ urun, api }: { urun: UrunNode; api: Api }) {
+function UrunKart({ urun, api, parentTur }: { urun: UrunNode; api: Api; parentTur?: "sahne" | "palet" | "koli" }) {
+  const isPalet = parentTur === "palet";
   return (
     <div
       draggable
       onDragStart={(e) => { e.stopPropagation(); drag = { kind: "node", uid: urun.uid }; }}
       onClick={(e) => e.stopPropagation()}
-      className={`flex w-full min-w-0 flex-col rounded-xl border p-2 transition ${urun.paketli ? "border-slate-200 bg-white text-slate-900" : "border-line bg-surface hover:border-brand-300"}`}
+      className={`flex ${isPalet ? "w-[calc((100%-4px)/2)] shrink-0" : "w-full"} min-w-0 flex-col rounded-xl border p-2 transition ${urun.paketli ? "border-slate-400 dark:border-slate-400 bg-white text-slate-900" : "border-slate-400 dark:border-slate-400 bg-surface hover:border-brand-400"}`}
     >
       <div className="flex items-start gap-1">
         <div className="min-w-0 flex-1">
