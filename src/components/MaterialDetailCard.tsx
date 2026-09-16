@@ -666,10 +666,9 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
 
   return (
     <div
-      className={`rounded-3xl border border-line bg-surface pt-0.5 pb-0.5 px-2 sm:pt-0.5 sm:pb-0.5 sm:px-1.5 shadow-card flex flex-col justify-start min-w-0 h-full ${activeMaterial.isSpecialLot ? "min-h-[190px] sm:min-h-[200px]" : "min-h-[190px] sm:min-h-[200px]"
-        } ${className}`}
+      className={`rounded-3xl border border-line bg-surface pt-1 pb-1 px-2.5 sm:pt-1 sm:pb-1 sm:px-2.5 shadow-card flex flex-col justify-start min-w-0 ${className}`}
     >
-      <div className="w-full flex-1 flex flex-col justify-start gap-0.5 sm:gap-0.5">
+      <div className="w-full flex flex-col justify-start gap-1">
         {/* 1. Satır: En Üstte Malzeme İsmi */}
         <div className="flex items-center justify-between gap-2 border-b border-line/40 pt-0 pb-1 min-w-0">
           <h4
@@ -682,7 +681,7 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
         </div>
 
         {/* 2. Satır: Fotoğraf + 3D Şema + Sağ Bilgi & Barkod Paneli */}
-        <div className="flex-1 flex items-stretch gap-0 w-full min-w-0 pt-0.5 pb-0 min-h-0">
+        <div className="flex items-stretch gap-0 w-full min-w-0 pt-0.5 pb-0 min-h-0">
           {/* 1. Bölüm: Solda Ürün Görseli ve Altında Ürün Kodu */}
           <div className="flex flex-col items-center shrink-0 mr-1.5 self-start w-24 sm:w-26 min-w-0">
             <div className="h-24 w-24 sm:h-26 sm:w-26 rounded-2xl overflow-hidden shrink-0 border border-line bg-elevated/40 flex items-center justify-center shadow-xs">
@@ -709,7 +708,7 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
           </div>
 
           {/* Çizgi 1: Resim ile 3D Model Arasındaki Ayırıcı Çizgi */}
-          <div className="h-full min-h-[96px] w-px bg-line shrink-0 self-stretch mr-1" />
+          <div className="w-px bg-line shrink-0 self-stretch mr-1" />
 
           {/* 2. Bölüm: 3D Şema */}
           <div className="shrink-0 flex items-start justify-start overflow-visible self-start">
@@ -756,10 +755,10 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
           </div>
 
           {/* Çizgi 2: Boy Yazısının Sağındaki Ayırıcı Çizgi */}
-          <div className="h-full min-h-[96px] w-px bg-line shrink-0 self-stretch ml-1.5 mr-2" />
+          <div className="w-px bg-line shrink-0 self-stretch ml-1.5 mr-2" />
 
           {/* 3. Bölüm: Sağ Bilgi & Barkod Paneli */}
-          <div className="flex-1 min-w-0 flex flex-col justify-between h-full min-h-0">
+          <div className="flex-1 min-w-0 flex flex-col justify-between min-h-0">
             {/* Üst Kısım: 2x2 Simetrik Grid (Stok Birimi, Net, Desi, Brüt) */}
             <div className="grid grid-cols-2 gap-x-2.5 gap-y-1 text-xs sm:text-[12px] leading-tight">
               <div className="flex items-center gap-1 min-w-0">
@@ -808,7 +807,7 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
 
             {/* Alt Kısım: Barkod Listesi / Combobox */}
             {activeMaterial.barcodes && activeMaterial.barcodes.length > 0 && (
-              <div className="w-full mt-auto pt-1.5 pb-0.5 border-t border-line/40 flex items-center justify-start">
+              <div className="w-full mt-1 pt-1 pb-0.5 border-t border-line/40 flex items-center justify-start">
                 <div className="relative inline-flex items-center w-auto max-w-full">
                   <select
                     value={selectedBarcodeState || activeMaterial.selectedBarcode}

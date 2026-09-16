@@ -3,6 +3,7 @@ import { Calendar, Search, Printer, Check, Loader2, Package } from "lucide-react
 import { api } from "../../api/client";
 import type { StockRow } from "../../types";
 import PageHeader from "../../components/PageHeader";
+import MaterialDetailCard from "../../components/MaterialDetailCard";
 
 type TabType = "directDate" | "searchGrid";
 
@@ -14,10 +15,13 @@ export default function ExpiryLabelPage() {
   const [repeatCount, setRepeatCount] = useState<number | string>(1);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeBarcode, setActiveBarcode] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
   const [searchResults, setSearchResults] = useState<StockRow[]>([]);
   const [selectedMaterials, setSelectedMaterials] = useState<StockRow[]>([]);
+
+  const activeMaterialCode = selectedMaterials[0]?.material || searchResults[0]?.material || "";
 
   // Status & Printing State
   const [printing, setPrinting] = useState(false);
@@ -30,6 +34,7 @@ export default function ExpiryLabelPage() {
     setActiveTab(tab);
     setDirectExpiryDate("");
     setSearchTerm("");
+    setActiveBarcode("");
     setSearchDone(false);
     setSearchResults([]);
     setSelectedMaterials([]);
@@ -79,7 +84,45 @@ export default function ExpiryLabelPage() {
         }
       }
 
-      // 3. MZYGetMaterial ile ana kart sorgulama (Stokta olmasa bile CANIAS'taki barkod/malzeme eşleşmesini getirir)
+      // 3. Barkod okuma servisi ile doğrudan malzeme çözümleme (MZYReadBarcode)
+      if (rows.length === 0) {
+        try {
+          const readRes = await api.readBarcode(term);
+          if (readRes.ok && readRes.material) {
+            const matCode = readRes.material;
+            const matName = readRes.name || matCode;
+            const unit = readRes.unit || "AD";
+
+            let stockFound: StockRow[] = [];
+            try {
+              stockFound = await api.queryStock({ material: matCode });
+            } catch {
+              stockFound = [];
+            }
+
+            if (stockFound && stockFound.length > 0) {
+              rows = stockFound;
+            } else {
+              rows = [
+                {
+                  material: matCode,
+                  name: matName,
+                  warehouse: "10",
+                  stockPlace: "*",
+                  batchNum: "*",
+                  specialStock: "*",
+                  availStock: 0,
+                  unit: unit,
+                },
+              ];
+            }
+          }
+        } catch {
+          // Devam et
+        }
+      }
+
+      // 4. MZYGetMaterial ile ana kart sorgulama (Stokta olmasa bile CANIAS'taki barkod/malzeme eşleşmesini getirir)
       if (rows.length === 0) {
         try {
           const matDetail = await api.getMaterialDetail(term);
@@ -137,6 +180,7 @@ export default function ExpiryLabelPage() {
       setSearchDone(true);
       if (rows.length > 0) {
         setSelectedMaterials([rows[0]]);
+        setActiveBarcode(term);
       }
     } catch (err: unknown) {
       setSearchResults([]);
@@ -219,7 +263,7 @@ export default function ExpiryLabelPage() {
       let failedCount = 0;
 
       for (const mat of selectedMaterials) {
-        const batch = mat.batchNum && mat.batchNum !== "*" ? mat.batchNum : mat.material;
+        const batch = mat.batchNum && mat.batchNum !== "*" ? mat.batchNum : (activeBarcode || mat.material);
         try {
           const res = await api.printBarcode({
             company: "01",
@@ -359,8 +403,8 @@ export default function ExpiryLabelPage() {
           type="button"
           onClick={() => handleTabChange("directDate")}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition-all ${activeTab === "directDate"
-              ? "bg-blue-600 text-white shadow-md"
-              : "text-subtle hover:text-fg hover:bg-elevated"
+            ? "bg-blue-600 text-white shadow-md"
+            : "text-subtle hover:text-fg hover:bg-elevated"
             }`}
         >
           <Calendar className="h-4 w-4" />
@@ -371,8 +415,8 @@ export default function ExpiryLabelPage() {
           type="button"
           onClick={() => handleTabChange("searchGrid")}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition-all ${activeTab === "searchGrid"
-              ? "bg-blue-600 text-white shadow-md"
-              : "text-subtle hover:text-fg hover:bg-elevated"
+            ? "bg-blue-600 text-white shadow-md"
+            : "text-subtle hover:text-fg hover:bg-elevated"
             }`}
         >
           <Package className="h-4 w-4" />
@@ -467,18 +511,26 @@ export default function ExpiryLabelPage() {
           {searching ? (
             <div className="h-24 animate-pulse rounded-2xl bg-elevated mt-2" />
           ) : searchResults.length > 0 ? (
-            <div className="pt-2 border-t border-line">
+            <div className="pt-2 border-t border-line space-y-4">
+              {/* Malzeme Detay Kartı — Gelen sonucun hemen üstünde */}
+              {activeMaterialCode && (
+                <MaterialDetailCard
+                  materialCode={activeMaterialCode}
+                  barcode={activeBarcode}
+                  onBarcodeSelect={(barcode) => setActiveBarcode(barcode)}
+                />
+              )}
+
               {(() => {
                 const r = searchResults[0];
                 const selected = isMaterialSelected(r);
                 return (
                   <div
                     onClick={() => toggleSelectMaterial(r)}
-                    className={`relative flex cursor-pointer items-center justify-between rounded-2xl border p-5 text-left shadow-card transition-all ${
-                      selected
-                        ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
-                        : "border-line bg-bg hover:border-emerald-300"
-                    }`}
+                    className={`relative flex cursor-pointer items-center justify-between rounded-2xl border p-5 text-left shadow-card transition-all ${selected
+                      ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
+                      : "border-line bg-bg hover:border-emerald-300"
+                      }`}
                   >
                     <div>
                       <span className="font-mono text-lg font-extrabold text-fg">{r.material}</span>
@@ -486,9 +538,8 @@ export default function ExpiryLabelPage() {
                     </div>
 
                     <span
-                      className={`chip text-xs font-bold ${
-                        selected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
-                      }`}
+                      className={`chip text-xs font-bold ${selected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
+                        }`}
                     >
                       {selected ? <Check className="h-4 w-4 inline mr-1" /> : null}
                       {selected ? "Seçildi" : "Seç"}

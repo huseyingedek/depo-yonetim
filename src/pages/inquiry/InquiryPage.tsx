@@ -254,7 +254,7 @@ export default function InquiryPage() {
         </div>
 
         {/* Sağ: sonuçlar DetailPage */}
-        <div className="min-w-0 space-y-4">
+        <div className="min-w-0 space-y-4 lg:self-start">
           {/* Malzeme Detay Kartı — Sadece ürün sorgulandığında tek yerde gelir (Raf sorgusunda gelmez) */}
           {productCode && (
             <MaterialDetailCard materialCode={productCode} />
