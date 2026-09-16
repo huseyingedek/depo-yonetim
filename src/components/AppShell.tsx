@@ -12,16 +12,31 @@ export default function AppShell() {
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   // Kenar çubuğu aç/kapa (masaüstü/tablet). Hamburger ile toggle.
-  const [sidebarAcik, setSidebarAcik] = useState(true);
+  // Paketleme ekranı monitörde geniş alan gerektirdiğinden varsayılan olarak kapalı gelir.
+  const isPackaging = location.pathname.startsWith("/packaging");
+  const [sidebarAcik, setSidebarAcik] = useState(() => !isPackaging);
+  const prevPathRef = useRef(location.pathname);
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, behavior: "auto" });
     window.scrollTo(0, 0);
+
+    const isCurrentPackaging = location.pathname.startsWith("/packaging");
+    const wasPackaging = prevPathRef.current.startsWith("/packaging");
+
+    if (isCurrentPackaging && !wasPackaging) {
+      // Paketleme ekranına gelindiğinde sol menüyü varsayılan olarak kapalı getir
+      setSidebarAcik(false);
+    } else if (!isCurrentPackaging && wasPackaging) {
+      // Paketleme ekranından diğer ekranlara geçildiğinde sol menüyü varsayılan olarak açık getir
+      setSidebarAcik(true);
+    }
+    prevPathRef.current = location.pathname;
   }, [location.pathname]);
 
   return (
     <div className="app-bg flex h-[100dvh] overflow-hidden">
-      {}
+      {/* Kenar Çubuğu (Büyük Ekran - lg+) */}
       <aside
         className={`hidden w-72 shrink-0 flex-col border-r border-white/10 bg-gradient-to-b from-ink-900 via-brand-900 to-brand-950 ${
           sidebarAcik ? "lg:flex" : "lg:hidden"
@@ -30,15 +45,16 @@ export default function AppShell() {
         <SidebarContent onNavigate={() => {}} />
       </aside>
 
-      {}
+      {/* Ana Gövde */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {}
+        {/* Üst Çubuk (Masaüstü/Tablet lg+) */}
         <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface px-4 lg:px-8 short:hidden lg:!flex">
-          {}
+          {/* Sol menü toggle (sadece masaüstü/tablet lg+) */}
           <button
             type="button"
             onClick={() => setSidebarAcik((v) => !v)}
             aria-label="Menüyü aç/kapat"
+            title={sidebarAcik ? "Menüyü Kapat" : "Menüyü Aç"}
             className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition hover:bg-elevated hover:text-fg lg:flex"
           >
             <Menu className="h-5 w-5" />

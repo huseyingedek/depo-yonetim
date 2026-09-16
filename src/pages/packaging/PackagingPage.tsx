@@ -9,6 +9,7 @@ import {
   Truck,
   Weight,
   Pause,
+  Play,
   Trash2,
   GripVertical,
   Flame,
@@ -165,6 +166,7 @@ export default function PackagingPage() {
   const [atilMod, setAtilMod] = useState(false);
   const [dropHedef, setDropHedef] = useState<string | null>(null);
   const [bitti, setBitti] = useState(false);
+  const [bekletildi, setBekletildi] = useState(false);
 
   // Sürükle-bırak sırasında kenara yaklaşınca otomatik kaydırma (tablet + fare).
   // İmleç hangi kaydırılabilir alanın (sayfa, paketleme alanı, ürün listesi, koli)
@@ -302,6 +304,17 @@ export default function PackagingPage() {
     show({ kind: "done", text: `${kSay} koli · ${pSay} palet paketlendi` });
   };
 
+  const paketlemeyiBeklet = () => {
+    setBekletildi((v) => {
+      const yeni = !v;
+      show({
+        kind: yeni ? "info" : "ok",
+        text: yeni ? "Paketleme işlemi beklemeye alındı" : "Paketleme işlemine devam ediliyor",
+      });
+      return yeni;
+    });
+  };
+
   function koliIcineKoli(parentUid: string) {
     const uid = yid();
     const yeni: KoliNode = { uid, tur: "koli", no: 1, hacim: boyutHacim(1), hazards: [], cocuklar: [] };
@@ -313,7 +326,7 @@ export default function PackagingPage() {
   const api: Api = { seciliKapId, setSeciliKapId, sil, urunAdet, hacim, hazardToggle, beklet, koliIcineEkle: koliIcineKoli, dropHedef, setDropHedef, birak };
 
   return (
-    <div className="mx-auto max-w-[1700px] p-3 lg:p-5">
+    <div className="w-full px-1.5 py-3 lg:py-4">
       <PageHeader title="Paketleme" subtitle="Paketleme alanı › Palet › Koli › Ürün" backTo="/home" />
 
       {bitti && (
@@ -351,18 +364,30 @@ export default function PackagingPage() {
               );
             })}
             <button type="button" onClick={() => setAtilMod((v) => !v)} className={`inline-flex h-11 items-center gap-1 rounded-xl border-2 px-2.5 text-[11px] font-bold transition ${atilMod ? "border-slate-400 bg-slate-200 text-slate-700 dark:border-slate-500 dark:bg-slate-600/40 dark:text-slate-200" : "border-line bg-surface text-subtle hover:text-fg"}`} title="Atıl koli"><Recycle className="h-4 w-4" /> Atıl</button>
+            <button type="button" onClick={paletEkle} className="inline-flex h-11 items-center gap-1.5 rounded-xl border border-brand-300/80 bg-brand-50/80 px-3 text-xs font-bold text-brand-700 transition hover:bg-brand-100 active:scale-95 dark:border-brand-500/30 dark:bg-brand-500/15 dark:text-brand-300 dark:hover:bg-brand-500/25" title="Yeni Palet Ekle"><Layers className="h-4 w-4" /> Palet Ekle</button>
           </div>
 
           {/* Aksiyonlar */}
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            <button type="button" onClick={paletEkle} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-elevated px-3 text-sm font-semibold text-brand-600 transition hover:bg-line"><Layers className="h-4 w-4" /> Palet Ekle</button>
+            <button
+              type="button"
+              onClick={paketlemeyiBeklet}
+              className={`inline-flex h-9 w-[130px] items-center justify-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition active:scale-95 ${bekletildi
+                ? "border-amber-400 bg-amber-100 text-amber-800 hover:bg-amber-200 dark:border-amber-500/40 dark:bg-amber-500/20 dark:text-amber-200"
+                : "border-line bg-surface text-subtle hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-500/10 dark:hover:text-amber-300"
+                }`}
+              title={bekletildi ? "Paketlemeye Devam Et" : "Paketlemeyi Beklet"}
+            >
+              {bekletildi ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+              <span>{bekletildi ? "Devam Ettir" : "Beklet"}</span>
+            </button>
             <button type="button" onClick={bitir} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-700"><Truck className="h-4 w-4" /> Paketlemeyi Bitir</button>
           </div>
         </div>
       </div>
 
       {/* İÇERİK: geniş paketleme alanı (sol) + ürün listesi (sağ) */}
-      <div className="mt-3 flex flex-col gap-4 xl:flex-row">
+      <div className="mt-3 flex flex-col gap-2 xl:flex-row">
         {/* ORTA: PAKETLEME ALANI (gri sahne) */}
         <main className="min-w-0 flex-1">
           <div
@@ -373,25 +398,28 @@ export default function PackagingPage() {
             className={`min-h-[60vh] rounded-2xl border-2 p-3 transition ${dropHedef === "sahne" ? "border-brand-400 bg-brand-100/60 dark:bg-brand-500/10" : seciliKapId === null ? "border-brand-300 bg-slate-100/80 dark:border-brand-500/30 dark:bg-slate-800/40" : "border-line bg-slate-100/70 dark:bg-slate-800/40"}`}
           >
             <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 px-1">
-              <h2 className="flex items-center gap-1.5 text-sm font-bold text-fg"><Boxes className="h-4 w-4 text-subtle" /> Paketleme Alanı</h2>
+              <h2 className="flex items-center gap-1.5 text-sm font-bold text-fg">
+                <Boxes className="h-4 w-4 text-subtle" />
+                <span>Paketleme Alanı</span>
+                {seciliKapId === null && <span className="rounded bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">hedef</span>}
+              </h2>
               <div className="flex items-center gap-2.5 text-xs font-medium text-subtle">
                 <span><b className="font-mono text-sm font-extrabold text-fg">{kSay}</b> koli</span>
                 <span><b className="font-mono text-sm font-extrabold text-fg">{pSay}</b> palet</span>
                 <span><b className="font-mono text-sm font-extrabold text-fg">{fmt(genelDesi)}</b> desi</span>
                 <span><b className="font-mono text-sm font-extrabold text-fg">{fmt(genelKg)}</b> kg</span>
               </div>
-              {seciliKapId === null && <span className="ml-auto rounded bg-brand-100 px-2 py-0.5 text-[10px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">hedef: alan</span>}
             </div>
 
             <div className="max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-0">
                 {sahne.length === 0 && (
                   <div className="flex w-full flex-col items-center justify-center gap-2 py-16 text-subtle">
                     <Package className="h-9 w-9" />
                     <p className="text-sm">Boş — soldan palet/koli ekle ya da sağdan ürün sürükle</p>
                   </div>
                 )}
-                {sahne.map((n) => <KartNode key={n.uid} node={n} api={api} />)}
+                {sahne.map((n) => <KartNode key={n.uid} node={n} api={api} parentTur="sahne" />)}
               </div>
             </div>
           </div>
@@ -400,7 +428,7 @@ export default function PackagingPage() {
         {/* SAĞ: PAKETLENECEK ÜRÜNLER */}
         <aside className="xl:w-80 xl:shrink-0">
           <div className="flex flex-col rounded-2xl border border-line bg-surface shadow-card xl:sticky xl:top-4">
-            <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+            <div className="flex items-center gap-2 border-b border-line px-1.5 py-1.5">
               <Package className="h-4 w-4 text-subtle" />
               <h2 className="text-sm font-bold text-fg">Paketlenecek Ürünler</h2>
               <span className="ml-auto rounded-full bg-elevated px-2 py-0.5 text-[10px] font-bold text-subtle">{KAYNAK.length} kalem</span>
@@ -413,19 +441,16 @@ export default function PackagingPage() {
                 return (
                   <div
                     key={k.code}
-                    draggable={!bittiK}
-                    onDragStart={() => { if (!bittiK) drag = { kind: "kaynak", code: k.code }; }}
-                    className={`rounded-xl border p-3 transition ${bittiK ? "border-emerald-300 bg-emerald-50/60 opacity-70 dark:border-emerald-500/30 dark:bg-emerald-500/10" : "cursor-grab border-line bg-surface hover:border-brand-300 active:cursor-grabbing"}`}
+                    className={`rounded-xl border p-3 transition ${bittiK ? "border-emerald-300 bg-emerald-50/60 opacity-70 dark:border-emerald-500/30 dark:bg-emerald-500/10" : "border-line bg-surface hover:border-brand-300"}`}
                   >
                     <div className="flex items-start gap-2">
-                      {!bittiK && <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-subtle/50" />}
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-bold text-fg">{k.name}</p>
                         <p className="font-mono text-[10px] text-subtle">{k.code}{k.paketli && " · paketli"}</p>
                       </div>
                       {bittiK && <Check className="h-4 w-4 shrink-0 text-emerald-600" />}
                     </div>
-                    <div className="mt-2 flex items-center justify-between">
+                    <div className="mt-1 flex items-center justify-between">
                       <span className="font-mono text-sm font-black text-fg">{pk}<span className="text-subtle"> / {k.siparis}</span> <span className="text-[10px] font-semibold text-subtle">{k.unit}</span></span>
                       <button type="button" disabled={bittiK} onClick={() => kaynakEkle(k.code, seciliKapId)} className="inline-flex items-center gap-1 rounded-lg border border-brand-300 px-2 py-1 text-[11px] font-bold text-brand-600 transition hover:bg-brand-50 disabled:opacity-40 dark:hover:bg-brand-500/10"><Plus className="h-3.5 w-3.5" /> Ekle</button>
                     </div>
@@ -436,7 +461,6 @@ export default function PackagingPage() {
                 );
               })}
             </div>
-            <p className="border-t border-line px-4 py-2 text-center text-[11px] text-subtle">Sürükle → sahneye/koliye bırak, ya da "Ekle"</p>
           </div>
         </aside>
       </div>
@@ -461,16 +485,21 @@ interface Api {
   birak: (parentUid: string | null) => void;
 }
 
-function KartNode({ node, api }: { node: Node; api: Api }) {
+function KartNode({ node, api, parentTur }: { node: Node; api: Api; parentTur?: "sahne" | "palet" | "koli" }) {
   if (node.tur === "urun") return <UrunKart urun={node} api={api} />;
   if (node.tur === "palet") return <PaletKart palet={node} api={api} />;
-  return <KoliKart koli={node} api={api} />;
+  return <KoliKart koli={node} api={api} parentTur={parentTur} />;
 }
 
 function PaletKart({ palet, api }: { palet: PaletNode; api: Api }) {
   const [acik, setAcik] = useState(true);
   const secili = api.seciliKapId === palet.uid;
   const drop = api.dropHedef === palet.uid;
+
+  // Sağ ve sol sütunları birbirinden bağımsız akacak şekilde iki kolona ayırıyoruz
+  const solKolon = palet.cocuklar.filter((_, i) => i % 2 === 0);
+  const sagKolon = palet.cocuklar.filter((_, i) => i % 2 !== 0);
+
   return (
     <div
       draggable
@@ -485,29 +514,98 @@ function PaletKart({ palet, api }: { palet: PaletNode; api: Api }) {
         <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-subtle/50" />
         <button type="button" onClick={(e) => { e.stopPropagation(); setAcik((v) => !v); }} className="shrink-0 text-subtle">{acik ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</button>
         <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"><Layers className="h-5 w-5" /></span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-extrabold text-fg">{palet.ad}{secili && <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-500/30 dark:text-amber-200">hedef</span>}</p>
-          <p className="font-mono text-[11px] text-subtle">{koliSay(palet.cocuklar)} koli · {fmt(nodeDesi(palet))} ds · {fmt(nodeKg(palet))} kg</p>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-1">
+          <p className="text-sm font-extrabold text-fg">{palet.ad}</p>
+          {secili && <span className="rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-500/30 dark:text-amber-200">hedef</span>}
+          <span className="font-mono text-xs text-subtle">· {koliSay(palet.cocuklar)} koli · {fmt(nodeDesi(palet))} desi · {fmt(nodeKg(palet))} kg</span>
         </div>
         <SilButon onSil={() => api.sil(palet.uid)} className="rounded-lg p-1.5 text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-4 w-4" />
       </div>
       {acik && (
-        <div className="mt-2 flex flex-wrap gap-3 rounded-xl border border-dashed border-amber-300/60 bg-white/40 p-2.5 dark:bg-black/10">
-          {palet.cocuklar.length === 0 && <p className="w-full py-4 text-center text-[11px] text-subtle">Boş palet — koli ekle ya da ürün sürükle</p>}
-          {palet.cocuklar.map((c) => <KartNode key={c.uid} node={c} api={api} />)}
+        <div className="mt-1.5 rounded-xl border border-dashed border-amber-300/60 bg-white/40 p-1 dark:bg-black/10">
+          {palet.cocuklar.length === 0 ? (
+            <p className="w-full py-4 text-center text-[11px] text-subtle">Boş palet — koli ekle</p>
+          ) : (
+            <div className="flex items-start gap-[4px]">
+              {/* Sol Sütun (Bağımsız) */}
+              <div className="flex flex-1 min-w-0 flex-col gap-[4px]">
+                {solKolon.map((c) => <KartNode key={c.uid} node={c} api={api} parentTur="palet" />)}
+              </div>
+              {/* Sağ Sütun (Bağımsız) */}
+              <div className="flex flex-1 min-w-0 flex-col gap-[4px]">
+                {sagKolon.map((c) => <KartNode key={c.uid} node={c} api={api} parentTur="palet" />)}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function KoliKart({ koli, api }: { koli: KoliNode; api: Api }) {
+// Koli içi akıllı sıra algoritması:
+// - Normalde bir sol bir sağ gider.
+// - Eğer koyma sırası sağ tarafta idi ise ve oraya koli kondu ise sonraki iki yerleştirme sola konulur ve sayaç sola getirilir.
+// - Eğer sıra solda ise ve oraya koli konursa sonraki 3 yerleştirme sağa yapılır ve sonra sayaç sola getirilir.
+function koliKolonlaraAyir(cocuklar: Node[]): { solKolon: Node[]; sagKolon: Node[] } {
+  const solKolon: Node[] = [];
+  const sagKolon: Node[] = [];
+
+  let siradakiNormal: "sol" | "sag" = "sol";
+  let zorunluYon: "sol" | "sag" | null = null;
+  let zorunluKalan = 0;
+
+  for (const item of cocuklar) {
+    let hedefYon: "sol" | "sag";
+
+    if (zorunluKalan > 0 && zorunluYon) {
+      hedefYon = zorunluYon;
+      zorunluKalan--;
+      if (zorunluKalan === 0) {
+        // Sayaç tamamlandı: sayaç SOLA getirilir
+        siradakiNormal = "sol";
+        zorunluYon = null;
+      }
+    } else {
+      hedefYon = siradakiNormal;
+      siradakiNormal = siradakiNormal === "sol" ? "sag" : "sol";
+    }
+
+    if (hedefYon === "sol") {
+      solKolon.push(item);
+    } else {
+      sagKolon.push(item);
+    }
+
+    // Eğer konulan nesne bir koli ise özel dengeleme kuralları devreye girer:
+    if (item.tur === "koli") {
+      if (hedefYon === "sag") {
+        // Sağ tarafta iken koli konduysa sonraki iki yerleştirme sola konulur ve sayaç sıfırlanır
+        zorunluYon = "sol";
+        zorunluKalan = 2;
+      } else {
+        // Sol tarafta iken koli konduysa sonraki 3 yerleştirme sağa yapılır ve sonra sayaç sıfırlanır
+        zorunluYon = "sag";
+        zorunluKalan = 3;
+      }
+    }
+  }
+
+  return { solKolon, sagKolon };
+}
+
+function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTur?: "sahne" | "palet" | "koli" }) {
   const [acik, setAcik] = useState(true);
   const secili = api.seciliKapId === koli.uid;
   const drop = api.dropHedef === koli.uid;
   const desi = nodeDesi(koli), kg = nodeKg(koli);
   const dolu = Math.min(100, koli.hacim > 0 ? (desi / koli.hacim) * 100 : 0);
   const atil = koli.atil;
+  const inContainer = parentTur === "palet" || parentTur === "koli";
+
+  // Koli içi sağ ve sol sütunları akıllı dengeleme algoritmasıyla ayırıyoruz
+  const { solKolon, sagKolon } = koliKolonlaraAyir(koli.cocuklar);
+
   return (
     <div
       draggable
@@ -516,8 +614,8 @@ function KoliKart({ koli, api }: { koli: KoliNode; api: Api }) {
       onDragLeave={() => drop && api.setDropHedef(null)}
       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); api.birak(koli.uid); }}
       onClick={(e) => { e.stopPropagation(); api.setSeciliKapId(koli.uid); }}
-      style={{ minWidth: boyutGenislik(koli.no), maxWidth: Math.max(boyutGenislik(koli.no), 380) }}
-      className={`flex flex-col rounded-2xl border-2 p-2.5 shadow-sm transition ${drop ? "border-brand-500 bg-brand-50/60 dark:bg-brand-500/10" : secili ? "border-brand-400 ring-2 ring-brand-200 dark:ring-brand-500/30" : atil ? "border-slate-300 bg-slate-100/70 dark:border-slate-600 dark:bg-slate-700/30" : "border-line bg-surface"}`}
+      style={!inContainer ? { minWidth: boyutGenislik(koli.no), maxWidth: Math.max(boyutGenislik(koli.no), 380) } : undefined}
+      className={`flex min-w-0 w-full flex-col rounded-2xl border-2 p-2.5 shadow-sm transition ${drop ? "border-brand-500 bg-brand-50/60 dark:bg-brand-500/10" : secili ? "border-brand-400 ring-2 ring-brand-200 dark:ring-brand-500/30" : atil ? "border-slate-300 bg-slate-100/70 dark:border-slate-600 dark:bg-slate-700/30" : "border-line bg-surface"}`}
     >
       <div className="flex items-start gap-2">
         <GripVertical className="mt-1 h-4 w-4 shrink-0 cursor-grab text-subtle/50" />
@@ -526,12 +624,10 @@ function KoliKart({ koli, api }: { koli: KoliNode; api: Api }) {
         <div className="min-w-0 flex-1">
           <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-fg">
             {atil ? "Atıl Koli" : "Koli"} <span className="text-xs font-semibold text-subtle">· Boyut {koli.no} · {boyutOl(koli.no)} cm</span>
-            {koli.beklemede &&<span className="rounded bg-amber-200 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 dark:bg-amber-500/30 dark:text-amber-200">beklemede</span>}
           </p>
           <p className="font-mono text-[11px] text-subtle">{urunSay(koli)} ürün · {fmt(desi)} ds · {fmt(kg)} kg</p>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
-          <button type="button" onClick={(e) => { e.stopPropagation(); api.beklet(koli.uid); }} className="rounded-lg p-1.5 text-subtle transition hover:bg-amber-50 hover:text-amber-600 active:scale-95 dark:hover:bg-amber-500/10" title="Beklet"><Pause className="h-4 w-4" /></button>
           <button type="button" onClick={(e) => { e.stopPropagation(); api.koliIcineEkle(koli.uid); }} className="rounded-lg p-1.5 text-subtle transition hover:bg-brand-50 hover:text-brand-600 active:scale-95 dark:hover:bg-brand-500/10" title="İçine koli ekle"><Box className="h-4 w-4" /></button>
           <SilButon onSil={() => api.sil(koli.uid)} className="rounded-lg p-1.5 text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-4 w-4" />
         </div>
@@ -557,9 +653,21 @@ function KoliKart({ koli, api }: { koli: KoliNode; api: Api }) {
       </div>
 
       {acik && (
-        <div className="mt-2 flex max-h-[320px] flex-wrap gap-2 overflow-y-auto rounded-xl border border-dashed border-line bg-elevated/30 p-2">
-          {koli.cocuklar.length === 0 && <p className="w-full py-3 text-center text-[11px] text-subtle">Boş — ürün/koli sürükle</p>}
-          {koli.cocuklar.map((c) => <KartNode key={c.uid} node={c} api={api} />)}
+        <div className="mt-2 max-h-[360px] overflow-y-auto rounded-xl border border-dashed border-line bg-elevated/30 px-[3px] py-1.5">
+          {koli.cocuklar.length === 0 ? (
+            <p className="w-full py-3 text-center text-[11px] text-subtle">Boş koli</p>
+          ) : (
+            <div className="flex items-start gap-[3px]">
+              {/* Sol Sütun (Bağımsız) */}
+              <div className="flex flex-1 min-w-0 flex-col gap-[3px]">
+                {solKolon.map((c) => <KartNode key={c.uid} node={c} api={api} parentTur="koli" />)}
+              </div>
+              {/* Sağ Sütun (Bağımsız) */}
+              <div className="flex flex-1 min-w-0 flex-col gap-[3px]">
+                {sagKolon.map((c) => <KartNode key={c.uid} node={c} api={api} parentTur="koli" />)}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -572,7 +680,7 @@ function UrunKart({ urun, api }: { urun: UrunNode; api: Api }) {
       draggable
       onDragStart={(e) => { e.stopPropagation(); drag = { kind: "node", uid: urun.uid }; }}
       onClick={(e) => e.stopPropagation()}
-      className={`flex w-36 cursor-grab flex-col rounded-xl border p-1.5 transition active:cursor-grabbing ${urun.paketli ? "border-slate-200 bg-white text-slate-900" : "border-line bg-surface"}`}
+      className={`flex w-full min-w-0 flex-col rounded-xl border p-2 transition ${urun.paketli ? "border-slate-200 bg-white text-slate-900" : "border-line bg-surface hover:border-brand-300"}`}
     >
       <div className="flex items-start gap-1">
         <div className="min-w-0 flex-1">
@@ -584,9 +692,9 @@ function UrunKart({ urun, api }: { urun: UrunNode; api: Api }) {
       <div className="mt-1 flex flex-wrap items-center justify-between gap-1">
         <span className={`font-mono text-sm font-black ${urun.paketli ? "text-slate-900" : "text-fg"}`}>{urun.qty}<span className="ml-0.5 text-[9px] font-semibold text-subtle">{urun.unit}</span></span>
         <div className="flex flex-wrap items-center justify-end gap-0.5">
-          <button type="button" onClick={(e) => { e.stopPropagation(); api.urunAdet(urun.uid, -1); }} className="flex h-7 w-7 items-center justify-center rounded-md border border-rose-300 text-rose-500 transition hover:bg-rose-50 active:scale-95 dark:hover:bg-rose-500/10"><Minus className="h-4 w-4" /></button>
-          <button type="button" onClick={(e) => { e.stopPropagation(); api.urunAdet(urun.uid, +1); }} className="flex h-7 w-7 items-center justify-center rounded-md border border-emerald-300 text-emerald-600 transition hover:bg-emerald-50 active:scale-95 dark:hover:bg-emerald-500/10"><Plus className="h-4 w-4" /></button>
-          <SilButon onSil={() => api.sil(urun.uid)} />
+          <button type="button" onClick={(e) => { e.stopPropagation(); api.urunAdet(urun.uid, -1); }} className="flex h-6 w-6 items-center justify-center rounded-md border border-rose-300 text-rose-500 transition hover:bg-rose-50 active:scale-95 dark:hover:bg-rose-500/10"><Minus className="h-3.5 w-3.5" /></button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); api.urunAdet(urun.uid, +1); }} className="flex h-6 w-6 items-center justify-center rounded-md border border-emerald-300 text-emerald-600 transition hover:bg-emerald-50 active:scale-95 dark:hover:bg-emerald-500/10"><Plus className="h-3.5 w-3.5" /></button>
+          <SilButon onSil={() => api.sil(urun.uid)} className="flex h-6 w-6 items-center justify-center rounded-md text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-3 w-3" />
         </div>
       </div>
     </div>
