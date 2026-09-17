@@ -5,7 +5,7 @@ export type OperationType =
   | "transfer" // Transfer
   | "count" // Sayım
   | "inquiry" // Ürün Sorgulama
-  | "label_printing" // Etiket Yazdırma
+  | "label_printing" // Yardımcı İşlemler
   | "packaging" // Paketleme
   | "reporting"; // Raporlama
 

@@ -95,6 +95,7 @@ export const BOYUTLAR: KoliBoyutTanimi[] = [
     yukseklik: 17,
     hacim: 5.08,
     dara: 0.266,
+    ring: "ring-emerald-500",
     ic: "text-emerald-500",
     txt: "text-emerald-700 dark:text-emerald-300",
     btn: "border-emerald-200 bg-emerald-50 hover:bg-emerald-100 dark:border-emerald-500/40 dark:bg-emerald-500/10",
@@ -109,6 +110,7 @@ export const BOYUTLAR: KoliBoyutTanimi[] = [
     yukseklik: 33,
     hacim: 9.9,
     dara: 0.411,
+    ring: "ring-sky-500",
     ic: "text-sky-500",
     txt: "text-sky-700 dark:text-sky-300",
     btn: "border-sky-200 bg-sky-50 hover:bg-sky-100 dark:border-sky-500/40 dark:bg-sky-500/10",
@@ -125,6 +127,7 @@ export const BOYUTLAR: KoliBoyutTanimi[] = [
     dara: 0.518,
     barkod: "A00000384",
     ic: "text-amber-500",
+    ring: "ring-amber-500",
     txt: "text-amber-700 dark:text-amber-300",
     btn: "border-amber-200 bg-amber-50 hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/10",
   },
@@ -139,6 +142,7 @@ export const BOYUTLAR: KoliBoyutTanimi[] = [
     hacim: 24.5,
     dara: 0.63,
     ic: "text-orange-500",
+    ring: "ring-orange-500",
     txt: "text-orange-700 dark:text-orange-300",
     btn: "border-orange-200 bg-orange-50 hover:bg-orange-100 dark:border-orange-500/40 dark:bg-orange-500/10",
   },
@@ -153,6 +157,7 @@ export const BOYUTLAR: KoliBoyutTanimi[] = [
     hacim: 2.7,
     dara: 0.145,
     ic: "text-rose-500",
+    ring: "ring-rose-500",
     txt: "text-rose-700 dark:text-rose-300",
     btn: "border-rose-200 bg-rose-50 hover:bg-rose-100 dark:border-rose-500/40 dark:bg-rose-500/10",
   },
@@ -167,6 +172,7 @@ export const BOYUTLAR: KoliBoyutTanimi[] = [
     hacim: 4.63,
     dara: 0.23,
     ic: "text-violet-500",
+    ring: "ring-violet-500",
     txt: "text-violet-700 dark:text-violet-300",
     btn: "border-violet-200 bg-violet-50 hover:bg-violet-100 dark:border-violet-500/40 dark:bg-violet-500/10",
   },
@@ -766,6 +772,7 @@ function koliKolonlaraAyir(cocuklar: Node[]): { solKolon: Node[]; sagKolon: Node
 
 function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTur?: "sahne" | "palet" | "koli" }) {
   const [acik, setAcik] = useState(true);
+  const b = boyutBul(koli.no);
   const secili = api.seciliKapId === koli.uid;
   const drop = api.dropHedef === koli.uid;
   const desi = nodeDesi(koli), kg = nodeKg(koli);
@@ -787,7 +794,7 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); api.birak(koli.uid); }}
       onClick={(e) => { e.stopPropagation(); api.setSeciliKapId(koli.uid); }}
       style={!inContainer ? { minWidth: boyutGenislik(koli.no), maxWidth: Math.max(boyutGenislik(koli.no), 380) } : undefined}
-      className={`flex min-w-0 w-full flex-col rounded-2xl border-2 p-[2px] shadow-sm transition ${drop ? "border-brand-500 bg-brand-50/60 dark:bg-brand-500/10" : secili ? "border-brand-400 ring-2 ring-brand-200 dark:ring-brand-500/30" : atil ? "border-slate-500 bg-slate-100/70 dark:border-slate-400 dark:bg-slate-700/30" : "border-slate-400 dark:border-slate-400 bg-surface"}`}
+      className={`flex min-w-0 w-full flex-col rounded-2xl border-2 p-[2px] shadow-sm transition ${b?.btn} ${secili ? `ring-2 ${b?.ring}` : ""}`}
     >
       <div className="px-2 pt-1.5 pb-0.5">
         {isNestedKoli ? (
