@@ -26,7 +26,7 @@
       "transfer": "Transfer",
       "count": "Sayım",
       "inquiry": "Ürün Sorgulama",
-      "label_printing": "Etiket Yazdırma",
+      "label_printing": "Yardımcı İşlemler",
       "packaging": "Paketleme",
       "reporting": "Stok Hareket Raporları"
     },
@@ -37,7 +37,7 @@
       "transfer": "Lokasyonlar arası taşı",
       "count": "Stok sayımı yap",
       "inquiry": "Stok ve lokasyon sorgula",
-      "label_printing": "Ürün ve koli etiketleri yazdır",
+      "label_printing": "Etiket yazdırma ve yardımcı işlemler",
       "packaging": "Ürünleri kolile ve sevkiyata hazırla"
     }
   },
@@ -239,7 +239,7 @@
     "backToMenu": "Ana Menüye Dön"
   },
   "labelPrinting": {
-    "title": "Etiket Yazdırma",
+    "title": "Yardımcı İşlemler",
     "subtitle": "Yazdırmak istediğiniz etiket tipini seçin",
     "search": "Etiket tipi ara...",
     "modalTitle": "Etiket Yazdırma Ayarları",

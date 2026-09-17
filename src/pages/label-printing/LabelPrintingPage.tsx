@@ -94,7 +94,7 @@ export default function LabelPrintingPage() {
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8">
       <PageHeader
-        title={t("labelPrinting.title", { defaultValue: "Etiket Yazdırma" })}
+        title={t("labelPrinting.title", { defaultValue: "Yardımcı İşlemler" })}
         subtitle={t("labelPrinting.subtitle", {
           defaultValue: "Yazdırmak istediğiniz etiket tipini seçin",
         })}
