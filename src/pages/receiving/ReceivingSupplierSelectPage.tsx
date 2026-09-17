@@ -134,30 +134,45 @@ export default function ReceivingSupplierSelectPage() {
     setHasSearched(true);
     setSelectedSupplier(null);
     try {
-      // Girilen değere göre parametre seçimi (Bora, 12.09):
-      //  • Sadece sayı ve ≤6 karakter  → tedarikçi kodu  → PSVENDOR
-      //  • Sadece sayı ve >6 karakter  → barkod          → PSBARCODE
-      //  • Harf içeriyorsa             → yalnız PSCOMPANY/PSPLANT gönder, dönen
-      //    sonucu NAME1 / MATERIAL / STEXT alanlarında istemcide süz.
+      // Arama mantığı:
+      //  • Sayısal (179 / 1793 / 179381 gibi — kısmi sipariş no dahil):
+      //      Önce tüm açık siparişleri çek, SİPARİŞ NO / tedarikçi kodu / barkod /
+      //      malzeme üzerinde istemcide (kısmi) süz. Böylece kısmi sipariş no da eşleşir.
+      //      Bare istek boş dönerse (sunucu tüm listeyi vermiyorsa) ESKİ davranışa düş:
+      //      ≤6 hane → PSVENDOR, >6 hane → PSBARCODE. (Mevcut yapı korunur.)
+      //  • Harf içeriyorsa: tüm açık siparişleri çek, NAME1 / MATERIAL / STEXT / ORDERNUM'da süz.
       const sadeceRakam = /^[0-9]+$/.test(query);
+      const q = trNormalize(query);
       let orders: Record<string, unknown>[] = [];
 
-      if (sadeceRakam && query.length <= 6) {
-        const res = await api.getOpenOrders({ vendor: query });
-        orders = res.orders || [];
-      } else if (sadeceRakam) {
-        const res = await api.getOpenOrders({ barcode: query });
-        orders = res.orders || [];
+      if (sadeceRakam) {
+        const res = await api.getOpenOrders(); // yalnızca PSCOMPANY + PSPLANT
+        orders = (res.orders || []).filter((r) => {
+          const ord = trNormalize(String(r.ORDERNUM || r.PURORDER || r.POORDER || r.PO_NUMBER || ""));
+          const ven = trNormalize(String(r.VENDOR || r.PSVENDOR || r.SUPPLIERID || ""));
+          const bc = trNormalize(String(r.BARCODE || r.PSBARCODE || ""));
+          const mat = trNormalize(String(r.MATERIAL || r.PSMATERIAL || ""));
+          return ord.includes(q) || ven.includes(q) || bc.includes(q) || mat.includes(q);
+        });
+
+        // Güvenlik ağı: bare istek hiç veri döndürmediyse eski parametreli aramaya düş.
+        if (orders.length === 0) {
+          const res2 = query.length <= 6
+            ? await api.getOpenOrders({ vendor: query })
+            : await api.getOpenOrders({ barcode: query });
+          orders = res2.orders || [];
+        }
       } else {
         const res = await api.getOpenOrders(); // yalnızca PSCOMPANY + PSPLANT
-        const q = trNormalize(query);
         orders = (res.orders || []).filter((r) => {
           const name = trNormalize(String(r.NAME1 || ""));
           const mat = trNormalize(String(r.MATERIAL || ""));
           const stext = trNormalize(String(r.STEXT || ""));
-          return name.includes(q) || mat.includes(q) || stext.includes(q);
+          const ord = trNormalize(String(r.ORDERNUM || r.PURORDER || r.POORDER || r.PO_NUMBER || ""));
+          return name.includes(q) || mat.includes(q) || stext.includes(q) || ord.includes(q);
         });
       }
+
       setSuppliers(groupOrdersToSuppliers(orders, query));
     } catch (err) {
       setApiError(hataMetni(err, "CANIAS sunucusuna bağlanılamadı. Lütfen ağ bağlantınızı ve sunucu adresini kontrol edin."));

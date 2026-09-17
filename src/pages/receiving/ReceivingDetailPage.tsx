@@ -360,6 +360,12 @@ function checkAttr(sources: (Record<string, unknown> | undefined)[], keys: strin
   return false;
 }
 
+// Malzeme bazında en son yüklenen açık siparişler (modül seviyesi — sayfa
+// adresten çıkıp geri gelince de yaşar). Kayıtlardan silip TEKRAR okutunca
+// barkod bazlı sorgu boş dönerse bu cache'ten geri getirilir; kart kaybolmaz.
+const acikSiparisCache = new Map<string, Record<string, unknown>[]>();
+const cacheKey = (vendor: string, mat: string) => `${String(vendor || "").trim()}::${String(mat || "").trim()}`;
+
 export default function ReceivingDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -645,6 +651,10 @@ export default function ReceivingDetailPage() {
       }
       if (location.state.openOrders) {
         setOpenOrders(location.state.openOrders);
+        const mc = location.state.currentMaterial?.material;
+        if (mc && Array.isArray(location.state.openOrders) && location.state.openOrders.length > 0) {
+          acikSiparisCache.set(cacheKey(vendorCode, mc), location.state.openOrders);
+        }
       }
       setAreDimensionsDone(true);
       setActiveStep(location.state.currentMaterial?.isSpecialLot ? "lot" : "quantity");
@@ -657,7 +667,13 @@ export default function ReceivingDetailPage() {
       }));
       setIsProductScanned(true);
       if (location.state.matSizeForm) setMatSizeForm(location.state.matSizeForm);
-      if (location.state.openOrders) setOpenOrders(location.state.openOrders);
+      if (location.state.openOrders) {
+        setOpenOrders(location.state.openOrders);
+        const mc = location.state.currentMaterial?.material;
+        if (mc && Array.isArray(location.state.openOrders) && location.state.openOrders.length > 0) {
+          acikSiparisCache.set(cacheKey(vendorCode, mc), location.state.openOrders);
+        }
+      }
       if (location.state.areDimensionsDone !== undefined) {
         setAreDimensionsDone(Boolean(location.state.areDimensionsDone));
       }
@@ -924,22 +940,26 @@ export default function ReceivingDetailPage() {
         }
 
         // Malzemenin TÜM barkodlarını kendi BUNIT'leriyle ekle (AD, KT, KO, PK ...).
+        // ÖNEMLİ: Malzemenin gerçek barkodu yoksa CANIAS "malzemekodu + $ + *"
+        // biçiminde SENTETİK bir barkod döndürür. Bu combobox'a GİRMEMELİ —
+        // yalnızca gerçek barkodlar listelenir. Bu yüzden "$" veya "*" içeren
+        // (ya da malzeme kodu + $/* deseni olan) barkodlar atlanır.
+        const sentetikBarkod = (bc: string) =>
+          !bc || bc.includes("$") || bc.includes("*");
         for (const b of rawBarcodeList) {
           const bCode = String(b.BARCODE || b.barcode || "").trim();
           const bUnit = String(
             b.BUNIT || b.UNIT || b.BARCODEUNIT || b.B_UNIT || b.unit || matUnit || "AD"
           ).trim().toUpperCase();
-          if (bCode && !seenBarcodes.has(bCode)) {
+          if (bCode && !sentetikBarkod(bCode) && !seenBarcodes.has(bCode)) {
             seenBarcodes.add(bCode);
             barcodes.push({ barcode: bCode, unit: bUnit });
           }
         }
 
-        // Okutulan barkod listede yoksa yine de ekle.
-        if (targetBarcode && !seenBarcodes.has(targetBarcode)) {
-          seenBarcodes.add(targetBarcode);
-          barcodes.push({ barcode: targetBarcode, unit: scannedUnit || matUnit || "AD" });
-        }
+        // NOT: Okutulan barkod, malzemenin GetMaterialInfo barkod listesinde (TBLBARCODELIST)
+        // yoksa combobox'a EKLENMEZ. Combobox yalnızca gerçek malzeme barkodlarından oluşur;
+        // olmayan barkod (ör. malzemekodu+$+*) buraya düşmez.
 
         // 3. MZYGetOpenOrder ile açık siparişleri getir (Barkod, Malzeme Kodu ve Tedarikçi Fallback'li)
         let rawOrders: Record<string, unknown>[] = [];
@@ -983,11 +1003,23 @@ export default function ReceivingDetailPage() {
           }
         }
 
-        const sortedOrders = [...rawOrders].sort((a, b) => {
+        let sortedOrders = [...rawOrders].sort((a, b) => {
           const dateA = getOrderDate(a) || getOrderNum(a, 0);
           const dateB = getOrderDate(b) || getOrderNum(b, 0);
           return dateB.localeCompare(dateA); // Yeniden eskiye sıralama (LIFO)
         });
+
+        // Açık sipariş cache'i (modül seviyesi):
+        //  • Bu malzeme için sipariş bulunduysa cache'e yaz.
+        //  • Bulunamadıysa (ör. silip tekrar okutunca barkod bazlı sorgu boş
+        //    dönerse) daha önce yüklenen siparişleri geri getir — kart kaybolmasın.
+        const ooKey = cacheKey(vendorCode, matCode);
+        if (sortedOrders.length > 0) {
+          acikSiparisCache.set(ooKey, sortedOrders);
+        } else {
+          const onceki = acikSiparisCache.get(ooKey);
+          if (onceki && onceki.length > 0) sortedOrders = onceki;
+        }
 
         setOpenOrders(sortedOrders);
 
@@ -1019,7 +1051,7 @@ export default function ReceivingDetailPage() {
           unit: matUnit,
           isSpecialLot,
           barcodes,
-          selectedBarcode: targetBarcode || barcodes[0]?.barcode || "",
+          selectedBarcode: barcodes.some((b) => b.barcode === targetBarcode) ? targetBarcode : (barcodes[0]?.barcode || ""),
           packageMultiplier: scannedMultiplier,
           unitMultipliers,
           specialAttributes,
@@ -1227,6 +1259,14 @@ export default function ReceivingDetailPage() {
   // ---------------------------------------------------------------------------
   const handleCompleteItemReceipt = () => {
     if (!currentMaterial) return;
+
+    // Açık sipariş kartı yoksa mal kabul yapılamaz. Kart olmadan kabul edilirse
+    // belge tipi/belge no yanlış ("SERBEST") kayıt düşerdi — bu engellenir.
+    if (!openOrders || openOrders.length === 0) {
+      sesHata();
+      show({ kind: "err", text: "Bu malzeme için açık sipariş kartı bulunamadı. Kart olmadan mal kabul yapılamaz." });
+      return;
+    }
 
     if (receiptQty <= 0) {
       sesHata();
@@ -2107,16 +2147,17 @@ export default function ReceivingDetailPage() {
                         </div>
                       </div>
 
-                      {/* Sağ: stok birimi (büyük) / toplam, altında sipariş birimi (küçük) */}
+                      {/* Sağ: HER ZAMAN sipariş birimi (büyük) kabul edilen / bakiye,
+                          sipariş birimi ≠ stok birimi ise altına stok birimi (küçük). */}
                       <div className="flex shrink-0 flex-col items-end">
                         <div className="flex items-baseline gap-1 font-mono">
-                          <span className="text-lg font-black text-fg">{al.fulfilledStockQty}</span>
-                          <span className="text-sm text-subtle">/ {al.totalStockQty}</span>
-                          <span className="text-xs font-bold text-subtle">{al.stockUnit}</span>
+                          <span className="text-lg font-black text-fg">{Math.round(al.fulfilledPurQty)}</span>
+                          <span className="text-sm text-subtle">/ {Math.round(al.totalPurQty)}</span>
+                          <span className="text-xs font-bold text-subtle">{al.purUnit}</span>
                         </div>
                         {al.purUnit !== al.stockUnit && (
                           <div className="mt-0.5 font-mono text-[11px] text-subtle">
-                            {Math.round(al.fulfilledPurQty)}/{Math.round(al.totalPurQty)} {al.purUnit}
+                            {al.fulfilledStockQty}/{al.totalStockQty} {al.stockUnit}
                           </div>
                         )}
                       </div>
