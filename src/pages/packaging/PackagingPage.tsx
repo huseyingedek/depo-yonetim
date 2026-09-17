@@ -43,7 +43,7 @@ interface UrunNode {
   desi: number; kg: number; paketli?: boolean;
 }
 interface KoliNode {
-  uid: string; tur: "koli"; no: number; atil?: boolean; beklemede?: boolean;
+  uid: string; tur: "koli"; no: number; kod?: string; atil?: boolean; beklemede?: boolean;
   hacim: number; hazards: Hazard[]; cocuklar: Node[];
 }
 interface PaletNode { uid: string; tur: "palet"; ad: string; cocuklar: Node[]; }
@@ -67,21 +67,120 @@ const KAYNAK: KaynakUrun[] = [
   { code: "UL105", name: "Ülker Çubuk Kraker Paketi 40Gr", unit: "PK", siparis: 360, desi: 0.05, kg: 0.04, paketli: true },
 ];
 
-// Koli boyutları — 6 seçenek, her biri kendi rengiyle (1..5 + 0=en büyük)
-// ol = koli ölçüsü (örnek değerler; gerçek ölçüler sonra girilecek)
-const BOYUTLAR: { n: number; ol: string; ic: string; txt: string; btn: string }[] = [
-  { n: 1, ol: "20×15", ic: "text-emerald-500", txt: "text-emerald-700 dark:text-emerald-300", btn: "border-emerald-200 bg-emerald-50 hover:bg-emerald-100 dark:border-emerald-500/40 dark:bg-emerald-500/10" },
-  { n: 2, ol: "30×20", ic: "text-sky-500", txt: "text-sky-700 dark:text-sky-300", btn: "border-sky-200 bg-sky-50 hover:bg-sky-100 dark:border-sky-500/40 dark:bg-sky-500/10" },
-  { n: 3, ol: "40×30", ic: "text-amber-500", txt: "text-amber-700 dark:text-amber-300", btn: "border-amber-200 bg-amber-50 hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/10" },
-  { n: 4, ol: "50×40", ic: "text-orange-500", txt: "text-orange-700 dark:text-orange-300", btn: "border-orange-200 bg-orange-50 hover:bg-orange-100 dark:border-orange-500/40 dark:bg-orange-500/10" },
-  { n: 5, ol: "60×40", ic: "text-rose-500", txt: "text-rose-700 dark:text-rose-300", btn: "border-rose-200 bg-rose-50 hover:bg-rose-100 dark:border-rose-500/40 dark:bg-rose-500/10" },
-  { n: 0, ol: "80×60", ic: "text-violet-500", txt: "text-violet-700 dark:text-violet-300", btn: "border-violet-200 bg-violet-50 hover:bg-violet-100 dark:border-violet-500/40 dark:bg-violet-500/10" },
+// Koli boyutları — CANIAS resmi verileri (KOL00, KOL01, KOL02, KOL03, KOL04, KOL07)
+export interface KoliBoyutTanimi {
+  kod: string;
+  n: number;
+  ad: string;
+  ol: string;        // cm: En × Boy × Yükseklik
+  en: number;        // cm
+  boy: number;       // cm
+  yukseklik: number; // cm
+  hacim: number;     // desi
+  dara: number;      // kg
+  barkod?: string;
+  ic: string;
+  txt: string;
+  btn: string;
+}
+
+export const BOYUTLAR: KoliBoyutTanimi[] = [
+  {
+    kod: "KOL01",
+    n: 1,
+    ad: "Koli 1",
+    ol: "32×28×17",
+    en: 32,
+    boy: 28,
+    yukseklik: 17,
+    hacim: 5.08,
+    dara: 0.266,
+    ic: "text-emerald-500",
+    txt: "text-emerald-700 dark:text-emerald-300",
+    btn: "border-emerald-200 bg-emerald-50 hover:bg-emerald-100 dark:border-emerald-500/40 dark:bg-emerald-500/10",
+  },
+  {
+    kod: "KOL02",
+    n: 2,
+    ad: "Koli 2",
+    ol: "30×30×33",
+    en: 30,
+    boy: 30,
+    yukseklik: 33,
+    hacim: 9.9,
+    dara: 0.411,
+    ic: "text-sky-500",
+    txt: "text-sky-700 dark:text-sky-300",
+    btn: "border-sky-200 bg-sky-50 hover:bg-sky-100 dark:border-sky-500/40 dark:bg-sky-500/10",
+  },
+  {
+    kod: "KOL03",
+    n: 3,
+    ad: "Koli 3",
+    ol: "45×30×34",
+    en: 45,
+    boy: 30,
+    yukseklik: 34,
+    hacim: 15.3,
+    dara: 0.518,
+    barkod: "A00000384",
+    ic: "text-amber-500",
+    txt: "text-amber-700 dark:text-amber-300",
+    btn: "border-amber-200 bg-amber-50 hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/10",
+  },
+  {
+    kod: "KOL04",
+    n: 4,
+    ad: "Koli 4",
+    ol: "60×35×35",
+    en: 60,
+    boy: 35,
+    yukseklik: 35,
+    hacim: 24.5,
+    dara: 0.63,
+    ic: "text-orange-500",
+    txt: "text-orange-700 dark:text-orange-300",
+    btn: "border-orange-200 bg-orange-50 hover:bg-orange-100 dark:border-orange-500/40 dark:bg-orange-500/10",
+  },
+  {
+    kod: "KOL07",
+    n: 5,
+    ad: "Koli 5",
+    ol: "28×17×17",
+    en: 28,
+    boy: 17,
+    yukseklik: 17,
+    hacim: 2.7,
+    dara: 0.145,
+    ic: "text-rose-500",
+    txt: "text-rose-700 dark:text-rose-300",
+    btn: "border-rose-200 bg-rose-50 hover:bg-rose-100 dark:border-rose-500/40 dark:bg-rose-500/10",
+  },
+  {
+    kod: "KOL00",
+    n: 0,
+    ad: "Koli 0",
+    ol: "24×17×34",
+    en: 24,
+    boy: 17,
+    yukseklik: 34,
+    hacim: 4.63,
+    dara: 0.23,
+    ic: "text-violet-500",
+    txt: "text-violet-700 dark:text-violet-300",
+    btn: "border-violet-200 bg-violet-50 hover:bg-violet-100 dark:border-violet-500/40 dark:bg-violet-500/10",
+  },
 ];
 
 const fmt = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, useGrouping: false }).format(n);
-const boyutHacim = (no: number) => (no === 0 ? 60 : Math.round(no * 6 * 10) / 10);
-const boyutGenislik = (no: number) => Math.round(190 + (no === 0 ? 10 : no) * 14);
-const boyutOl = (no: number) => BOYUTLAR.find((b) => b.n === no)?.ol ?? "";
+const boyutBul = (no: number) => BOYUTLAR.find((b) => b.n === no);
+const boyutHacim = (no: number) => boyutBul(no)?.hacim ?? 10;
+const boyutGenislik = (no: number) => {
+  const b = boyutBul(no);
+  return b ? Math.round(180 + b.en * 2.8) : 260;
+};
+const boyutOl = (no: number) => boyutBul(no)?.ol ?? "";
+const boyutKodu = (no: number) => boyutBul(no)?.kod ?? `KOL0${no}`;
 
 // --- Ağaç yardımcıları --------------------------------------------------------
 const cocuk = (n: Node): Node[] => (n.tur === "urun" ? [] : n.cocuklar);
@@ -144,7 +243,7 @@ function baslangic(): Node[] {
       uid: "plt1", tur: "palet", ad: "Palet 1",
       cocuklar: [
         {
-          uid: "k1", tur: "koli", no: 7, hacim: boyutHacim(7), hazards: ["kirilabilir"],
+          uid: "k1", tur: "koli", no: 1, kod: "KOL01", hacim: boyutHacim(1), hazards: ["kirilabilir"],
           cocuklar: [
             { uid: "up1", tur: "urun", code: "SV101", name: "Fotokopi Kağıdı A4 80Gr Beyaz", qty: 6, unit: "PK", desi: 1.19, kg: 2.55 },
           ],
@@ -243,12 +342,22 @@ export default function PackagingPage() {
 
   const koliEkle = (no: number) => {
     const uid = yid();
-    const yeni: KoliNode = { uid, tur: "koli", no, hacim: boyutHacim(no), hazards: [], atil: atilMod, cocuklar: [] };
+    const b = boyutBul(no);
+    const yeni: KoliNode = {
+      uid,
+      tur: "koli",
+      no,
+      kod: b?.kod,
+      hacim: b?.hacim ?? boyutHacim(no),
+      hazards: [],
+      atil: atilMod,
+      cocuklar: []
+    };
     const hedef = seciliKapId ? nodeFind(sahne, seciliKapId) : null;
     const parent = hedef && hedef.tur !== "urun" ? seciliKapId : null;
     setSahne((prev) => nodeAdd(prev, parent, yeni));
     setSeciliKapId(uid);
-    show({ kind: "ok", text: `${atilMod ? "Atıl koli" : "Koli"} · Boyut ${no}` });
+    show({ kind: "ok", text: `${atilMod ? "Atıl koli" : "Koli"} · ${b?.kod || `Boyut ${no}`} (${b?.ol || ""} cm)` });
   };
 
   const sil = (uid: string) => { setSahne((prev) => nodeRemove(prev, uid).list); show({ kind: "warn", text: "Kart silindi" }); };
@@ -318,7 +427,8 @@ export default function PackagingPage() {
 
   function koliIcineKoli(parentUid: string) {
     const uid = yid();
-    const yeni: KoliNode = { uid, tur: "koli", no: 1, hacim: boyutHacim(1), hazards: [], cocuklar: [] };
+    const b = boyutBul(1);
+    const yeni: KoliNode = { uid, tur: "koli", no: 1, kod: b?.kod, hacim: b?.hacim ?? boyutHacim(1), hazards: [], cocuklar: [] };
     setSahne((prev) => nodeAdd(prev, parentUid, yeni));
     setSeciliKapId(uid);
     show({ kind: "ok", text: "Koli içine koli eklendi" });
@@ -402,11 +512,12 @@ export default function PackagingPage() {
               <h2 className="flex items-center gap-1.5 text-sm font-bold text-fg">
                 <Boxes className="h-4 w-4 text-subtle" />
                 <span>Paketleme Alanı</span>
-                {seciliKapId === null && <span className="rounded bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">hedef</span>}
+                {seciliKapId === null && <span className="rounded bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">Hedef</span>}
               </h2>
               <div className="flex items-center gap-2.5 text-xs font-bold text-fg">
-                <span><b className="font-mono text-sm font-extrabold text-fg">{kSay}</b> koli</span>
+                <span className="font-mono text-sm font-extrabold text-fg">Toplam:</span>
                 <span><b className="font-mono text-sm font-extrabold text-fg">{pSay}</b> palet</span>
+                <span><b className="font-mono text-sm font-extrabold text-fg">{kSay}</b> koli</span>
                 <span><b className="font-mono text-sm font-extrabold text-fg">{fmt(genelDesi)}</b> desi</span>
                 <span><b className="font-mono text-sm font-extrabold text-fg">{fmt(genelKg)}</b> kg</span>
               </div>
@@ -460,9 +571,6 @@ export default function PackagingPage() {
                         <span className="text-[10px] font-bold text-fg">{k.unit}</span>
                       </div>
                       <button type="button" disabled={bittiK} onClick={() => kaynakEkle(k.code, seciliKapId)} className="inline-flex items-center gap-1 rounded-lg border border-brand-300 px-2 py-1 text-[11px] font-bold text-brand-600 transition hover:bg-brand-50 disabled:opacity-40 dark:hover:bg-brand-500/10"><Plus className="h-3.5 w-3.5" /> Ekle</button>
-                    </div>
-                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-elevated">
-                      <div className={`h-full rounded-full ${bittiK ? "bg-emerald-500" : "bg-brand-500"}`} style={{ width: `${(pk / k.siparis) * 100}%` }} />
                     </div>
                   </div>
                 );
@@ -568,9 +676,10 @@ function PaletKart({ palet, api }: { palet: PaletNode; api: Api }) {
         <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"><Layers className="h-5 w-5" /></span>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-1">
           <p className="text-sm font-extrabold text-fg">{palet.ad}</p>
-          {secili && <span className="rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-500/30 dark:text-amber-200">hedef</span>}
+          {secili && <span className="rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-500/30 dark:text-amber-200">Hedef</span>}
           <div className="inline-flex items-center gap-1.5">
             <span className="font-mono text-xs font-bold text-fg flex items-center gap-2">
+              <span>Toplam:</span>
               <span>{koliSay(palet.cocuklar)} koli</span>
               <span>{fmt(nodeDesi(palet))} desi</span>
               <span>{fmt(nodeKg(palet))} kg</span>
@@ -660,7 +769,7 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
   const secili = api.seciliKapId === koli.uid;
   const drop = api.dropHedef === koli.uid;
   const desi = nodeDesi(koli), kg = nodeKg(koli);
-  const dolu = Math.min(100, koli.hacim > 0 ? (desi / koli.hacim) * 100 : 0);
+  const dolu = koli.hacim > 0 ? (desi / koli.hacim) * 100 : 0;
   const atil = koli.atil;
   const inContainer = parentTur === "palet" || parentTur === "koli";
 
@@ -692,7 +801,7 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
                 <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-black ${atil ? "bg-slate-200 text-slate-600 dark:bg-slate-600/50 dark:text-slate-200" : "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300"}`}>
                   {koli.no}
                 </span>
-                <span className="truncate text-xs font-bold text-fg">{atil ? "Atıl Koli" : "Koli"}</span>
+                <span className="truncate text-xs font-bold text-fg">{atil ? "Atıl Koli" : `Koli ${boyutKodu(koli.no)}`}</span>
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
                 <button type="button" onClick={(e) => { e.stopPropagation(); api.koliIcineEkle(koli.uid); }} className="rounded-lg p-1.5 text-subtle transition hover:bg-brand-50 hover:text-brand-600 active:scale-95 dark:hover:bg-brand-500/10" title="İçine koli ekle">
@@ -732,7 +841,7 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
             <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-black ${atil ? "bg-slate-200 text-slate-600 dark:bg-slate-600/50 dark:text-slate-200" : "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300"}`}>{koli.no}</span>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-fg">
-                <span>{atil ? "Atıl Koli" : "Koli"}</span>
+                <span>{atil ? "Atıl Koli" : `Koli ${boyutKodu(koli.no)}`}</span>
                 <span className="text-xs font-bold text-fg flex items-center gap-2">
                   <span>Boyut {koli.no}</span>
                   <span>{boyutOl(koli.no)} cm</span>
@@ -765,9 +874,9 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
         <div className="mt-1.5 flex items-center gap-2">
           <span className="flex items-center gap-1 text-[11px] font-bold text-fg"><Weight className="h-3.5 w-3.5" /> Doluluk</span>
           <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-elevated">
-            <div className={`h-full rounded-full ${dolu > 100 ? "bg-rose-500" : "bg-emerald-500"}`} style={{ width: `${dolu}%` }} />
+            <div className={`h-full rounded-full ${dolu > 105 ? "bg-rose-500" : "bg-emerald-500"}`} style={{ width: `${Math.min(100, dolu)}%` }} />
           </div>
-          <span className={`font-mono text-[10px] font-bold ${dolu > 100 ? "text-rose-500" : "text-emerald-500"}`}>%{Math.round(dolu)}</span>
+          <span className={`font-mono text-[10px] font-bold ${dolu > 105 ? "text-rose-500" : "text-emerald-500"}`}>%{Math.round(dolu)}</span>
         </div>
 
         <div className="mt-2 flex flex-wrap gap-1">
