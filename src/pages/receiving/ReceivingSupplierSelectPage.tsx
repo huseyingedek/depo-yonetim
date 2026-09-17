@@ -116,7 +116,7 @@ export default function ReceivingSupplierSelectPage() {
     // Mal kabul seçim sayfasına gelindiğinde eski yarım kalmış oturum kalıntılarını temizle
     try {
       Object.keys(localStorage).forEach((k) => {
-        if (k.startsWith("mzy_receiving_items_")) {
+        if (k.startsWith("mzy_receiving_items_") || k.startsWith("mzy_receiving_start_")) {
           localStorage.removeItem(k);
         }
       });

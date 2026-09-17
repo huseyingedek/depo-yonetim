@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
+import { caniasDateTime } from "../../store/pickingStore";
 import {
   Package,
   Plus,
@@ -725,6 +726,14 @@ export default function ReceivingDetailPage() {
     async (codeToScan?: string) => {
       const targetBarcode = (codeToScan || barcodeInput || "").trim();
       if (!targetBarcode) return;
+
+      // PDTSTARTTIME: mal kabul oturumunun saati İLK ürün okutulunca (Enter) başlar;
+      // saveReceipt başarılı olunca (özet sayfası) resetlenir. Ölçü/kayıt sayfalarına
+      // gidip gelince ve özet sayfasında da erişilebilsin diye localStorage'da tutulur.
+      try {
+        const startKey = storageKey.replace("mzy_receiving_items_", "mzy_receiving_start_");
+        if (!localStorage.getItem(startKey)) localStorage.setItem(startKey, caniasDateTime());
+      } catch {}
 
       setIsQueryingBarcode(true);
       setLotError("");

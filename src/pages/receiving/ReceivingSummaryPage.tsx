@@ -22,6 +22,7 @@ export default function ReceivingSummaryPage() {
   const vendorName = searchParams.get("vendorName") || location.state?.vendorName || "Tedarikçi";
 
   const storageKey = `mzy_receiving_items_${vendorCode || id || "active"}_${waybillNo || "active"}`;
+  const startKey = storageKey.replace("mzy_receiving_items_", "mzy_receiving_start_");
 
   const [items] = useState<ReceivedItem[]>(() => {
     try {
@@ -89,12 +90,20 @@ export default function ReceivingSummaryPage() {
         expiryDate: it.expiryDate || undefined,
       }));
 
+      // PDTSTARTTIME: mal kabulün başlangıç saati (ilk okutmada detay sayfasında
+      // yazılmıştı). saveReceipt'e gönderilir; başarılı olunca aşağıda temizlenir.
+      let receiptStart: string | undefined;
+      try {
+        receiptStart = localStorage.getItem(startKey) || undefined;
+      } catch { receiptStart = undefined; }
+
       const res = await api.saveReceipt({
         vendor: vendorCode,
         waybillNo,
         warehouse: targetWH || "00",
         targetWarehouse: targetWH || "00",
         stockPlace: targetSP || "*",
+        startTime: receiptStart,
         items: itemsPayload,
       });
 
@@ -115,9 +124,10 @@ export default function ReceivingSummaryPage() {
       setSuccessMessage(successText);
       show({ kind: "done", text: successText });
 
-      // LocalStorage temizle
+      // LocalStorage temizle — kalemler VE başlangıç saati (PDTSTARTTIME reset).
       try {
         localStorage.removeItem(storageKey);
+        localStorage.removeItem(startKey);
       } catch {}
 
       // Otomatik yönlendirme YOK — kullanıcı "Ana Sayfaya Dön" butonuna basınca gider.

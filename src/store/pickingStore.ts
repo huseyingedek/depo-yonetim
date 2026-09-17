@@ -140,8 +140,10 @@ export const usePickingStore = create<PickingState>()(
 
       order = taze ? mergeRecords(taze, oncekiOrder) : oncekiOrder;
 
-      if (order && !order.startTime) {
-        order = { ...order, startTime: oncekiOrder?.startTime ?? caniasDateTime() };
+      // PDTSTARTTIME: saat emir YÜKLENİNCE değil, ilk ürün okutulunca (Enter) başlar.
+      // Aynı emirde önceki oturumun başlangıcı varsa korunur.
+      if (order && !order.startTime && oncekiOrder?.startTime) {
+        order = { ...order, startTime: oncekiOrder.startTime };
       }
       set({ order, loading: false });
     } catch (e) {
@@ -207,6 +209,11 @@ export const usePickingStore = create<PickingState>()(
     if (!order) return { kind: "error", message: "Emir yüklü değil" };
     const shelf = get().shelf;
 
+    // PDTSTARTTIME: saat ilk ürün okutulunca (Enter) başlar; başarılı savePick'te resetlenir.
+    if (!order.startTime) {
+      set({ order: { ...order, startTime: caniasDateTime() } });
+    }
+
     let sonuc;
     try {
 
@@ -244,7 +251,8 @@ export const usePickingStore = create<PickingState>()(
 
     if (karar.outcome.kind === "ok" && karar.record) {
       set({
-        order: kayitUpsert(order, karar.outcome.lineId, karar.record, karar.mergedInto),
+        // startTime yukarıda set edildiyse korunsun (kayitUpsert eski order'dan üretiyor).
+        order: { ...kayitUpsert(order, karar.outcome.lineId, karar.record, karar.mergedInto), startTime: get().order?.startTime },
       });
     }
     return karar.outcome;
@@ -433,8 +441,9 @@ export const usePickingStore = create<PickingState>()(
         };
       }
 
+      // Başarılı savePick → saat RESETLENİR; sonraki toplama kendi ilk okutmasında (Enter) yeniden başlar.
       set({
-        order: { ...order, lines: order.lines.map((l) => ({ ...l, records: [] })) },
+        order: { ...order, startTime: undefined, lines: order.lines.map((l) => ({ ...l, records: [] })) },
         shelf: null,
       });
       return { ok: true, containerId: kap.containerId };
