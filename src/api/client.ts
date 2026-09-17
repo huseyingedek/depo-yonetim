@@ -1431,7 +1431,7 @@ export const api = {
     specialStock: string; // PSSPECIALSTOCK
     lot: string; // PSBATCHNUM
     qty: number; // PDCQUANTITY
-    startTime?: string; // PDSTARTTIME
+    startTime?: string; // PDTSTARTTIME
   }): Promise<{ ok: boolean; message: string }> {
     const c = ctx();
     const isPartili = input.specialStock === "1" || /takipli|partili/i.test(String(input.specialStock || ""));
@@ -1448,7 +1448,7 @@ export const api = {
       PSBATCHNUM: isPartili && input.lot && input.lot !== "*" ? input.lot : "*",
       PDCQUANTITY: input.qty,
       PSUSER: c.worker,
-      PDSTARTTIME: input.startTime ?? "",
+      PDTSTARTTIME: input.startTime ?? "",
     });
     const mesaj = serviceMessage(r);
     if (mesaj) return { ok: false, message: mesaj };
