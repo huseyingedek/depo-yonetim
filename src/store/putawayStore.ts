@@ -62,7 +62,8 @@ export const usePutawayStore = create<PutawayState>()(
         let orderWithStart: PickOrder | null = null;
         try {
           const order = await api.enterPutaway(id, orderType);
-          orderWithStart = order ? { ...order, startTime: order.startTime ?? caniasDateTime() } : null;
+          // PDSTARTTIME: saat emir YÜKLENİNCE değil, ilk ürün okutulunca (Enter) başlar.
+          orderWithStart = order ? { ...order, startTime: undefined } : null;
           set({ order: orderWithStart, loading: false, source: null, ready: null, records: [], pendingProduct: null });
         } catch (e) {
           set({ order: null, loading: false });
@@ -98,6 +99,12 @@ export const usePutawayStore = create<PutawayState>()(
         if (!order) return { kind: "error", message: "Emir yüklü değil" };
         if (!source) return { kind: "error", message: "Önce kaynak depoyu okutun." };
         const kod = barcode.trim();
+
+        // PDSTARTTIME: saat ürün okutulduğu (Enter) an başlar. Henüz başlamadıysa
+        // şimdi başlat; başarılı save'de resetlenir, sonraki ürün kendi Enter'ında yeniden başlar.
+        if (!order.startTime) {
+          set({ order: { ...order, startTime: caniasDateTime() } });
+        }
 
         const scan = await api.readBarcode(kod, source.warehouse, source.stockPlace, adet);
 
@@ -175,7 +182,13 @@ export const usePutawayStore = create<PutawayState>()(
           yeniKayitlar.push(record);
         }
 
-        set({ records: [...get().records, ...yeniKayitlar], ready: null });
+        // Başarılı save → saat RESETLENİR (startTime temizlenir); sonraki ürün kendi
+        // okutmasında (Enter) yeniden başlar.
+        set({
+          records: [...get().records, ...yeniKayitlar],
+          ready: null,
+          order: get().order ? { ...get().order!, startTime: undefined } : null,
+        });
 
         // Tüm satırlar gönderildikten sonra TEK tazeleme (EnterPlacement).
         try {
@@ -183,7 +196,7 @@ export const usePutawayStore = create<PutawayState>()(
           if (taze && get().order?.id === taze.id) {
             const oncekiOneri = new Map((get().order?.lines ?? []).map((l) => [l.id, l.suggestions]));
             const yeniLines = taze.lines.map((l) => ({ ...l, suggestions: oncekiOneri.get(l.id) }));
-            set({ order: { ...taze, startTime: get().order?.startTime, lines: yeniLines } });
+            set({ order: { ...taze, startTime: get().order?.startTime ?? undefined, lines: yeniLines } });
 
             // ÇİFT SAYIMI ÖNLE: sunucu (MOVEDQTY/pickedQty) bu malzemeyi artık yansıttıysa,
             // oturum kayıtlarını düş. Böylece yerleşen = max(pickedQty, kayıt) toplamı şişmez.
