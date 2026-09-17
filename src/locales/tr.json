@@ -272,6 +272,10 @@
       "shelf_location": {
         "title": "Depo Raf Etiketi Yazdırma",
         "desc": "Depo lokasyon, koridor ve raf adres etiketlerini yazdırın"
+      },
+      "barcode_generator": {
+        "title": "Barkod Oluşturma",
+        "desc": "Yeni ürün ve koli barkodları oluşturun ve tanımlayın"
       }
     }
   }

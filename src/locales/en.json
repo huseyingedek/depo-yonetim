@@ -261,6 +261,10 @@
       "shelf_location": {
         "title": "Warehouse Shelf Label Printing",
         "desc": "Print warehouse location, aisle and shelf labels"
+      },
+      "barcode_generator": {
+        "title": "Barcode Creation",
+        "desc": "Generate and create new product and package barcodes"
       }
     }
   }

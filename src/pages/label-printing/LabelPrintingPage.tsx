@@ -75,6 +75,16 @@ const LABEL_CARDS: LabelCardItem[] = [
     iconBg: "bg-rose-100 dark:bg-rose-900/30",
     iconFg: "text-rose-600 dark:text-rose-400",
   },
+  {
+    id: "barcode_generator",
+    route: "/label-printing/barcode-generator",
+    titleKey: "labelPrinting.cards.barcode_generator.title",
+    defaultTitle: "Barkod Oluşturma",
+    description: "Yeni ürün ve koli barkodları oluşturun ve tanımlayın",
+    icon: Barcode,
+    iconBg: "bg-teal-100 dark:bg-teal-900/30",
+    iconFg: "text-teal-600 dark:text-teal-400",
+  },
 ];
 
 export default function LabelPrintingPage() {

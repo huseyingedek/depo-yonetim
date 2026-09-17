@@ -34,6 +34,7 @@ import WaybillLabelPage from "./pages/label-printing/WaybillLabelPage";
 import ExpiryLabelPage from "./pages/label-printing/ExpiryLabelPage";
 import ProductBarcodePage from "./pages/label-printing/ProductBarcodePage";
 import ShelfLocationPage from "./pages/label-printing/ShelfLocationPage";
+import BarcodeGeneratorPage from "./pages/label-printing/BarcodeGeneratorPage";
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const user = useAppStore((s) => s.user);
@@ -57,7 +58,7 @@ export default function App() {
         <Route path="/home" element={<HomePage />} />
         <Route path="/settings" element={<SettingsPage />} />
 
-        {}
+        { }
         <Route path="/picking" element={<PickingListPage />} />
         <Route path="/picking/:id" element={<PickingDetailPage />} />
         <Route path="/picking/:id/kayitlar" element={<PickingRecordsPage />} />
@@ -72,7 +73,7 @@ export default function App() {
         <Route path="/receiving/:id/olculer" element={<ReceivingDimensionsPage />} />
         <Route path="/receiving/:id/summary" element={<ReceivingSummaryPage />} />
 
-        {}
+        { }
         <Route path="/putaway" element={<PutawayListPage />} />
         <Route path="/putaway/:id" element={<PutawayItemPage />} />
 
@@ -81,28 +82,29 @@ export default function App() {
         <Route path="/transfer/tasks" element={<TransferListPage />} />
         <Route path="/transfer/:id" element={<TransferTaskPage />} />
 
-        {}
+        { }
         <Route path="/count" element={<CountListPage />} />
         <Route path="/count/:id" element={<CountDetailPage />} />
         <Route path="/count/:id/sayilanlar" element={<CountRecordsPage />} />
         <Route path="/count/:id/summary" element={<CountSummaryPage />} />
 
-        {}
+        { }
         <Route path="/inquiry" element={<InquiryPage />} />
 
         {/* Paketleme (tasarım aşaması) */}
         <Route path="/packaging" element={<PackagingPage />} />
 
-        {}
+        { }
         <Route path="/reporting" element={<ReportingPage />} />
 
-        {}
+        { }
         <Route path="/label-printing" element={<LabelPrintingPage />} />
         <Route path="/label-printing/packaging" element={<PackagingLabelPage />} />
         <Route path="/label-printing/waybill" element={<WaybillLabelPage />} />
         <Route path="/label-printing/expiry" element={<ExpiryLabelPage />} />
         <Route path="/label-printing/product-barcode" element={<ProductBarcodePage />} />
         <Route path="/label-printing/shelf-location" element={<ShelfLocationPage />} />
+        <Route path="/label-printing/barcode-generator" element={<BarcodeGeneratorPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/home" replace />} />
