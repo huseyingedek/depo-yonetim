@@ -765,9 +765,9 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
         <div className="mt-1.5 flex items-center gap-2">
           <span className="flex items-center gap-1 text-[11px] font-bold text-fg"><Weight className="h-3.5 w-3.5" /> Doluluk</span>
           <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-elevated">
-            <div className={`h-full rounded-full ${dolu < 30 ? "bg-rose-500" : dolu > 80 ? "bg-emerald-500" : "bg-amber-500"}`} style={{ width: `${dolu}%` }} />
+            <div className={`h-full rounded-full ${dolu > 100 ? "bg-rose-500" : "bg-emerald-500"}`} style={{ width: `${dolu}%` }} />
           </div>
-          <span className={`font-mono text-[10px] font-bold ${dolu < 30 ? "text-rose-500" : dolu > 80 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-500"}`}>%{Math.round(dolu)}</span>
+          <span className={`font-mono text-[10px] font-bold ${dolu > 100 ? "text-rose-500" : "text-emerald-500"}`}>%{Math.round(dolu)}</span>
         </div>
 
         <div className="mt-2 flex flex-wrap gap-1">
