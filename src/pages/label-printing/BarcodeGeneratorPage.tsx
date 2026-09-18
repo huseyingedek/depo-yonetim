@@ -397,167 +397,165 @@ export default function BarcodeGeneratorPage() {
 
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8">
-    {/* Top Header with Kopya Input & Green Print Button aligned right */}
-    <PageHeader
-      title="Ürün Barkodu Yazdırma"
-      subtitle="Ürünleri arayın, seçin ve etiket yazdırın"
-      backTo="/label-printing"
-    />
+      {/* Top Header with Kopya Input & Green Print Button aligned right */}
+      <PageHeader
+        title="Ürün Barkodu Yazdırma"
+        subtitle="Ürünleri arayın, seçin ve etiket yazdırın"
+        backTo="/label-printing"
+      />
 
-    {/* YAZDIR BUTONU DEĞİŞECEK---------- */}
-    <div className="flex items-center justify-between gap-3 sm:hidden mb-2">
-      <button
-        type="button"
-        onClick={handlePrintSelectedGrid}
-        disabled={isPrintDisabled}
-        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
-      >
-        {printing ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Printer className="h-4 w-4" />
-        )}
-        <span>Yazdır {selectedCards.length > 0 ? `(${selectedCards.length})` : ""}</span>
-      </button>
-    </div>
-
-    {/* 3 Option Segmented Tab Bar */}
-    <div className="flex flex-col sm:flex-row rounded-2xl border border-line bg-surface p-1.5 shadow-sm gap-1">
-      <button
-        type="button"
-        onClick={() => handleTabChange("materialCode")}
-        className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-3 text-xs font-bold transition-all ${activeTab === "materialCode"
-          ? "bg-blue-600 text-white shadow-md"
-          : "text-subtle hover:text-fg hover:bg-elevated"
-          }`}
-      >
-        <Package className="h-4 w-4" />
-        <span>1. Malzeme Kodu ile Arama</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => handleTabChange("description")}
-        className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-3 text-xs font-bold transition-all ${activeTab === "description"
-          ? "bg-blue-600 text-white shadow-md"
-          : "text-subtle hover:text-fg hover:bg-elevated"
-          }`}
-      >
-        <FileText className="h-4 w-4" />
-        <span>3. Ürün Açıklaması ile Arama</span>
-      </button>
-    </div>
-
-    {/* Global Alerts */}
-    {errorMsg && (
-      <div className="flex items-center gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-600 dark:text-red-400">
-        <span>{errorMsg}</span>
-      </div>
-    )}
-
-    {successMsg && (
-      <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 text-xs text-emerald-600 dark:text-emerald-400">
-        <span>{successMsg}</span>
-      </div>
-    )}
-
-    {/* TAB CONTENT: Dedicated Search Card & Results */}
-    <div className="rounded-2xl border border-line bg-surface p-6 shadow-card space-y-5">
-      <div>
-        <h3 className="text-base font-extrabold text-fg flex items-center gap-2">
-          {activeTab === "materialCode" && (
-            <>
-              <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              <span>Malzeme Kodu ile Arama ve Seçim</span>
-            </>
-          )}
-          {activeTab === "description" && (
-            <>
-              <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              <span>Ürün Açıklaması ile Arama ve Seçim</span>
-            </>
-          )}
-        </h3>
-        <p className="text-xs text-subtle mt-0.5">
-          {activeTab === "materialCode" && "Malzeme kodunu girin, çıkan ürünleri seçip sayfa başındaki Yazdır butonunu kullanın."}
-          {activeTab === "description" && "Ürün adını veya açıklamasını yazın, eşleşen ürünleri seçip sayfa başındaki Yazdır butonunu kullanın."}
-        </p>
-      </div>
-
-      {/* Dedicated Search Form per Option */}
-      <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={
-              activeTab === "materialCode"
-                ? "Malzeme Kodu Girin (ör. MAL001)..."
-                : "Ürün Açıklaması veya Adı Girin..."
-            }
-            className="field-input pl-11"
-          />
-        </div>
-
+      {/* YAZDIR BUTONU DEĞİŞECEK---------- */}
+      <div className="flex items-center justify-between gap-3 sm:hidden mb-2">
         <button
-          type="submit"
-          disabled={searching || !searchTerm.trim()}
-          className="btn-primary flex items-center justify-center gap-2 py-2.5 px-6 shadow-sm shrink-0"
+          type="button"
+          onClick={handlePrintSelectedGrid}
+          disabled={isPrintDisabled}
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
         >
-          {searching ? (
+          {printing ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            <Search className="h-4 w-4" />
+            <Printer className="h-4 w-4" />
           )}
-          <span>Ara</span>
+          <span>Yazdır {selectedCards.length > 0 ? `(${selectedCards.length})` : ""}</span>
         </button>
-      </form>
+      </div>
 
-      {/* Result Cards in Classic/Original Layout with KO, PK, AD Badge */}
-      {searching ? (
-        <div className="h-24 animate-pulse rounded-2xl bg-elevated mt-2" />
-      ) : searchResults.length > 0 ? (
-        <div ref={detailCardRef} className="pt-2 border-t border-line space-y-4 scroll-mt-20">
-          {/* Arama Sonuçları Listesi */}
-          <div className="space-y-3">
-            {searchResults.map((r) => {
-              const selected = isCardSelected(r);
-              return (
-                <div
-                  key={r.id}
-                  id={`product-card-${r.id}`}
-                  onClick={() => toggleSelectCard(r)}
-                  className={`relative flex cursor-pointer items-center justify-between rounded-2xl border p-5 text-left shadow-card transition-all ${selected
-                    ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
-                    : "border-line bg-bg hover:border-emerald-300"
-                    }`}
-                >
-                  <div>
-                    <div className="flex items-center gap-8">
-                      <p>{r.barcode}</p>
-                      <p>{r.unit}</p>
-                      <p>{r.material}</p>
-                      <p>{r.name}</p>
-                    </div>
-                  </div>
+      {/* 2 Option Segmented Tab Bar */}
+      <div className="flex flex-col sm:flex-row rounded-2xl border border-line bg-surface p-1.5 shadow-sm gap-1">
+        <button
+          type="button"
+          onClick={() => handleTabChange("materialCode")}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-3 text-xs font-bold transition-all ${activeTab === "materialCode"
+            ? "bg-blue-600 text-white shadow-md"
+            : "text-subtle hover:text-fg hover:bg-elevated"
+            }`}
+        >
+          <Package className="h-4 w-4" />
+          <span>1. Malzeme Kodu ile Arama</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTabChange("description")}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-3 text-xs font-bold transition-all ${activeTab === "description"
+            ? "bg-blue-600 text-white shadow-md"
+            : "text-subtle hover:text-fg hover:bg-elevated"
+            }`}
+        >
+          <FileText className="h-4 w-4" />
+          <span>2. Ürün Açıklaması ile Arama</span>
+        </button>
+      </div>
 
-                  <span
-                    className={`chip text-xs font-bold ${selected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
+      {/* Global Alerts */}
+      {errorMsg && (
+        <div className="flex items-center gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-600 dark:text-red-400">
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="flex items-center gap-2.5 rounded-xl border border-blue-500/20 bg-blue-500/10 p-3.5 text-xs text-blue-600 dark:text-blue-400">
+          <span>{successMsg}</span>
+        </div>
+      )}
+
+      {/* TAB CONTENT: Dedicated Search Card & Results */}
+      <div className="rounded-2xl border border-line bg-surface p-6 shadow-card space-y-5">
+        <div>
+          <h3 className="text-base font-extrabold text-fg flex items-center gap-2">
+            {activeTab === "materialCode" && (
+              <>
+                <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <span>Malzeme Kodu ile Arama ve Seçim</span>
+              </>
+            )}
+            {activeTab === "description" && (
+              <>
+                <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <span>Ürün Açıklaması ile Arama ve Seçim</span>
+              </>
+            )}
+          </h3>
+          <p className="text-xs text-subtle mt-0.5">
+            {activeTab === "materialCode" && "Malzeme kodunu girin, çıkan sonuçlardan istediğiniz malzemeyi seçin."}
+            {activeTab === "description" && "Malzeme ismini veya açıklmasını yazın, çıkan sonuçlardan istediğiniz malzemeyi seçin."}
+          </p>
+        </div>
+
+        {/* Dedicated Search Form per Option */}
+        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder={
+                activeTab === "materialCode"
+                  ? "Malzeme Kodu Girin (ör. MAL001)..."
+                  : "Ürün Açıklaması veya kodu Girin..."
+              }
+              className="field-input pl-11"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={searching || !searchTerm.trim()}
+            className="btn-primary flex items-center justify-center gap-2 py-2.5 px-6 shadow-sm shrink-0"
+          >
+            {searching ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Search className="h-4 w-4" />
+            )}
+            <span>Ara</span>
+          </button>
+        </form>
+
+        {/* Result Cards in Classic/Original Layout with KO, PK, AD Badge */}
+        {searching ? (
+          <div className="h-24 animate-pulse rounded-2xl bg-elevated mt-2" />
+        ) : searchResults.length > 0 ? (
+          <div ref={detailCardRef} className="pt-2 border-t border-line space-y-4 scroll-mt-20">
+            {/* Arama Sonuçları Listesi */}
+            <div className="space-y-3">
+              {searchResults.map((r) => {
+                const selected = isCardSelected(r);
+                return (
+                  <div
+                    key={r.id}
+                    id={`product-card-${r.id}`}
+                    onClick={() => toggleSelectCard(r)}
+                    className={`relative flex cursor-pointer items-center justify-between rounded-2xl border p-5 text-left shadow-card transition-all ${selected
+                      ? "border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30"
+                      : "border-line bg-bg hover:border-blue-300"
                       }`}
                   >
-                    {selected ? <Check className="h-4 w-4 inline mr-1" /> : null}
-                    {selected ? "Seçildi" : "Seç"}
-                  </span>
-                </div>
-              );
-            })}
+                    <div>
+                      <div className="flex items-center gap-8">
+                        <p>{r.name}</p>
+                        <p>{r.material}</p>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`chip text-xs font-bold ml-2 ${selected ? "bg-blue-600 text-white" : "bg-elevated text-subtle"
+                        }`}
+                    >
+                      {selected ? null : null}
+                      {selected ? "Seçildi" : "Seç"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ) : searchDone ? (
-        <p className="text-xs text-subtle py-4 text-center">Aranan kriterde ürün kaydı bulunamadı.</p>
-      ) : null}
+        ) : searchDone ? (
+          <p className="text-xs text-subtle py-4 text-center">Aranan kriterde ürün kaydı bulunamadı.</p>
+        ) : null}
+      </div>
     </div>
-  </div>
-);
+  );
 }
