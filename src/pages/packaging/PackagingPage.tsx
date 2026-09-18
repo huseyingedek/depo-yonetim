@@ -82,6 +82,7 @@ export interface KoliBoyutTanimi {
   ic: string;
   txt: string;
   btn: string;
+  ring: string;
 }
 
 export const BOYUTLAR: KoliBoyutTanimi[] = [
