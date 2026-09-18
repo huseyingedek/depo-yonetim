@@ -77,11 +77,11 @@ export default function BarcodeGeneratorPage() {
         if (!bCode) continue;
 
         const unitInfo = formatBarcodeUnitInfo(rawUnit);
-        const key = `${matCode}_${bCode}_${unitInfo.short}`;
+        const key = matCode;
         if (!seenKey.has(key)) {
           seenKey.add(key);
           cards.push({
-            id: key,
+            id: `${matCode}_${bCode}_${unitInfo.short}`,
             material: matCode,
             name: name || matCode,
             barcode: bCode,
@@ -245,7 +245,7 @@ export default function BarcodeGeneratorPage() {
         }
       }
 
-      // 3. SEKME: Ürün Açıklaması ile Arama
+      // 2. SEKME: Ürün Açıklaması ile Arama
       else if (activeTab === "description") {
         try {
           const allStock = await api.queryStock({});
@@ -397,7 +397,6 @@ export default function BarcodeGeneratorPage() {
 
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8">
-      {/* Top Header with Kopya Input & Green Print Button aligned right */}
       <PageHeader
         title="Ürün Barkodu Yazdırma"
         subtitle="Ürünleri arayın, seçin ve etiket yazdırın"
