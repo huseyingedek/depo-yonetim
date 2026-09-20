@@ -1,10 +1,7 @@
-import { useEffect, useMemo, useState, useRef } from "react";
-import { Package, Search, Printer, RefreshCw, MapPin, Check, Loader2, FileText, Tag, } from "lucide-react";
+import { useState, useRef } from "react";
+import { Package, Search, Printer, Loader2, FileText } from "lucide-react";
 import { api } from "../../api/client";
-import { useAppStore } from "../../store/appStore";
-import type { StockRow } from "../../types";
 import PageHeader from "../../components/PageHeader";
-import Pagination, { usePagination } from "../../components/Pagination";
 import { formatBarcodeUnitInfo } from "../label-printing/ProductBarcodePage";
 
 type TabType = "materialCode" | "barcode" | "description";
@@ -31,8 +28,6 @@ export default function BarcodeGeneratorPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  const activeMaterialCode = selectedCards[0]?.material || searchResults[0]?.material || "";
-  const activeBarcode = selectedCards[0]?.barcode || searchResults[0]?.barcode || "";
   const detailCardRef = useRef<HTMLDivElement>(null);
 
   const handleTabChange = (tab: TabType) => {
@@ -315,24 +310,6 @@ export default function BarcodeGeneratorPage() {
 
   const toggleSelectCard = (item: ProductBarcodeCardItem) => {
     selectAndBringToTop(item);
-  };
-
-  const handleCardBarcodeSelect = (barcode: string) => {
-    const trimmed = (barcode || "").trim().toLowerCase();
-    if (!trimmed) return;
-
-    // Önce aktif malzemenin bu barkoduna ait kartı bul, yoksa listedeki eşleşen kartı seç
-    const matchingCard =
-      searchResults.find(
-        (c) =>
-          c.material.toLowerCase() === activeMaterialCode.toLowerCase() &&
-          c.barcode.toLowerCase() === trimmed
-      ) ||
-      searchResults.find((c) => c.barcode.toLowerCase() === trimmed);
-
-    if (matchingCard) {
-      selectAndBringToTop(matchingCard);
-    }
   };
 
   const isCardSelected = (item: ProductBarcodeCardItem) => {
