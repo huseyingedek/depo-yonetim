@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { MapPin, Check, CheckCircle2, AlertTriangle, Loader2, Warehouse, X } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import BarcodeScanner from "../../components/BarcodeScanner";
+import AdimBar from "../../components/AdimBar";
 import { usePutawayStore } from "../../store/putawayStore";
 import { isoDateToBatch } from "../../store/pickingLogic";
 import { sesBasarili, sesHata } from "../../sound";
@@ -253,24 +254,12 @@ export default function PutawayItemPage() {
       />
 
       {}
-      <div className="grid min-w-0 gap-4 md:gap-6 md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-3">
+      <div className="grid min-w-0 gap-4 md:grid-cols-[340px_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-3">
         {}
-        <div className="min-w-0 md:sticky md:top-3 md:self-start lg:static xl:sticky xl:top-4 short:!static short:w-[300px] short:shrink-0 short:self-stretch short:overflow-y-auto">
-          <div className="card p-4">
+        <div className="min-w-0 md:sticky md:top-3 md:self-start lg:static xl:sticky xl:top-4 short:!static short:w-[320px] short:shrink-0 short:self-stretch short:overflow-y-auto">
+          <div className="card p-3">
             {}
-            <div className="mb-3 flex items-center gap-1.5">
-              {adimlar.map((a, i) => (
-                <div
-                  key={a.key}
-                  className={`flex min-w-0 flex-1 items-center justify-center gap-1 truncate rounded-xl px-1.5 py-1.5 text-[11px] font-semibold ${
-                    a.active ? "bg-brand-600 text-white shadow-soft" : a.done ? "bg-emerald-100 text-emerald-700" : "bg-elevated text-subtle"
-                  }`}
-                >
-                  <span className="shrink-0 font-mono">{a.done ? "✓" : i + 1}</span>
-                  <span className="truncate">{a.label}</span>
-                </div>
-              ))}
-            </div>
+            <AdimBar fill adimlar={adimlar} className="mb-3" />
 
             {}
             {source ? (
@@ -339,7 +328,7 @@ export default function PutawayItemPage() {
             )}
 
             {}
-            <BarcodeScanner onDetected={handleDetected} prompt={promptText} prefill={pending ? partiPrefill : ready ? hedefPrefill : undefined} />
+            <BarcodeScanner onDetected={handleDetected} prompt={promptText} prefill={pending ? partiPrefill : ready ? hedefPrefill : undefined} hideCardWrapper />
 
             {busy && <p className="mt-2 flex items-center gap-1.5 text-xs text-subtle"><Loader2 className="h-3.5 w-3.5 animate-spin" /> okunuyor…</p>}
           </div>

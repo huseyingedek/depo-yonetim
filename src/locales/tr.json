@@ -28,6 +28,7 @@
       "inquiry": "Ürün Sorgulama",
       "label_printing": "Yardımcı İşlemler",
       "packaging": "Paketleme",
+      "dagitim": "Dağıtım",
       "reporting": "Stok Hareket Raporları"
     },
     "operationDesc": {
@@ -38,7 +39,9 @@
       "count": "Stok sayımı yap",
       "inquiry": "Stok ve lokasyon sorgula",
       "label_printing": "Etiket yazdırma ve yardımcı işlemler",
-      "packaging": "Ürünleri kolile ve sevkiyata hazırla"
+      "packaging": "Ürünleri kolile ve sevkiyata hazırla",
+      "dagitim": "Sevkiyat ve dağıtımı tek ekrandan yönet",
+      "reporting": "Stok hareketlerini görüntüle ve raporla"
     }
   },
   "settings": {

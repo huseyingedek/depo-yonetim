@@ -45,9 +45,7 @@ export default function ReportingPage() {
   const [error, setError] = useState<string | null>(null);
   const [detay, setDetay] = useState(false);
   const [sayfa, setSayfa] = useState(1);
-  const [tumKullanici, setTumKullanici] = useState(false);
   const SAYFA_BOYUT = 50;
-  const KULLANICI_LIMIT = 12;
 
   // StrictMode (dev) useEffect'i iki kez çalıştırır → fazladan istek atılmasın diye
   // tek seferlik guard (ayrıca api katmanında da inflight dedup var).
@@ -75,7 +73,6 @@ export default function ReportingPage() {
       });
       setRows(r);
       setSayfa(1);
-      setTumKullanici(false);
       setQueried(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -89,20 +86,48 @@ export default function ReportingPage() {
   // Servis belge bazında dönüyor: her satır bir belge, ITEM = belgedeki kalem sayısı.
   const data = rows;
 
-  // Kullanıcı bazında özet (kim ne kadar toplamış)
-  const ozet = useMemo(() => {
-    const map = new Map<string, { user: string; belge: number; kalem: number; siparis: Set<string>; hacim: number; agirlik: number }>();
+  // İşlem türü bazında özet (Mal Kabul / Toplama / Yerleştirme... ayrı ayrı) +
+  // her işlemin içinde kullanıcı kırılımı. (KPI: gruplama + toplam ayrımı)
+  const islemGruplari = useMemo(() => {
+    type U = { user: string; belge: number; kalem: number; hacim: number; agirlik: number; siparis: Set<string> };
+    const map = new Map<string, {
+      islem: string; belge: number; kalem: number; hacim: number; agirlik: number;
+      siparis: Set<string>; kullanicilar: Map<string, U>;
+    }>();
     for (const r of data) {
-      const k = r.user || "—";
-      if (!map.has(k)) map.set(k, { user: k, belge: 0, kalem: 0, siparis: new Set(), hacim: 0, agirlik: 0 });
-      const g = map.get(k)!;
+      const op = (r.srcTypeText || r.typeText || "Diğer").trim() || "Diğer";
+      if (!map.has(op)) {
+        map.set(op, { islem: op, belge: 0, kalem: 0, hacim: 0, agirlik: 0, siparis: new Set(), kullanicilar: new Map() });
+      }
+      const g = map.get(op)!;
       g.belge += 1;
       g.kalem += r.item;
-      if (r.isSalesOrder && r.order) g.siparis.add(r.order);
       g.hacim += r.volume;
       g.agirlik += r.weight;
+      if (r.isSalesOrder && r.order) g.siparis.add(r.order);
+
+      const uk = r.user || "—";
+      if (!g.kullanicilar.has(uk)) {
+        g.kullanicilar.set(uk, { user: uk, belge: 0, kalem: 0, hacim: 0, agirlik: 0, siparis: new Set() });
+      }
+      const u = g.kullanicilar.get(uk)!;
+      u.belge += 1;
+      u.kalem += r.item;
+      u.hacim += r.volume;
+      u.agirlik += r.weight;
+      if (r.isSalesOrder && r.order) u.siparis.add(r.order);
     }
-    return [...map.values()].sort((a, b) => b.kalem - a.kalem);
+    return [...map.values()]
+      .map((g) => ({
+        islem: g.islem,
+        belge: g.belge,
+        kalem: g.kalem,
+        hacim: g.hacim,
+        agirlik: g.agirlik,
+        siparis: g.siparis.size,
+        kullanicilar: [...g.kullanicilar.values()].sort((a, b) => b.kalem - a.kalem),
+      }))
+      .sort((a, b) => b.kalem - a.kalem);
   }, [data]);
 
   const toplam = useMemo(() => ({
@@ -206,48 +231,81 @@ export default function ReportingPage() {
             ))}
           </div>
 
-          {/* Kullanıcı bazında özet — kartlar */}
+          {/* İŞLEM BAZINDA TOPLAM (KPI: toplanan / paketlenen / mal kabul ayrımı) */}
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-subtle">Kullanıcılar ({ozet.length})</h2>
+            <h2 className="text-sm font-semibold text-subtle">İşlem Bazında Toplam ({islemGruplari.length})</h2>
           </div>
-          <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {(tumKullanici ? ozet : ozet.slice(0, KULLANICI_LIMIT)).map((g) => (
-              <div key={g.user} className="card p-5">
-                <div className="mb-4 flex items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100 text-base font-bold text-brand-700">
-                    {basHarf(g.user)}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-base font-bold text-fg">{g.user}</p>
-                    <p className="text-xs text-subtle">{g.belge} belge</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-elevated px-3 py-2">
-                    <p className="truncate font-mono text-xl font-extrabold text-cyan-600">{fmt(g.kalem)}</p>
-                    <p className="text-[11px] text-subtle">Kalem</p>
-                  </div>
-                  <div className="rounded-xl bg-elevated px-3 py-2">
-                    <p className="truncate font-mono text-xl font-extrabold text-violet-600">{fmt(g.siparis.size)}</p>
-                    <p className="text-[11px] text-subtle">Sipariş</p>
-                  </div>
-                  <div className="rounded-xl bg-elevated px-3 py-2">
-                    <p className="truncate font-mono text-xl font-extrabold text-emerald-600">{fmt(g.hacim)}</p>
-                    <p className="text-[11px] text-subtle">Desi</p>
-                  </div>
-                  <div className="rounded-xl bg-elevated px-3 py-2">
-                    <p className="truncate font-mono text-xl font-extrabold text-amber-600">{fmt(g.agirlik)}</p>
-                    <p className="text-[11px] text-subtle">kg</p>
-                  </div>
-                </div>
+          <div className="card mb-8 overflow-x-auto p-0">
+            <table className="w-full text-xs sm:text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-subtle">
+                  <th className="px-3 py-2 font-semibold">İşlem</th>
+                  <th className="px-3 py-2 text-right font-semibold">Belge</th>
+                  <th className="px-3 py-2 text-right font-semibold">Kalem</th>
+                  <th className="px-3 py-2 text-right font-semibold">Sipariş</th>
+                  <th className="px-3 py-2 text-right font-semibold">Desi</th>
+                  <th className="px-3 py-2 text-right font-semibold">kg</th>
+                </tr>
+              </thead>
+              <tbody>
+                {islemGruplari.map((g) => (
+                  <tr key={g.islem} className="border-b border-line/50 last:border-0">
+                    <td className="px-3 py-2 font-bold text-fg">{g.islem}</td>
+                    <td className="px-3 py-2 text-right font-mono">{fmt(g.belge)}</td>
+                    <td className="px-3 py-2 text-right font-mono font-bold text-cyan-600">{fmt(g.kalem)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-violet-600">{fmt(g.siparis)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-emerald-600">{fmt(g.hacim)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-amber-600">{fmt(g.agirlik)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* KULLANICILAR — İŞLEME GÖRE GRUPLU (KPI: Mal Kabul bir arada, Toplama bir arada) */}
+          {islemGruplari.map((grup) => (
+            <div key={grup.islem} className="mb-8">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <h2 className="text-sm font-bold text-fg">{grup.islem}</h2>
+                <span className="rounded-full bg-elevated px-2 py-0.5 text-[11px] font-semibold text-subtle">
+                  {grup.kullanicilar.length} kullanıcı · {fmt(grup.kalem)} kalem
+                </span>
               </div>
-            ))}
-          </div>
-          {ozet.length > KULLANICI_LIMIT && (
-            <button type="button" onClick={() => setTumKullanici((v) => !v)} className="mb-6 text-sm font-semibold text-brand-600 hover:underline">
-              {tumKullanici ? "Daha az göster" : `Tüm kullanıcıları göster (${ozet.length})`}
-            </button>
-          )}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {grup.kullanicilar.map((u) => (
+                  <div key={u.user} className="card p-5">
+                    <div className="mb-4 flex items-center gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100 text-base font-bold text-brand-700">
+                        {basHarf(u.user)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-base font-bold text-fg">{u.user}</p>
+                        <p className="text-xs text-subtle">{u.belge} belge</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-elevated px-3 py-2">
+                        <p className="truncate font-mono text-xl font-extrabold text-cyan-600">{fmt(u.kalem)}</p>
+                        <p className="text-[11px] text-subtle">Kalem</p>
+                      </div>
+                      <div className="rounded-xl bg-elevated px-3 py-2">
+                        <p className="truncate font-mono text-xl font-extrabold text-violet-600">{fmt(u.siparis.size)}</p>
+                        <p className="text-[11px] text-subtle">Sipariş</p>
+                      </div>
+                      <div className="rounded-xl bg-elevated px-3 py-2">
+                        <p className="truncate font-mono text-xl font-extrabold text-emerald-600">{fmt(u.hacim)}</p>
+                        <p className="text-[11px] text-subtle">Desi</p>
+                      </div>
+                      <div className="rounded-xl bg-elevated px-3 py-2">
+                        <p className="truncate font-mono text-xl font-extrabold text-amber-600">{fmt(u.agirlik)}</p>
+                        <p className="text-[11px] text-subtle">kg</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
 
           {/* Detay kayıtlar */}
           <button type="button" onClick={() => setDetay((v) => !v)} className="mb-3 text-sm font-semibold text-brand-600 hover:underline">

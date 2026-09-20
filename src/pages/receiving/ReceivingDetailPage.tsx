@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { caniasDateTime } from "../../store/pickingStore";
+import AdimBar from "../../components/AdimBar";
 import {
   Package,
   Plus,
@@ -23,6 +24,8 @@ import {
   Skull,
   Trash2,
   Layers,
+  GripVertical,
+  CalendarDays,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import ToastView, { useToast } from "../../components/Toast";
@@ -183,6 +186,47 @@ function getOrderDate(ord: Record<string, unknown>): string {
     }
   }
   return "";
+}
+
+// Helper: Bugünün yerel tarihi (yyyy-mm-dd) — SKT alt sınırı için (UTC kaymasız).
+function bugunISODate(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+// Helper: Seçilen SKT geçmişte mi? (yyyy-mm-dd string karşılaştırması güvenli)
+function gecmisSKTMi(iso: string): boolean {
+  if (!iso) return false;
+  return iso < bugunISODate();
+}
+
+// Helper: Parti No genelde SKT'nin ters çevrilmiş hali (YYYYMMDD). Tarih gibi
+// görünüyor ve geçmişteyse true döner — SKT alanı boş bırakılıp Parti No'ya elle
+// geçmiş tarih yazılarak kontrolün atlanmasını engeller.
+function partiGecmisSKTMi(lot: string): boolean {
+  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(lot.trim());
+  if (!m) return false;
+  const ay = Number(m[2]);
+  const gun = Number(m[3]);
+  if (ay < 1 || ay > 12 || gun < 1 || gun > 31) return false; // tarih değil → dokunma
+  return gecmisSKTMi(`${m[1]}-${m[2]}-${m[3]}`);
+}
+
+// Helper: Ham sipariş tarihini gg.aa.yyyy biçimine çevir (YYYYMMDD, YYYY-MM-DD, ISO vb.)
+function formatOrderDate(raw: string): string {
+  if (!raw) return "";
+  const s = raw.trim();
+  // YYYYMMDD (8 haneli)
+  let m = /^(\d{4})(\d{2})(\d{2})/.exec(s);
+  if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+  // YYYY-MM-DD veya YYYY-MM-DDThh:mm...
+  m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+  // DD.MM.YYYY zaten uygunsa aynen bırak
+  m = /^(\d{2})\.(\d{2})\.(\d{4})/.exec(s);
+  if (m) return `${m[1]}.${m[2]}.${m[3]}`;
+  return s;
 }
 
 // Helper: Sipariş No Çıkarıcı
@@ -608,6 +652,62 @@ export default function ReceivingDetailPage() {
 
   // Açık Siparişler (FIFO Sıralı)
   const [openOrders, setOpenOrders] = useState<Record<string, unknown>[]>([]);
+
+  // --- Açık siparişleri sürükle-bırakla yeniden sıralama (dokunmatik + fare) ---
+  // Miktar dağıtımı (orderFulfillment) listedeki sıraya göre yukarıdan aşağı
+  // yedirdiği için, sırayı değiştirmek kapatma önceliğini de değiştirir.
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+  const dragPointerId = useRef<number | null>(null);
+
+  const siparisSiraDegistir = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0) return;
+    setOpenOrders((prev) => {
+      if (from >= prev.length || to >= prev.length) return prev;
+      const arr = [...prev];
+      const [tasinan] = arr.splice(from, 1);
+      arr.splice(to, 0, tasinan);
+      return arr;
+    });
+  };
+
+  const onGripPointerDown = (e: React.PointerEvent, idx: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragIndex(idx);
+    setOverIndex(idx);
+    dragPointerId.current = e.pointerId;
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* yoksay */
+    }
+  };
+
+  const onGripPointerMove = (e: React.PointerEvent) => {
+    if (dragIndex === null || dragPointerId.current !== e.pointerId) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const kart = el?.closest("[data-oo-idx]") as HTMLElement | null;
+    if (kart) {
+      const to = Number(kart.getAttribute("data-oo-idx"));
+      if (!Number.isNaN(to)) setOverIndex(to);
+    }
+  };
+
+  const onGripPointerUp = (e: React.PointerEvent) => {
+    if (dragIndex === null) return;
+    const from = dragIndex;
+    const to = overIndex ?? dragIndex;
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      /* yoksay */
+    }
+    setDragIndex(null);
+    setOverIndex(null);
+    dragPointerId.current = null;
+    if (from !== to) siparisSiraDegistir(from, to);
+  };
 
   // Okutulanlar Listesi (Sadece aktif oturum veya kayitlar sayfasından dönüşte aktarılır)
   const [receivedItems, setReceivedItems] = useState<ReceivedItem[]>(() => {
@@ -1507,7 +1607,7 @@ export default function ReceivingDetailPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl p-2 sm:p-4 lg:p-6 animate-fade-in space-y-3 sm:space-y-4">
+    <div className="mx-auto max-w-7xl p-2 sm:p-4 lg:p-6 animate-fade-in space-y-3 sm:space-y-4 short:h-[100dvh] short:max-w-none short:flex short:flex-col short:overflow-hidden short:space-y-2 short:p-2">
       {/* Üst Başlık ve Aksiyonlar */}
       <PageHeader
         title={`Mal Kabul: ${vendorName}`}
@@ -1528,65 +1628,44 @@ export default function ReceivingDetailPage() {
         }
       />
 
-      {/* ANA GRID - 2 SÜTUNLU VE EŞİT YÜKSEKLİKLİ HİZALANMIŞ YAPI */}
-      <div className="grid grid-cols-1 sm:grid-cols-12 md:grid-cols-12 landscape:grid-cols-12 gap-2.5 sm:gap-3 items-stretch">
-        {/* ========================================================================= */}
-        {/* 1. SATIR: SOL ANA KART & SAĞ MALZEME DETAY KARTI (TAM EŞİT ÜST VE ALT HİZA)*/}
-        {/* ========================================================================= */}
+      {/* ANA İÇERİK - SOL/SAĞ BAĞIMSIZ KAYAN 2 SÜTUN (Sipariş Toplama gibi) */}
+      <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 items-stretch short:min-h-0 short:flex-1 short:overflow-hidden">
+        {/* ================= SOL SÜTUN: tarama (bağımsız kayar) ================= */}
+        <div className="flex flex-col gap-2.5 sm:gap-3 sm:w-[38%] md:w-[36%] min-w-0 short:w-[280px] short:shrink-0 short:self-stretch short:overflow-y-auto short:pr-1">
 
         {/* SOL ANA KART: 1 MALZEME · 2 MİKTAR ADIMLARI */}
         <div
-          className={`col-span-1 sm:col-span-5 md:col-span-4 lg:col-span-4 xl:col-span-4 landscape:col-span-4 rounded-3xl border border-line bg-surface p-3 sm:p-3.5 shadow-card flex flex-col justify-between space-y-2.5 min-w-0 h-full ${currentMaterial?.isSpecialLot
+          className={`card p-3 flex flex-col justify-between space-y-2.5 min-w-0 w-full ${currentMaterial?.isSpecialLot
             ? "min-h-[290px] sm:min-h-[300px]"
             : "min-h-[205px] sm:min-h-[215px]"
             }`}
         >
-          {/* Adım tab'ları — sipariş toplama/yerleştirme ile birebir aynı pill stili */}
-          <div className="mb-3 flex items-center gap-1.5">
-            {(
-              [
-                ["product", "Malzeme"],
-                ["lot", "Parti"],
-                ["quantity", "Miktar"],
-              ] as const
-            ).map(([s, label], i) => {
-              const urunHazir = isProductScanned && areDimensionsDone;
-              const partili = !!currentMaterial?.isSpecialLot;
-              const active = activeStep === s;
-              const done =
-                (s === "product" && urunHazir) ||
-                (s === "lot" && urunHazir && partili && !!lotNumber.trim());
-              // Parti tabı sadece parti-takipli üründe tıklanabilir (aksi halde görünür ama pasif — picking gibi).
-              const tiklanabilir =
-                s === "product" ||
-                (s === "lot" && urunHazir && partili) ||
-                (s === "quantity" && urunHazir);
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => {
-                    if (s === "product") setActiveStep("product");
-                    else if (s === "lot" && urunHazir && partili) setActiveStep("lot");
-                    else if (s === "quantity" && urunHazir) setActiveStep("quantity");
-                  }}
-                  disabled={!tiklanabilir}
-                  className={`flex min-w-0 flex-1 items-center justify-center gap-1 truncate rounded-xl px-1.5 py-1.5 text-[11px] font-semibold transition-all duration-200 ease-soft ${
-                    active
-                      ? "bg-brand-600 text-white shadow-soft"
-                      : done
-                        ? "bg-emerald-100 text-emerald-700"
-                        : tiklanabilir
-                          ? "bg-elevated text-subtle hover:bg-elevated"
-                          : "bg-elevated text-subtle/50 cursor-default"
-                  }`}
-                >
-                  <span className="shrink-0 font-mono">{done && !active ? "✓" : i + 1}</span>
-                  <span className="truncate">{label}</span>
-                </button>
-              );
-            })}
-          </div>
+          {/* Adım sekmeleri — ortak AdimBar (tam genişlik: ekranı doldurur) */}
+          <AdimBar
+            fill
+            className="mb-3"
+            adimlar={[
+              {
+                label: "Malzeme",
+                active: activeStep === "product",
+                done: isProductScanned && areDimensionsDone,
+                onClick: () => setActiveStep("product"),
+              },
+              {
+                label: "Parti",
+                active: activeStep === "lot",
+                done: isProductScanned && areDimensionsDone && !!currentMaterial?.isSpecialLot && !!lotNumber.trim(),
+                disabled: !(isProductScanned && areDimensionsDone && !!currentMaterial?.isSpecialLot),
+                onClick: () => { if (isProductScanned && areDimensionsDone && currentMaterial?.isSpecialLot) setActiveStep("lot"); },
+              },
+              {
+                label: "Miktar",
+                active: activeStep === "quantity",
+                disabled: !(isProductScanned && areDimensionsDone),
+                onClick: () => { if (isProductScanned && areDimensionsDone) setActiveStep("quantity"); },
+              },
+            ]}
+          />
 
           {/* ------------------------------------------------------------------- */}
           {/* ADIM 1 GÖRÜNÜMÜ: MALZEME BARKODU OKUTMA */}
@@ -1607,20 +1686,20 @@ export default function ReceivingDetailPage() {
                       onKeyDown={(e) => e.key === "Enter" && handleScanBarcode()}
                       placeholder="Malzeme barkodu okutun veya yazın..."
                       disabled={isQueryingBarcode}
-                      className="field-input w-full pr-10 font-mono text-xs sm:text-sm font-bold tracking-wider h-10"
+                      className="field-input w-full pr-11 font-mono text-xs sm:text-sm font-bold tracking-wider h-12"
                       autoFocus
                     />
                     <button
                       type="button"
                       onClick={() => handleScanBarcode()}
                       disabled={!barcodeInput.trim() || isQueryingBarcode}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-lg text-subtle hover:bg-elevated hover:text-fg disabled:opacity-30 transition"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-elevated hover:text-fg disabled:opacity-30 transition"
                       title="Sorgula"
                     >
                       {isQueryingBarcode ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-brand-600" />
+                        <Loader2 className="h-5 w-5 animate-spin text-brand-600" />
                       ) : (
-                        <CornerDownLeft className="h-4 w-4" />
+                        <CornerDownLeft className="h-5 w-5" />
                       )}
                     </button>
                   </div>
@@ -1629,13 +1708,13 @@ export default function ReceivingDetailPage() {
                   <button
                     type="button"
                     onClick={() => (cameraOpen ? stopCamera() : startCamera())}
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition ${cameraOpen
+                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition ${cameraOpen
                       ? "border-brand-600 bg-brand-600 text-white shadow-md"
                       : "border-line bg-elevated/60 text-subtle hover:bg-elevated hover:text-fg"
                       }`}
                     title="Kamera ile Barkod Tara"
                   >
-                    {cameraOpen ? <X className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
+                    {cameraOpen ? <X className="h-5 w-5" /> : <Camera className="h-5 w-5" />}
                   </button>
                 </div>
               </div>
@@ -1691,6 +1770,12 @@ export default function ReceivingDetailPage() {
                     }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && lotNumber.trim()) {
+                        // SKT KONTROLÜ: Enter ile de geçmiş tarihli SKT/parti geçilemez.
+                        if ((expiryDate && gecmisSKTMi(expiryDate)) || partiGecmisSKTMi(lotNumber)) {
+                          sesHata();
+                          setLotError("Geçmiş tarihli SKT/parti ile mal kabul yapılamaz. Bugün veya ileri bir tarih girin.");
+                          return;
+                        }
                         setLotError("");
                         setActiveStep("quantity");
                       }
@@ -1706,10 +1791,18 @@ export default function ReceivingDetailPage() {
                   <input
                     type="date"
                     value={expiryDate}
+                    min={bugunISODate()}
                     onChange={(e) => {
-                      setExpiryDate(e.target.value);
+                      const val = e.target.value;
+                      // SKT KONTROLÜ: geçmiş tarihli SKT ile mal kabul engellenir.
+                      if (gecmisSKTMi(val)) {
+                        sesHata();
+                        setLotError("Geçmiş tarihli SKT ile mal kabul yapılamaz. Bugün veya ileri bir tarih seçin.");
+                        return; // geçmiş tarihi kabul etme (input eski değerinde kalır)
+                      }
+                      setExpiryDate(val);
                       // Tarih seçilince Parti No'yu ters çevirip yaz (yyyy-mm-dd → YYYYMMDD) — toplamadaki gibi.
-                      const parti = isoDateToBatch(e.target.value);
+                      const parti = isoDateToBatch(val);
                       if (parti) {
                         setLotNumber(parti);
                         if (lotError) setLotError("");
@@ -1726,6 +1819,18 @@ export default function ReceivingDetailPage() {
                   if (!lotNumber.trim()) {
                     sesHata();
                     setLotError("Bu malzeme partili olduğu için Parti No girilmesi zorunludur.");
+                    return;
+                  }
+                  // SKT KONTROLÜ (güvenlik ağı): geçmiş tarihli SKT ile devam edilemez.
+                  if (expiryDate && gecmisSKTMi(expiryDate)) {
+                    sesHata();
+                    setLotError("Geçmiş tarihli SKT ile mal kabul yapılamaz. Bugün veya ileri bir tarih seçin.");
+                    return;
+                  }
+                  // Parti No'ya elle geçmiş-tarihli (YYYYMMDD) batch yazıldıysa da engelle.
+                  if (partiGecmisSKTMi(lotNumber)) {
+                    sesHata();
+                    setLotError("Geçmiş tarihli SKT/parti ile mal kabul yapılamaz. Bugün veya ileri bir tarih girin.");
                     return;
                   }
                   setLotError("");
@@ -1879,9 +1984,51 @@ export default function ReceivingDetailPage() {
           )}
         </div>
 
+        {/* KABUL EDİLENLER BARI (sol sütun — diğer ekranlarla aynı konum) */}
+        <div className="self-start w-full">
+          <div className="rounded-2xl border border-line bg-surface p-2.5 sm:p-3 shadow-xs hover:border-brand-500/40 transition flex items-center min-h-[66px] sm:min-h-[68px]">
+            <button
+              type="button"
+              onClick={() =>
+                navigate(
+                  `/receiving/${encodeURIComponent(vendorCode)}/kayitlar?waybill=${encodeURIComponent(
+                    waybillNo
+                  )}&targetWH=${encodeURIComponent(targetWH)}&targetSP=${encodeURIComponent(targetSP)}&vendor=${encodeURIComponent(
+                    vendorName
+                  )}`,
+                  {
+                    state: {
+                      items: receivedItems,
+                      waybillNo,
+                      targetWarehouse: targetWH,
+                      targetStockPlace: targetSP,
+                      vendor: vendorCode,
+                      vendorName,
+                      currentMaterial,
+                      openOrders,
+                      areDimensionsDone,
+                      activeStep,
+                    },
+                  }
+                )
+              }
+              className="flex w-full items-center justify-between text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline cursor-pointer"
+            >
+              <span>Kabul edilenler ({receivedItems.length})</span>
+              <span aria-hidden>→</span>
+            </button>
+          </div>
+        </div>
+
+        {/* /SOL SÜTUN */}
+        </div>
+
+        {/* ================= SAĞ SÜTUN: malzeme detayı + açık siparişler (bağımsız kayar) ================= */}
+        <div className="flex flex-col gap-2.5 sm:gap-3 sm:flex-1 min-w-0 short:flex-1 short:self-stretch short:overflow-y-auto short:pr-1">
+
         {/* SAĞ ANA KART: MALZEME BİLGİ VE ÖLÇÜ KARTI */}
         <div
-          className={`col-span-1 sm:col-span-7 md:col-span-8 lg:col-span-8 xl:col-span-8 landscape:col-span-8 rounded-3xl border border-line bg-surface pt-1.5 pb-1.5 px-3 sm:pt-1.5 sm:pb-2 sm:px-3.5 shadow-card flex flex-col justify-start min-w-0 h-full ${currentMaterial?.isSpecialLot
+          className={`rounded-3xl border border-line bg-surface pt-1.5 pb-1.5 px-3 sm:pt-1.5 sm:pb-2 sm:px-3.5 shadow-card flex flex-col justify-start min-w-0 w-full ${currentMaterial?.isSpecialLot
             ? "min-h-[290px] sm:min-h-[300px]"
             : "min-h-[205px] sm:min-h-[215px]"
             }`}
@@ -2072,60 +2219,48 @@ export default function ReceivingDetailPage() {
         {/* 2. SATIR: SOLDA OKUTULANLAR BARI & SAĞDA AÇIK SİPARİŞLER KARTLARI         */}
         {/* ========================================================================= */}
 
-        {/* SOL ALT: KABUL EDİLENLER BARI */}
-        <div className="col-span-1 sm:col-span-5 md:col-span-4 lg:col-span-4 xl:col-span-4 landscape:col-span-4 self-start">
-          <div className="rounded-2xl border border-line bg-surface p-2.5 sm:p-3 shadow-xs hover:border-brand-500/40 transition flex items-center min-h-[66px] sm:min-h-[68px]">
-            <button
-              type="button"
-              onClick={() =>
-                navigate(
-                  `/receiving/${encodeURIComponent(vendorCode)}/kayitlar?waybill=${encodeURIComponent(
-                    waybillNo
-                  )}&targetWH=${encodeURIComponent(targetWH)}&targetSP=${encodeURIComponent(targetSP)}&vendor=${encodeURIComponent(
-                    vendorName
-                  )}`,
-                  {
-                    state: {
-                      items: receivedItems,
-                      waybillNo,
-                      targetWarehouse: targetWH,
-                      targetStockPlace: targetSP,
-                      vendor: vendorCode,
-                      vendorName,
-                      currentMaterial,
-                      openOrders,
-                      areDimensionsDone,
-                      activeStep,
-                    },
-                  }
-                )
-              }
-              className="flex w-full items-center justify-between text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline cursor-pointer"
-            >
-              <span>Kabul edilenler ({receivedItems.length})</span>
-              <span aria-hidden>→</span>
-            </button>
-          </div>
-        </div>
-
-        {/* SAĞ ALT: AÇIK SİPARİŞ KARTLARI (Varsa) */}
-        <div className="col-span-1 sm:col-span-7 md:col-span-8 lg:col-span-8 xl:col-span-8 landscape:col-span-8">
+        {/* AÇIK SİPARİŞ KARTLARI (Varsa) */}
+        <div className="w-full">
           {openOrders.length > 0 && (
             <div className="space-y-1.5 max-h-[32vh] overflow-y-auto pr-0.5 animate-fade-in">
+              {openOrders.length > 1 && (
+                <p className="flex items-center gap-1 px-0.5 pb-0.5 text-[10.5px] font-semibold text-subtle">
+                  <GripVertical className="h-3 w-3 shrink-0" />
+                  Önce sürükleyip sıralayın, sonra miktar girin — miktar üstten aşağı yedirilir
+                </p>
+              )}
               {orderFulfillment.allocations.map((al, idx) => {
                 const orderType = getOrderType(al.order);
 
                 return (
                   <div
                     key={`${al.orderNum}-${al.itemNum}-${idx}`}
-                    className={`rounded-2xl border p-3 transition-all shadow-xs ${al.isFullyAllocated
+                    data-oo-idx={idx}
+                    className={`rounded-2xl border p-3 transition-all shadow-xs ${dragIndex === idx
+                      ? "opacity-50 ring-2 ring-brand-500"
+                      : dragIndex !== null && overIndex === idx
+                        ? "ring-2 ring-brand-400"
+                        : ""
+                      } ${al.isFullyAllocated
                       ? "border-brand-500/60 bg-brand-500/10"
                       : al.isPartiallyAllocated
                         ? "border-amber-500/60 bg-amber-500/10"
                         : "border-line bg-surface"
                       }`}
                   >
-                    <div className="flex items-start gap-3 min-w-0">
+                    <div className="flex items-start gap-2 min-w-0">
+                      {/* Sürükle-bırak tutamacı (dokunmatik + fare) */}
+                      <button
+                        type="button"
+                        onPointerDown={(e) => onGripPointerDown(e, idx)}
+                        onPointerMove={onGripPointerMove}
+                        onPointerUp={onGripPointerUp}
+                        className="shrink-0 -ml-1 flex h-9 w-6 items-center justify-center rounded-lg text-subtle/60 touch-none cursor-grab hover:bg-elevated hover:text-fg active:cursor-grabbing"
+                        title="Sürükleyerek sıralayın"
+                        aria-label="Sürükleyerek sıralayın"
+                      >
+                        <GripVertical className="h-4 w-4" />
+                      </button>
                       {/* Sol: kalan (sipariş birimi) daire rozeti — tamamlandıysa ✓ */}
                       <div
                         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${al.isFullyAllocated
@@ -2149,6 +2284,12 @@ export default function ReceivingDetailPage() {
                           <span className="font-mono truncate">{al.orderNum}</span>
                         </p>
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[11px] text-subtle">
+                          {al.orderDate && (
+                            <span className="inline-flex items-center gap-1">
+                              <CalendarDays className="h-3 w-3 shrink-0" />
+                              <strong className="font-bold text-fg">{formatOrderDate(al.orderDate)}</strong>
+                            </span>
+                          )}
                           <span>Kalem: <strong className="font-black text-fg">{al.itemNum}</strong></span>
                           {al.purUnit !== al.stockUnit && (
                             <span>1 {al.purUnit} = {al.factor} {al.stockUnit}</span>
@@ -2176,6 +2317,8 @@ export default function ReceivingDetailPage() {
               })}
             </div>
           )}
+        </div>
+        {/* /SAĞ SÜTUN */}
         </div>
       </div>
 

@@ -12,6 +12,8 @@ import {
   Info,
 } from "lucide-react";
 import BarcodeScanner from "../../components/BarcodeScanner";
+import AdimBar from "../../components/AdimBar";
+import Pagination, { usePagination } from "../../components/Pagination";
 import ToastView, { useToast } from "../../components/Toast";
 import { api } from "../../api/client";
 import { sesBasarili, sesHata } from "../../sound";
@@ -1372,6 +1374,15 @@ export default function CountDetailPage() {
     });
   }, [displayedLines, activeItem, lotPendingItem, selectedLineForShelf]);
 
+  // ---- Sayfalama (diğer sayfalarla aynı ortak bileşen) — sayfa başına en fazla 20 kalem ----
+  const sayfalama = usePagination(sortedLines, 20);
+  // Aktif okutma/parti/raf seçimi olduğunda ilgili kalem sıralamada en üste geldiği için 1. sayfaya dön
+  const aktifSecimVar = Boolean(activeItem || lotPendingItem || selectedLineForShelf);
+  useEffect(() => {
+    if (aktifSecimVar) sayfalama.setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aktifSecimVar]);
+
   const totalCountedLines = lines.filter((l) => l.countedQty > 0).length;
   const isAllComplete = lines.length > 0 && totalCountedLines === lines.length;
 
@@ -1436,10 +1447,10 @@ export default function CountDetailPage() {
           <button
             type="button"
             onClick={handleGoToSummary}
-            className="flex items-center justify-center rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1 text-xs sm:text-sm font-bold shadow-sm transition active:scale-95 shrink-0"
+            className="flex items-center justify-center rounded-xl bg-brand-600 hover:bg-brand-700 text-white px-3.5 py-1 text-xs sm:text-sm font-bold shadow-sm transition active:scale-95 shrink-0"
             title="Sayımı İncele ve Bitir"
           >
-            <span>Bitir</span>
+            <span>Sayımı Bitir</span>
           </button>
           <span
             className={`chip border px-2.5 py-1 text-[14px] font-bold ${isAllComplete
@@ -1460,72 +1471,22 @@ export default function CountDetailPage() {
       )}
 
       {/* ANA İÇERİK: SOL PANEL & SAĞ LİSTE */}
-      <div className="grid min-w-0 gap-2.5 md:gap-3.5 md:grid-cols-[330px_minmax(0,1fr)] lg:grid-cols-[350px_minmax(0,1fr)] xl:grid-cols-[370px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-2.5">
+      <div className="grid min-w-0 gap-4 md:grid-cols-[340px_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-3">
         {/* =================================================================== */}
         {/* SOL KOLON: Sayım İşlem Kartı                                        */}
         {/* =================================================================== */}
-        <div className="min-w-0 md:sticky md:top-2 md:self-start lg:sticky lg:top-2 xl:sticky xl:top-2 short:!static short:w-[330px] short:shrink-0 short:self-stretch short:overflow-y-auto">
-          <div className="card p-2 sm:p-2.5 space-y-1.5">
+        <div className="min-w-0 md:sticky md:top-3 md:self-start lg:static xl:sticky xl:top-4 short:!static short:w-[320px] short:shrink-0 short:self-stretch short:overflow-y-auto">
+          <div className="card p-3 space-y-1.5">
             {/* 4 TAB BAŞLIĞI: [Raf, Barkod, Parti, Miktar] */}
-            <div className="grid grid-cols-4 gap-1 w-full">
-              {(
-                [
-                  ["shelf", "Raf"],
-                  ["barcode", "Barkod"],
-                  ["lot", "Parti"],
-                  ["qty", "Miktar"],
-                ] as const
-              ).map(([s, label]) => {
-                const active = tab === s;
-                const isClickable =
-                  s === "shelf" ||
-                  (s === "barcode" && (Boolean(selectedShelf) || Boolean(activeItem) || Boolean(lotPendingItem))) ||
-                  (s === "lot" && (Boolean(activeItem) || Boolean(lotPendingItem))) ||
-                  (s === "qty" && Boolean(activeItem));
-
-                const handleClick = () => {
-                  if (s === "shelf") {
-                    setTab("shelf");
-                    setSelectedShelf(null);
-                    setSelectedWarehouse(null);
-                    setSelectedStockPlace(null);
-                    setActiveItem(null);
-                    setLotPendingItem(null);
-                    setSelectedLineForShelf(null);
-                  } else if (s === "barcode") {
-                    setTab("barcode");
-                    setActiveItem(null);
-                    setLotPendingItem(null);
-                    setSelectedLineForShelf(null);
-                  } else if (s === "lot") {
-                    if (activeItem) {
-                      handleBackToLot(activeItem);
-                    } else if (lotPendingItem) {
-                      setTab("lot");
-                    }
-                  } else if (s === "qty" && activeItem) {
-                    setTab("qty");
-                  }
-                };
-
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={handleClick}
-                    disabled={!isClickable}
-                    className={`flex h-9 w-full items-center justify-center rounded-xl px-0.5 text-xs font-bold tracking-tight transition-all duration-200 ease-soft ${active
-                      ? "bg-brand-600 text-white shadow-soft font-extrabold cursor-default"
-                      : isClickable
-                        ? "bg-elevated text-subtle hover:text-fg hover:bg-line cursor-pointer"
-                        : "bg-elevated/60 text-subtle/60 cursor-default opacity-80"
-                      }`}
-                  >
-                    <span className="truncate">{label}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <AdimBar
+              fill
+              adimlar={[
+                { label: "Raf", active: tab === "shelf", onClick: () => { setTab("shelf"); setSelectedShelf(null); setSelectedWarehouse(null); setSelectedStockPlace(null); setActiveItem(null); setLotPendingItem(null); setSelectedLineForShelf(null); } },
+                { label: "Barkod", active: tab === "barcode", disabled: !(Boolean(selectedShelf) || Boolean(activeItem) || Boolean(lotPendingItem)), onClick: () => { setTab("barcode"); setActiveItem(null); setLotPendingItem(null); setSelectedLineForShelf(null); } },
+                { label: "Parti", active: tab === "lot", disabled: !(Boolean(activeItem) || Boolean(lotPendingItem)), onClick: () => { if (activeItem) handleBackToLot(activeItem); else if (lotPendingItem) setTab("lot"); } },
+                { label: "Miktar", active: tab === "qty", disabled: !Boolean(activeItem), onClick: () => { if (activeItem) setTab("qty"); } },
+              ]}
+            />
 
             {/* SEÇİLİ RAF BİLGİSİ */}
             {selectedShelf && tab !== "shelf" && (
@@ -1563,7 +1524,6 @@ export default function CountDetailPage() {
                     onDetected={handleSelectShelf}
                     placeholder="Raf barkodunu girin"
                     hideCardWrapper
-                    compact
                   />
                   {shelfBusy && (
                     <p className="mt-1 flex items-center gap-1.5 text-[12.5px] font-semibold text-brand-600 animate-pulse">
@@ -1586,7 +1546,6 @@ export default function CountDetailPage() {
                   onDetected={handleDetected}
                   placeholder="Malzeme barkodu okutun"
                   hideCardWrapper
-                  compact
                 />
                 {busy && (
                   <p className="mt-1 flex items-center gap-1.5 text-[12.5px] font-semibold text-brand-600">
@@ -1655,7 +1614,6 @@ export default function CountDetailPage() {
                     onDetected={handleDetected}
                     placeholder="Parti barkodu girin"
                     hideCardWrapper
-                    compact
                   />
                 </div>
               </div>
@@ -1808,7 +1766,7 @@ export default function CountDetailPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {sortedLines.map((line) => {
+              {sayfalama.pageItems.map((line) => {
                 const isSelectedForShelf = selectedLineForShelf?.id === line.id;
                 const isCurrentActive = Boolean(
                   activeItem &&
@@ -1948,6 +1906,17 @@ export default function CountDetailPage() {
                   </button>
                 );
               })}
+
+              {/* ---- Sayfalama — diğer sayfalarla aynı ortak bileşen ---- */}
+              <Pagination
+                page={sayfalama.page}
+                pageCount={sayfalama.pageCount}
+                onChange={sayfalama.setPage}
+                rangeStart={sayfalama.rangeStart}
+                rangeEnd={sayfalama.rangeEnd}
+                total={sayfalama.total}
+                label="kalem"
+              />
             </div>
           )}
         </div>
