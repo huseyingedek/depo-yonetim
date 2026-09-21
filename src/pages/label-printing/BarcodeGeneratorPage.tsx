@@ -392,11 +392,10 @@ export default function BarcodeGeneratorPage() {
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex h-9 min-w-0 flex-1 items-center justify-center truncate rounded-xl px-2 text-[11px] font-bold transition active:scale-95 ${
-                      isActive
-                        ? "bg-blue-600 text-white shadow-soft"
-                        : "bg-elevated text-subtle hover:text-fg hover:bg-elevated/80"
-                    }`}
+                    className={`flex h-9 min-w-0 flex-1 items-center justify-center truncate rounded-xl px-2 text-[11px] font-bold transition active:scale-95 ${isActive
+                      ? "bg-blue-600 text-white shadow-soft"
+                      : "bg-elevated text-subtle hover:text-fg hover:bg-elevated/80"
+                      }`}
                   >
                     <span className="truncate">{tab.label}</span>
                   </button>
