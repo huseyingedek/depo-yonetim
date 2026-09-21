@@ -195,12 +195,13 @@ export default function BarcodeGeneratorPage() {
 
       setSearchResults(cards);
       setSearchDone(true);
+      setActiveTab("unit");
 
       if (cards.length > 0) {
         const first = cards[0];
         setSelectedCard(first);
         const u = first.unit.toUpperCase();
-        if (u === "KO" || u === "PK" || u === "AD") {
+        if (u === "KO" || u === "PK" || u === "AD" || u === "KT") {
           setSelectedUnit(u);
         }
         showToast({ kind: "ok", text: `${cards.length} malzeme bulundu.` });
@@ -223,7 +224,7 @@ export default function BarcodeGeneratorPage() {
   const handleSelectCard = (item: ProductBarcodeCardItem) => {
     setSelectedCard(item);
     const u = item.unit.toUpperCase();
-    if (u === "KO" || u === "PK" || u === "AD") {
+    if (u === "KO" || u === "PK" || u === "AD" || u === "KT") {
       setSelectedUnit(u);
     }
     showToast({ kind: "ok", text: `Seçildi: ${item.name}` });
@@ -356,10 +357,10 @@ export default function BarcodeGeneratorPage() {
       )}
 
       {/* İKİ SÜTUNLU TRANSFER EKRANI DÜZENİ */}
-      <div className="grid min-w-0 gap-4 md:grid-cols-[340px_minmax(0,1fr)] lg:grid-cols-[360px_minmax(0,1fr)]">
+      <div className="grid min-w-0 gap-2 md:grid-cols-[250px_minmax(0,1fr)] lg:grid-cols-[250px_minmax(0,1fr)]">
         {/* SOL KOLON: Sayfada Sabit/Sticky, 3 Tablı Sabit Ölçülü Kart */}
         <div className="min-w-0 md:sticky md:top-4 md:self-start">
-          <div className="card p-3.5 sm:p-4">
+          <div className="card p-1 sm:p-2">
             {/* 3 Tablı Adım Barı */}
             <div className="mb-3">
               <AdimBar
@@ -439,6 +440,7 @@ export default function BarcodeGeneratorPage() {
                         <option value="KO">KO</option>
                         <option value="PK">PK</option>
                         <option value="AD">AD</option>
+                        <option value="KT">KT</option>
                       </select>
                       <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle pointer-events-none" />
                     </div>
@@ -537,10 +539,7 @@ export default function BarcodeGeneratorPage() {
                   >
                     <div className="min-w-0 flex-1 pr-3">
                       <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
-                        <p
-                          className="font-semibold text-fg text-xs sm:text-sm truncate max-w-[180px] sm:max-w-xs md:max-w-sm"
-                          title={r.name}
-                        >
+                        <p className="font-semibold text-fg text-xs sm:text-sm">
                           {r.name}
                         </p>
                         <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded-md shrink-0">
