@@ -232,6 +232,16 @@ export default function BarcodeGeneratorPage() {
   // Malzeme kartı seçimi
   const handleSelectCard = (item: ProductBarcodeCardItem) => {
     setSelectedCard(item);
+
+    // Seçilen kartı sonuç listesinin en üstüne taşı
+    setSearchResults((prev) => {
+      const idx = prev.findIndex((c) => c.id === item.id);
+      if (idx <= 0) return prev;
+      const copy = [...prev];
+      const [moved] = copy.splice(idx, 1);
+      return [moved, ...copy];
+    });
+
     const u = item.unit.toUpperCase();
     if (u === "KO" || u === "PK" || u === "AD" || u === "KT") {
       setSelectedUnit(u);
