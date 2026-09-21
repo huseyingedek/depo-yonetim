@@ -9,7 +9,7 @@ import {
 } from "./ProductBarcodePage";
 
 type LeftTabType = "material" | "unit" | "barcode";
-type BarcodeMode = "auto" | "manual";
+type BarcodeMode = "auto" | "manual" | null;
 type Toast = { kind: "ok" | "done" | "error"; text: string } | null;
 
 export default function BarcodeGeneratorPage() {
@@ -26,8 +26,8 @@ export default function BarcodeGeneratorPage() {
   // Tab 2: Birim Durumu (KO, PK, AD)
   const [selectedUnit, setSelectedUnit] = useState<string>("");
 
-  // Tab 3: Barkod Modu ve Değeri
-  const [barcodeMode, setBarcodeMode] = useState<BarcodeMode>("auto");
+  // Tab 3: Barkod Modu ve Değeri (Seçilmeden kaydetme yapılamaz)
+  const [barcodeMode, setBarcodeMode] = useState<BarcodeMode>(null);
   const [customBarcode, setCustomBarcode] = useState("");
 
   // Bildirim ve Kaydetme Durumları
@@ -218,6 +218,8 @@ export default function BarcodeGeneratorPage() {
       setSearchDone(true);
       setSelectedCard(null);
       setSelectedUnit("");
+      setBarcodeMode(null);
+      setCustomBarcode("");
       setActiveTab("material");
 
       if (uniqueCards.length > 0) {
@@ -249,8 +251,10 @@ export default function BarcodeGeneratorPage() {
       return [moved, ...copy];
     });
 
-    // Kullanıcının birim seçebilmesi için birimi sıfırla ve Birim tabına geç
+    // Kullanıcının birim ve barkod modunu seçebilmesi için seçimleri sıfırla ve Birim tabına geç
     setSelectedUnit("");
+    setBarcodeMode(null);
+    setCustomBarcode("");
     setActiveTab("unit");
     showToast({ kind: "ok", text: `Seçildi: ${item.name}` });
   };
@@ -280,6 +284,15 @@ export default function BarcodeGeneratorPage() {
     if (!selectedUnit) {
       showToast({ kind: "error", text: "Lütfen önce birim seçin." });
       setActiveTab("unit");
+      return;
+    }
+
+    if (!barcodeMode) {
+      showToast({
+        kind: "error",
+        text: "Lütfen 'Sıradaki Numarayı Ata' veya 'Kendin Gir' seçeneğini belirleyin.",
+      });
+      setActiveTab("barcode");
       return;
     }
 
@@ -335,7 +348,13 @@ export default function BarcodeGeneratorPage() {
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving || !selectedCard || !selectedUnit}
+            disabled={
+              saving ||
+              !selectedCard ||
+              !selectedUnit ||
+              !barcodeMode ||
+              (barcodeMode === "manual" && !customBarcode.trim())
+            }
             className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-soft hover:bg-blue-700 transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? (
@@ -392,7 +411,7 @@ export default function BarcodeGeneratorPage() {
         {/* SOL KOLON: Sayfada Sabit/Sticky, 3 Tablı Sabit Ölçülü Kart */}
         <div className="min-w-0 md:sticky md:top-4 md:self-start">
           <div className="card p-1 sm:p-2">
-            {/* 3 Tablı Sekme Barı (Sadece isimler, numara ve tik işareti yok) */}
+            {/* 3 Tablı Sekme Barı (Sadece isimler) */}
             <div className="flex items-center justify-center gap-1.5 mb-3">
               {[
                 { id: "material" as const, label: "Malzeme", disabled: false },
@@ -424,32 +443,26 @@ export default function BarcodeGeneratorPage() {
             <div className="pt-1">
               {/* TAB 1: MALZEME ARAMA */}
               {activeTab === "material" && (
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <label className="text-xs font-bold text-fg block">
                     Malzeme Arama
                   </label>
-                  <form onSubmit={handleSearch} className="flex items-center gap-2">
+                  <form onSubmit={handleSearch} className="flex items-center gap-1">
                     <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
                       <input
                         type="text"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="İsim veya ürün kodu..."
-                        className="field-input h-10 pl-9 pr-2 text-xs"
+                        placeholder="Açıklama veya ürün kodu"
+                        className="field-input h-10 w-full text-xs"
                       />
                     </div>
                     <button
                       type="submit"
                       disabled={searching || !searchTerm.trim()}
-                      className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3.5 text-xs font-bold text-white shadow-soft hover:bg-blue-700 transition active:scale-95 disabled:opacity-50 shrink-0"
+                      className="flex h-9 items-center justify-center rounded-xl bg-blue-600 px-1.5 text-xs font-bold text-white shadow-soft hover:bg-blue-700 transition active:scale-95 disabled:opacity-50 shrink-0"
                     >
-                      {searching ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Search className="h-3.5 w-3.5" />
-                      )}
-                      <span>Ara</span>
+                      <span>{searching ? "..." : "Ara"}</span>
                     </button>
                   </form>
                 </div>
@@ -536,15 +549,17 @@ export default function BarcodeGeneratorPage() {
                     </label>
                     <input
                       type="text"
-                      disabled={barcodeMode === "auto"}
-                      value={barcodeMode === "auto" ? "" : customBarcode}
+                      disabled={barcodeMode !== "manual"}
+                      value={barcodeMode === "manual" ? customBarcode : ""}
                       onChange={(e) => setCustomBarcode(e.target.value.toUpperCase())}
                       placeholder={
-                        barcodeMode === "auto"
-                          ? "Sistem otomatik atayacak"
-                          : "Barkod numarasını yazınız..."
+                        !barcodeMode
+                          ? "Lütfen yukarıdan bir seçenek belirleyin"
+                          : barcodeMode === "auto"
+                            ? "Sistem otomatik atayacak"
+                            : "Barkod numarasını yazınız..."
                       }
-                      className={`field-input h-10 px-3 text-xs font-mono font-bold transition ${barcodeMode === "auto"
+                      className={`field-input h-10 px-3 text-xs font-mono font-bold transition ${barcodeMode !== "manual"
                         ? "bg-elevated/50 text-subtle/70 cursor-not-allowed border-dashed"
                         : "border-blue-300 dark:border-blue-800 text-fg focus:border-blue-600"
                         }`}
