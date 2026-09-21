@@ -28,6 +28,7 @@
       "inquiry": "Product Inquiry",
       "label_printing": "Label Printing",
       "packaging": "Packaging",
+      "dagitim": "Distribution",
       "reporting": "Stock Movement Reports"
     },
     "operationDesc": {
@@ -38,7 +39,9 @@
       "count": "Perform stock count",
       "inquiry": "Query stock and location",
       "label_printing": "Print barcode and package labels",
-      "packaging": "Pack items and prepare for shipment"
+      "packaging": "Pack items and prepare for shipment",
+      "dagitim": "Manage shipment and distribution in one screen",
+      "reporting": "View and report stock movements"
     }
   },
   "settings": {

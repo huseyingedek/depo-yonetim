@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import BarcodeScanner from "../../components/BarcodeScanner";
+import AdimBar from "../../components/AdimBar";
 import {
   useTransferStore,
   qtyRound,
@@ -587,72 +588,22 @@ export default function StockTransferPage() {
       />
 
       {/* İki Sütunlu Grid Düzen (Yatay Telefonda Yan Yana) */}
-      <div className="grid min-w-0 gap-3 md:gap-5 md:grid-cols-[350px_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[380px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-3">
+      <div className="grid min-w-0 gap-4 md:grid-cols-[340px_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-3">
         {/* SOL KOLON: Tarayıcı, Lokasyon Kartları ve Miktar Paneli */}
-        <div className="min-w-0 md:sticky md:top-3 md:self-start lg:static xl:sticky xl:top-4 short:!static short:w-[350px] short:shrink-0 short:self-stretch short:overflow-y-auto">
-          <div className="card p-2 sm:p-2.5">
+        <div className="min-w-0 md:sticky md:top-3 md:self-start lg:static xl:sticky xl:top-4 short:!static short:w-[320px] short:shrink-0 short:self-stretch short:overflow-y-auto">
+          <div className="card p-3">
             {/* Adım İndikatörleri (Oval Kartlar: Kartın sağ ve sol kenarlarına yakın, yatayda geniş) */}
             <div className="mb-2.5">
               {step === "collect" ? (
-                <div className="grid grid-cols-4 gap-1 w-full">
-                  {(
-                    [
-                      ["shelf", "1 Raf"],
-                      ["product", "2 Malzeme"],
-                      ["lot", "3 Parti"],
-                      ["qty", "4 Miktar"],
-                    ] as const
-                  ).map(([s, label]) => {
-                    const active =
-                      (s === "shelf" && !sourceShelf) ||
-                      (s === "product" && !lotPendingItem && !activeItem) ||
-                      (s === "lot" && !!lotPendingItem) ||
-                      (s === "qty" && !!activeItem);
-
-                    // 5. Kural: Malzeme okuttuktan sonra raf tabına tıklayıp farklı rafa gidebilsin
-
-
-                    /*                  ).map(([s, label]) => {
-                      const active =
-                        (s === "shelf" && !sourceShelf) ||
-                        (s === "product" && !!sourceShelf && !lotPendingItem && !activeItem) ||
-                        (s === "lot" && !!lotPendingItem) ||
-                        (s === "qty" && !!activeItem);
-                        
-                        */
-
-                    const isClickable = s === "shelf" || (s === "product" && (!!lotPendingItem || !!activeItem));
-
-                    const git = () => {
-                      if (s === "shelf") {
-                        clearSourceShelf();
-                        setActiveItem(null);
-                        setLotPendingItem(null);
-                      } else if (s === "product") {
-                        setActiveItem(null);
-                        setLotPendingItem(null);
-                      }
-                    };
-
-                    return (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={git}
-                        disabled={!isClickable}
-                        title={typeof label === "string" ? label : ""}
-                        className={`flex h-10 w-full items-center justify-center rounded-xl px-0.5 text-xs sm:text-[13px] font-bold tracking-tight transition-all duration-200 ease-soft ${active
-                          ? "bg-brand-600 text-white shadow-soft font-extrabold cursor-default"
-                          : isClickable
-                            ? "bg-elevated text-subtle hover:text-fg hover:bg-line cursor-pointer"
-                            : "bg-elevated/60 text-subtle/60 cursor-default opacity-85"
-                          }`}
-                      >
-                        <span className="truncate">{label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <AdimBar
+                  fill
+                  adimlar={[
+                    { label: "Raf", active: !sourceShelf, done: !!sourceShelf, onClick: () => { clearSourceShelf(); setActiveItem(null); setLotPendingItem(null); } },
+                    { label: "Malzeme", active: !!sourceShelf && !lotPendingItem && !activeItem, done: !!lotPendingItem || !!activeItem, disabled: !(lotPendingItem || activeItem), onClick: () => { setActiveItem(null); setLotPendingItem(null); } },
+                    { label: "Parti", active: !!lotPendingItem, disabled: true },
+                    { label: "Miktar", active: !!activeItem, disabled: true },
+                  ]}
+                />
               ) : (
                 // 6. Kural: Transfer onayı verilen ekranda sol üstteki kartta onay kısmı olmasın
                 <div className="w-full">

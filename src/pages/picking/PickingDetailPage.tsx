@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import BarcodeScanner from "../../components/BarcodeScanner";
+import AdimBar from "../../components/AdimBar";
 import {
   usePickingStore, orderProgress, linePicked,
 } from "../../store/pickingStore";
@@ -265,63 +266,20 @@ export default function PickingDetailPage() {
       />
 
       {}
-      <div className="grid min-w-0 gap-4 md:gap-6 md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-3">
+      <div className="grid min-w-0 gap-4 md:grid-cols-[340px_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] short:!flex short:min-h-0 short:flex-1 short:overflow-hidden short:gap-3">
         {}
-        <div className="min-w-0 md:sticky md:top-3 md:self-start lg:static xl:sticky xl:top-4 short:!static short:w-[300px] short:shrink-0 short:self-stretch short:overflow-y-auto">
-          <div className="card p-4">
+        <div className="min-w-0 md:sticky md:top-3 md:self-start lg:static xl:sticky xl:top-4 short:!static short:w-[320px] short:shrink-0 short:self-stretch short:overflow-y-auto">
+          <div className="card p-3">
             {}
-            <div className="mb-3 flex items-center gap-1.5">
-              {(
-                [
-                  ["shelf", "Raf"],
-                  ["product", "Ürün"],
-                  ["lot", "Parti"],
-                ] as const
-              ).map(([s, label], i) => {
-                const active =
-                  (s === "shelf" && !shelf) ||
-                  (s === "product" && !!shelf && !lotPending) ||
-                  (s === "lot" && !!lotPending);
-                const done =
-                  (s === "shelf" && !!shelf) || (s === "product" && !!lotPending);
-
-                const partiBekleyen = order?.lines.find(
-                  (l) => l.lotTracked && (l.records?.length ?? 0) > 0 && !l.lot
-                );
-                const tiklanabilir =
-                  (s === "shelf" && !!shelf) || (s === "lot" && !!partiBekleyen);
-
-                const git = () => {
-                  if (s === "shelf") {
-                    clearShelf();
-                    setLotPending(null);
-                  } else if (s === "lot" && partiBekleyen) {
-                    setLotPending(partiBekleyen.id);
-                  }
-                };
-
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={git}
-                    disabled={!tiklanabilir}
-                    className={`flex min-w-0 flex-1 items-center justify-center gap-1 truncate rounded-xl px-1.5 py-1.5 text-[11px] font-semibold transition-all duration-200 ease-soft ${
-                      active
-                        ? "bg-brand-600 text-white shadow-soft"
-                        : done
-                        ? "bg-emerald-100 text-emerald-700"
-                        : tiklanabilir
-                        ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                        : "bg-elevated text-subtle"
-                    } ${tiklanabilir ? "cursor-pointer" : "cursor-default"}`}
-                  >
-                    <span className="shrink-0 font-mono">{done ? "✓" : i + 1}</span>
-                    <span className="truncate">{label}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <AdimBar
+              fill
+              className="mb-3"
+              adimlar={[
+                { label: "Raf", active: !shelf, done: !!shelf, disabled: !shelf, onClick: () => { clearShelf(); setLotPending(null); } },
+                { label: "Ürün", active: !!shelf && !lotPending, done: !!lotPending, disabled: true },
+                { label: "Parti", active: !!lotPending, disabled: !order?.lines.find((l) => l.lotTracked && (l.records?.length ?? 0) > 0 && !l.lot), onClick: () => { const pb = order?.lines.find((l) => l.lotTracked && (l.records?.length ?? 0) > 0 && !l.lot); if (pb) setLotPending(pb.id); } },
+              ]}
+            />
 
             {}
             {shelf ? (
@@ -345,11 +303,7 @@ export default function PickingDetailPage() {
                   Rafı değiştir
                 </button>
               </div>
-            ) : (
-              <div className="mb-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
-                Önce bulunduğunuz rafın barkodunu okutun
-              </div>
-            )}
+            ) : null}
 
             {}
             {lotPending && (
@@ -475,6 +429,7 @@ export default function PickingDetailPage() {
               onDetected={handleDetected}
               prompt={promptText}
               prefill={lotPending ? partiPrefill : rafPrefill}
+              hideCardWrapper
             />
 
             {busy && (

@@ -7,6 +7,7 @@ export type OperationType =
   | "inquiry" // Ürün Sorgulama
   | "label_printing" // Yardımcı İşlemler
   | "packaging" // Paketleme
+  | "dagitim" // Dağıtım
   | "reporting"; // Raporlama
 
 export interface User {
