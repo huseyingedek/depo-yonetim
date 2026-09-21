@@ -387,98 +387,75 @@ export default function BarcodeGeneratorPage() {
               />
             </div>
 
-            {/* TAB İÇERİĞİ: STANDART SABİT ÖLÇÜLÜ ALAN (Sekmeler arası boy değişmez!) */}
-            <div className="h-[200px] flex flex-col justify-between pt-1">
+            {/* TAB İÇERİĞİ: Dinamik Ölçülü Alan */}
+            <div className="pt-1">
               {/* TAB 1: MALZEME ARAMA */}
               {activeTab === "material" && (
-                <>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-fg block">
-                      Malzeme Arama
-                    </label>
-                    <form onSubmit={handleSearch} className="flex items-center gap-2">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
-                        <input
-                          type="text"
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          placeholder="İsim veya ürün kodu..."
-                          className="field-input h-10 pl-9 pr-2 text-xs"
-                        />
-                      </div>
-                      <button
-                        type="submit"
-                        disabled={searching || !searchTerm.trim()}
-                        className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3.5 text-xs font-bold text-white shadow-soft hover:bg-blue-700 transition active:scale-95 disabled:opacity-50 shrink-0"
-                      >
-                        {searching ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Search className="h-3.5 w-3.5" />
-                        )}
-                        <span>Ara</span>
-                      </button>
-                    </form>
-                  </div>
-
-                  {selectedCard ? (
-                    <div className="rounded-xl border border-blue-200 bg-blue-50/70 dark:border-blue-900/50 dark:bg-blue-950/30 p-2.5 text-xs">
-                      <div className="flex items-center justify-between text-blue-700 dark:text-blue-300 font-semibold mb-0.5">
-                        <span>Seçili Malzeme</span>
-                        <span className="font-mono text-[11px] font-bold">{selectedCard.unit}</span>
-                      </div>
-                      <p className="font-bold text-fg truncate text-xs">{selectedCard.name}</p>
-                      <p className="font-mono text-[11px] text-subtle mt-0.5">{selectedCard.material}</p>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-fg block">
+                    Malzeme Arama
+                  </label>
+                  <form onSubmit={handleSearch} className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
+                      <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="İsim veya ürün kodu..."
+                        className="field-input h-10 pl-9 pr-2 text-xs"
+                      />
                     </div>
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-line bg-elevated/40 p-2.5 text-center text-xs text-subtle">
-                      İsim veya kod yazıp arayın, sağdaki listeden bir malzeme seçin.
-                    </div>
-                  )}
-                </>
+                    <button
+                      type="submit"
+                      disabled={searching || !searchTerm.trim()}
+                      className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3.5 text-xs font-bold text-white shadow-soft hover:bg-blue-700 transition active:scale-95 disabled:opacity-50 shrink-0"
+                    >
+                      {searching ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Search className="h-3.5 w-3.5" />
+                      )}
+                      <span>Ara</span>
+                    </button>
+                  </form>
+                </div>
               )}
 
               {/* TAB 2: BİRİM SEÇİMİ */}
               {activeTab === "unit" && (
-                <>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-fg block">
-                      Birim Seçimi
-                    </label>
-                    <div className="flex items-center gap-4">
-                      {/* Birim Combo Box */}
-                      <div className="relative flex-1">
-                        <select
-                          value={selectedUnit}
-                          onChange={(e) => setSelectedUnit(e.target.value)}
-                          className="field-input h-10 px-3 text-xs font-bold appearance-none bg-surface cursor-pointer pr-8 border-line focus:border-blue-500"
-                        >
-                          <option value="KO">KO</option>
-                          <option value="PK">PK</option>
-                          <option value="AD">AD</option>
-                        </select>
-                        <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle pointer-events-none" />
-                      </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-fg block">
+                    Birim Seçimi
+                  </label>
+                  <div className="flex items-center gap-4">
+                    {/* Birim Combo Box */}
+                    <div className="relative flex-1">
+                      <select
+                        value={selectedUnit}
+                        onChange={(e) => setSelectedUnit(e.target.value)}
+                        className="field-input h-10 px-3 text-xs font-bold appearance-none bg-surface cursor-pointer pr-8 border-line focus:border-blue-500"
+                      >
+                        <option value="KO">KO</option>
+                        <option value="PK">PK</option>
+                        <option value="AD">AD</option>
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle pointer-events-none" />
+                    </div>
 
-                      {/* Combo Box Sağında SADECE Seçilen KO/PK/AD Birimi (Mavi Renkte, Başka Hiçbir Şey Yok) */}
-                      <div className="flex items-center justify-center min-w-[54px]">
-                        <span className="text-2xl font-black font-mono text-blue-600 dark:text-blue-400 tracking-wider">
-                          {selectedUnit}
-                        </span>
-                      </div>
+                    {/* Combo Box Sağında SADECE Seçilen KO/PK/AD Birimi (Mavi Renkte, Başka Hiçbir Şey Yok) */}
+                    <div className="flex items-center justify-center min-w-[54px]">
+                      <span className="text-2xl font-black font-mono text-blue-600 dark:text-blue-400 tracking-wider">
+                        {selectedUnit}
+                      </span>
                     </div>
                   </div>
-
-                  <div className="rounded-xl border border-line bg-elevated/30 p-2.5 text-xs text-subtle">
-                    Seçilen birim oluşturulacak barkod kaydına atanacaktır.
-                  </div>
-                </>
+                </div>
               )}
 
               {/* TAB 3: BARKOD MODU VE GİRİŞİ */}
               {activeTab === "barcode" && (
-                <>
+                <div className="space-y-3">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-fg block">
                       Barkod Seçeneği
@@ -521,7 +498,7 @@ export default function BarcodeGeneratorPage() {
                       onChange={(e) => setCustomBarcode(e.target.value.toUpperCase())}
                       placeholder={
                         barcodeMode === "auto"
-                          ? "Sistem tarafından otomatik atanacak"
+                          ? "Sistem otomatik atayacak"
                           : "Barkod numarasını yazınız..."
                       }
                       className={`field-input h-10 px-3 text-xs font-mono font-bold transition ${barcodeMode === "auto"
@@ -530,7 +507,7 @@ export default function BarcodeGeneratorPage() {
                         }`}
                     />
                   </div>
-                </>
+                </div>
               )}
             </div>
           </div>
