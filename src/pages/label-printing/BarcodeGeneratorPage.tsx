@@ -77,11 +77,11 @@ export default function BarcodeGeneratorPage() {
         if (!bCode) continue;
 
         const unitInfo = formatBarcodeUnitInfo(rawUnit);
-        const key = matCode;
+        const key = `${matCode}_${bCode}_${unitInfo.short}_${rawUnit}`;
         if (!seenKey.has(key)) {
           seenKey.add(key);
           cards.push({
-            id: `${matCode}_${bCode}_${unitInfo.short}`,
+            id: key,
             material: matCode,
             name: name || matCode,
             barcode: bCode,
@@ -383,7 +383,6 @@ export default function BarcodeGeneratorPage() {
     setPrinting(false);
     setRepeatCount(1);
     if (failedCount === 0) {
-      setSuccessMsg(`Seçilen ürün etiketi (${count} kopya) yazdırma isteği iletildi.`);
       setSelectedCards([]);
     } else {
       setErrorMsg(
@@ -398,27 +397,20 @@ export default function BarcodeGeneratorPage() {
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8">
       <PageHeader
-        title="Ürün Barkodu Yazdırma"
-        subtitle="Ürünleri arayın, seçin ve etiket yazdırın"
+        title="Barkod oluşturma"
+        subtitle="Ürünleri arayın, seçin ve barkod oluşturun"
         backTo="/label-printing"
+        right={
+          <button
+            type="button"
+            onClick={handlePrintSelectedGrid}
+            disabled={isPrintDisabled}
+            className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 px-4 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+          >
+            <span>Sonraki Adım {selectedCards.length > 0 ? `(${selectedCards.length})` : ""}</span>
+          </button>
+        }
       />
-
-      {/* YAZDIR BUTONU DEĞİŞECEK---------- */}
-      <div className="flex items-center justify-between gap-3 sm:hidden mb-2">
-        <button
-          type="button"
-          onClick={handlePrintSelectedGrid}
-          disabled={isPrintDisabled}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
-        >
-          {printing ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Printer className="h-4 w-4" />
-          )}
-          <span>Yazdır {selectedCards.length > 0 ? `(${selectedCards.length})` : ""}</span>
-        </button>
-      </div>
 
       {/* 2 Option Segmented Tab Bar */}
       <div className="flex flex-col sm:flex-row rounded-2xl border border-line bg-surface p-1.5 shadow-sm gap-1">
@@ -535,12 +527,13 @@ export default function BarcodeGeneratorPage() {
                     <div>
                       <div className="flex items-center gap-8">
                         <p>{r.name}</p>
+                        <p>{r.unit}</p>
                         <p>{r.material}</p>
                       </div>
                     </div>
 
                     <span
-                      className={`chip text-xs font-bold ml-2 ${selected ? "bg-blue-600 text-white" : "bg-elevated text-subtle"
+                      className={`chip text-xs font-bold ml-1 ${selected ? "bg-blue-600 text-white" : "bg-elevated text-subtle"
                         }`}
                     >
                       {selected ? null : null}
