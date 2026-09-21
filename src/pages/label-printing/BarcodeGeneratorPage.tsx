@@ -193,18 +193,27 @@ export default function BarcodeGeneratorPage() {
         }
       }
 
-      setSearchResults(cards);
+      // Aynı malzeme koduna sahip olanları tekilleştir (her malzeme kodundan sadece 1 kart)
+      const seenMaterial = new Set<string>();
+      const uniqueCards = cards.filter((c) => {
+        const matKey = c.material.trim().toUpperCase();
+        if (!matKey || seenMaterial.has(matKey)) return false;
+        seenMaterial.add(matKey);
+        return true;
+      });
+
+      setSearchResults(uniqueCards);
       setSearchDone(true);
       setActiveTab("unit");
 
-      if (cards.length > 0) {
-        const first = cards[0];
+      if (uniqueCards.length > 0) {
+        const first = uniqueCards[0];
         setSelectedCard(first);
         const u = first.unit.toUpperCase();
         if (u === "KO" || u === "PK" || u === "AD" || u === "KT") {
           setSelectedUnit(u);
         }
-        showToast({ kind: "ok", text: `${cards.length} malzeme bulundu.` });
+        showToast({ kind: "ok", text: `${uniqueCards.length} malzeme bulundu.` });
       } else {
         setSelectedCard(null);
         showToast({ kind: "error", text: "Aranan kriterde ürün bulunamadı." });
@@ -532,23 +541,21 @@ export default function BarcodeGeneratorPage() {
                     key={r.id}
                     id={`product-card-${r.id}`}
                     onClick={() => handleSelectCard(r)}
-                    className={`relative flex cursor-pointer items-center justify-between rounded-2xl border p-3.5 sm:p-4 text-left shadow-card transition-all ${selected
+                    className={`relative flex min-h-[80px] h-[80px] cursor-pointer items-center justify-between rounded-2xl border px-4 py-2.5 text-left shadow-card transition-all ${selected
                       ? "border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30"
                       : "border-line bg-surface hover:border-blue-300"
                       }`}
                   >
-                    <div className="min-w-0 flex-1 pr-3">
-                      <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
-                        <p className="font-semibold text-fg text-xs sm:text-sm">
-                          {r.name}
-                        </p>
-                        <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded-md shrink-0">
-                          {r.unit}
-                        </span>
-                        <p className="text-xs font-mono text-subtle shrink-0">
-                          {r.material}
-                        </p>
-                      </div>
+                    <div className="min-w-0 flex-1 pr-3 flex flex-col justify-center">
+                      <p
+                        className="font-semibold text-fg text-xs sm:text-sm line-clamp-2 leading-snug"
+                        title={r.name}
+                      >
+                        {r.name}
+                      </p>
+                      <p className="text-[11px] sm:text-xs font-mono text-subtle truncate mt-0.5">
+                        {r.material}
+                      </p>
                     </div>
 
                     <span
