@@ -24,7 +24,7 @@ export default function BarcodeGeneratorPage() {
   const [selectedCard, setSelectedCard] = useState<ProductBarcodeCardItem | null>(null);
 
   // Tab 2: Birim Durumu (KO, PK, AD)
-  const [selectedUnit, setSelectedUnit] = useState<string>("AD");
+  const [selectedUnit, setSelectedUnit] = useState<string>("");
 
   // Tab 3: Barkod Modu ve Değeri
   const [barcodeMode, setBarcodeMode] = useState<BarcodeMode>("auto");
@@ -41,6 +41,19 @@ export default function BarcodeGeneratorPage() {
     else if (tst) sesBasarili();
     setToast(tst);
     setTimeout(() => setToast(null), 3500);
+  };
+
+  // Sekme Değişimi Kontrolü (Malzeme seçilmeden Birim'e, Birim seçilmeden Barkod'a geçilemez)
+  const handleTabChange = (tabId: LeftTabType) => {
+    if (tabId === "unit" && !selectedCard) {
+      showToast({ kind: "error", text: "Lütfen önce sağ taraftan bir malzeme seçin." });
+      return;
+    }
+    if (tabId === "barcode" && (!selectedCard || !selectedUnit)) {
+      showToast({ kind: "error", text: "Lütfen önce birim seçin." });
+      return;
+    }
+    setActiveTab(tabId);
   };
 
   // CANIAS MZYGetMaterial detayından veya fallback'lerden malzeme kartlarını üretir
@@ -203,18 +216,13 @@ export default function BarcodeGeneratorPage() {
 
       setSearchResults(uniqueCards);
       setSearchDone(true);
-      setActiveTab("unit");
+      setSelectedCard(null);
+      setSelectedUnit("");
+      setActiveTab("material");
 
       if (uniqueCards.length > 0) {
-        const first = uniqueCards[0];
-        setSelectedCard(first);
-        const u = first.unit.toUpperCase();
-        if (u === "KO" || u === "PK" || u === "AD" || u === "KT") {
-          setSelectedUnit(u);
-        }
-        showToast({ kind: "ok", text: `${uniqueCards.length} malzeme bulundu.` });
+        showToast({ kind: "ok", text: `${uniqueCards.length} malzeme bulundu. Sağ taraftan malzeme seçiniz.` });
       } else {
-        setSelectedCard(null);
         showToast({ kind: "error", text: "Aranan kriterde ürün bulunamadı." });
       }
     } catch (err: unknown) {
@@ -228,7 +236,7 @@ export default function BarcodeGeneratorPage() {
     }
   };
 
-  // Malzeme kartı seçimi
+  // Malzeme kartı seçimi (Sağ taraftan malzeme seçilince Birim tabına atar)
   const handleSelectCard = (item: ProductBarcodeCardItem) => {
     setSelectedCard(item);
 
@@ -241,10 +249,9 @@ export default function BarcodeGeneratorPage() {
       return [moved, ...copy];
     });
 
-    const u = item.unit.toUpperCase();
-    if (u === "KO" || u === "PK" || u === "AD" || u === "KT") {
-      setSelectedUnit(u);
-    }
+    // Kullanıcının birim seçebilmesi için birimi sıfırla ve Birim tabına geç
+    setSelectedUnit("");
+    setActiveTab("unit");
     showToast({ kind: "ok", text: `Seçildi: ${item.name}` });
   };
 
@@ -267,6 +274,12 @@ export default function BarcodeGeneratorPage() {
     if (!selectedCard) {
       showToast({ kind: "error", text: "Lütfen önce listeden bir malzeme seçin." });
       setActiveTab("material");
+      return;
+    }
+
+    if (!selectedUnit) {
+      showToast({ kind: "error", text: "Lütfen önce birim seçin." });
+      setActiveTab("unit");
       return;
     }
 
@@ -322,7 +335,7 @@ export default function BarcodeGeneratorPage() {
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving || !selectedCard}
+            disabled={saving || !selectedCard || !selectedUnit}
             className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-soft hover:bg-blue-700 transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? (
@@ -382,19 +395,23 @@ export default function BarcodeGeneratorPage() {
             {/* 3 Tablı Sekme Barı (Sadece isimler, numara ve tik işareti yok) */}
             <div className="flex items-center justify-center gap-1.5 mb-3">
               {[
-                { id: "material" as const, label: "Malzeme" },
-                { id: "unit" as const, label: "Birim" },
-                { id: "barcode" as const, label: "Barkod" },
+                { id: "material" as const, label: "Malzeme", disabled: false },
+                { id: "unit" as const, label: "Birim", disabled: !selectedCard },
+                { id: "barcode" as const, label: "Barkod", disabled: !selectedCard || !selectedUnit },
               ].map((tab) => {
                 const isActive = activeTab === tab.id;
+                const isDisabled = tab.disabled;
                 return (
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex h-9 min-w-0 flex-1 items-center justify-center truncate rounded-xl px-2 text-[11px] font-bold transition active:scale-95 ${isActive
-                      ? "bg-blue-600 text-white shadow-soft"
-                      : "bg-elevated text-subtle hover:text-fg hover:bg-elevated/80"
+                    disabled={isDisabled}
+                    onClick={() => handleTabChange(tab.id)}
+                    className={`flex h-9 min-w-0 flex-1 items-center justify-center truncate rounded-xl px-2 text-[11px] font-bold transition ${isDisabled
+                      ? "bg-elevated/40 text-subtle/40 cursor-not-allowed opacity-40"
+                      : isActive
+                        ? "bg-blue-600 text-white shadow-soft active:scale-95"
+                        : "bg-elevated text-subtle hover:text-fg hover:bg-elevated/80 active:scale-95"
                       }`}
                   >
                     <span className="truncate">{tab.label}</span>
@@ -445,13 +462,22 @@ export default function BarcodeGeneratorPage() {
                     Birim Seçimi
                   </label>
                   <div className="flex items-center gap-4">
-                    {/* Birim Combo Box */}
+                    {/* Birim Combo Box (Birim seçilince otomatik Barkod tabına atar) */}
                     <div className="relative flex-1">
                       <select
                         value={selectedUnit}
-                        onChange={(e) => setSelectedUnit(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val) {
+                            setSelectedUnit(val);
+                            setActiveTab("barcode");
+                          }
+                        }}
                         className="field-input h-10 px-3 text-xs font-bold appearance-none bg-surface cursor-pointer pr-8 border-line focus:border-blue-500"
                       >
+                        <option value="" disabled>
+                          Birim Seçiniz...
+                        </option>
                         <option value="KO">KO</option>
                         <option value="PK">PK</option>
                         <option value="AD">AD</option>
@@ -463,7 +489,7 @@ export default function BarcodeGeneratorPage() {
                     {/* Combo Box Sağında SADECE Seçilen KO/PK/AD Birimi (Mavi Renkte, Başka Hiçbir Şey Yok) */}
                     <div className="flex items-center justify-center min-w-[54px]">
                       <span className="text-2xl font-black font-mono text-blue-600 dark:text-blue-400 tracking-wider">
-                        {selectedUnit}
+                        {selectedUnit || "-"}
                       </span>
                     </div>
                   </div>
