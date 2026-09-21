@@ -536,73 +536,72 @@ export default function BarcodeGeneratorPage() {
           </div>
         </div>
 
-        {/* SAĞ KOLON: Malzeme Kartları Listesi */}
-
-        {/* Kartlar */}
-        {searching ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((n) => (
-              <div key={n} className="h-16 animate-pulse rounded-2xl bg-elevated/60" />
-            ))}
-          </div>
-        ) : searchResults.length > 0 ? (
-          <div className="space-y-2.5">
-            {searchResults.map((r) => {
-              const selected = selectedCard?.id === r.id;
-              return (
-                <div
-                  key={r.id}
-                  id={`product-card-${r.id}`}
-                  onClick={() => handleSelectCard(r)}
-                  className={`relative flex cursor-pointer items-center justify-between rounded-2xl border p-3.5 sm:p-4 text-left shadow-card transition-all ${selected
-                    ? "border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30"
-                    : "border-line bg-surface hover:border-blue-300"
-                    }`}
-                >
-                  <div className="min-w-0 flex-1 pr-3">
-                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
-                      <p
-                        className="font-semibold text-fg text-xs sm:text-sm truncate max-w-[180px] sm:max-w-xs md:max-w-sm"
-                        title={r.name}
-                      >
-                        {r.name}
-                      </p>
-                      <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded-md shrink-0">
-                        {r.unit}
-                      </span>
-                      <p className="text-xs font-mono text-subtle shrink-0">
-                        {r.material}
-                      </p>
-                    </div>
-                  </div>
-
-                  <span
-                    className={`chip text-xs font-bold shrink-0 ml-1 ${selected
-                      ? "bg-blue-600 text-white shadow-xs"
-                      : "bg-elevated text-subtle"
+        {/* Sağ Kolon: Kartlar */}
+        <div className="min-w-0 space-y-2.5">
+          {searching ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((n) => (
+                <div key={n} className="h-16 animate-pulse rounded-2xl bg-elevated/60" />
+              ))}
+            </div>
+          ) : searchResults.length > 0 ? (
+            <div className="space-y-2.5">
+              {searchResults.map((r) => {
+                const selected = selectedCard?.id === r.id;
+                return (
+                  <div
+                    key={r.id}
+                    id={`product-card-${r.id}`}
+                    onClick={() => handleSelectCard(r)}
+                    className={`relative flex cursor-pointer items-center justify-between rounded-2xl border p-3.5 sm:p-4 text-left shadow-card transition-all ${selected
+                      ? "border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30"
+                      : "border-line bg-surface hover:border-blue-300"
                       }`}
                   >
-                    {selected ? "Seçildi" : "Seç"}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        ) : searchDone ? (
-          <div className="card p-8 text-center">
-            <Package className="h-8 w-8 text-subtle mx-auto mb-2 opacity-50" />
-            <p className="text-xs text-subtle">Aranan kriterde ürün kaydı bulunamadı.</p>
-          </div>
-        ) : (
-          <div className="card p-8 text-center border-dashed">
-            <Package className="h-8 w-8 text-subtle mx-auto mb-2 opacity-40" />
-            <p className="text-xs text-subtle">
-              Arama yapmak için sol taraftaki panelden isim veya malzeme kodu giriniz.
-            </p>
-          </div>
-        )}
+                    <div className="min-w-0 flex-1 pr-3">
+                      <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+                        <p
+                          className="font-semibold text-fg text-xs sm:text-sm truncate max-w-[180px] sm:max-w-xs md:max-w-sm"
+                          title={r.name}
+                        >
+                          {r.name}
+                        </p>
+                        <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded-md shrink-0">
+                          {r.unit}
+                        </span>
+                        <p className="text-xs font-mono text-subtle shrink-0">
+                          {r.material}
+                        </p>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`chip text-xs font-bold shrink-0 ml-1 ${selected
+                        ? "bg-blue-600 text-white shadow-xs"
+                        : "bg-elevated text-subtle"
+                        }`}
+                    >
+                      {selected ? "Seçildi" : "Seç"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : searchDone ? (
+            <div className="card p-8 text-center">
+              <Package className="h-8 w-8 text-subtle mx-auto mb-2 opacity-50" />
+              <p className="text-xs text-subtle">Aranan kriterde ürün kaydı bulunamadı.</p>
+            </div>
+          ) : (
+            <div className="card p-8 text-center border-dashed">
+              <Package className="h-8 w-8 text-subtle mx-auto mb-2 opacity-40" />
+              <p className="text-xs text-subtle">
+                Arama yapmak için sol taraftaki panelden isim veya malzeme kodu giriniz.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
-    </div >
   );
 }
