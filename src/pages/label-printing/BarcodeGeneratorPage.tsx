@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Search, Loader2, Save, ChevronDown, Check, Package, AlertCircle } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
-import AdimBar from "../../components/AdimBar";
 import { api } from "../../api/client";
 import { sesBasarili, sesHata } from "../../sound";
 import {
@@ -380,31 +379,29 @@ export default function BarcodeGeneratorPage() {
         {/* SOL KOLON: Sayfada Sabit/Sticky, 3 Tablı Sabit Ölçülü Kart */}
         <div className="min-w-0 md:sticky md:top-4 md:self-start">
           <div className="card p-1 sm:p-2">
-            {/* 3 Tablı Adım Barı */}
-            <div className="mb-3">
-              <AdimBar
-                fill
-                adimlar={[
-                  {
-                    label: "Malzeme",
-                    active: activeTab === "material",
-                    done: Boolean(selectedCard),
-                    onClick: () => setActiveTab("material"),
-                  },
-                  {
-                    label: "Birim",
-                    active: activeTab === "unit",
-                    done: Boolean(selectedUnit),
-                    onClick: () => setActiveTab("unit"),
-                  },
-                  {
-                    label: "Barkod",
-                    active: activeTab === "barcode",
-                    done: Boolean(barcodeMode === "auto" || (barcodeMode === "manual" && customBarcode.trim())),
-                    onClick: () => setActiveTab("barcode"),
-                  },
-                ]}
-              />
+            {/* 3 Tablı Sekme Barı (Sadece isimler, numara ve tik işareti yok) */}
+            <div className="flex items-center justify-center gap-1.5 mb-3">
+              {[
+                { id: "material" as const, label: "Malzeme" },
+                { id: "unit" as const, label: "Birim" },
+                { id: "barcode" as const, label: "Barkod" },
+              ].map((tab) => {
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex h-9 min-w-0 flex-1 items-center justify-center truncate rounded-xl px-2 text-xs font-bold transition active:scale-95 ${
+                      isActive
+                        ? "bg-blue-600 text-white shadow-soft"
+                        : "bg-elevated text-subtle hover:text-fg hover:bg-elevated/80"
+                    }`}
+                  >
+                    <span className="truncate">{tab.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* TAB İÇERİĞİ: Dinamik Ölçülü Alan */}
