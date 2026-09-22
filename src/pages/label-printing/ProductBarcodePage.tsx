@@ -14,6 +14,7 @@ export interface ProductBarcodeCardItem {
   unit: string;
   unitLabel: string;
   isSearchedBarcode?: boolean;
+  availableUnits?: string[];
 }
 
 export function formatBarcodeUnitInfo(rawUnit: string): {

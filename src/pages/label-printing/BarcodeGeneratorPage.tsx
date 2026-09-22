@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Loader2, Save, ChevronDown, Check, Package, AlertCircle } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import { api } from "../../api/client";
@@ -23,13 +23,25 @@ export default function BarcodeGeneratorPage() {
   const [searchResults, setSearchResults] = useState<ProductBarcodeCardItem[]>([]);
   const [selectedCard, setSelectedCard] = useState<ProductBarcodeCardItem | null>(null);
 
-  // Tab 2: Birim Durumu (KO, PK, AD)
+  // Tab 2: Birim Durumu (Sadece seçilen malzemenin sahip olduğu birimler)
   const [selectedUnit, setSelectedUnit] = useState<string>("");
 
   // Tab 3: Barkod Modu, Değeri ve Yazdırma Sayısı
   const [barcodeMode, setBarcodeMode] = useState<BarcodeMode>(null);
   const [customBarcode, setCustomBarcode] = useState("");
   const [printCount, setPrintCount] = useState<number>(1);
+
+  // Seçilen malzemenin CANIAS'ta sahip olduğu geçerli birimler
+  const currentAvailableUnits = useMemo(() => {
+    if (!selectedCard) return [];
+    const list =
+      selectedCard.availableUnits && selectedCard.availableUnits.length > 0
+        ? selectedCard.availableUnits
+        : selectedCard.unit
+          ? [selectedCard.unit]
+          : [];
+    return Array.from(new Set(list.map((u) => u.trim().toUpperCase()))).filter(Boolean);
+  }, [selectedCard]);
 
   // Bildirim ve Kaydetme Durumları
   const [saving, setSaving] = useState(false);
@@ -81,6 +93,30 @@ export default function BarcodeGeneratorPage() {
     }
 
     const rawBarcodeList = Array.isArray(matDetail.barcodeList) ? matDetail.barcodeList : [];
+    const rawUnitList = Array.isArray(matDetail.unitList) ? matDetail.unitList : [];
+
+    // Malzemenin CANIAS'ta tanımlı tüm geçerli birimlerini topla (TBLUNITLIST, TBLBARCODELIST, matList)
+    const unitSet = new Set<string>();
+    if (baseUnit) unitSet.add(baseUnit.trim().toUpperCase());
+
+    for (const u of rawUnitList) {
+      const uCode = String(u.QUNIT || u.UNIT || u.BUNIT || u.IUNIT || u.TUNIT || "").trim().toUpperCase();
+      if (uCode) unitSet.add(uCode);
+    }
+
+    for (const b of rawBarcodeList) {
+      const bUnit = String(
+        b.BUNIT || b.UNIT || b.BARCODEUNIT || b.B_UNIT || b.QUNIT || b.SKUNIT || b.unit || ""
+      ).trim().toUpperCase();
+      if (bUnit) unitSet.add(bUnit);
+    }
+
+    if (initialUnit?.trim()) {
+      unitSet.add(initialUnit.trim().toUpperCase());
+    }
+
+    const availableUnits = Array.from(unitSet).filter(Boolean);
+
     const cards: ProductBarcodeCardItem[] = [];
     const seenKey = new Set<string>();
 
@@ -104,6 +140,7 @@ export default function BarcodeGeneratorPage() {
           unit: unitInfo.short,
           unitLabel: unitInfo.label,
           isSearchedBarcode: searchedBarcode ? bCode.toLowerCase() === searchedBarcode.toLowerCase() : false,
+          availableUnits,
         });
       }
     }
@@ -119,6 +156,7 @@ export default function BarcodeGeneratorPage() {
         unit: unitInfo.short,
         unitLabel: unitInfo.label,
         isSearchedBarcode: false,
+        availableUnits,
       });
     }
 
@@ -479,14 +517,22 @@ export default function BarcodeGeneratorPage() {
                 </div>
               )}
 
-              {/* TAB 2: BİRİM SEÇİMİ */}
+              {/* TAB 2: BİRİM SEÇİMİ (Sadece seçilen malzemenin sahip olduğu birimler sorulur) */}
               {activeTab === "unit" && (
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-fg block">
-                    Birim Seçimi
-                  </label>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-fg block">
+                      Birim Seçimi
+                    </label>
+                    {currentAvailableUnits.length > 0 && (
+                      <span className="text-[10px] text-subtle font-semibold">
+                        {currentAvailableUnits.length} birim tanımlı
+                      </span>
+                    )}
+                  </div>
+
                   <div className="flex items-center gap-4">
-                    {/* Birim Combo Box (Birim seçilince otomatik Barkod tabına atar) */}
+                    {/* Birim Combo Box (SADECE bu malzemenin sahip olduğu birimler listelenir) */}
                     <div className="relative flex-1">
                       <select
                         value={selectedUnit}
@@ -500,23 +546,64 @@ export default function BarcodeGeneratorPage() {
                         className="field-input h-10 px-3 text-xs font-bold appearance-none bg-surface cursor-pointer pr-8 border-line focus:border-blue-500"
                       >
                         <option value="" disabled>
-                          Birim Seçiniz...
+                          {currentAvailableUnits.length > 0
+                            ? "Birim Seçiniz..."
+                            : "Tanımlı birim bulunamadı"}
                         </option>
-                        <option value="KO">KO</option>
-                        <option value="PK">PK</option>
-                        <option value="AD">AD</option>
-                        <option value="KT">KT</option>
+                        {currentAvailableUnits.map((u) => (
+                          <option key={u} value={u}>
+                            {u}
+                          </option>
+                        ))}
                       </select>
                       <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle pointer-events-none" />
                     </div>
 
-                    {/* Combo Box Sağında SADECE Seçilen KO/PK/AD Birimi (Mavi Renkte, Başka Hiçbir Şey Yok) */}
+                    {/* Combo Box Sağında SADECE Seçilen Birim (Mavi Renkte) */}
                     <div className="flex items-center justify-center min-w-[54px]">
                       <span className="text-2xl font-black font-mono text-blue-600 dark:text-blue-400 tracking-wider">
                         {selectedUnit || "-"}
                       </span>
                     </div>
                   </div>
+
+                  {/* Hızlı Seçim Butonları (Tek tıkla birimi seçip Barkod sekmesine geçer) */}
+                  {currentAvailableUnits.length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <span className="text-[11px] text-subtle font-medium block">
+                        Veya hızlıca seçin:
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {currentAvailableUnits.map((u) => {
+                          const isSelected = selectedUnit === u;
+                          return (
+                            <button
+                              key={u}
+                              type="button"
+                              onClick={() => {
+                                setSelectedUnit(u);
+                                setActiveTab("barcode");
+                              }}
+                              className={`flex-1 min-w-[55px] h-9 rounded-xl border text-xs font-bold font-mono transition active:scale-95 flex items-center justify-center gap-1.5 ${
+                                isSelected
+                                  ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                                  : "bg-elevated text-fg border-line hover:border-blue-500/50 hover:bg-elevated/80"
+                              }`}
+                            >
+                              <span>{u}</span>
+                              {isSelected && <Check className="h-3.5 w-3.5" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {currentAvailableUnits.length === 0 && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                      Bu malzeme için CANIAS sisteminde tanımlı birim bulunamadı.
+                    </p>
+                  )}
                 </div>
               )}
 

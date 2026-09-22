@@ -1780,7 +1780,17 @@ export const api = {
     if (tblBarcodes.length) {
       barcodeList = tblBarcodes;
     }
-    const unitList = unwrapRows(wmsRoot.TBLUNITLIST ?? dataObj.TBLUNITLIST);
+    let unitList = unwrapRows(
+      wmsRoot.TBLUNITLIST ??
+      dataObj.TBLUNITLIST ??
+      wmsRoot.UNITLIST ??
+      dataObj.UNITLIST ??
+      wmsRoot.TBLUNITS ??
+      dataObj.TBLUNITS
+    );
+    if (!unitList.length) {
+      unitList = rowsOf(r, ["TBLUNITLIST", "UNITLIST", "TBLUNITS", "UNITS", "IASMATUNIT", "MATUNITS"]);
+    }
 
     // MatSize (CANIAS ölçüleri TBLMATSIZ veya TBLMATSIZE altında döndürür)
     const tblMatSize = unwrapRows(
