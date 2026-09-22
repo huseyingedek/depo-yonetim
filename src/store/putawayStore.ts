@@ -4,7 +4,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { api } from "../api/client";
-import type { PickOrder } from "../types";
+import type { PickOrder, StockBatch } from "../types";
 import { caniasDateTime } from "./pickingStore";
 import {
   validateSource,
@@ -31,6 +31,11 @@ interface PutawayState {
 
   pendingProduct: { barcode: string; adet: number; material: string; name: string } | null;
 
+  // Toplama ekranındaki gibi: bekleyen ürünün kaynak depo+stok yerindeki partileri.
+  batchList: StockBatch[];
+  batchLoading: boolean;
+  batchError: string | null;
+
   loadOrder: (id: string, orderType?: string) => Promise<{ ok: boolean; message?: string }>;
   clear: () => void;
 
@@ -56,6 +61,9 @@ export const usePutawayStore = create<PutawayState>()(
       ready: null,
       records: [],
       pendingProduct: null,
+      batchList: [],
+      batchLoading: false,
+      batchError: null,
 
       loadOrder: async (id, orderType = "") => {
         set({ loading: true });
@@ -64,7 +72,7 @@ export const usePutawayStore = create<PutawayState>()(
           const order = await api.enterPutaway(id, orderType);
           // PDSTARTTIME: saat emir YÜKLENİNCE değil, ilk ürün okutulunca (Enter) başlar.
           orderWithStart = order ? { ...order, startTime: undefined } : null;
-          set({ order: orderWithStart, loading: false, source: null, ready: null, records: [], pendingProduct: null });
+          set({ order: orderWithStart, loading: false, source: null, ready: null, records: [], pendingProduct: null, batchList: [], batchLoading: false, batchError: null });
         } catch (e) {
           set({ order: null, loading: false });
           return { ok: false, message: e instanceof Error ? e.message : String(e) };
@@ -80,7 +88,7 @@ export const usePutawayStore = create<PutawayState>()(
         return { ok: true };
       },
 
-      clear: () => set({ order: null, source: null, ready: null, records: [], pendingProduct: null }),
+      clear: () => set({ order: null, source: null, ready: null, records: [], pendingProduct: null, batchList: [], batchLoading: false, batchError: null }),
 
       scanSource: async (barcode) => {
         const order = get().order;
@@ -112,10 +120,15 @@ export const usePutawayStore = create<PutawayState>()(
         const yerlesen = Math.max(order.lines.find((l) => l.product.code === scan.material)?.pickedQty ?? 0, oturumKayit);
         const { outcome, ready } = evaluatePlacementScan({ order, source, scan, adet, alreadyPlaced: yerlesen });
         if (outcome.kind === "needsBatch") {
-          set({ pendingProduct: { barcode: kod, adet, material: scan.material, name: scan.name } });
+          set({ pendingProduct: { barcode: kod, adet, material: scan.material, name: scan.name }, batchList: [], batchError: null, batchLoading: true });
+          // Toplama ekranıyla aynı: kaynak depo + stok yerindeki partileri listele (MZYGetStock).
+          api
+            .getStock(scan.material, source.warehouse, source.stockPlace)
+            .then((batches) => { if (get().pendingProduct?.barcode === kod) set({ batchList: batches, batchLoading: false }); })
+            .catch((e) => { if (get().pendingProduct?.barcode === kod) set({ batchError: e instanceof Error ? e.message : String(e), batchLoading: false }); });
           return outcome;
         }
-        if (outcome.kind === "ok" && ready) set({ ready, pendingProduct: null });
+        if (outcome.kind === "ok" && ready) set({ ready, pendingProduct: null, batchList: [], batchLoading: false, batchError: null });
         return outcome;
       },
 
@@ -126,7 +139,7 @@ export const usePutawayStore = create<PutawayState>()(
         const scan = await api.readBarcode(p.barcode, source.warehouse, source.stockPlace, p.adet, batchDate);
         const yerlesen = order.lines.find((l) => l.product.code === scan.material)?.pickedQty ?? 0;
         const { outcome, ready } = evaluatePlacementScan({ order, source, scan, adet: p.adet, batchDate, alreadyPlaced: yerlesen });
-        if (outcome.kind === "ok" && ready) set({ ready, pendingProduct: null });
+        if (outcome.kind === "ok" && ready) set({ ready, pendingProduct: null, batchList: [], batchLoading: false, batchError: null });
         return outcome;
       },
 
@@ -217,7 +230,7 @@ export const usePutawayStore = create<PutawayState>()(
         return { ok: true, message: "" };
       },
 
-      clearReady: () => set({ ready: null, pendingProduct: null }),
+      clearReady: () => set({ ready: null, pendingProduct: null, batchList: [], batchLoading: false, batchError: null }),
 
       removeRecord: (id) => set({ records: get().records.filter((r) => r.id !== id) }),
     }),

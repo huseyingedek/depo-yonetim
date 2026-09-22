@@ -6,7 +6,7 @@ import PageHeader from "../../components/PageHeader";
 import BarcodeScanner from "../../components/BarcodeScanner";
 import AdimBar from "../../components/AdimBar";
 import { usePutawayStore } from "../../store/putawayStore";
-import { isoDateToBatch } from "../../store/pickingLogic";
+import { isoDateToBatch, qtyRound } from "../../store/pickingLogic";
 import { sesBasarili, sesHata } from "../../sound";
 
 type Toast = { kind: "ok" | "done" | "error"; text: string } | null;
@@ -25,6 +25,9 @@ export default function PutawayItemPage() {
   const ready = usePutawayStore((s) => s.ready);
   const records = usePutawayStore((s) => s.records);
   const pending = usePutawayStore((s) => s.pendingProduct);
+  const batchList = usePutawayStore((s) => s.batchList);
+  const batchLoading = usePutawayStore((s) => s.batchLoading);
+  const batchError = usePutawayStore((s) => s.batchError);
   const loadOrder = usePutawayStore((s) => s.loadOrder);
   const scanSource = usePutawayStore((s) => s.scanSource);
   const scanTarget = usePutawayStore((s) => s.scanTarget);
@@ -305,10 +308,39 @@ export default function PutawayItemPage() {
 
             {}
             {pending && (
-              <div className="mb-3 flex items-center gap-2 rounded-xl bg-elevated px-3 py-2">
-                <span className="shrink-0 text-xs font-medium text-muted">Tarih seç</span>
-                <input type="date" onChange={(e) => setPartiPrefill(isoDateToBatch(e.target.value))} className="h-8 flex-1 rounded-lg border border-line bg-surface px-2 font-mono text-sm text-fg outline-none focus:border-brand-500" />
-              </div>
+              <>
+                {/* Parti seç — kaynak depo + stok yerindeki partiler (toplamadaki gibi) */}
+                <div className="mb-3 rounded-xl bg-elevated px-3 py-2">
+                  <span className="mb-1 block text-xs font-medium text-muted">Parti seç (kaynaktaki stok)</span>
+                  <select
+                    value=""
+                    disabled={batchList.length === 0 || busy}
+                    onChange={(e) => { if (e.target.value) handleDetected(e.target.value); }}
+                    className="h-9 w-full rounded-lg border border-line bg-surface px-2 font-mono text-sm text-fg outline-none focus:border-brand-500 disabled:opacity-70"
+                  >
+                    {batchList.length > 0 ? (
+                      <>
+                        <option value="" disabled>Parti seçin…</option>
+                        {batchList.map((b) => (
+                          <option key={b.batchNum} value={b.batchNum}>
+                            {b.batchNum} — {qtyRound(b.availStock)} {b.unit}
+                          </option>
+                        ))}
+                      </>
+                    ) : (
+                      <option value="" disabled>
+                        {batchLoading ? "Yükleniyor…" : batchError ? `Veri yüklenemedi — ${batchError}` : "Parti bulunamadı"}
+                      </option>
+                    )}
+                  </select>
+                </div>
+
+                {/* Tarih ile parti gir (elle) — barkod alanına ön-doldurur */}
+                <div className="mb-3 flex items-center gap-2 rounded-xl bg-elevated px-3 py-2">
+                  <span className="shrink-0 text-xs font-medium text-muted">Tarih seç</span>
+                  <input type="date" onChange={(e) => setPartiPrefill(isoDateToBatch(e.target.value))} className="h-8 flex-1 rounded-lg border border-line bg-surface px-2 font-mono text-sm text-fg outline-none focus:border-brand-500" />
+                </div>
+              </>
             )}
 
             {}
