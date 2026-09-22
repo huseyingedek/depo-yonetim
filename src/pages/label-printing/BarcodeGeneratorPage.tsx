@@ -94,18 +94,18 @@ export default function BarcodeGeneratorPage() {
     setActiveTab(tabId);
   };
 
-// Türkçe karakter duyarsız arama normalizasyonu
-function trNormalize(str: string): string {
-  return str
-    .toLocaleLowerCase("tr-TR")
-    .replace(/ı/g, "i")
-    .replace(/ş/g, "s")
-    .replace(/ğ/g, "g")
-    .replace(/ü/g, "u")
-    .replace(/ö/g, "o")
-    .replace(/ç/g, "c")
-    .trim();
-}
+  // Türkçe karakter duyarsız arama normalizasyonu
+  function trNormalize(str: string): string {
+    return str
+      .toLocaleLowerCase("tr-TR")
+      .replace(/ı/g, "i")
+      .replace(/ş/g, "s")
+      .replace(/ğ/g, "g")
+      .replace(/ü/g, "u")
+      .replace(/ö/g, "o")
+      .replace(/ç/g, "c")
+      .trim();
+  }
 
   // CANIAS MZYGetMaterial detayından malzeme kartlarını üretir 
   async function fetchCardsForMaterial(
@@ -715,7 +715,7 @@ function trNormalize(str: string): string {
                       <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle pointer-events-none" />
                     </div>
 
-                    {/* Combo Box Sağında SADECE Seçilen Birim (Mavi Renkte) */}
+                    {/* Combo Box Sağında SADECE Seçilen Birim */}
                     <div className="flex items-center justify-center min-w-[54px]">
                       <span className="text-2xl font-black font-mono text-blue-600 dark:text-blue-400 tracking-wider">
                         {selectedUnit || "-"}
