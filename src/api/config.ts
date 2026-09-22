@@ -34,6 +34,7 @@ export const SERVICES = {
   printWHSP: "MZYPrintWHSP", // Raf / Konteyner / Parti etiket yazdırma
   printMaterial: "MZYPrintMaterial", // Ürün barkodu etiket yazdırma
   printBarcode: "MZYPrintBarcode", // SKT / Parti barkod etiket yazdırma
+  createBarcode: "MZYCreateBarcode", // Barkod oluşturma servisi
 
   // Mal Kabul Servisleri
   getOpenOrder: "MZYGetOpenOrder", // Açık satın alma siparişleri listesi

@@ -26,9 +26,10 @@ export default function BarcodeGeneratorPage() {
   // Tab 2: Birim Durumu (KO, PK, AD)
   const [selectedUnit, setSelectedUnit] = useState<string>("");
 
-  // Tab 3: Barkod Modu ve Değeri (Seçilmeden kaydetme yapılamaz)
+  // Tab 3: Barkod Modu, Değeri ve Yazdırma Sayısı
   const [barcodeMode, setBarcodeMode] = useState<BarcodeMode>(null);
   const [customBarcode, setCustomBarcode] = useState("");
+  const [printCount, setPrintCount] = useState<number>(1);
 
   // Bildirim ve Kaydetme Durumları
   const [saving, setSaving] = useState(false);
@@ -313,26 +314,28 @@ export default function BarcodeGeneratorPage() {
     setSaving(true);
 
     try {
-      const barcodeToSave =
-        barcodeMode === "manual"
-          ? customBarcode.trim()
-          : (selectedCard.barcode || `${selectedCard.material}-${selectedUnit}`);
+      const isAuto = barcodeMode === "auto";
+      const newBarcode = isAuto ? "" : customBarcode.trim();
 
-      // CANIAS MZYPrintMaterial veya barkod servisine kaydetme bildirimi
-      const res = await api.printMaterial({
+      // CANIAS MZYCreateBarcode servisine kaydetme bildirimi
+      // PARAMETRELER: PSCOMPANY, PSMATERIAL, PSUNIT, PIAUTOGENERATE, PSNEWBARCODE, PIPRINTCOUNT, PITRACESTATUS
+      const res = await api.createBarcode({
         company: "01",
-        plant: "100",
-        barcode: barcodeToSave,
+        material: selectedCard.material,
         unit: selectedUnit,
-        repeat: 1,
+        autoGenerate: isAuto ? 1 : 0,
+        newBarcode: newBarcode,
+        printCount: printCount,
       });
 
       if (res.ok) {
-        const okText = `Barkod (${barcodeToSave}) başarıyla oluşturuldu ve kaydedildi!`;
+        const assignedCode = res.barcode || (!isAuto ? newBarcode : "Sıradaki Numara");
+        const printText = printCount > 0 ? ` ve ${printCount} adet etiket yazdırıldı` : "";
+        const okText = `Barkod (${assignedCode}) başarıyla oluşturuldu${printText}!`;
         setSuccessMsg(okText);
         showToast({ kind: "done", text: okText });
       } else {
-        const errText = res.message || "Barkod kaydedilirken bir sorun oluştu.";
+        const errText = res.message || "Barkod oluşturulurken bir sorun oluştu.";
         setErrorMsg(errText);
         showToast({ kind: "error", text: errText });
       }
@@ -572,6 +575,50 @@ export default function BarcodeGeneratorPage() {
                         : "border-blue-300 dark:border-blue-800 text-fg focus:border-blue-600"
                         }`}
                     />
+                  </div>
+
+                  {/* Yazdırılacak Etiket Sayısı (PIPRINTCOUNT) */}
+                  <div className="pt-1 border-t border-line/50">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-semibold text-subtle">
+                        Etiket Baskı Adedi
+                      </label>
+                      <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                        {printCount === 0 ? "Yazdırılmayacak (0)" : `${printCount} adet basılacak`}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPrintCount((prev) => Math.max(0, prev - 1))}
+                        disabled={printCount <= 0}
+                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-elevated text-fg font-bold hover:bg-elevated/80 transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min={0}
+                        max={99}
+                        value={printCount}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          setPrintCount(isNaN(val) ? 0 : Math.min(99, Math.max(0, val)));
+                        }}
+                        className="field-input h-9 text-center font-bold font-mono text-xs flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setPrintCount((prev) => Math.min(99, prev + 1))}
+                        disabled={printCount >= 99}
+                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-elevated text-fg font-bold hover:bg-elevated/80 transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-subtle mt-1">
+                      * 0 girilirse yalnızca sisteme barkod tanımlanır, etiket yazdırılmaz.
+                    </p>
                   </div>
                 </div>
               )}

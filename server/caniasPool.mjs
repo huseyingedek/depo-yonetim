@@ -23,6 +23,8 @@ const YAZAN_SERVIS = new Set([
   "MZYPrintWHSP",
   "MZYPrintMaterial",
   "MZYPrintBarcode",
+  "MZYCreateBarcode",
+  "MzyCreateBarcode",
   "MzySetMatSize",
   "MZYSetMatSize",
   "MZYSaveReceipt",

@@ -75,6 +75,8 @@ const ALLOWED = new Set([
   "MZYPrintWHSP",
   "MZYPrintMaterial",
   "MZYPrintBarcode",
+  "MZYCreateBarcode",
+  "MzyCreateBarcode",
 
   // Mal Kabul Servisleri
   "MZYGetOpenOrder",
@@ -311,6 +313,8 @@ async function callServiceInner(serviceId, params, retry = true) {
     serviceId === "MZYPrintWHSP" ||
     serviceId === "MZYPrintMaterial" ||
     serviceId === "MZYPrintBarcode" ||
+    serviceId === "MZYCreateBarcode" ||
+    serviceId === "MzyCreateBarcode" ||
     serviceId === "MzySetMatSize" ||
     serviceId === "MZYSetMatSize" ||
     serviceId === "MZYSaveReceipt" ||

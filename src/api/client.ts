@@ -1609,6 +1609,72 @@ export const api = {
     return { ok: true, message: mesaj || "SKT / Barkod etiket yazdırma isteği CANIAS sunucusuna iletildi." };
   },
 
+  // 5. MZYCreateBarcode - Barkod Oluştur
+  // PARAMETRELER: PSCOMPANY, PSMATERIAL, PSUNIT, PIAUTOGENERATE, PSNEWBARCODE, PIPRINTCOUNT, PITRACESTATUS
+  async createBarcode(payload: {
+    company?: string;
+    material: string;
+    unit: string;
+    autoGenerate: boolean | number;
+    newBarcode?: string;
+    printCount?: number;
+  }): Promise<{
+    ok: boolean;
+    message: string;
+    barcode?: string;
+    raw?: Record<string, unknown>;
+  }> {
+    const c = ctx();
+    const isTrace = useAppStore.getState().trace;
+    const matStr = (payload.material || "").trim();
+    if (!matStr) {
+      throw new WmsError("Malzeme kodu belirtilmelidir.");
+    }
+    const unitStr = (payload.unit || "").trim().toUpperCase();
+    if (!unitStr) {
+      throw new WmsError("Birim belirtilmelidir.");
+    }
+
+    const isAuto = payload.autoGenerate === true || payload.autoGenerate === 1;
+    const newBarcodeStr = (payload.newBarcode || "").trim();
+    if (!isAuto && !newBarcodeStr) {
+      throw new WmsError("Manuel barkod modunda yeni barkod değeri boş bırakılamaz.");
+    }
+
+    const printCount = Math.max(0, Math.min(99, Number(payload.printCount ?? 0)));
+
+    const r = await call(SERVICES.createBarcode, {
+      PSCOMPANY: String(payload.company ?? c.company ?? "01").trim(),
+      PSMATERIAL: matStr,
+      PSUNIT: unitStr,
+      PIAUTOGENERATE: isAuto ? 1 : 0,
+      PSNEWBARCODE: isAuto ? "" : newBarcodeStr,
+      PIPRINTCOUNT: printCount,
+      PITRACESTATUS: isTrace ? 1 : 0,
+    });
+
+    const mesaj = serviceMessage(r);
+    if (mesaj && /error|fail|hata/i.test(mesaj)) {
+      return { ok: false, message: mesaj };
+    }
+
+    const dataObj = (r.data || {}) as Record<string, unknown>;
+    const createdBarcode = String(
+      dataObj.NEWBARCODE ||
+      dataObj.PSNEWBARCODE ||
+      dataObj.BARCODE ||
+      dataObj.CREATEDBARCODE ||
+      (isAuto ? "" : newBarcodeStr)
+    ).trim();
+
+    return {
+      ok: true,
+      message: mesaj || "Barkod başarıyla oluşturuldu.",
+      barcode: createdBarcode || (isAuto ? undefined : newBarcodeStr),
+      raw: dataObj,
+    };
+  },
+
   // ---------------------------------------------------------------------------
   // MAL KABUL (GOODS RECEIPT) SERVİSLERİ
   // ---------------------------------------------------------------------------
