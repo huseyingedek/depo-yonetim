@@ -56,80 +56,72 @@ export default function BarcodeGeneratorPage() {
     setActiveTab(tabId);
   };
 
-  // CANIAS MZYGetMaterial detayından veya fallback'lerden malzeme kartlarını üretir
+  // CANIAS MZYGetMaterial detayından malzeme kartlarını üretir (hata durumunda fallback kart üretilmez, hata fırlatılır)
   async function fetchCardsForMaterial(
     matCode: string,
-    fallbackName = "",
-    fallbackUnit = "AD",
+    initialName = "",
+    initialUnit = "AD",
     searchedBarcode = ""
   ): Promise<ProductBarcodeCardItem[]> {
-    try {
-      const matDetail = await api.getMaterialDetail(matCode);
-      let name = fallbackName;
-      let baseUnit = fallbackUnit;
+    const matDetail = await api.getMaterialDetail(matCode);
+    let name = initialName;
+    let baseUnit = initialUnit;
 
-      if (matDetail.ok && Array.isArray(matDetail.matList) && matDetail.matList.length > 0) {
-        const m = matDetail.matList[0];
-        name = String(m.STEXT || m.MTEXT || m.NAME1 || m.NAME || name || matCode).trim();
-        baseUnit = String(m.QUNIT || m.UNIT || m.IUNIT || baseUnit).trim().toUpperCase();
-      }
+    const hasMat = matDetail.ok && Array.isArray(matDetail.matList) && matDetail.matList.length > 0;
+    if (hasMat) {
+      const m = matDetail.matList[0];
+      name = String(m.STEXT || m.MTEXT || m.NAME1 || m.NAME || name || "").trim();
+      baseUnit = String(m.QUNIT || m.UNIT || m.IUNIT || baseUnit).trim().toUpperCase();
+    }
 
-      const rawBarcodeList = Array.isArray(matDetail.barcodeList) ? matDetail.barcodeList : [];
-      const cards: ProductBarcodeCardItem[] = [];
-      const seenKey = new Set<string>();
+    // Malzeme ne CANIAS detayında ne de stok listesinde mevcut değilse sahte fallback kartı üretme
+    if (!hasMat && !initialName) {
+      return [];
+    }
 
-      for (const b of rawBarcodeList) {
-        const bCode = String(b.BARCODE || b.barcode || b.BARCODENUM || b.EAN || b.CODE || "").trim();
-        const rawUnit = String(
-          b.BUNIT || b.UNIT || b.BARCODEUNIT || b.B_UNIT || b.QUNIT || b.SKUNIT || b.unit || baseUnit
-        ).trim().toUpperCase();
+    const rawBarcodeList = Array.isArray(matDetail.barcodeList) ? matDetail.barcodeList : [];
+    const cards: ProductBarcodeCardItem[] = [];
+    const seenKey = new Set<string>();
 
-        if (!bCode) continue;
+    for (const b of rawBarcodeList) {
+      const bCode = String(b.BARCODE || b.barcode || b.BARCODENUM || b.EAN || b.CODE || "").trim();
+      const rawUnit = String(
+        b.BUNIT || b.UNIT || b.BARCODEUNIT || b.B_UNIT || b.QUNIT || b.SKUNIT || b.unit || baseUnit
+      ).trim().toUpperCase();
 
-        const unitInfo = formatBarcodeUnitInfo(rawUnit);
-        const key = `${matCode}_${bCode}_${unitInfo.short}_${rawUnit}`;
-        if (!seenKey.has(key)) {
-          seenKey.add(key);
-          cards.push({
-            id: key,
-            material: matCode,
-            name: name || matCode,
-            barcode: bCode,
-            unit: unitInfo.short,
-            unitLabel: unitInfo.label,
-            isSearchedBarcode: searchedBarcode ? bCode.toLowerCase() === searchedBarcode.toLowerCase() : false,
-          });
-        }
-      }
+      if (!bCode) continue;
 
-      if (cards.length === 0) {
-        const unitInfo = formatBarcodeUnitInfo(baseUnit);
+      const unitInfo = formatBarcodeUnitInfo(rawUnit);
+      const key = `${matCode}_${bCode}_${unitInfo.short}_${rawUnit}`;
+      if (!seenKey.has(key)) {
+        seenKey.add(key);
         cards.push({
-          id: `${matCode}_${matCode}_${unitInfo.short}`,
+          id: key,
           material: matCode,
           name: name || matCode,
-          barcode: matCode,
+          barcode: bCode,
           unit: unitInfo.short,
           unitLabel: unitInfo.label,
-          isSearchedBarcode: searchedBarcode ? matCode.toLowerCase() === searchedBarcode.toLowerCase() : false,
+          isSearchedBarcode: searchedBarcode ? bCode.toLowerCase() === searchedBarcode.toLowerCase() : false,
         });
       }
-
-      return cards;
-    } catch {
-      const unitInfo = formatBarcodeUnitInfo(fallbackUnit);
-      return [
-        {
-          id: `${matCode}_${matCode}_${unitInfo.short}`,
-          material: matCode,
-          name: fallbackName || matCode,
-          barcode: matCode,
-          unit: unitInfo.short,
-          unitLabel: unitInfo.label,
-          isSearchedBarcode: searchedBarcode ? matCode.toLowerCase() === searchedBarcode.toLowerCase() : false,
-        },
-      ];
     }
+
+    // Malzeme ERP'de mevcut ama henüz tanımlı hiç barkodu yoksa malzeme kartı oluştur
+    if (cards.length === 0 && (hasMat || initialName)) {
+      const unitInfo = formatBarcodeUnitInfo(baseUnit);
+      cards.push({
+        id: `${matCode}_${unitInfo.short}`,
+        material: matCode,
+        name: name || matCode,
+        barcode: "",
+        unit: unitInfo.short,
+        unitLabel: unitInfo.label,
+        isSearchedBarcode: false,
+      });
+    }
+
+    return cards;
   }
 
   // 1. Sekme: İsim veya Ürün Kodu ile Malzeme Arama
@@ -150,18 +142,24 @@ export default function BarcodeGeneratorPage() {
 
     try {
       let cards: ProductBarcodeCardItem[] = [];
+      let apiError: string | null = null;
 
-      // A) Doğrudan malzeme detayı çağrısı
+      // A) Doğrudan malzeme detayı / barkod çağrısı
       try {
         const directCards = await fetchCardsForMaterial(term);
-        if (directCards.length > 0 && directCards[0].name !== directCards[0].material) {
+        if (directCards.length > 0) {
           cards = directCards;
         }
-      } catch {
-        // Devam et
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        apiError = msg;
+        // Bağlantı / sunucu hatalarında hemen fırlat
+        if (/bağlantı|cevaplanmadı|proxy|zaman aşımı|fetch|500|network/i.test(msg)) {
+          throw err;
+        }
       }
 
-      // B) Eğer doğrudan bulunamadıysa veya eksikse stok sorgusu (isim ve koda göre)
+      // B) Eğer doğrudan bulunamadıysa stok sorgusu (isim ve koda göre)
       if (cards.length === 0) {
         try {
           const allStock = await api.queryStock({});
@@ -188,21 +186,31 @@ export default function BarcodeGeneratorPage() {
             );
             cards = cardGroups.flat();
           }
-        } catch {
-          // Devam et
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (!apiError) apiError = msg;
+          if (/bağlantı|cevaplanmadı|proxy|zaman aşımı|fetch|500|network/i.test(msg)) {
+            throw err;
+          }
         }
       }
 
-      // C) Hala kart bulunamadıysa barkod okuyucu fallback
+      // C) Hala kart bulunamadıysa barkod okuyucu
       if (cards.length === 0) {
         try {
           const readRes = await api.readBarcode(term);
           if (readRes.ok && readRes.material) {
             cards = await fetchCardsForMaterial(readRes.material, readRes.name, readRes.unit, term);
           }
-        } catch {
-          // Devam et
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (!apiError) apiError = msg;
         }
+      }
+
+      // Eğer hiç kart bulunamadıysa ve bir hata oluştuysa hata mesajını fırlat
+      if (cards.length === 0 && apiError) {
+        throw new Error(apiError);
       }
 
       // Aynı malzeme koduna sahip olanları tekilleştir (her malzeme kodundan sadece 1 kart)
