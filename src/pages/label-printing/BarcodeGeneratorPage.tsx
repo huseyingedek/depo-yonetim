@@ -681,15 +681,10 @@ function trNormalize(str: string): string {
               {/* TAB 2: BİRİM SEÇİMİ (Sadece seçilen malzemenin sahip olduğu birimler sorulur) */}
               {activeTab === "unit" && (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div>
                     <label className="text-xs font-bold text-fg block">
                       Birim Seçimi
                     </label>
-                    {currentAvailableUnits.length > 0 && (
-                      <span className="text-[10px] text-subtle font-semibold">
-                        {currentAvailableUnits.length} birim tanımlı
-                      </span>
-                    )}
                   </div>
 
                   <div className="flex items-center gap-4">
