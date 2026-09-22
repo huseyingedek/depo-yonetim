@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Loader2, Save, ChevronDown, Check, Package, AlertCircle } from "lucide-react";
+import { Loader2, Save, ChevronDown, Check, Package, AlertCircle } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import { api } from "../../api/client";
 import { sesBasarili, sesHata } from "../../sound";
@@ -453,8 +453,8 @@ export default function BarcodeGeneratorPage() {
                         type="text"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Açıklama veya ürün kodu"
-                        className="field-input h-10 w-full text-xs"
+                        placeholder="Açıklama veya ürün kodu girin"
+                        className="field-input h-10 w-full px-1.5 text-[12px] placeholder:text-[12px]"
                       />
                     </div>
                     <button
