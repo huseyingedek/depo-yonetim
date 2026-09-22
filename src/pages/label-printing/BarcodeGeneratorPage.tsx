@@ -56,7 +56,7 @@ export default function BarcodeGeneratorPage() {
     setActiveTab(tabId);
   };
 
-  // CANIAS MZYGetMaterial detayından malzeme kartlarını üretir (hata durumunda fallback kart üretilmez, hata fırlatılır)
+  // CANIAS MZYGetMaterial detayından malzeme kartlarını üretir 
   async function fetchCardsForMaterial(
     matCode: string,
     initialName = "",
