@@ -36,7 +36,7 @@ export default function BarcodeGeneratorPage() {
   // Tab 3: Barkod Modu, Değeri ve Yazdırma Sayısı
   const [barcodeMode, setBarcodeMode] = useState<BarcodeMode>(null);
   const [customBarcode, setCustomBarcode] = useState("");
-  const [printCount, setPrintCount] = useState<number>(1);
+  const [printCount, setPrintCount] = useState<number | string>(1);
 
   // Seçilen malzemenin CANIAS'ta sahip olduğu geçerli birimler
   const currentAvailableUnits = useMemo(() => {
@@ -416,18 +416,20 @@ function trNormalize(str: string): string {
 
       // CANIAS MZYCreateBarcode servisine kaydetme bildirimi
       // PARAMETRELER: PSCOMPANY, PSMATERIAL, PSUNIT, PIAUTOGENERATE, PSNEWBARCODE, PIPRINTCOUNT, PITRACESTATUS
+      const count = printCount === "" ? 0 : Number(printCount);
+
       const res = await api.createBarcode({
         company: "01",
         material: selectedCard.material,
         unit: selectedUnit,
         autoGenerate: isAuto ? 1 : 0,
         newBarcode: newBarcode,
-        printCount: printCount,
+        printCount: count,
       });
 
       if (res.ok) {
         const assignedCode = res.barcode || (!isAuto ? newBarcode : "Sıradaki Numara");
-        const printText = printCount > 0 ? ` ve ${printCount} adet etiket yazdırıldı` : "";
+        const printText = count > 0 ? ` ve ${count} adet etiket yazdırıldı` : "";
         const okText = `Barkod (${assignedCode}) başarıyla oluşturuldu${printText}!`;
         setSuccessMsg(okText);
         showToast({ kind: "done", text: okText });
@@ -447,38 +449,122 @@ function trNormalize(str: string): string {
 
   return (
     <div className="mx-auto max-w-6xl p-3 sm:p-4 lg:p-6 space-y-4">
-      {/* HEADER: Başlık ve En Sağda Mavi Kaydet Butonu */}
+      {/* HEADER: Başlık ve En Sağda Kopya + Mavi Kaydet Butonu */}
       <PageHeader
         title="Barkod Oluşturma"
         subtitle="Ürün seçin, birim ve barkod parametrelerini belirleyin"
         backTo="/label-printing"
         right={
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={
-              saving ||
-              !selectedCard ||
-              !selectedUnit ||
-              !barcodeMode ||
-              (barcodeMode === "manual" && !customBarcode.trim())
-            }
-            className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-soft hover:bg-blue-700 transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Kaydediliyor...</span>
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                <span>Kaydet</span>
-              </>
-            )}
-          </button>
+          <div className="hidden sm:flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
+              <input
+                type="number"
+                min={0}
+                max={99}
+                value={printCount}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "") {
+                    setPrintCount("");
+                    return;
+                  }
+                  const v = parseInt(val, 10);
+                  if (!isNaN(v)) {
+                    setPrintCount(Math.min(99, Math.max(0, v)));
+                  }
+                }}
+                onBlur={() => {
+                  if (printCount === "") {
+                    setPrintCount(0);
+                  }
+                }}
+                className="field-input w-16 py-1.5 px-2 text-center text-xs font-bold"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={
+                saving ||
+                !selectedCard ||
+                !selectedUnit ||
+                !barcodeMode ||
+                (barcodeMode === "manual" && !customBarcode.trim())
+              }
+              className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-soft hover:bg-blue-700 transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Kaydediliyor...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  <span>Kaydet</span>
+                </>
+              )}
+            </button>
+          </div>
         }
       />
+
+      {/* Mobile Action Bar */}
+      <div className="flex items-center justify-between gap-3 sm:hidden mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
+          <input
+            type="number"
+            min={0}
+            max={99}
+            value={printCount}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === "") {
+                setPrintCount("");
+                return;
+              }
+              const v = parseInt(val, 10);
+              if (!isNaN(v)) {
+                setPrintCount(Math.min(99, Math.max(0, v)));
+              }
+            }}
+            onBlur={() => {
+              if (printCount === "") {
+                setPrintCount(0);
+              }
+            }}
+            className="field-input w-20 py-1.5 px-2 text-center text-xs font-bold"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={
+            saving ||
+            !selectedCard ||
+            !selectedUnit ||
+            !barcodeMode ||
+            (barcodeMode === "manual" && !customBarcode.trim())
+          }
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 py-2 text-xs font-bold text-white shadow-soft hover:bg-blue-700 transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saving ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Kaydediliyor...</span>
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4" />
+              <span>Kaydet</span>
+            </>
+          )}
+        </button>
+      </div>
 
       {/* Toast Bildirimi */}
       {toast && (
@@ -689,50 +775,6 @@ function trNormalize(str: string): string {
                         : "border-blue-300 dark:border-blue-800 text-fg focus:border-blue-600"
                         }`}
                     />
-                  </div>
-
-                  {/* Yazdırılacak Etiket Sayısı (PIPRINTCOUNT) */}
-                  <div className="pt-1 border-t border-line/50">
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[11px] font-semibold text-subtle">
-                        Etiket Baskı Adedi
-                      </label>
-                      <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
-                        {printCount === 0 ? "Yazdırılmayacak (0)" : `${printCount} adet basılacak`}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setPrintCount((prev) => Math.max(0, prev - 1))}
-                        disabled={printCount <= 0}
-                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-elevated text-fg font-bold hover:bg-elevated/80 transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        -
-                      </button>
-                      <input
-                        type="number"
-                        min={0}
-                        max={99}
-                        value={printCount}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value, 10);
-                          setPrintCount(isNaN(val) ? 0 : Math.min(99, Math.max(0, val)));
-                        }}
-                        className="field-input h-9 text-center font-bold font-mono text-xs flex-1"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setPrintCount((prev) => Math.min(99, prev + 1))}
-                        disabled={printCount >= 99}
-                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-elevated text-fg font-bold hover:bg-elevated/80 transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        +
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-subtle mt-1">
-                      * 0 girilirse yalnızca sisteme barkod tanımlanır, etiket yazdırılmaz.
-                    </p>
                   </div>
                 </div>
               )}
