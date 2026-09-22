@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Loader2, Save, ChevronDown, Check, Package, AlertCircle } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import { api } from "../../api/client";
@@ -20,6 +21,17 @@ type BarcodeMode = "auto" | "manual" | null;
 type Toast = { kind: "ok" | "done" | "error"; text: string } | null;
 
 export default function BarcodeGeneratorPage() {
+  const navigate = useNavigate();
+  const redirectTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
+
   // Sol Kart Sekme Durumu
   const [activeTab, setActiveTab] = useState<LeftTabType>("material");
 
@@ -36,7 +48,7 @@ export default function BarcodeGeneratorPage() {
   // Tab 3: Barkod Modu, Değeri ve Yazdırma Sayısı
   const [barcodeMode, setBarcodeMode] = useState<BarcodeMode>(null);
   const [customBarcode, setCustomBarcode] = useState("");
-  const [printCount, setPrintCount] = useState<number | string>(1);
+  const [printCount, setPrintCount] = useState<number | string>(0);
 
   // Seçilen malzemenin CANIAS'ta sahip olduğu geçerli birimler
   const currentAvailableUnits = useMemo(() => {
@@ -433,6 +445,10 @@ function trNormalize(str: string): string {
         const okText = `Barkod (${assignedCode}) başarıyla oluşturuldu${printText}!`;
         setSuccessMsg(okText);
         showToast({ kind: "done", text: okText });
+
+        redirectTimerRef.current = setTimeout(() => {
+          navigate("/label-printing");
+        }, 3500);
       } else {
         const errText = res.message || "Barkod oluşturulurken bir sorun oluştu.";
         setErrorMsg(errText);
