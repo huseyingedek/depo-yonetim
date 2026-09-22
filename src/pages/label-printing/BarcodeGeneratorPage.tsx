@@ -8,6 +8,13 @@ import {
   formatBarcodeUnitInfo,
 } from "./ProductBarcodePage";
 
+const NON_BARCODE_UNITS = new Set([
+  "KG", "GR", "G", "MG", "TON",
+  "DS", "DESI",
+  "M", "M2", "M3", "CM", "MM",
+  "L", "LT", "ML"
+]);
+
 type LeftTabType = "material" | "unit" | "barcode";
 type BarcodeMode = "auto" | "manual" | null;
 type Toast = { kind: "ok" | "done" | "error"; text: string } | null;
@@ -40,7 +47,13 @@ export default function BarcodeGeneratorPage() {
         : selectedCard.unit
           ? [selectedCard.unit]
           : [];
-    return Array.from(new Set(list.map((u) => u.trim().toUpperCase()))).filter(Boolean);
+    return Array.from(
+      new Set(
+        list
+          .map((u) => (formatBarcodeUnitInfo(u).short || u).trim().toUpperCase())
+          .filter((u) => u && !NON_BARCODE_UNITS.has(u))
+      )
+    );
   }, [selectedCard]);
 
   // Bildirim ve Kaydetme Durumları
@@ -73,7 +86,7 @@ export default function BarcodeGeneratorPage() {
   async function fetchCardsForMaterial(
     matCode: string,
     initialName = "",
-    initialUnit = "AD",
+    initialUnit = "",
     searchedBarcode = ""
   ): Promise<ProductBarcodeCardItem[]> {
     const matDetail = await api.getMaterialDetail(matCode);
@@ -84,7 +97,8 @@ export default function BarcodeGeneratorPage() {
     if (hasMat) {
       const m = matDetail.matList[0];
       name = String(m.STEXT || m.MTEXT || m.NAME1 || m.NAME || name || "").trim();
-      baseUnit = String(m.QUNIT || m.UNIT || m.IUNIT || baseUnit).trim().toUpperCase();
+      const qUnit = String(m.QUNIT || m.UNIT || m.IUNIT || "").trim().toUpperCase();
+      if (qUnit) baseUnit = qUnit;
     }
 
     // Malzeme ne CANIAS detayında ne de stok listesinde mevcut değilse sahte fallback kartı üretme
@@ -95,27 +109,40 @@ export default function BarcodeGeneratorPage() {
     const rawBarcodeList = Array.isArray(matDetail.barcodeList) ? matDetail.barcodeList : [];
     const rawUnitList = Array.isArray(matDetail.unitList) ? matDetail.unitList : [];
 
-    // Malzemenin CANIAS'ta tanımlı tüm geçerli birimlerini topla (TBLUNITLIST, TBLBARCODELIST, matList)
-    const unitSet = new Set<string>();
-    if (baseUnit) unitSet.add(baseUnit.trim().toUpperCase());
-
-    for (const u of rawUnitList) {
-      const uCode = String(u.QUNIT || u.UNIT || u.BUNIT || u.IUNIT || u.TUNIT || "").trim().toUpperCase();
-      if (uCode) unitSet.add(uCode);
-    }
+    // Malzemenin CANIAS barkodlarında tanımlı birimlerini topla
+    const barcodeUnitSet = new Set<string>();
 
     for (const b of rawBarcodeList) {
-      const bUnit = String(
+      const rawUnit = String(
         b.BUNIT || b.UNIT || b.BARCODEUNIT || b.B_UNIT || b.QUNIT || b.SKUNIT || b.unit || ""
       ).trim().toUpperCase();
-      if (bUnit) unitSet.add(bUnit);
+      if (!rawUnit || NON_BARCODE_UNITS.has(rawUnit)) continue;
+      const uShort = formatBarcodeUnitInfo(rawUnit).short || rawUnit;
+      if (uShort && !NON_BARCODE_UNITS.has(uShort)) {
+        barcodeUnitSet.add(uShort);
+      }
     }
 
-    if (initialUnit?.trim()) {
-      unitSet.add(initialUnit.trim().toUpperCase());
+    // Eğer malzemenin CANIAS'ta henüz hiç tanımlı barkodu yoksa, ana birimi veya TBLUNITLIST'teki paket birimlerini al
+    if (barcodeUnitSet.size === 0) {
+      if (baseUnit && !NON_BARCODE_UNITS.has(baseUnit)) {
+        const uShort = formatBarcodeUnitInfo(baseUnit).short || baseUnit;
+        if (!NON_BARCODE_UNITS.has(uShort)) barcodeUnitSet.add(uShort);
+      }
+      for (const u of rawUnitList) {
+        const uCode = String(u.QUNIT || u.UNIT || u.BUNIT || u.IUNIT || u.TUNIT || "").trim().toUpperCase();
+        if (uCode && !NON_BARCODE_UNITS.has(uCode)) {
+          const uShort = formatBarcodeUnitInfo(uCode).short || uCode;
+          if (!NON_BARCODE_UNITS.has(uShort)) barcodeUnitSet.add(uShort);
+        }
+      }
+      if (initialUnit && !NON_BARCODE_UNITS.has(initialUnit)) {
+        const uShort = formatBarcodeUnitInfo(initialUnit).short || initialUnit;
+        if (!NON_BARCODE_UNITS.has(uShort)) barcodeUnitSet.add(uShort);
+      }
     }
 
-    const availableUnits = Array.from(unitSet).filter(Boolean);
+    const availableUnits = Array.from(barcodeUnitSet).filter(Boolean);
 
     const cards: ProductBarcodeCardItem[] = [];
     const seenKey = new Set<string>();
