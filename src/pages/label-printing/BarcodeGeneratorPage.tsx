@@ -567,38 +567,6 @@ export default function BarcodeGeneratorPage() {
                     </div>
                   </div>
 
-                  {/* Hızlı Seçim Butonları (Tek tıkla birimi seçip Barkod sekmesine geçer) */}
-                  {currentAvailableUnits.length > 0 && (
-                    <div className="space-y-1.5 pt-1">
-                      <span className="text-[11px] text-subtle font-medium block">
-                        Veya hızlıca seçin:
-                      </span>
-                      <div className="flex flex-wrap gap-2">
-                        {currentAvailableUnits.map((u) => {
-                          const isSelected = selectedUnit === u;
-                          return (
-                            <button
-                              key={u}
-                              type="button"
-                              onClick={() => {
-                                setSelectedUnit(u);
-                                setActiveTab("barcode");
-                              }}
-                              className={`flex-1 min-w-[55px] h-9 rounded-xl border text-xs font-bold font-mono transition active:scale-95 flex items-center justify-center gap-1.5 ${
-                                isSelected
-                                  ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-                                  : "bg-elevated text-fg border-line hover:border-blue-500/50 hover:bg-elevated/80"
-                              }`}
-                            >
-                              <span>{u}</span>
-                              {isSelected && <Check className="h-3.5 w-3.5" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
                   {currentAvailableUnits.length === 0 && (
                     <p className="text-[11px] text-amber-600 dark:text-amber-400">
                       Bu malzeme için CANIAS sisteminde tanımlı birim bulunamadı.
