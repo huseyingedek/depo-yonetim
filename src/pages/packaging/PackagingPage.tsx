@@ -68,30 +68,6 @@ export interface PackOrder {
   tblItem?: unknown;
 }
 
-function parseTblItem(raw: unknown): KaynakUrun[] {
-  if (!raw) return [];
-  if (Array.isArray(raw)) {
-    return raw.map((r, i) => ({
-      code: String(r.MATERIAL || r.MATCODE || r.CODE || `URUN-${i + 1}`).trim(),
-      name: String(r.MTEXT || r.MATNAME || r.NAME || r.STEXT || `Ürün ${i + 1}`).trim(),
-      unit: String(r.SKUNIT || r.UNIT || "AD").trim(),
-      siparis: Number(r.QTY || r.QUANTITY || r.ORDERQTY || 1) || 1,
-      desi: Number(r.VOLUME || r.DESI || 0.1) || 0.1,
-      kg: Number(r.WEIGHT || r.NETWEIGHT || r.GROSSWEIGHT || 0.5) || 0.5,
-      paketli: Boolean(r.ISPACKED || r.PACKED),
-    }));
-  }
-  if (typeof raw === "string" && raw.trim().startsWith("[")) {
-    try {
-      const arr = JSON.parse(raw);
-      if (Array.isArray(arr)) return parseTblItem(arr);
-    } catch {
-      // ignore
-    }
-  }
-  return [];
-}
-
 const HAZARDS: { id: Hazard; label: string; icon: typeof Flame; cls: string }[] = [
   { id: "kirilabilir", label: "Kırılabilir", icon: GlassWater, cls: "border-yellow-300 bg-yellow-50 text-yellow-800 dark:border-yellow-500/30 dark:bg-yellow-950/40 dark:text-yellow-300" },
   { id: "yanici", label: "Yanıcı", icon: Flame, cls: "border-rose-400/60 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-950/40 dark:text-rose-300" },
@@ -101,12 +77,6 @@ const HAZARDS: { id: Hazard; label: string; icon: typeof Flame; cls: string }[] 
   { id: "bozulur", label: "Bozulur", icon: Clock, cls: "border-green-400/60 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-950/40 dark:text-green-300" },
 ];
 
-const VARSAYILAN_URUNLER: KaynakUrun[] = [
-  { code: "SV101", name: "Fotokopi Kağıdı A4 80Gr Beyaz", unit: "PK", siparis: 20, desi: 1.19, kg: 2.55 },
-  { code: "ZZ2328", name: "Koton Baskılı Koli Bandı 45X100", unit: "AD", siparis: 40, desi: 0.076, kg: 0.0075 },
-  { code: "NC013", name: "Nescafe Gold Kavanoz Kahve 200Gr", unit: "AD", siparis: 120, desi: 0.6, kg: 0.25 },
-  { code: "UL105", name: "Ülker Çubuk Kraker Paketi 40Gr", unit: "PK", siparis: 360, desi: 0.05, kg: 0.04, paketli: true },
-];
 
 // Koli boyutları — CANIAS resmi verileri (KOL00, KOL01, KOL02, KOL03, KOL04, KOL07)
 export interface KoliBoyutTanimi {
@@ -331,22 +301,6 @@ function temizle(ns: Node[]): Node[] {
   return ns.filter((n) => n.tur !== "urun" || n.qty > 0).map((n) => (n.tur === "urun" ? n : ({ ...n, cocuklar: temizle(n.cocuklar) } as Node)));
 }
 
-function baslangic(): Node[] {
-  return [
-    {
-      uid: "plt1", tur: "palet", ad: "Palet 1",
-      cocuklar: [
-        {
-          uid: "k1", tur: "koli", no: 1, kod: "KOL01", hacim: boyutHacim(1), dara: boyutBul(1)?.dara ?? 0, hazards: ["kirilabilir"],
-          cocuklar: [
-            { uid: "up1", tur: "urun", code: "SV101", name: "Fotokopi Kağıdı A4 80Gr Beyaz", qty: 6, unit: "PK", desi: 1.19, kg: 2.55 },
-          ],
-        },
-      ],
-    },
-  ];
-}
-
 // sürükleme durumu (modül seviyesi)
 let drag: { kind: "node"; uid: string } | { kind: "kaynak"; code: string } | null = null;
 
@@ -355,8 +309,8 @@ export default function PackagingPage() {
   const idRef = useRef(100);
   const yid = () => `x${++idRef.current}`;
 
-  const [sahne, setSahne] = useState<Node[]>(baslangic);
-  const [seciliKapId, setSeciliKapId] = useState<string | null>("k1");
+  const [sahne, setSahne] = useState<Node[]>([]);
+  const [seciliKapId, setSeciliKapId] = useState<string | null>(null);
   const [atilMod, setAtilMod] = useState(false);
   const [dropHedef, setDropHedef] = useState<string | null>(null);
   const [bitti, setBitti] = useState(false);
@@ -365,33 +319,54 @@ export default function PackagingPage() {
   // CANIAS MZYListingPack Servisi — Paketlenecek Emirler & Ürünler
   const [emirler, setEmirler] = useState<PackOrder[]>([]);
   const [seciliEmir, setSeciliEmir] = useState<PackOrder | null>(null);
-  const [urunler, setUrunler] = useState<KaynakUrun[]>(VARSAYILAN_URUNLER);
+  const [urunler, setUrunler] = useState<KaynakUrun[]>([]);
   const [yukleniyor, setYukleniyor] = useState(false);
-  const [kaynakTuru, setKaynakTuru] = useState<"canias" | "varsayilan">("varsayilan");
+  const [kaynakTuru, setKaynakTuru] = useState<"canias" | "varsayilan">("canias");
 
-  const emirSec = (emir: PackOrder) => {
+  const emirSec = async (emir: PackOrder) => {
     setSeciliEmir(emir);
-    const parsed = parseTblItem(emir.tblItem);
-    if (parsed.length > 0) {
-      setUrunler(parsed);
-      setKaynakTuru("canias");
-    } else if (emir.orderNum === "847786") {
-      setUrunler(VARSAYILAN_URUNLER);
-      setKaynakTuru("canias");
-    } else {
-      setUrunler([
-        { code: `M-${emir.orderNum}-01`, name: `${emir.customer.slice(0, 24)} Kalem 1`, unit: "AD", siparis: Math.max(1, emir.itemCount), desi: 0.5, kg: 1.2 },
-        { code: `M-${emir.orderNum}-02`, name: `${emir.customer.slice(0, 24)} Kalem 2`, unit: "PK", siparis: 10, desi: 1.2, kg: 2.5 },
-      ]);
-      setKaynakTuru("canias");
+    setSahne([]);
+    setSeciliKapId(null);
+    setYukleniyor(true);
+    try {
+      // CANIAS MZYGetStock ile bu siparişin stok yerindeki (Örn: SO-847786) GERÇEK malzemelerini çek
+      const sp = emir.stockPlace || `SO-${emir.orderNum}`;
+      const stocks = await wmsApi.queryStock({
+        warehouse: "10",
+        stockPlace: sp,
+        container: true,
+        onlyPickWarehouse: false,
+      });
+
+      if (stocks && stocks.length > 0) {
+        const caniasUrunler: KaynakUrun[] = stocks.map((s) => ({
+          code: s.material,
+          name: s.name || s.material,
+          unit: s.unit || "AD",
+          siparis: s.availStock || 1,
+          desi: 0.2,
+          kg: 0.5,
+        }));
+        setUrunler(caniasUrunler);
+        setKaynakTuru("canias");
+        show({ kind: "ok", text: `${emir.orderType}-${emir.orderNum} için ${caniasUrunler.length} kalem malzeme CANIAS'tan yüklendi` });
+      } else {
+        setUrunler([]);
+        setKaynakTuru("canias");
+        show({ kind: "info", text: `${emir.orderType}-${emir.orderNum} stok yerinde açık malzeme bulunamadı` });
+      }
+    } catch (err) {
+      console.warn("queryStock hatası:", err);
+      setUrunler([]);
+    } finally {
+      setYukleniyor(false);
     }
-    show({ kind: "ok", text: `${emir.orderType}-${emir.orderNum} (${emir.customer}) seçildi` });
   };
 
   const listeGetir = async () => {
     setYukleniyor(true);
     try {
-      // CANIAS Depo 10 üzerinden paketlenecek emirleri çek
+      // CANIAS Depo 10 üzerinden paketlenecek açık emirleri çek
       const rows = await wmsApi.getPackagingList({ warehouse: "10" });
       if (rows && rows.length > 0) {
         const yeniEmirler: PackOrder[] = rows.map((r) => ({
@@ -409,29 +384,20 @@ export default function PackagingPage() {
           tblItem: r.TBLITEM,
         }));
         setEmirler(yeniEmirler);
-
-        // KOTON (847786) veya ilk emri varsayılan olarak seç
-        const secilecek = yeniEmirler.find((e) => e.orderNum === "847786") || yeniEmirler[0];
-        setSeciliEmir(secilecek);
-
-        const parsed = parseTblItem(secilecek.tblItem);
-        if (parsed.length > 0) {
-          setUrunler(parsed);
-        } else {
-          setUrunler(VARSAYILAN_URUNLER);
-        }
+        // Otomatik sipariş seçilmez, kullanıcı kendisi seçer (F5 temiz gelir)
+        setSeciliEmir(null);
+        setUrunler([]);
         setKaynakTuru("canias");
-        show({ kind: "ok", text: `CANIAS Depo 10'dan ${yeniEmirler.length} paketleme emri getirildi` });
       } else {
         setEmirler([]);
-        setUrunler(VARSAYILAN_URUNLER);
-        setKaynakTuru("varsayilan");
+        setSeciliEmir(null);
+        setUrunler([]);
       }
     } catch (err) {
       console.warn("MZYListingPack hatası:", err);
       setEmirler([]);
-      setUrunler(VARSAYILAN_URUNLER);
-      setKaynakTuru("varsayilan");
+      setSeciliEmir(null);
+      setUrunler([]);
     } finally {
       setYukleniyor(false);
     }
@@ -627,37 +593,44 @@ export default function PackagingPage() {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 xl:flex-nowrap">
           {/* Sevkiyat Seçimi / CANIAS Paketleme Emri */}
           <div className="flex min-w-0 items-center gap-1.5">
-            {emirler.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="rounded-md bg-brand-100 px-1.5 py-0.5 text-[11px] font-black text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">
-                  {seciliEmir ? `${seciliEmir.orderType}-${seciliEmir.orderNum}` : "SO-847786"}
-                </span>
-                <select
-                  value={seciliEmir?.orderNum || ""}
-                  onChange={(e) => {
-                    const found = emirler.find((x) => x.orderNum === e.target.value);
-                    if (found) emirSec(found);
-                  }}
-                  className="max-w-[210px] truncate rounded-lg border border-line bg-surface px-2 py-1 text-xs font-bold text-fg focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  title="CANIAS Paketlenecek Sipariş Seçin"
-                >
-                  {emirler.map((e) => (
-                    <option key={e.orderNum} value={e.orderNum}>
-                      {e.orderType}-{e.orderNum} · {e.customer.slice(0, 22)} ({e.itemCount} klm)
-                    </option>
-                  ))}
-                </select>
-                {seciliEmir?.delNum && (
-                  <span className="hidden font-mono text-[10px] text-subtle xl:inline" title="Teslimat Kodu">
-                    {seciliEmir.delNum}
-                  </span>
-                )}
-              </div>
-            ) : (
-              <p className="flex min-w-0 items-center gap-1.5 text-sm font-extrabold text-fg">
-                <span className="rounded-md bg-brand-100 px-1.5 py-0.5 text-[11px] font-black text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">SO-847786</span>
-                <span className="truncate">KOTON MAĞAZACILIK</span>
-              </p>
+            <select
+              value={seciliEmir?.orderNum || ""}
+              onChange={(e) => {
+                const found = emirler.find((x) => x.orderNum === e.target.value);
+                if (found) {
+                  emirSec(found);
+                } else {
+                  setSeciliEmir(null);
+                  setUrunler([]);
+                  setSahne([]);
+                  setSeciliKapId(null);
+                }
+              }}
+              className="max-w-[280px] truncate rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-bold text-fg focus:outline-none focus:ring-1 focus:ring-brand-500"
+              title="CANIAS Paketlenecek Sipariş Seçin"
+            >
+              <option value="">
+                {yukleniyor
+                  ? "CANIAS emirleri yükleniyor..."
+                  : emirler.length > 0
+                  ? `-- Paketlenecek Sevkiyatı Seçiniz (${emirler.length} Açık) --`
+                  : "-- Açık Paketleme Emri Yok --"}
+              </option>
+              {emirler.map((e) => (
+                <option key={e.orderNum} value={e.orderNum}>
+                  {e.orderType}-{e.orderNum} · {e.customer.slice(0, 24)} ({e.itemCount} klm)
+                </option>
+              ))}
+            </select>
+            {seciliEmir && (
+              <span className="rounded-md bg-brand-100 px-1.5 py-0.5 text-[11px] font-black text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">
+                {seciliEmir.orderType}-{seciliEmir.orderNum}
+              </span>
+            )}
+            {seciliEmir?.delNum && (
+              <span className="hidden font-mono text-[10px] text-subtle xl:inline" title="Teslimat Kodu">
+                {seciliEmir.delNum}
+              </span>
             )}
           </div>
 
@@ -731,8 +704,12 @@ export default function PackagingPage() {
               <div className="flex flex-wrap gap-0">
                 {sahne.length === 0 && (
                   <div className="flex w-full flex-col items-center justify-center gap-2 py-16 text-subtle">
-                    <Package className="h-9 w-9" />
-                    <p className="text-sm">Boş — soldan palet/koli ekle ya da sağdan ürün sürükle</p>
+                    <Package className="h-9 w-9 text-subtle/50" />
+                    <p className="text-sm font-medium">
+                      {seciliEmir
+                        ? "Paketleme alanı boş — yukarıdan palet veya koli ekleyip sağdaki ürünleri sürükleyin"
+                        : "Paketlemeye başlamak için yukarıdan bir sevkiyat seçin, ardından palet veya koli ekleyin"}
+                    </p>
                   </div>
                 )}
                 {sahne.map((n) => <KartNode key={n.uid} node={n} api={api} parentTur="sahne" />)}
@@ -771,15 +748,40 @@ export default function PackagingPage() {
               </div>
             </div>
             <div className="max-h-[calc(100vh-200px)] space-y-2 overflow-y-auto p-2.5">
-              {yukleniyor ? (
+              {!seciliEmir ? (
+                <div className="flex flex-col items-center justify-center gap-2 py-8 text-center text-subtle">
+                  <Package className="h-8 w-8 text-subtle/50" />
+                  <p className="text-xs font-semibold text-fg">Sevkiyat Seçilmedi</p>
+                  <p className="text-[11px] text-subtle">Paketlenecek ürünleri listelemek için yukarıdan bir sevkiyat seçin.</p>
+                  {emirler.length > 0 && (
+                    <div className="mt-3 flex w-full flex-col gap-1.5 text-left">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-subtle px-1">Açık Sevkiyatlar ({emirler.length})</span>
+                      {emirler.map((e) => (
+                        <button
+                          key={e.orderNum}
+                          type="button"
+                          onClick={() => emirSec(e)}
+                          className="flex items-center justify-between gap-1.5 rounded-xl border border-line bg-surface p-2 text-xs transition hover:border-brand-400 hover:bg-brand-50/40 active:scale-95 dark:hover:bg-brand-500/10"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <span className="font-bold text-brand-600 block truncate">{e.orderType}-{e.orderNum}</span>
+                            <span className="text-[10px] text-subtle truncate block">{e.customer}</span>
+                          </div>
+                          <span className="rounded bg-elevated px-1.5 py-0.5 text-[10px] font-bold text-fg shrink-0">{e.itemCount} klm</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : yukleniyor ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-12 text-subtle">
                   <RotateCw className="h-6 w-6 animate-spin text-brand-600" />
-                  <p className="text-xs">CANIAS'tan paketlenecekler alınıyor...</p>
+                  <p className="text-xs">CANIAS'tan malzemeler alınıyor...</p>
                 </div>
               ) : urunler.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-2 py-12 text-subtle">
+                <div className="flex flex-col items-center justify-center gap-2 py-12 text-subtle text-center">
                   <Package className="h-8 w-8 text-subtle/50" />
-                  <p className="text-xs font-medium">Paketlenecek ürün bulunamadı</p>
+                  <p className="text-xs font-medium">Bu sevkiyatta açık paketlenecek ürün kalmadı</p>
                 </div>
               ) : (
                 urunler.map((k) => {
