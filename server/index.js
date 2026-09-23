@@ -205,9 +205,14 @@ async function login() {
           p_strUserName: WMS_USER,
           p_strPassword: WMS_PASSWORD,
         });
-        const sessionId = val(res?.loginReturn ?? res);
+        const rawLogin = res?.loginReturn;
+        let sessionId = typeof rawLogin === "string" ? rawLogin : rawLogin?.$value ?? val(rawLogin ?? res);
+        if (typeof sessionId === "object" && sessionId !== null) {
+          sessionId = sessionId.$value || JSON.stringify(sessionId);
+        }
         if (!sessionId || typeof sessionId !== "string" || /error|fail|hata/i.test(sessionId)) {
-          throw new Error("CANIAS login başarısız: " + (sessionId || "bilinmeyen hata"));
+          console.error("CANIAS login hatası detayı:", JSON.stringify(res, null, 2));
+          throw new Error("CANIAS login başarısız: " + (sessionId || JSON.stringify(res) || "bilinmeyen hata"));
         }
         session = { sessionId, securityKey: "", at: Date.now() };
       } else {
