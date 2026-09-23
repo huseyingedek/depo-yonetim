@@ -881,7 +881,7 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
               <div className="flex items-center gap-1">
                 <p className="font-mono text-[10px] font-bold text-fg flex items-center gap-2">
                   <span>{urunSay(koli)} ürün</span>
-                  <span title={`İçerik desisi: ${icDesiYuvarlanmis} ds (ham: ${fmt(icDesiHam)})`}>İçerik {icDesiYuvarlanmis} ds</span>
+                  <span title={`Koli Desisi: ${kDesi} ds (İçerik: ${icDesiYuvarlanmis} ds)`}>{kDesi} ds</span>
                   <span title={`Toplam brüt ağırlık: ${fmt(toplamKg)} kg (Koli darası: ${fmt(daraKg)} kg)`}>{fmt(toplamKg)} kg</span>
                 </p>
                 <button
@@ -914,7 +914,7 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
               <div className="flex items-center gap-1">
                 <p className="font-mono text-[11px] font-bold text-fg flex items-center gap-2">
                   <span>{urunSay(koli)} ürün</span>
-                  <span title={`İçerik desisi: ${icDesiYuvarlanmis} ds (ham: ${fmt(icDesiHam)})`}>İçerik {icDesiYuvarlanmis} ds</span>
+                  <span title={`Koli Desisi: ${kDesi} ds (İçerik: ${icDesiYuvarlanmis} ds)`}>{kDesi} ds</span>
                   <span title={`Toplam brüt ağırlık: ${fmt(toplamKg)} kg (Koli darası: ${fmt(daraKg)} kg)`}>{fmt(toplamKg)} kg</span>
                 </p>
                 <button
