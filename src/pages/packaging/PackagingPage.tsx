@@ -607,18 +607,18 @@ export default function PackagingPage() {
                 }
               }}
               className="max-w-[280px] truncate rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-bold text-fg focus:outline-none focus:ring-1 focus:ring-brand-500"
-              title="CANIAS Paketlenecek Sipariş Seçin"
+              title="Paketlenecek Sipariş Seçin"
             >
               <option value="">
                 {yukleniyor
-                  ? "CANIAS emirleri yükleniyor..."
+                  ? "Emirler yükleniyor"
                   : emirler.length > 0
-                  ? `-- Paketlenecek Sevkiyatı Seçiniz (${emirler.length} Açık) --`
-                  : "-- Açık Paketleme Emri Yok --"}
+                    ? `Paketlenecek Sevkiyatı Seçiniz`
+                    : "Açık Paketleme Emri Yok"}
               </option>
               {emirler.map((e) => (
                 <option key={e.orderNum} value={e.orderNum}>
-                  {e.orderType}-{e.orderNum} · {e.customer.slice(0, 24)} ({e.itemCount} klm)
+                  {e.orderType}-{e.orderNum} · {e.customer.slice(0, 24)}
                 </option>
               ))}
             </select>
