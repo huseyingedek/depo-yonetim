@@ -25,9 +25,12 @@ import {
   Package,
   Pencil,
   RotateCw,
+  Camera,
+  AlertTriangle,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import ToastView, { useToast } from "../../components/Toast";
+import CameraScanOverlay from "../../components/CameraScanOverlay";
 import { api as wmsApi } from "../../api/client";
 
 // -----------------------------------------------------------------------------
@@ -506,6 +509,26 @@ export default function PackagingPage() {
   const hazardToggle = (uid: string, h: Hazard) => map(uid, (n) => (n.tur === "koli" ? { ...n, hazards: n.hazards.includes(h) ? n.hazards.filter((x) => x !== h) : n.hazards.concat(h) } : n));
   const beklet = (uid: string) => map(uid, (n) => (n.tur === "koli" ? { ...n, beklemede: !n.beklemede } : n));
 
+  const [barkodGiris, setBarkodGiris] = useState("");
+  const [kameraAcik, setKameraAcik] = useState(false);
+  const [barkodHatasi, setBarkodHatasi] = useState<string | null>(null);
+  const hataTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (hataTimeoutRef.current) clearTimeout(hataTimeoutRef.current);
+    };
+  }, []);
+
+  const barkodHatasiGoster = (mesaj = "Barkodlar eşleşmiyor") => {
+    if (hataTimeoutRef.current) clearTimeout(hataTimeoutRef.current);
+    setBarkodHatasi(mesaj);
+    show({ kind: "error", text: mesaj });
+    hataTimeoutRef.current = setTimeout(() => {
+      setBarkodHatasi(null);
+    }, 3000);
+  };
+
   const kaynakEkle = (code: string, parentUid: string | null) => {
     const k = urunler.find((x) => x.code === code);
     if (!k) return;
@@ -515,6 +538,53 @@ export default function PackagingPage() {
     if (parent) { const p = nodeFind(sahne, parent); if (!p || p.tur === "urun") parent = null; }
     setSahne((prev) => nodeAddUrun(prev, parent, yeni));
     show({ kind: "ok", text: `${k.name} +1` });
+  };
+
+  const barkodIsle = async (rawBarkod: string) => {
+    const ham = (rawBarkod || "").trim();
+    if (!ham) return;
+
+    const sadelestir = (s: string) => s.trim().toLowerCase().replace(/^0+/, "");
+    const hedef = sadelestir(ham);
+    const hedefKucuk = ham.toLowerCase();
+
+    // 1. Önce sayfadaki paketlenecek ürün listesinden doğrudan eşleştirme dene
+    let eslesen = urunler.find(
+      (u) => sadelestir(u.code) === hedef || u.code.trim().toLowerCase() === hedefKucuk
+    );
+
+    // 2. Doğrudan eşleşmediyse CANIAS barkod okuma servisi ile dene
+    if (!eslesen) {
+      try {
+        const res = await wmsApi.readBarcode(
+          ham,
+          seciliEmir?.warehouse || "10",
+          seciliEmir?.stockPlace || ""
+        );
+        if (res && res.material) {
+          const matHedef = sadelestir(res.material);
+          const matKucuk = res.material.trim().toLowerCase();
+          eslesen = urunler.find(
+            (u) => sadelestir(u.code) === matHedef || u.code.trim().toLowerCase() === matKucuk
+          );
+        }
+      } catch (err) {
+        console.warn("readBarcode hatası:", err);
+      }
+    }
+
+    // 3. Eşleşme yoksa ekrana 3 saniye kalan hata mesajı göster
+    if (!eslesen) {
+      barkodHatasiGoster("Barkodlar eşleşmiyor");
+      setBarkodGiris("");
+      return;
+    }
+
+    // 4. Eşleşme varsa sahneye / seçili kaba ekle
+    if (hataTimeoutRef.current) clearTimeout(hataTimeoutRef.current);
+    setBarkodHatasi(null);
+    kaynakEkle(eslesen.code, seciliKapId);
+    setBarkodGiris("");
   };
 
   const tasi = (uid: string, parentUid: string | null) => {
@@ -650,6 +720,42 @@ export default function PackagingPage() {
             })}
             <button type="button" onClick={() => setAtilMod((v) => !v)} className={`inline-flex h-11 items-center gap-1 rounded-xl border-2 px-2.5 text-[11px] font-bold transition ${atilMod ? "border-slate-400 bg-slate-200 text-slate-700 dark:border-slate-500 dark:bg-slate-600/40 dark:text-slate-200" : "border-line bg-surface text-subtle hover:text-fg"}`} title="Atıl koli"><Recycle className="h-4 w-4" /> Atıl</button>
             <button type="button" onClick={paletEkle} className="inline-flex h-11 items-center gap-1.5 rounded-xl border border-brand-300/80 bg-brand-50/80 px-3 text-xs font-bold text-brand-700 transition hover:bg-brand-100 active:scale-95 dark:border-brand-500/30 dark:bg-brand-500/15 dark:text-brand-300 dark:hover:bg-brand-500/25" title="Yeni Palet Ekle"><Layers className="h-4 w-4" /> Palet Ekle</button>
+
+            {/* Malzeme Ekle Barkod Kartı */}
+            <div
+              className={`flex shrink-0 flex-col justify-between rounded-xl border px-2.5 py-1 transition ${
+                barkodHatasi
+                  ? "border-red-400 bg-red-50/70 dark:border-red-500/50 dark:bg-red-500/10"
+                  : "border-line bg-surface/90 dark:bg-elevated/40"
+              }`}
+            >
+              <span className="text-[10px] font-bold uppercase tracking-wider text-subtle">
+                Malzeme Ekle
+              </span>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  barkodIsle(barkodGiris);
+                }}
+                className="mt-1 flex items-center gap-1"
+              >
+                <input
+                  type="text"
+                  value={barkodGiris}
+                  onChange={(e) => setBarkodGiris(e.target.value)}
+                  placeholder="Barkod gir"
+                  className="h-7 w-28 rounded-lg border border-line bg-surface px-2 text-xs font-medium text-fg placeholder:text-subtle focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:bg-card sm:w-32"
+                />
+                <button
+                  type="button"
+                  onClick={() => setKameraAcik(true)}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-surface text-subtle transition hover:bg-elevated hover:text-fg active:scale-95"
+                  title="Kamera ile barkod okut"
+                >
+                  <Camera className="h-3.5 w-3.5" />
+                </button>
+              </form>
+            </div>
           </div>
 
           {/* Aksiyonlar */}
@@ -670,6 +776,26 @@ export default function PackagingPage() {
           </div>
         </div>
       </div>
+
+      {/* 3 Saniye Kalan Barkod Eşleşmeme Hata Mesajı */}
+      {barkodHatasi && (
+        <div className="mt-2.5 flex items-center justify-between gap-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm font-bold text-red-600 shadow-sm animate-in fade-in slide-in-from-top-1 dark:border-red-500/30 dark:bg-red-500/20 dark:text-red-400">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-red-500" />
+            <span>{barkodHatasi}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (hataTimeoutRef.current) clearTimeout(hataTimeoutRef.current);
+              setBarkodHatasi(null);
+            }}
+            className="text-xs font-semibold underline hover:opacity-80"
+          >
+            Kapat
+          </button>
+        </div>
+      )}
 
       {/* İÇERİK: geniş paketleme alanı (sol) + ürün listesi (sağ) */}
       <div className="mt-3 flex flex-col gap-2 xl:flex-row">
@@ -784,6 +910,17 @@ export default function PackagingPage() {
           </div>
         </aside>
       </div>
+
+      {kameraAcik && (
+        <CameraScanOverlay
+          onDetected={(kod) => {
+            setKameraAcik(false);
+            barkodIsle(kod);
+          }}
+          onClose={() => setKameraAcik(false)}
+          prompt="Malzeme Barkodu Okutun"
+        />
+      )}
 
       <ToastView toast={toast} />
     </div>
