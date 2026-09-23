@@ -919,11 +919,11 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
               <div className="flex items-center gap-1">
                 <p className="font-mono text-[11px] font-bold text-fg flex items-center gap-2">
                   <span>{urunSay(koli)} ürün</span>
+                  <span title={`Koli Desisi: ${kDesi} ds (İçerik: ${icDesiYuvarlanmis} ds)`}>{kDesi} ds</span>
                   <span title={`Toplam brüt ağırlık: ${fmt(toplamKg)} kg (Koli darası: ${fmt(daraKg)} kg)`}>{fmt(toplamKg)} kg</span>
-                  <span className="px-1.5" title={`Koli Desisi: ${kDesi} ds (İçerik: ${icDesiYuvarlanmis} ds)`}>
-                    Toplam: {kDesi} Desi
-                  </span>
                 </p>
+                <span className={`${kDesi} Desi px-3`}>
+                </span>
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
