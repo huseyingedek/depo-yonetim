@@ -726,10 +726,10 @@ export default function PackagingPage() {
               className={`flex shrink-0 flex-col justify-between rounded-xl border px-2.5 py-1 transition ${
                 barkodHatasi
                   ? "border-red-400 bg-red-50/70 dark:border-red-500/50 dark:bg-red-500/10"
-                  : "border-line bg-surface/90 dark:bg-elevated/40"
+                  : "border-brand-300/80 bg-brand-50/80 dark:border-brand-500/30 dark:bg-brand-500/15"
               }`}
             >
-              <span className="text-[10px] font-bold uppercase tracking-wider text-subtle">
+              <span className="text-center text-[11px] font-bold tracking-tight text-brand-700 dark:text-brand-300">
                 Malzeme Ekle
               </span>
               <form
@@ -744,12 +744,12 @@ export default function PackagingPage() {
                   value={barkodGiris}
                   onChange={(e) => setBarkodGiris(e.target.value)}
                   placeholder="Barkod gir"
-                  className="h-7 w-28 rounded-lg border border-line bg-surface px-2 text-xs font-medium text-fg placeholder:text-subtle focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:bg-card sm:w-32"
+                  className="h-7 w-28 rounded-lg border border-brand-200/80 bg-white px-2 text-xs font-medium text-fg placeholder:text-subtle focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-brand-500/30 dark:bg-card sm:w-32"
                 />
                 <button
                   type="button"
                   onClick={() => setKameraAcik(true)}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-surface text-subtle transition hover:bg-elevated hover:text-fg active:scale-95"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200/80 bg-white text-brand-700 transition hover:bg-brand-100 hover:text-brand-800 active:scale-95 dark:border-brand-500/30 dark:bg-card dark:text-brand-300 dark:hover:bg-brand-500/25"
                   title="Kamera ile barkod okut"
                 >
                   <Camera className="h-3.5 w-3.5" />
