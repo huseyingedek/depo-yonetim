@@ -753,25 +753,6 @@ export default function PackagingPage() {
                   <Package className="h-8 w-8 text-subtle/50" />
                   <p className="text-xs font-semibold text-fg">Sevkiyat Seçilmedi</p>
                   <p className="text-[11px] text-subtle">Paketlenecek ürünleri listelemek için yukarıdan bir sevkiyat seçin.</p>
-                  {emirler.length > 0 && (
-                    <div className="mt-3 flex w-full flex-col gap-1.5 text-left">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-subtle px-1">Açık Sevkiyatlar ({emirler.length})</span>
-                      {emirler.map((e) => (
-                        <button
-                          key={e.orderNum}
-                          type="button"
-                          onClick={() => emirSec(e)}
-                          className="flex items-center justify-between gap-1.5 rounded-xl border border-line bg-surface p-2 text-xs transition hover:border-brand-400 hover:bg-brand-50/40 active:scale-95 dark:hover:bg-brand-500/10"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <span className="font-bold text-brand-600 block truncate">{e.orderType}-{e.orderNum}</span>
-                            <span className="text-[10px] text-subtle truncate block">{e.customer}</span>
-                          </div>
-                          <span className="rounded bg-elevated px-1.5 py-0.5 text-[10px] font-bold text-fg shrink-0">{e.itemCount} klm</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
               ) : yukleniyor ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-12 text-subtle">
