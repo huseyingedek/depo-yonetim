@@ -906,25 +906,24 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
                 <span className="text-xs font-bold text-fg flex items-center gap-2">
                   <span>Boyut {koli.no}</span>
                   {boyutOl(koli.no) && <span>{boyutOl(koli.no)} cm</span>}
-                  <span className="rounded bg-brand-100/80 px-1.5 py-0.5 text-[11px] font-extrabold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">
-                    {kDesi} DS
-                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => e.stopPropagation()}
+                    className="rounded p-0.5 text-subtle transition hover:bg-elevated hover:text-fg active:scale-95"
+                    title="Düzenle"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
                 </span>
               </div>
               <div className="flex items-center gap-1">
                 <p className="font-mono text-[11px] font-bold text-fg flex items-center gap-2">
                   <span>{urunSay(koli)} ürün</span>
-                  <span title={`Koli Desisi: ${kDesi} ds (İçerik: ${icDesiYuvarlanmis} ds)`}>{kDesi} ds</span>
                   <span title={`Toplam brüt ağırlık: ${fmt(toplamKg)} kg (Koli darası: ${fmt(daraKg)} kg)`}>{fmt(toplamKg)} kg</span>
+                  <span className="px-1.5" title={`Koli Desisi: ${kDesi} ds (İçerik: ${icDesiYuvarlanmis} ds)`}>
+                    Toplam: {kDesi} Desi
+                  </span>
                 </p>
-                <button
-                  type="button"
-                  onClick={(e) => e.stopPropagation()}
-                  className="rounded p-0.5 text-subtle transition hover:bg-elevated hover:text-fg active:scale-95"
-                  title="Düzenle"
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
