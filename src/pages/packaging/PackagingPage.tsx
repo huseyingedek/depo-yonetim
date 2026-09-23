@@ -44,7 +44,7 @@ interface UrunNode {
 }
 interface KoliNode {
   uid: string; tur: "koli"; no: number; kod?: string; atil?: boolean; beklemede?: boolean;
-  hacim: number; hazards: Hazard[]; cocuklar: Node[];
+  hacim: number; dara?: number; hazards: Hazard[]; cocuklar: Node[];
 }
 interface PaletNode { uid: string; tur: "palet"; ad: string; cocuklar: Node[]; }
 type Node = UrunNode | KoliNode | PaletNode;
@@ -189,10 +189,56 @@ const boyutGenislik = (no: number) => {
 const boyutOl = (no: number) => boyutBul(no)?.ol ?? "";
 const boyutKodu = (no: number) => boyutBul(no)?.kod ?? `KOL0${no}`;
 
+// --- Desi & Ağırlık Kuralları (Patron Kuralı) --------------------------------
+// Desi kuralı: 1'den küçükse 1, 1 ve üzeri ise tam sayı (virgülden sonrası atılır / Math.floor)
+const yuvarlaDesi = (d: number): number => {
+  if (d <= 0) return 0;
+  return Math.max(1, Math.floor(d));
+};
+
+const koliDara = (koli: KoliNode): number => {
+  if (typeof koli.dara === "number") return koli.dara;
+  return boyutBul(koli.no)?.dara ?? 0;
+};
+
+// Kolinin kendi standart ebat desisi (değişmez, tam sayı)
+const koliKendiDesi = (koli: KoliNode): number => yuvarlaDesi(koli.hacim);
+
+// Koli içine konan ürünler ve iç kolilerin hacim toplamı
+const koliIcerikDesi = (koli: KoliNode): number => {
+  return koli.cocuklar.reduce((s, c) => {
+    if (c.tur === "urun") return s + c.desi * c.qty;
+    if (c.tur === "koli") return s + koliKendiDesi(c);
+    return s + nodeDesi(c);
+  }, 0);
+};
+
 // --- Ağaç yardımcıları --------------------------------------------------------
 const cocuk = (n: Node): Node[] => (n.tur === "urun" ? [] : n.cocuklar);
-const nodeDesi = (n: Node): number => (n.tur === "urun" ? n.desi * n.qty : cocuk(n).reduce((s, c) => s + nodeDesi(c), 0));
-const nodeKg = (n: Node): number => (n.tur === "urun" ? n.kg * n.qty : cocuk(n).reduce((s, c) => s + nodeKg(c), 0));
+
+// Node desisi:
+// - Ürün ise: ürün desisi * adet (yuvarlanmış)
+// - Koli ise: kolinin kendi standart desisi
+// - Palet ise: içindeki kolilerin ve malzemelerin desilerinin tam toplamı
+const nodeDesi = (n: Node): number => {
+  if (n.tur === "urun") return yuvarlaDesi(n.desi * n.qty);
+  if (n.tur === "koli") return koliKendiDesi(n);
+  return cocuk(n).reduce((s, c) => s + nodeDesi(c), 0);
+};
+
+// Node kilosu:
+// - Ürün ise: ürün kg * adet
+// - Koli ise: içindeki her şeyin kg toplamı + koli darası (kayıtlıysa, yoksa 0)
+// - Palet ise: içindeki her şeyin toplam kg'si
+const nodeKg = (n: Node): number => {
+  if (n.tur === "urun") return n.kg * n.qty;
+  if (n.tur === "koli") {
+    const icKg = cocuk(n).reduce((s, c) => s + nodeKg(c), 0);
+    return icKg + koliDara(n);
+  }
+  return cocuk(n).reduce((s, c) => s + nodeKg(c), 0);
+};
+
 const urunSay = (n: Node): number => (n.tur === "urun" ? 1 : cocuk(n).reduce((s, c) => s + urunSay(c), 0));
 const koliSay = (ns: Node[]): number => ns.reduce((s, n) => s + (n.tur === "koli" ? 1 : 0) + (n.tur === "urun" ? 0 : koliSay(cocuk(n))), 0);
 const paletSay = (ns: Node[]): number => ns.filter((n) => n.tur === "palet").length;
@@ -250,7 +296,7 @@ function baslangic(): Node[] {
       uid: "plt1", tur: "palet", ad: "Palet 1",
       cocuklar: [
         {
-          uid: "k1", tur: "koli", no: 1, kod: "KOL01", hacim: boyutHacim(1), hazards: ["kirilabilir"],
+          uid: "k1", tur: "koli", no: 1, kod: "KOL01", hacim: boyutHacim(1), dara: boyutBul(1)?.dara ?? 0, hazards: ["kirilabilir"],
           cocuklar: [
             { uid: "up1", tur: "urun", code: "SV101", name: "Fotokopi Kağıdı A4 80Gr Beyaz", qty: 6, unit: "PK", desi: 1.19, kg: 2.55 },
           ],
@@ -356,6 +402,7 @@ export default function PackagingPage() {
       no,
       kod: b?.kod,
       hacim: b?.hacim ?? boyutHacim(no),
+      dara: b?.dara ?? 0,
       hazards: [],
       atil: atilMod,
       cocuklar: []
@@ -364,7 +411,7 @@ export default function PackagingPage() {
     const parent = hedef && hedef.tur !== "urun" ? seciliKapId : null;
     setSahne((prev) => nodeAdd(prev, parent, yeni));
     setSeciliKapId(uid);
-    show({ kind: "ok", text: `${atilMod ? "Atıl koli" : "Koli"} · ${b?.kod || `Boyut ${no}`} (${b?.ol || ""} cm)` });
+    show({ kind: "ok", text: `${atilMod ? "Atıl koli" : "Koli"} · ${b?.kod || `Boyut ${no}`} (${b?.ol || ""} cm · ${yuvarlaDesi(b?.hacim ?? boyutHacim(no))} DS)` });
   };
 
   const sil = (uid: string) => { setSahne((prev) => nodeRemove(prev, uid).list); show({ kind: "warn", text: "Kart silindi" }); };
@@ -435,7 +482,7 @@ export default function PackagingPage() {
   function koliIcineKoli(parentUid: string) {
     const uid = yid();
     const b = boyutBul(1);
-    const yeni: KoliNode = { uid, tur: "koli", no: 1, kod: b?.kod, hacim: b?.hacim ?? boyutHacim(1), hazards: [], cocuklar: [] };
+    const yeni: KoliNode = { uid, tur: "koli", no: 1, kod: b?.kod, hacim: b?.hacim ?? boyutHacim(1), dara: b?.dara ?? 0, hazards: [], cocuklar: [] };
     setSahne((prev) => nodeAdd(prev, parentUid, yeni));
     setSeciliKapId(uid);
     show({ kind: "ok", text: "Koli içine koli eklendi" });
@@ -473,7 +520,7 @@ export default function PackagingPage() {
               const ik = 14 + (b.n === 0 ? 10 : b.n) * 1.6;
               return (
                 <div key={b.n} className="flex flex-col items-center gap-0.5">
-                  <button type="button" onClick={() => koliEkle(b.n)} title={`Boyut ${b.n} · ${b.ol} cm · ~${boyutHacim(b.n)} ds`} className={`group relative flex h-11 w-11 items-center justify-center rounded-xl border-2 transition active:scale-95 ${atilMod ? "border-slate-300 bg-slate-50 hover:bg-slate-100 dark:border-slate-500/40 dark:bg-slate-600/20" : b.btn}`}>
+                  <button type="button" onClick={() => koliEkle(b.n)} title={`Boyut ${b.n} (${b.kod}) · ${b.ol} cm · ${yuvarlaDesi(b.hacim)} DS · Dara: ${b.dara} kg`} className={`group relative flex h-11 w-11 items-center justify-center rounded-xl border-2 transition active:scale-95 ${atilMod ? "border-slate-300 bg-slate-50 hover:bg-slate-100 dark:border-slate-500/40 dark:bg-slate-600/20" : b.btn}`}>
                     <Box strokeWidth={2.25} style={{ width: ik, height: ik }} className={atilMod ? "text-slate-400 dark:text-slate-300" : b.ic} />
                     <span className={`absolute bottom-0.5 right-1 text-[10px] font-black ${atilMod ? "text-slate-500 dark:text-slate-300" : b.txt}`}>{b.n}</span>
                   </button>
@@ -525,7 +572,7 @@ export default function PackagingPage() {
                 <span className="font-mono text-sm font-extrabold text-fg">Toplam:</span>
                 <span><b className="font-mono text-sm font-extrabold text-fg">{pSay}</b> palet</span>
                 <span><b className="font-mono text-sm font-extrabold text-fg">{kSay}</b> koli</span>
-                <span><b className="font-mono text-sm font-extrabold text-fg">{fmt(genelDesi)}</b> desi</span>
+                <span><b className="font-mono text-sm font-extrabold text-fg">{genelDesi}</b> desi</span>
                 <span><b className="font-mono text-sm font-extrabold text-fg">{fmt(genelKg)}</b> kg</span>
               </div>
             </div>
@@ -688,7 +735,7 @@ function PaletKart({ palet, api }: { palet: PaletNode; api: Api }) {
             <span className="font-mono text-xs font-bold text-fg flex items-center gap-2">
               <span>Toplam:</span>
               <span>{koliSay(palet.cocuklar)} koli</span>
-              <span>{fmt(nodeDesi(palet))} desi</span>
+              <span>{nodeDesi(palet)} desi</span>
               <span>{fmt(nodeKg(palet))} kg</span>
             </span>
             <button type="button" onClick={(e) => e.stopPropagation()} className="rounded p-0.5 text-subtle transition hover:bg-amber-100 hover:text-fg active:scale-95 dark:hover:bg-amber-500/20" title="Düzenle">
@@ -776,8 +823,12 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
   const b = boyutBul(koli.no);
   const secili = api.seciliKapId === koli.uid;
   const drop = api.dropHedef === koli.uid;
-  const desi = nodeDesi(koli), kg = nodeKg(koli);
-  const dolu = koli.hacim > 0 ? (desi / koli.hacim) * 100 : 0;
+  const kDesi = koliKendiDesi(koli);
+  const icDesiHam = koliIcerikDesi(koli);
+  const icDesiYuvarlanmis = yuvarlaDesi(icDesiHam);
+  const toplamKg = nodeKg(koli);
+  const daraKg = koliDara(koli);
+  const dolu = koli.hacim > 0 ? (icDesiHam / koli.hacim) * 100 : 0;
   const atil = koli.atil;
   const inContainer = parentTur === "palet" || parentTur === "koli";
 
@@ -820,16 +871,18 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
             </div>
 
             <div className="mt-1 flex flex-col gap-0.5">
-              <p className="flex flex-wrap items-center gap-2 text-[11px] font-bold text-fg">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold text-fg">
                 <span>Boyut {koli.no}</span>
-                <span>{boyutOl(koli.no)} cm</span>
-                <span>Hacim {koli.hacim} desi</span>
-              </p>
+                {boyutOl(koli.no) && <span>{boyutOl(koli.no)} cm</span>}
+                <span className="rounded bg-brand-100/80 px-1.5 py-0.5 text-[10px] font-extrabold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">
+                  {kDesi} DS
+                </span>
+              </div>
               <div className="flex items-center gap-1">
                 <p className="font-mono text-[10px] font-bold text-fg flex items-center gap-2">
                   <span>{urunSay(koli)} ürün</span>
-                  <span>{fmt(desi)} ds</span>
-                  <span>{fmt(kg)} kg</span>
+                  <span title={`İçerik desisi: ${icDesiYuvarlanmis} ds (ham: ${fmt(icDesiHam)})`}>İçerik {icDesiYuvarlanmis} ds</span>
+                  <span title={`Toplam brüt ağırlık: ${fmt(toplamKg)} kg (Koli darası: ${fmt(daraKg)} kg)`}>{fmt(toplamKg)} kg</span>
                 </p>
                 <button
                   type="button"
@@ -852,15 +905,17 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
                 <span>{atil ? "Atıl Koli" : `Koli ${boyutKodu(koli.no)}`}</span>
                 <span className="text-xs font-bold text-fg flex items-center gap-2">
                   <span>Boyut {koli.no}</span>
-                  <span>{boyutOl(koli.no)} cm</span>
-                  <span>Hacim {koli.hacim} desi</span>
+                  {boyutOl(koli.no) && <span>{boyutOl(koli.no)} cm</span>}
+                  <span className="rounded bg-brand-100/80 px-1.5 py-0.5 text-[11px] font-extrabold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">
+                    {kDesi} DS
+                  </span>
                 </span>
               </div>
               <div className="flex items-center gap-1">
                 <p className="font-mono text-[11px] font-bold text-fg flex items-center gap-2">
                   <span>{urunSay(koli)} ürün</span>
-                  <span>{fmt(desi)} ds</span>
-                  <span>{fmt(kg)} kg</span>
+                  <span title={`İçerik desisi: ${icDesiYuvarlanmis} ds (ham: ${fmt(icDesiHam)})`}>İçerik {icDesiYuvarlanmis} ds</span>
+                  <span title={`Toplam brüt ağırlık: ${fmt(toplamKg)} kg (Koli darası: ${fmt(daraKg)} kg)`}>{fmt(toplamKg)} kg</span>
                 </p>
                 <button
                   type="button"
@@ -879,7 +934,7 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
           </div>
         )}
 
-        <div className="mt-1.5 flex items-center gap-2">
+        <div className="mt-1.5 flex items-center gap-2" title={`Doluluk: %${Math.round(dolu)} (İçerik: ${icDesiYuvarlanmis} DS / Kapasite: ${kDesi} DS)`}>
           <span className="flex items-center gap-1 text-[11px] font-bold text-fg"><Weight className="h-3.5 w-3.5" /> Doluluk</span>
           <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-elevated">
             <div className={`h-full rounded-full ${dolu > 105 ? "bg-rose-500" : "bg-emerald-500"}`} style={{ width: `${Math.min(100, dolu)}%` }} />
