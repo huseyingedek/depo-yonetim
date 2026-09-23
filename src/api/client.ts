@@ -2395,7 +2395,7 @@ export const api = {
     const c = ctx();
     const companyCode = params?.company || c.company || "01";
     const plantCode = params?.plant || c.plant || "100";
-    const whCode = params?.warehouse || c.warehouse || "D1";
+    const whCode = params?.warehouse || "10";
     const traceStatus = params?.traceStatus ?? (c.trace ? 1 : 0);
 
     const callParams = {
