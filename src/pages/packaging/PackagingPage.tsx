@@ -27,6 +27,7 @@ import {
   RotateCw,
   Camera,
   AlertTriangle,
+  CornerDownLeft,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import ToastView, { useToast } from "../../components/Toast";
@@ -502,8 +503,22 @@ export default function PackagingPage() {
 
   const sil = (uid: string) => { setSahne((prev) => nodeRemove(prev, uid).list); show({ kind: "warn", text: "Kart silindi" }); };
 
-  const urunAdet = (uid: string, delta: number) =>
+  const urunAdet = (uid: string, delta: number) => {
+    if (delta > 0) {
+      const node = nodeFind(sahne, uid);
+      if (node && node.tur === "urun") {
+        const k = urunler.find((x) => x.code === node.code);
+        if (k) {
+          const kalan = k.siparis - paketlenmis(sahne, node.code);
+          if (kalan <= 0) {
+            show({ kind: "info", text: "Bu üründen siparişte daha fazla yok" });
+            return;
+          }
+        }
+      }
+    }
     setSahne((prev) => temizle(nodeMap(prev, uid, (n) => (n.tur === "urun" ? { ...n, qty: Math.max(0, n.qty + delta) } : n))));
+  };
 
   const hacim = (uid: string, v: number) => map(uid, (n) => (n.tur === "koli" ? { ...n, hacim: Math.max(0, v) } : n));
   const hazardToggle = (uid: string, h: Hazard) => map(uid, (n) => (n.tur === "koli" ? { ...n, hazards: n.hazards.includes(h) ? n.hazards.filter((x) => x !== h) : n.hazards.concat(h) } : n));
@@ -532,12 +547,13 @@ export default function PackagingPage() {
   const kaynakEkle = (code: string, parentUid: string | null) => {
     const k = urunler.find((x) => x.code === code);
     if (!k) return;
-    if (k.siparis - paketlenmis(sahne, code) <= 0) return show({ kind: "info", text: "Bu üründen kalmadı" });
-    const yeni: UrunNode = { uid: yid(), tur: "urun", code: k.code, name: k.name, qty: 1, unit: k.unit, desi: k.desi, kg: k.kg, paketli: k.paketli };
+    const kalan = k.siparis - paketlenmis(sahne, code);
+    if (kalan <= 0) return show({ kind: "info", text: "Bu üründen kalmadı" });
+    const yeni: UrunNode = { uid: yid(), tur: "urun", code: k.code, name: k.name, qty: kalan, unit: k.unit, desi: k.desi, kg: k.kg, paketli: k.paketli };
     let parent = parentUid;
     if (parent) { const p = nodeFind(sahne, parent); if (!p || p.tur === "urun") parent = null; }
     setSahne((prev) => nodeAddUrun(prev, parent, yeni));
-    show({ kind: "ok", text: `${k.name} +1` });
+    show({ kind: "ok", text: `${k.name} (+${kalan} ${k.unit}) eklendi` });
   };
 
   const barkodIsle = async (rawBarkod: string) => {
@@ -739,13 +755,24 @@ export default function PackagingPage() {
                 }}
                 className="mt-1 flex items-center gap-1"
               >
-                <input
-                  type="text"
-                  value={barkodGiris}
-                  onChange={(e) => setBarkodGiris(e.target.value)}
-                  placeholder="Barkod gir"
-                  className="h-7 w-28 rounded-lg border border-brand-200/80 bg-white px-2 text-xs font-medium text-fg placeholder:text-subtle focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-brand-500/30 dark:bg-card sm:w-32"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type="text"
+                    value={barkodGiris}
+                    onChange={(e) => setBarkodGiris(e.target.value)}
+                    placeholder="Barkod gir"
+                    className="h-7 w-28 rounded-lg border border-brand-200/80 bg-white pl-2 pr-7 text-xs font-medium text-fg placeholder:text-subtle focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-brand-500/30 dark:bg-card sm:w-32"
+                  />
+                  <button
+                    type="submit"
+                    title="Enter (Barkodu Onayla)"
+                    aria-label="Enter"
+                    disabled={!barkodGiris.trim()}
+                    className="absolute right-1 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-brand-600 transition hover:bg-brand-100 hover:text-brand-800 disabled:opacity-30 dark:text-brand-300 dark:hover:bg-brand-500/25"
+                  >
+                    <CornerDownLeft className="h-3.5 w-3.5" />
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={() => setKameraAcik(true)}
