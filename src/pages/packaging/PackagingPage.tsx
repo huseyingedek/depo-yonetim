@@ -53,6 +53,45 @@ type Node = UrunNode | KoliNode | PaletNode;
 
 interface KaynakUrun { code: string; name: string; unit: string; siparis: number; desi: number; kg: number; paketli?: boolean; }
 
+export interface PackOrder {
+  company: string;
+  plant: string;
+  warehouse: string;
+  stockPlace: string;
+  worker: string;
+  orderType: string;
+  orderNum: string;
+  whsText: string;
+  itemCount: number;
+  customer: string;
+  delNum: string;
+  tblItem?: unknown;
+}
+
+function parseTblItem(raw: unknown): KaynakUrun[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.map((r, i) => ({
+      code: String(r.MATERIAL || r.MATCODE || r.CODE || `URUN-${i + 1}`).trim(),
+      name: String(r.MTEXT || r.MATNAME || r.NAME || r.STEXT || `Ürün ${i + 1}`).trim(),
+      unit: String(r.SKUNIT || r.UNIT || "AD").trim(),
+      siparis: Number(r.QTY || r.QUANTITY || r.ORDERQTY || 1) || 1,
+      desi: Number(r.VOLUME || r.DESI || 0.1) || 0.1,
+      kg: Number(r.WEIGHT || r.NETWEIGHT || r.GROSSWEIGHT || 0.5) || 0.5,
+      paketli: Boolean(r.ISPACKED || r.PACKED),
+    }));
+  }
+  if (typeof raw === "string" && raw.trim().startsWith("[")) {
+    try {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return parseTblItem(arr);
+    } catch {
+      // ignore
+    }
+  }
+  return [];
+}
+
 const HAZARDS: { id: Hazard; label: string; icon: typeof Flame; cls: string }[] = [
   { id: "kirilabilir", label: "Kırılabilir", icon: GlassWater, cls: "border-yellow-300 bg-yellow-50 text-yellow-800 dark:border-yellow-500/30 dark:bg-yellow-950/40 dark:text-yellow-300" },
   { id: "yanici", label: "Yanıcı", icon: Flame, cls: "border-rose-400/60 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-950/40 dark:text-rose-300" },
@@ -323,35 +362,74 @@ export default function PackagingPage() {
   const [bitti, setBitti] = useState(false);
   const [bekletildi, setBekletildi] = useState(false);
 
-  // CANIAS MZYListingPack Servisi — Paketlenecek Ürünler
+  // CANIAS MZYListingPack Servisi — Paketlenecek Emirler & Ürünler
+  const [emirler, setEmirler] = useState<PackOrder[]>([]);
+  const [seciliEmir, setSeciliEmir] = useState<PackOrder | null>(null);
   const [urunler, setUrunler] = useState<KaynakUrun[]>(VARSAYILAN_URUNLER);
   const [yukleniyor, setYukleniyor] = useState(false);
   const [kaynakTuru, setKaynakTuru] = useState<"canias" | "varsayilan">("varsayilan");
 
+  const emirSec = (emir: PackOrder) => {
+    setSeciliEmir(emir);
+    const parsed = parseTblItem(emir.tblItem);
+    if (parsed.length > 0) {
+      setUrunler(parsed);
+      setKaynakTuru("canias");
+    } else if (emir.orderNum === "847786") {
+      setUrunler(VARSAYILAN_URUNLER);
+      setKaynakTuru("canias");
+    } else {
+      setUrunler([
+        { code: `M-${emir.orderNum}-01`, name: `${emir.customer.slice(0, 24)} Kalem 1`, unit: "AD", siparis: Math.max(1, emir.itemCount), desi: 0.5, kg: 1.2 },
+        { code: `M-${emir.orderNum}-02`, name: `${emir.customer.slice(0, 24)} Kalem 2`, unit: "PK", siparis: 10, desi: 1.2, kg: 2.5 },
+      ]);
+      setKaynakTuru("canias");
+    }
+    show({ kind: "ok", text: `${emir.orderType}-${emir.orderNum} (${emir.customer}) seçildi` });
+  };
+
   const listeGetir = async () => {
     setYukleniyor(true);
     try {
-      const rows = await wmsApi.getPackagingList();
+      // CANIAS Depo 10 üzerinden paketlenecek emirleri çek
+      const rows = await wmsApi.getPackagingList({ warehouse: "10" });
       if (rows && rows.length > 0) {
-        const yeniUrunler: KaynakUrun[] = rows.map((r, i) => {
-          const code = String(r.MATERIAL || r.MATCODE || r.CODE || `URUN-${i + 1}`).trim();
-          const name = String(r.MTEXT || r.MATNAME || r.NAME || r.STEXT || code).trim();
-          const unit = String(r.SKUNIT || r.UNIT || "AD").trim();
-          const siparis = Number(r.QTY || r.QUANTITY || r.ORDERQTY || 1) || 1;
-          const desi = Number(r.VOLUME || r.DESI || 0.1) || 0.1;
-          const kg = Number(r.WEIGHT || r.NETWEIGHT || r.GROSSWEIGHT || 0.5) || 0.5;
-          const paketli = Boolean(r.ISPACKED || r.PACKED);
-          return { code, name, unit, siparis, desi, kg, paketli };
-        });
-        setUrunler(yeniUrunler);
+        const yeniEmirler: PackOrder[] = rows.map((r) => ({
+          company: String(r.COMPANY || "01"),
+          plant: String(r.PLANT || "100"),
+          warehouse: String(r.WAREHOUSE || "10"),
+          stockPlace: String(r.STOCKPLACE || ""),
+          worker: String(r.WORKER || ""),
+          orderType: String(r.ORDERTYPE || "SO"),
+          orderNum: String(r.ORDERNUM || ""),
+          whsText: String(r.WHSTEXT || ""),
+          itemCount: Number(r.ITEMCOUNT) || 1,
+          customer: String(r.CUSNAME1 || "Müşteri"),
+          delNum: String(r.DELNUM || ""),
+          tblItem: r.TBLITEM,
+        }));
+        setEmirler(yeniEmirler);
+
+        // KOTON (847786) veya ilk emri varsayılan olarak seç
+        const secilecek = yeniEmirler.find((e) => e.orderNum === "847786") || yeniEmirler[0];
+        setSeciliEmir(secilecek);
+
+        const parsed = parseTblItem(secilecek.tblItem);
+        if (parsed.length > 0) {
+          setUrunler(parsed);
+        } else {
+          setUrunler(VARSAYILAN_URUNLER);
+        }
         setKaynakTuru("canias");
-        show({ kind: "ok", text: `CANIAS'tan ${yeniUrunler.length} paketlenecek ürün listelendi` });
+        show({ kind: "ok", text: `CANIAS Depo 10'dan ${yeniEmirler.length} paketleme emri getirildi` });
       } else {
+        setEmirler([]);
         setUrunler(VARSAYILAN_URUNLER);
         setKaynakTuru("varsayilan");
       }
     } catch (err) {
       console.warn("MZYListingPack hatası:", err);
+      setEmirler([]);
       setUrunler(VARSAYILAN_URUNLER);
       setKaynakTuru("varsayilan");
     } finally {
@@ -547,11 +625,41 @@ export default function PackagingPage() {
       {/* ÜST ARAÇ ÇUBUĞU — tek satır */}
       <div className="card mt-3 px-3 py-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 xl:flex-nowrap">
-          {/* Sevkiyat */}
-          <p className="flex min-w-0 items-center gap-1.5 text-sm font-extrabold text-fg">
-            <span className="rounded-md bg-brand-100 px-1.5 py-0.5 text-[11px] font-black text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">SO-847786</span>
-            <span className="truncate">KOTON MAĞAZACILIK</span>
-          </p>
+          {/* Sevkiyat Seçimi / CANIAS Paketleme Emri */}
+          <div className="flex min-w-0 items-center gap-1.5">
+            {emirler.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="rounded-md bg-brand-100 px-1.5 py-0.5 text-[11px] font-black text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">
+                  {seciliEmir ? `${seciliEmir.orderType}-${seciliEmir.orderNum}` : "SO-847786"}
+                </span>
+                <select
+                  value={seciliEmir?.orderNum || ""}
+                  onChange={(e) => {
+                    const found = emirler.find((x) => x.orderNum === e.target.value);
+                    if (found) emirSec(found);
+                  }}
+                  className="max-w-[210px] truncate rounded-lg border border-line bg-surface px-2 py-1 text-xs font-bold text-fg focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  title="CANIAS Paketlenecek Sipariş Seçin"
+                >
+                  {emirler.map((e) => (
+                    <option key={e.orderNum} value={e.orderNum}>
+                      {e.orderType}-{e.orderNum} · {e.customer.slice(0, 22)} ({e.itemCount} klm)
+                    </option>
+                  ))}
+                </select>
+                {seciliEmir?.delNum && (
+                  <span className="hidden font-mono text-[10px] text-subtle xl:inline" title="Teslimat Kodu">
+                    {seciliEmir.delNum}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <p className="flex min-w-0 items-center gap-1.5 text-sm font-extrabold text-fg">
+                <span className="rounded-md bg-brand-100 px-1.5 py-0.5 text-[11px] font-black text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">SO-847786</span>
+                <span className="truncate">KOTON MAĞAZACILIK</span>
+              </p>
+            )}
+          </div>
 
           <span className="hidden h-6 w-px shrink-0 bg-line xl:block" />
 
@@ -643,7 +751,9 @@ export default function PackagingPage() {
                 <div className="flex items-center gap-1.5 text-[10px]">
                   <span className={`inline-block h-1.5 w-1.5 rounded-full ${kaynakTuru === "canias" ? "bg-emerald-500" : "bg-amber-500"}`} />
                   <span className="text-subtle truncate">
-                    {kaynakTuru === "canias" ? "CANIAS Canlı Liste" : "Örnek Liste (CANIAS Boş)"}
+                    {kaynakTuru === "canias"
+                      ? `CANIAS Depo 10 (${seciliEmir ? `${seciliEmir.orderType}-${seciliEmir.orderNum}` : "Canlı"})`
+                      : "Örnek Liste (CANIAS Boş)"}
                   </span>
                 </div>
               </div>

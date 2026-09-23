@@ -406,7 +406,7 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 - **Parametreler**:
   - `PSCOMPANY` (*STRING*): Firma Kodu (Örn: `"01"`).
   - `PSPLANT` (*STRING*): Tesis Kodu (Örn: `"100"`).
-  - `PSWAREHOUSE` (*STRING*): Depo Kodu (Örn: `"D1"`).
+  - `PSWAREHOUSE` (*STRING*): Depo Kodu (Örn: `"10"` — Paketleme için 10 gönderilir).
   - `PITRACESTATUS` (*INTEGER*): Trace Durumu (`0`: Pasif, `1`: Aktif).
 - **WMS İstemci Karşılığı**: `api.getPackagingList({ company, plant, warehouse, traceStatus })`
 
