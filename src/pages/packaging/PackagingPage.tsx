@@ -725,25 +725,8 @@ export default function PackagingPage() {
               <Package className="h-4 w-4 text-subtle" />
               <div className="min-w-0 flex-1">
                 <h2 className="text-sm font-bold text-fg">Paketlenecek Ürünler</h2>
-                <div className="flex items-center gap-1.5 text-[10px]">
-                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${kaynakTuru === "canias" ? "bg-emerald-500" : "bg-amber-500"}`} />
-                  <span className="text-subtle truncate">
-                    {kaynakTuru === "canias"
-                      ? `CANIAS Depo 10 (${seciliEmir ? `${seciliEmir.orderType}-${seciliEmir.orderNum}` : "Canlı"})`
-                      : "Örnek Liste (CANIAS Boş)"}
-                  </span>
-                </div>
               </div>
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={listeGetir}
-                  disabled={yukleniyor}
-                  title="CANIAS'tan Listeyi Yenile"
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-surface text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-50"
-                >
-                  <RotateCw className={`h-3.5 w-3.5 ${yukleniyor ? "animate-spin text-brand-600" : ""}`} />
-                </button>
                 <span className="rounded-full bg-elevated px-2 py-0.5 text-[10px] font-bold text-subtle">{urunler.length}</span>
               </div>
             </div>
@@ -757,7 +740,7 @@ export default function PackagingPage() {
               ) : yukleniyor ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-12 text-subtle">
                   <RotateCw className="h-6 w-6 animate-spin text-brand-600" />
-                  <p className="text-xs">CANIAS'tan malzemeler alınıyor...</p>
+                  <p className="text-xs">Malzemeler aranıyor</p>
                 </div>
               ) : urunler.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-12 text-subtle text-center">
