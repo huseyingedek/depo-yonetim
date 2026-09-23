@@ -889,9 +889,6 @@ function PaletKart({ palet, api }: { palet: PaletNode; api: Api }) {
               <span>{nodeDesi(palet)} desi</span>
               <span>{fmt(nodeKg(palet))} kg</span>
             </span>
-            <button type="button" onClick={(e) => e.stopPropagation()} className="rounded p-0.5 text-subtle transition hover:bg-amber-100 hover:text-fg active:scale-95 dark:hover:bg-amber-500/20" title="Düzenle">
-              <Pencil className="h-3 w-3" />
-            </button>
           </div>
         </div>
         <SilButon onSil={() => api.sil(palet.uid)} className="rounded-lg p-1.5 text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-4 w-4" />
