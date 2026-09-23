@@ -102,6 +102,10 @@ const ALLOWED = new Set([
   "MZYSAVEADJUSTMENT",
   "MZYSaveAdjustment",
   "MzySaveAdjustment",
+
+  // Paketleme Servisleri
+  "MZYListingPack",
+  "MzyListingPack",
 ]);
 
 const app = express();

@@ -50,4 +50,7 @@ export const SERVICES = {
   listingAdjustment: "MZYListingAdjustment", // Sayım belgelerini listele
   enterAdjustment: "MZYEnterAdjustment", // Sayım emrine gir / detayları getir
   saveAdjustment: "MZYSaveAdjustment", // Sayım sonuçlarını kaydet
+
+  // Paketleme Servisleri
+  listingPack: "MZYListingPack", // Paketlenecekleri getir
 } as const;

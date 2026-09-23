@@ -24,9 +24,11 @@ import {
   ChevronRight,
   Package,
   Pencil,
+  RotateCw,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import ToastView, { useToast } from "../../components/Toast";
+import { api as wmsApi } from "../../api/client";
 
 // -----------------------------------------------------------------------------
 // PAKETLEME — TASARIM AŞAMASI · KART SİSTEMİ
@@ -60,7 +62,7 @@ const HAZARDS: { id: Hazard; label: string; icon: typeof Flame; cls: string }[] 
   { id: "bozulur", label: "Bozulur", icon: Clock, cls: "border-green-400/60 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-950/40 dark:text-green-300" },
 ];
 
-const KAYNAK: KaynakUrun[] = [
+const VARSAYILAN_URUNLER: KaynakUrun[] = [
   { code: "SV101", name: "Fotokopi Kağıdı A4 80Gr Beyaz", unit: "PK", siparis: 20, desi: 1.19, kg: 2.55 },
   { code: "ZZ2328", name: "Koton Baskılı Koli Bandı 45X100", unit: "AD", siparis: 40, desi: 0.076, kg: 0.0075 },
   { code: "NC013", name: "Nescafe Gold Kavanoz Kahve 200Gr", unit: "AD", siparis: 120, desi: 0.6, kg: 0.25 },
@@ -321,6 +323,46 @@ export default function PackagingPage() {
   const [bitti, setBitti] = useState(false);
   const [bekletildi, setBekletildi] = useState(false);
 
+  // CANIAS MZYListingPack Servisi — Paketlenecek Ürünler
+  const [urunler, setUrunler] = useState<KaynakUrun[]>(VARSAYILAN_URUNLER);
+  const [yukleniyor, setYukleniyor] = useState(false);
+  const [kaynakTuru, setKaynakTuru] = useState<"canias" | "varsayilan">("varsayilan");
+
+  const listeGetir = async () => {
+    setYukleniyor(true);
+    try {
+      const rows = await wmsApi.getPackagingList();
+      if (rows && rows.length > 0) {
+        const yeniUrunler: KaynakUrun[] = rows.map((r, i) => {
+          const code = String(r.MATERIAL || r.MATCODE || r.CODE || `URUN-${i + 1}`).trim();
+          const name = String(r.MTEXT || r.MATNAME || r.NAME || r.STEXT || code).trim();
+          const unit = String(r.SKUNIT || r.UNIT || "AD").trim();
+          const siparis = Number(r.QTY || r.QUANTITY || r.ORDERQTY || 1) || 1;
+          const desi = Number(r.VOLUME || r.DESI || 0.1) || 0.1;
+          const kg = Number(r.WEIGHT || r.NETWEIGHT || r.GROSSWEIGHT || 0.5) || 0.5;
+          const paketli = Boolean(r.ISPACKED || r.PACKED);
+          return { code, name, unit, siparis, desi, kg, paketli };
+        });
+        setUrunler(yeniUrunler);
+        setKaynakTuru("canias");
+        show({ kind: "ok", text: `CANIAS'tan ${yeniUrunler.length} paketlenecek ürün listelendi` });
+      } else {
+        setUrunler(VARSAYILAN_URUNLER);
+        setKaynakTuru("varsayilan");
+      }
+    } catch (err) {
+      console.warn("MZYListingPack hatası:", err);
+      setUrunler(VARSAYILAN_URUNLER);
+      setKaynakTuru("varsayilan");
+    } finally {
+      setYukleniyor(false);
+    }
+  };
+
+  useEffect(() => {
+    listeGetir();
+  }, []);
+
   // Sürükle-bırak sırasında kenara yaklaşınca otomatik kaydırma (tablet + fare).
   // İmleç hangi kaydırılabilir alanın (sayfa, paketleme alanı, ürün listesi, koli)
   // üst/alt kenarına yaklaşırsa o alanı yumuşakça kaydırır.
@@ -424,7 +466,7 @@ export default function PackagingPage() {
   const beklet = (uid: string) => map(uid, (n) => (n.tur === "koli" ? { ...n, beklemede: !n.beklemede } : n));
 
   const kaynakEkle = (code: string, parentUid: string | null) => {
-    const k = KAYNAK.find((x) => x.code === code);
+    const k = urunler.find((x) => x.code === code);
     if (!k) return;
     if (k.siparis - paketlenmis(sahne, code) <= 0) return show({ kind: "info", text: "Bu üründen kalmadı" });
     const yeni: UrunNode = { uid: yid(), tur: "urun", code: k.code, name: k.name, qty: 1, unit: k.unit, desi: k.desi, kg: k.kg, paketli: k.paketli };
@@ -594,41 +636,77 @@ export default function PackagingPage() {
         {/* SAĞ: PAKETLENECEK ÜRÜNLER */}
         <aside className="xl:w-80 xl:shrink-0">
           <div className="flex flex-col rounded-2xl border border-line bg-surface shadow-card xl:sticky xl:top-4">
-            <div className="flex items-center gap-2 border-b border-line px-1.5 py-1.5">
+            <div className="flex items-center gap-2 border-b border-line px-3 py-2">
               <Package className="h-4 w-4 text-subtle" />
-              <h2 className="text-sm font-bold text-fg">Paketlenecek Ürünler</h2>
-              <span className="ml-auto rounded-full bg-elevated px-2 py-0.5 text-[10px] font-bold text-subtle">{KAYNAK.length} kalem</span>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-bold text-fg">Paketlenecek Ürünler</h2>
+                <div className="flex items-center gap-1.5 text-[10px]">
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${kaynakTuru === "canias" ? "bg-emerald-500" : "bg-amber-500"}`} />
+                  <span className="text-subtle truncate">
+                    {kaynakTuru === "canias" ? "CANIAS Canlı Liste" : "Örnek Liste (CANIAS Boş)"}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={listeGetir}
+                  disabled={yukleniyor}
+                  title="CANIAS'tan Listeyi Yenile"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-surface text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-50"
+                >
+                  <RotateCw className={`h-3.5 w-3.5 ${yukleniyor ? "animate-spin text-brand-600" : ""}`} />
+                </button>
+                <span className="rounded-full bg-elevated px-2 py-0.5 text-[10px] font-bold text-subtle">{urunler.length}</span>
+              </div>
             </div>
             <div className="max-h-[calc(100vh-200px)] space-y-2 overflow-y-auto p-2.5">
-              {KAYNAK.map((k) => {
-                const pk = paketlenmis(sahne, k.code);
-                const kalan = Math.max(0, k.siparis - pk);
-                const bittiK = kalan === 0;
-                return (
-                  <div
-                    key={k.code}
-                    className={`rounded-xl border p-3 transition ${bittiK ? "border-emerald-300 bg-emerald-50/60 opacity-70 dark:border-emerald-500/30 dark:bg-emerald-500/10" : "border-slate-400 dark:border-slate-400 bg-surface hover:border-brand-400"}`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-fg">{k.name}</p>
-                        <p className="font-mono text-[10px] font-bold text-fg">{k.code}{k.paketli && " · paketli"}</p>
+              {yukleniyor ? (
+                <div className="flex flex-col items-center justify-center gap-2 py-12 text-subtle">
+                  <RotateCw className="h-6 w-6 animate-spin text-brand-600" />
+                  <p className="text-xs">CANIAS'tan paketlenecekler alınıyor...</p>
+                </div>
+              ) : urunler.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-2 py-12 text-subtle">
+                  <Package className="h-8 w-8 text-subtle/50" />
+                  <p className="text-xs font-medium">Paketlenecek ürün bulunamadı</p>
+                </div>
+              ) : (
+                urunler.map((k) => {
+                  const pk = paketlenmis(sahne, k.code);
+                  const kalan = Math.max(0, k.siparis - pk);
+                  const bittiK = kalan === 0;
+                  return (
+                    <div
+                      key={k.code}
+                      draggable={!bittiK}
+                      onDragStart={(e) => {
+                        e.dataTransfer?.setData("text/plain", k.code);
+                        drag = { kind: "kaynak", code: k.code };
+                      }}
+                      className={`rounded-xl border p-3 transition ${bittiK ? "border-emerald-300 bg-emerald-50/60 opacity-70 dark:border-emerald-500/30 dark:bg-emerald-500/10" : "border-slate-400 dark:border-slate-400 bg-surface hover:border-brand-400 cursor-grab"}`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-fg">{k.name}</p>
+                          <p className="font-mono text-[10px] font-bold text-fg">{k.code}{k.paketli && " · paketli"}</p>
+                        </div>
+                        {bittiK && <Check className="h-4 w-4 shrink-0 text-emerald-600" />}
                       </div>
-                      {bittiK && <Check className="h-4 w-4 shrink-0 text-emerald-600" />}
-                    </div>
-                    <div className="mt-1 flex items-center justify-between gap-2">
-                      <div className="flex items-baseline gap-1 text-xs">
-                        <span className={`font-mono text-sm font-black ${bittiK ? "text-emerald-600 dark:text-emerald-400" : "text-fg"}`}>{kalan}</span>
-                        <span className={`text-[11px] font-bold ${bittiK ? "text-emerald-600/80 dark:text-emerald-400/80" : "text-fg"}`}>kaldı</span>
-                        <span className="ml-1 font-mono text-xs font-black text-fg">{k.siparis}</span>
-                        <span className="text-[11px] font-bold text-fg">sipariş</span>
-                        <span className="text-[10px] font-bold text-fg">{k.unit}</span>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <div className="flex items-baseline gap-1 text-xs">
+                          <span className={`font-mono text-sm font-black ${bittiK ? "text-emerald-600 dark:text-emerald-400" : "text-fg"}`}>{kalan}</span>
+                          <span className={`text-[11px] font-bold ${bittiK ? "text-emerald-600/80 dark:text-emerald-400/80" : "text-fg"}`}>kaldı</span>
+                          <span className="ml-1 font-mono text-xs font-black text-fg">{k.siparis}</span>
+                          <span className="text-[11px] font-bold text-fg">sipariş</span>
+                          <span className="text-[10px] font-bold text-fg">{k.unit}</span>
+                        </div>
+                        <button type="button" disabled={bittiK} onClick={() => kaynakEkle(k.code, seciliKapId)} className="inline-flex items-center gap-1 rounded-lg border border-brand-300 px-2 py-1 text-[11px] font-bold text-brand-600 transition hover:bg-brand-50 disabled:opacity-40 dark:hover:bg-brand-500/10"><Plus className="h-3.5 w-3.5" /> Ekle</button>
                       </div>
-                      <button type="button" disabled={bittiK} onClick={() => kaynakEkle(k.code, seciliKapId)} className="inline-flex items-center gap-1 rounded-lg border border-brand-300 px-2 py-1 text-[11px] font-bold text-brand-600 transition hover:bg-brand-50 disabled:opacity-40 dark:hover:bg-brand-500/10"><Plus className="h-3.5 w-3.5" /> Ekle</button>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
         </aside>
@@ -922,7 +1000,8 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
                   <span title={`Koli Desisi: ${kDesi} ds (İçerik: ${icDesiYuvarlanmis} ds)`}>{kDesi} ds</span>
                   <span title={`Toplam brüt ağırlık: ${fmt(toplamKg)} kg (Koli darası: ${fmt(daraKg)} kg)`}>{fmt(toplamKg)} kg</span>
                 </p>
-                <span className={`${kDesi} Desi px-3`}>
+                <span className="px-3 text-[11px] font-bold text-fg">
+                  {kDesi} Desi
                 </span>
               </div>
             </div>

@@ -399,7 +399,20 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 
 ---
 
-## 8. Özet Tablo: Servis İsimleri ve Kullanım Yerleri
+## 8. Paketleme Servisleri
+
+### 8.1. `MZYListingPack` — Paketlenecekleri Getir
+- **Açıklama**: Paketleme istasyonunda paketlenmeyi bekleyen sipariş ve malzemeleri listeler.
+- **Parametreler**:
+  - `PSCOMPANY` (*STRING*): Firma Kodu (Örn: `"01"`).
+  - `PSPLANT` (*STRING*): Tesis Kodu (Örn: `"100"`).
+  - `PSWAREHOUSE` (*STRING*): Depo Kodu (Örn: `"D1"`).
+  - `PITRACESTATUS` (*INTEGER*): Trace Durumu (`0`: Pasif, `1`: Aktif).
+- **WMS İstemci Karşılığı**: `api.getPackagingList({ company, plant, warehouse, traceStatus })`
+
+---
+
+## 9. Özet Tablo: Servis İsimleri ve Kullanım Yerleri
 
 | Servis Adı | CANIAS Servisi | İstemci Metodu | Dosya Konumu |
 | :--- | :--- | :--- | :--- |
@@ -434,3 +447,4 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 | **Serbest Stok Transferi** | `MZYStockTransfer` | `api.createStockTransfer` | `src/api/client.ts` |
 | **Sayım Belgeleri Listesi** | `MZYListingAdjustment` | `api.getAdjustmentList` | `src/api/client.ts` |
 | **Sayım Emri Giriş** | `MZYEnterAdjustment` | `api.getAdjustmentOrder` | `src/api/client.ts` |
+| **Paketleme Listesi** | `MZYListingPack` | `api.getPackagingList` | `src/api/client.ts` |

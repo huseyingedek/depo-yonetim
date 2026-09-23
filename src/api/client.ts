@@ -216,6 +216,7 @@ function ctx() {
     plant: st.settings.facility,
     warehouse: st.settings.warehouse,
     worker: st.user?.username ?? "",
+    trace: st.trace ?? false,
   };
 }
 
@@ -2375,5 +2376,40 @@ export const api = {
       const msg = err instanceof Error ? err.message : String(err);
       return { ok: false, message: msg };
     }
+  },
+
+  // ---------------------------------------------------------------------------
+  // PAKETLEME SERVİSLERİ
+  // ---------------------------------------------------------------------------
+
+  /**
+   * MZYListingPack — Paketlenecekleri Getir
+   * @param params Firma, Tesis, Depo ve Trace durumu
+   */
+  async getPackagingList(params?: {
+    company?: string;
+    plant?: string;
+    warehouse?: string;
+    traceStatus?: number;
+  }): Promise<Row[]> {
+    const c = ctx();
+    const companyCode = params?.company || c.company || "01";
+    const plantCode = params?.plant || c.plant || "100";
+    const whCode = params?.warehouse || c.warehouse || "D1";
+    const traceStatus = params?.traceStatus ?? (c.trace ? 1 : 0);
+
+    const callParams = {
+      PSCOMPANY: companyCode,
+      PSPLANT: plantCode,
+      PSWAREHOUSE: whCode,
+      PITRACESTATUS: traceStatus,
+    };
+
+    console.info("📤 [MZYListingPack PARAMETRELER]", callParams);
+    const r = await call(SERVICES.listingPack, callParams);
+    console.info("📥 [MZYListingPack GELEN YANIT]", r);
+
+    if (Array.isArray(r.data)) return (r.data as unknown[]).map(flattenRow);
+    return rowsOf(r, ["TBLPACKLIST", "TBLLISTINGPACK", "PACKLIST", "TBLPACK", "ROW"]) || [];
   },
 };
