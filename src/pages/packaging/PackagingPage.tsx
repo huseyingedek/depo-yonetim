@@ -729,7 +729,7 @@ export default function PackagingPage() {
                   : "border-brand-300/80 bg-brand-50/80 dark:border-brand-500/30 dark:bg-brand-500/15"
               }`}
             >
-              <span className="text-center text-[11px] font-bold tracking-tight text-brand-700 dark:text-brand-300">
+              <span className="text-center text-[12px] font-bold tracking-tight text-brand-700 dark:text-brand-300">
                 Malzeme Ekle
               </span>
               <form
