@@ -321,7 +321,6 @@ export default function PackagingPage() {
   const [seciliEmir, setSeciliEmir] = useState<PackOrder | null>(null);
   const [urunler, setUrunler] = useState<KaynakUrun[]>([]);
   const [yukleniyor, setYukleniyor] = useState(false);
-  const [kaynakTuru, setKaynakTuru] = useState<"canias" | "varsayilan">("canias");
 
   const emirSec = async (emir: PackOrder) => {
     setSeciliEmir(emir);
@@ -348,11 +347,9 @@ export default function PackagingPage() {
           kg: 0.5,
         }));
         setUrunler(caniasUrunler);
-        setKaynakTuru("canias");
         show({ kind: "ok", text: `${emir.orderType}-${emir.orderNum} için ${caniasUrunler.length} kalem malzeme CANIAS'tan yüklendi` });
       } else {
         setUrunler([]);
-        setKaynakTuru("canias");
         show({ kind: "info", text: `${emir.orderType}-${emir.orderNum} stok yerinde açık malzeme bulunamadı` });
       }
     } catch (err) {
@@ -387,7 +384,6 @@ export default function PackagingPage() {
         // Otomatik sipariş seçilmez, kullanıcı kendisi seçer (F5 temiz gelir)
         setSeciliEmir(null);
         setUrunler([]);
-        setKaynakTuru("canias");
       } else {
         setEmirler([]);
         setSeciliEmir(null);
@@ -497,6 +493,7 @@ export default function PackagingPage() {
     const parent = hedef && hedef.tur !== "urun" ? seciliKapId : null;
     setSahne((prev) => nodeAdd(prev, parent, yeni));
     setSeciliKapId(uid);
+    if (atilMod) setAtilMod(false);
     show({ kind: "ok", text: `${atilMod ? "Atıl koli" : "Koli"} · ${b?.kod || `Boyut ${no}`} (${b?.ol || ""} cm · ${yuvarlaDesi(b?.hacim ?? boyutHacim(no))} DS)` });
   };
 
