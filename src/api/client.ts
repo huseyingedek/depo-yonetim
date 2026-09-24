@@ -1213,99 +1213,135 @@ export const api = {
     const tarWh = String(payload.targetWarehouse || "").trim();
     const tarSp = String(payload.targetStockPlace || "*").trim();
 
-    const formattedItems = (payload.items || []).map((it) => {
-      const rawSpecial = String(it.specialStock || "").trim();
-      const isPartili =
-        rawSpecial === "1" ||
-        /takipli|partili/i.test(rawSpecial) ||
-        (Boolean(it.batchNum) && it.batchNum !== "*" && it.batchNum !== "—");
-      const specialStock = isPartili
-        ? "1"
-        : rawSpecial !== "" && rawSpecial !== "0" && rawSpecial !== "Serbest"
-          ? rawSpecial
-          : "*";
-      const batchNum =
-        it.batchNum && it.batchNum !== "*" && it.batchNum !== "—"
-          ? String(it.batchNum).trim()
-          : "*";
+    // Farklı kaynak raflardan eklenen ürünleri kendi kaynak depo ve raflarına göre grupla
+    interface ItemGroup {
+      sourceWarehouse: string;
+      sourceStockPlace: string;
+      items: typeof payload.items;
+    }
 
-      // Stok birimi (adet) bazında miktar hesaplama (Örn: KO/PK/KT ise çarpan ile adet'e çevir)
-      const multiplier = it.multiplier && it.multiplier > 1 ? it.multiplier : 1;
-      const baseStockQty = Number(it.quantity || 1) * multiplier;
-      const baseStockUnit = String(it.skunit || it.unit || "AD").trim().toUpperCase();
+    const groupMap = new Map<string, ItemGroup>();
+    for (const it of payload.items || []) {
+      const itSrcWh = String(it.sourceWarehouse || srcWh).trim();
+      const itSrcSp = String(it.sourceStockPlace || srcSp).trim();
+      const key = `${itSrcWh}|${itSrcSp}`;
+      if (!groupMap.has(key)) {
+        groupMap.set(key, {
+          sourceWarehouse: itSrcWh,
+          sourceStockPlace: itSrcSp,
+          items: [],
+        });
+      }
+      groupMap.get(key)!.items.push(it);
+    }
 
-      return {
-        MATERIAL: String(it.material || "").trim(),
-        SPECIALSTOCK: specialStock,
-        BATCHNUM: batchNum,
-        QUANTITY: baseStockQty,
-        QUNIT: baseStockUnit,
-      };
-    });
+    if (groupMap.size === 0) {
+      return { ok: false, message: "Taşınacak malzeme bulunamadı." };
+    }
 
-    console.log("📦 [CANIAS MZYStockTransfer PAYLOAD]", {
-      company: compCode,
-      plant: plantCode,
-      user: userCode,
-      sourceWarehouse: srcWh,
-      sourceStockPlace: srcSp,
-      targetWarehouse: tarWh,
-      targetStockPlace: tarSp,
-      items: formattedItems,
-    });
+    const createdTransferIds: string[] = [];
 
     try {
-      const r = await call(SERVICES.stockTransfer, {
-        PSCOMPANY: compCode,
-        PSPLANT: plantCode,
-        PSUSER: userCode,
-        PSSRCWAREHOUSE: srcWh,
-        PSSRCSTOCKPLACE: srcSp,
-        PSTARWAREHOUSE: tarWh,
-        PSTARSTOCKPLACE: tarSp,
-        PSTRANSFERTABLEXML: formattedItems,
-      });
+      for (const group of groupMap.values()) {
+        const formattedItems = group.items.map((it) => {
+          const rawSpecial = String(it.specialStock || "").trim();
+          const isPartili =
+            rawSpecial === "1" ||
+            /takipli|partili/i.test(rawSpecial) ||
+            (Boolean(it.batchNum) && it.batchNum !== "*" && it.batchNum !== "—");
+          const specialStock = isPartili
+            ? "1"
+            : rawSpecial !== "" && rawSpecial !== "0" && rawSpecial !== "Serbest"
+              ? rawSpecial
+              : "*";
+          const batchNum =
+            it.batchNum && it.batchNum !== "*" && it.batchNum !== "—"
+              ? String(it.batchNum).trim()
+              : "*";
 
-      const d = (r.data ?? {}) as Record<string, unknown>;
+          // Stok birimi (adet) bazında miktar hesaplama (Örn: KO/PK/KT ise çarpan ile adet'e çevir)
+          const multiplier = it.multiplier && it.multiplier > 1 ? it.multiplier : 1;
+          const baseStockQty = Number(it.quantity || 1) * multiplier;
+          const baseStockUnit = String(it.skunit || it.unit || "AD").trim().toUpperCase();
 
-      // CANIAS hata tablosu kontrolü (TYPE === "E" ise hata)
-      let caniasError = "";
-      const mt = d.MESSAGETABLE as { ROW?: unknown } | undefined;
-      const mtRows = mt ? (Array.isArray(mt.ROW) ? mt.ROW : mt.ROW ? [mt.ROW] : []) : [];
-      for (const row of mtRows) {
-        const rw = row as Record<string, unknown>;
-        const type = String(rw?.TYPE || "").trim().toUpperCase();
-        if (type === "E" || type === "ERROR") {
-          caniasError = String(rw?.SYSTEMMSG || rw?.TEXT || rw?.MESSAGE || rw?.MSGTEXT || "CANIAS transfer işlemini reddetti.");
-          break;
+          return {
+            MATERIAL: String(it.material || "").trim(),
+            SPECIALSTOCK: specialStock,
+            BATCHNUM: batchNum,
+            QUANTITY: baseStockQty,
+            QUNIT: baseStockUnit,
+          };
+        });
+
+        console.log("📦 [CANIAS MZYStockTransfer PAYLOAD]", {
+          company: compCode,
+          plant: plantCode,
+          user: userCode,
+          sourceWarehouse: group.sourceWarehouse,
+          sourceStockPlace: group.sourceStockPlace,
+          targetWarehouse: tarWh,
+          targetStockPlace: tarSp,
+          items: formattedItems,
+        });
+
+        const r = await call(SERVICES.stockTransfer, {
+          PSCOMPANY: compCode,
+          PSPLANT: plantCode,
+          PSUSER: userCode,
+          PSSRCWAREHOUSE: group.sourceWarehouse,
+          PSSRCSTOCKPLACE: group.sourceStockPlace,
+          PSTARWAREHOUSE: tarWh,
+          PSTARSTOCKPLACE: tarSp,
+          PSTRANSFERTABLEXML: formattedItems,
+        });
+
+        const d = (r.data ?? {}) as Record<string, unknown>;
+
+        // CANIAS hata tablosu kontrolü (TYPE === "E" ise hata)
+        let caniasError = "";
+        const mt = d.MESSAGETABLE as { ROW?: unknown } | undefined;
+        const mtRows = mt ? (Array.isArray(mt.ROW) ? mt.ROW : mt.ROW ? [mt.ROW] : []) : [];
+        for (const row of mtRows) {
+          const rw = row as Record<string, unknown>;
+          const type = String(rw?.TYPE || "").trim().toUpperCase();
+          if (type === "E" || type === "ERROR") {
+            caniasError = String(rw?.SYSTEMMSG || rw?.TEXT || rw?.MESSAGE || rw?.MSGTEXT || "CANIAS transfer işlemini reddetti.");
+            break;
+          }
+        }
+
+        if (caniasError) {
+          return {
+            ok: false,
+            message: `${group.sourceStockPlace} rafı: ${caniasError}`,
+          };
+        }
+
+        const mesaj = serviceMessage(r);
+        if (mesaj && /error|fail|hata/i.test(mesaj)) {
+          return {
+            ok: false,
+            message: `${group.sourceStockPlace} rafı: ${mesaj}`,
+          };
+        }
+
+        const rows = rowsOf(r, ["IASINVITEM", "IASINVHEAD", "TBLTRANSFER", "TBLSTOCKTRANSFER", "TRANSFERLIST", "TBLDOC", "TBLRESULT"]);
+        const firstRow = rows[0] || (r.data as Row) || {};
+        const transferId =
+          pick(firstRow, ["INVDOCNUM", "DOCNUM", "TRANSFERID", "PSTRANSFERID", "ORDERNUM", "TRANSFERNO"]) ||
+          (r.data && typeof r.data === "object"
+            ? pick(r.data as Row, ["INVDOCNUM", "DOCNUM", "TRANSFERID", "PSTRANSFERID", "ORDERNUM", "TRANSFERNO"])
+            : "");
+
+        if (transferId) {
+          createdTransferIds.push(transferId);
         }
       }
 
-      if (caniasError) {
-        return { ok: false, message: caniasError };
-      }
-
-      const mesaj = serviceMessage(r);
-      if (mesaj && /error|fail|hata/i.test(mesaj)) {
-        return { ok: false, message: mesaj };
-      }
-
-      const rows = rowsOf(r, ["IASINVITEM", "IASINVHEAD", "TBLTRANSFER", "TBLSTOCKTRANSFER", "TRANSFERLIST", "TBLDOC", "TBLRESULT"]);
-      const firstRow = rows[0] || (r.data as Row) || {};
-      const transferId =
-        pick(firstRow, ["INVDOCNUM", "DOCNUM", "TRANSFERID", "PSTRANSFERID", "ORDERNUM", "TRANSFERNO"]) ||
-        (r.data && typeof r.data === "object"
-          ? pick(r.data as Row, ["INVDOCNUM", "DOCNUM", "TRANSFERID", "PSTRANSFERID", "ORDERNUM", "TRANSFERNO"])
-          : "");
-
-      const cleanMsg = (mesaj && !/msgtable|messagetable|\{|\}/i.test(mesaj))
-        ? mesaj
-        : "Transfer işlemi başarıyla tamamlandı.";
-
       return {
         ok: true,
-        transferId: transferId || undefined,
-        message: cleanMsg,
+        transferId: createdTransferIds.length > 0 ? createdTransferIds.join(", ") : undefined,
+        message: "Transfer işlemi başarıyla tamamlandı.",
       };
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);

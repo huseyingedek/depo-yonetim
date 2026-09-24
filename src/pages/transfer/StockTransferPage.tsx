@@ -36,6 +36,7 @@ export default function StockTransferPage() {
 
   const scanSourceShelf = useTransferStore((s) => s.scanSourceShelf);
   const clearSourceShelf = useTransferStore((s) => s.clearSourceShelf);
+  const setSourceShelf = useTransferStore((s) => s.setSourceShelf);
   const addItem = useTransferStore((s) => s.addItem);
   const removeItem = useTransferStore((s) => s.removeItem);
   const goToTargetStep = useTransferStore((s) => s.goToTargetStep);
@@ -250,6 +251,22 @@ export default function StockTransferPage() {
           return;
         }
 
+        // A2) Raf barkodu okutulduysa (örn: D1$G1R1) doğrudan kaynak rafı güncelle
+        if (barkod.includes("$")) {
+          if (activeItem && activeItem.quantity > 0) {
+            addItem(activeItem);
+            setActiveItem(null);
+          }
+          setLotPendingItem(null);
+          const r = await scanSourceShelf(barkod);
+          if (r.ok) {
+            showToast({ kind: "ok", text: `Kaynak raf değiştirildi: ${r.message}` });
+          } else {
+            showError(r.message);
+          }
+          return;
+        }
+
         // B) Parti bekleniyor (Adım 3)
         if (lotPendingItem) {
           const lotVal = barkod.trim();
@@ -335,6 +352,26 @@ export default function StockTransferPage() {
         );
 
         if (!res.ok || !res.material) {
+          // Raf barkodu veya kodu olabilir mi kontrol et (örn: doğrudan raf kodu girildiyse)
+          try {
+            const shelfCheck = await api.readShelfBarcode(barkod);
+            if (shelfCheck.ok && shelfCheck.warehouse && shelfCheck.stockPlace) {
+              setSourceShelf({
+                barcode: barkod,
+                warehouse: shelfCheck.warehouse,
+                stockPlace: shelfCheck.stockPlace,
+              });
+              setLotPendingItem(null);
+              showToast({
+                kind: "ok",
+                text: `Kaynak raf değiştirildi: Depo ${shelfCheck.warehouse} · ${shelfCheck.stockPlace}`,
+              });
+              return;
+            }
+          } catch {
+            // ignore
+          }
+
           const errMsg = res.message && !/kalıntı/i.test(res.message) ? res.message : "Barkod bulunamadı";
           showError(errMsg);
           return;
@@ -480,6 +517,7 @@ export default function StockTransferPage() {
       activeItem,
       scanTargetShelf,
       scanSourceShelf,
+      setSourceShelf,
       addItem,
       getBatchRemainingStock,
       getMaxAllowedQty,
