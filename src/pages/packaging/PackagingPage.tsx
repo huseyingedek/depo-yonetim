@@ -28,6 +28,7 @@ import {
   Camera,
   AlertTriangle,
   CornerDownLeft,
+  ArrowLeft,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import ToastView, { useToast } from "../../components/Toast";
@@ -51,6 +52,7 @@ interface UrunNode {
 interface KoliNode {
   uid: string; tur: "koli"; no: number; kod?: string; atil?: boolean; beklemede?: boolean;
   hacim: number; dara?: number; hazards: Hazard[]; cocuklar: Node[];
+  en?: number; boy?: number; yukseklik?: number; ol?: string;
 }
 interface PaletNode { uid: string; tur: "palet"; ad: string; cocuklar: Node[]; }
 type Node = UrunNode | KoliNode | PaletNode;
@@ -197,9 +199,9 @@ export const BOYUTLAR: KoliBoyutTanimi[] = [
 const fmt = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, useGrouping: false }).format(n);
 const boyutBul = (no: number) => BOYUTLAR.find((b) => b.n === no);
 const boyutHacim = (no: number) => boyutBul(no)?.hacim ?? 10;
-const boyutGenislik = (no: number) => {
-  const b = boyutBul(no);
-  return b ? Math.round(180 + b.en * 2.8) : 260;
+const boyutGenislik = (no: number, en?: number) => {
+  const w = typeof en === "number" && en > 0 ? en : boyutBul(no)?.en;
+  return w ? Math.round(180 + w * 2.8) : 260;
 };
 const boyutOl = (no: number) => boyutBul(no)?.ol ?? "";
 const boyutKodu = (no: number) => boyutBul(no)?.kod ?? `KOL0${no}`;
@@ -315,6 +317,7 @@ export default function PackagingPage() {
 
   const [sahne, setSahne] = useState<Node[]>([]);
   const [seciliKapId, setSeciliKapId] = useState<string | null>(null);
+  const [duzenlenenKoliUid, setDuzenlenenKoliUid] = useState<string | null>(null);
   const [atilMod, setAtilMod] = useState(false);
   const [dropHedef, setDropHedef] = useState<string | null>(null);
   const [bitti, setBitti] = useState(false);
@@ -487,6 +490,10 @@ export default function PackagingPage() {
       tur: "koli",
       no,
       kod: b?.kod,
+      en: b?.en,
+      boy: b?.boy,
+      yukseklik: b?.yukseklik,
+      ol: b?.ol,
       hacim: b?.hacim ?? boyutHacim(no),
       dara: b?.dara ?? 0,
       hazards: [],
@@ -651,13 +658,76 @@ export default function PackagingPage() {
   function koliIcineKoli(parentUid: string) {
     const uid = yid();
     const b = boyutBul(1);
-    const yeni: KoliNode = { uid, tur: "koli", no: 1, kod: b?.kod, hacim: b?.hacim ?? boyutHacim(1), dara: b?.dara ?? 0, hazards: [], cocuklar: [] };
+    const yeni: KoliNode = {
+      uid,
+      tur: "koli",
+      no: 1,
+      kod: b?.kod,
+      en: b?.en,
+      boy: b?.boy,
+      yukseklik: b?.yukseklik,
+      ol: b?.ol,
+      hacim: b?.hacim ?? boyutHacim(1),
+      dara: b?.dara ?? 0,
+      hazards: [],
+      cocuklar: [],
+    };
     setSahne((prev) => nodeAdd(prev, parentUid, yeni));
     setSeciliKapId(uid);
     show({ kind: "ok", text: "Koli içine koli eklendi" });
   }
 
-  const api: Api = { seciliKapId, setSeciliKapId, sil, urunAdet, hacim, hazardToggle, beklet, koliIcineEkle: koliIcineKoli, dropHedef, setDropHedef, birak };
+  const api: Api = {
+    seciliKapId,
+    setSeciliKapId,
+    sil,
+    urunAdet,
+    hacim,
+    hazardToggle,
+    beklet,
+    koliIcineEkle: koliIcineKoli,
+    dropHedef,
+    setDropHedef,
+    birak,
+    koliDuzenle: (uid: string) => setDuzenlenenKoliUid(uid),
+  };
+
+  const duzenlenenKoli = duzenlenenKoliUid
+    ? (nodeFind(sahne, duzenlenenKoliUid) as KoliNode | null)
+    : null;
+
+  if (duzenlenenKoli) {
+    return (
+      <div className="w-full px-1.5 py-3 lg:py-4">
+        <KoliBoyutDuzenlemeEkrani
+          koli={duzenlenenKoli}
+          onKaydet={(guncel) => {
+            setSahne((prev) =>
+              nodeMap(prev, duzenlenenKoli.uid, (n) =>
+                n.tur === "koli"
+                  ? {
+                    ...n,
+                    en: guncel.en,
+                    boy: guncel.boy,
+                    yukseklik: guncel.yukseklik,
+                    ol: guncel.ol,
+                    hacim: guncel.hacim,
+                  }
+                  : n
+              )
+            );
+            show({
+              kind: "ok",
+              text: `Koli boyutları güncellendi (${guncel.ol} cm · ${yuvarlaDesi(guncel.hacim)} DS)`,
+            });
+            setDuzenlenenKoliUid(null);
+          }}
+          onGeriDon={() => setDuzenlenenKoliUid(null)}
+        />
+        <ToastView toast={toast} />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full px-1.5 py-3 lg:py-4">
@@ -739,11 +809,10 @@ export default function PackagingPage() {
 
             {/* Malzeme Ekle Barkod Kartı */}
             <div
-              className={`flex shrink-0 flex-col justify-between rounded-xl border px-2.5 py-1 transition ${
-                barkodHatasi
-                  ? "border-red-400 bg-red-50/70 dark:border-red-500/50 dark:bg-red-500/10"
-                  : "border-brand-300/80 bg-brand-50/80 dark:border-brand-500/30 dark:bg-brand-500/15"
-              }`}
+              className={`flex shrink-0 flex-col justify-between rounded-xl border px-2.5 py-1 transition ${barkodHatasi
+                ? "border-red-400 bg-red-50/70 dark:border-red-500/50 dark:bg-red-500/10"
+                : "border-brand-300/80 bg-brand-50/80 dark:border-brand-500/30 dark:bg-brand-500/15"
+                }`}
             >
               <span className="text-center text-[12px] font-bold tracking-tight text-brand-700 dark:text-brand-300">
                 Malzeme Ekle
@@ -955,6 +1024,179 @@ export default function PackagingPage() {
 }
 
 // -----------------------------------------------------------------------------
+// KOLİ BOYUTLARI DÜZENLEME EKRANI (SADECE SEÇİLİ KOLİ İÇİN BOYUT DÜZENLEME)
+// Sağ üstte: 'Paketlemeye Geri Dön' tuşu. Sol üstte: Geri dön tuşu YOK.
+// Depocu monitörden klavyeyle En, Boy ve Yükseklik değerlerini doğrudan yazar.
+// Sadece tıklanmış olan o tek koli güncellenir, diğer koliler etkilenmez.
+// -----------------------------------------------------------------------------
+
+interface KoliBoyutGuncellemeData {
+  en: number;
+  boy: number;
+  yukseklik: number;
+  ol: string;
+  hacim: number;
+}
+
+interface KoliBoyutDuzenlemeEkraniProps {
+  koli: KoliNode;
+  onKaydet: (guncel: KoliBoyutGuncellemeData) => void;
+  onGeriDon: () => void;
+}
+
+function KoliBoyutDuzenlemeEkrani({
+  koli,
+  onKaydet,
+  onGeriDon,
+}: KoliBoyutDuzenlemeEkraniProps) {
+  const b = boyutBul(koli.no);
+  const ilkEn = koli.en ?? b?.en ?? 30;
+  const ilkBoy = koli.boy ?? b?.boy ?? 30;
+  const ilkYukseklik = koli.yukseklik ?? b?.yukseklik ?? 30;
+
+  const [en, setEn] = useState<number | string>(ilkEn);
+  const [boy, setBoy] = useState<number | string>(ilkBoy);
+  const [yukseklik, setYukseklik] = useState<number | string>(ilkYukseklik);
+
+  const numEn = Number(en) > 0 ? Number(en) : ilkEn;
+  const numBoy = Number(boy) > 0 ? Number(boy) : ilkBoy;
+  const numYukseklik = Number(yukseklik) > 0 ? Number(yukseklik) : ilkYukseklik;
+
+  const hesaplananHacim = Number(((numEn * numBoy * numYukseklik) / 3000).toFixed(2));
+  const kargoDesi = yuvarlaDesi(hesaplananHacim);
+
+  const degisti =
+    numEn !== ilkEn || numBoy !== ilkBoy || numYukseklik !== ilkYukseklik;
+
+  const handleKaydet = () => {
+    onKaydet({
+      en: numEn,
+      boy: numBoy,
+      yukseklik: numYukseklik,
+      ol: `${numEn}×${numBoy}×${numYukseklik}`,
+      hacim: hesaplananHacim,
+    });
+  };
+
+  const handleGeriDon = () => {
+    if (degisti) {
+      handleKaydet();
+    } else {
+      onGeriDon();
+    }
+  };
+
+  return (
+    <div className="mx-auto w-full max-w-2xl px-2 py-6">
+      {/* ÜST BAŞLIK — SOL ÜSTTE GERİ TUŞU YOK, SAĞ ÜSTTE 'PAKETLEMEYE GERİ DÖN' TUŞU */}
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-black text-fg sm:text-2xl">
+              Koli Boyutlarını Değiştir
+            </h1>
+            <span className="rounded-lg border border-line bg-surface px-2.5 py-0.5 font-mono text-xs font-bold text-brand-600 dark:text-brand-300">
+              {koli.kod || `Koli ${boyutKodu(koli.no)}`}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-subtle sm:text-sm">
+            Kolinin ölçülerini (cm) girerek kaydedin.
+          </p>
+        </div>
+
+        {/* SAĞ ÜST: Paketlemeye Geri Dön butonu */}
+        <button
+          type="button"
+          onClick={handleGeriDon}
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white shadow-soft transition hover:bg-brand-700 active:scale-95"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Paketlemeye Geri Dön</span>
+        </button>
+      </div>
+
+      {/* SADE VE DOĞRUDAN FORM KARTI */}
+      <div className="card p-6 shadow-sm">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {/* En */}
+          <div>
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-fg">
+              En (cm)
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={en}
+              onChange={(e) => setEn(e.target.value === "" ? "" : parseFloat(e.target.value))}
+              placeholder="En"
+              className="w-full rounded-xl border border-line bg-elevated px-3.5 py-2.5 font-mono text-base font-bold text-fg transition focus:border-brand-500 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+              autoFocus
+            />
+          </div>
+
+          {/* Boy */}
+          <div>
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-fg">
+              Boy / Uzunluk (cm)
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={boy}
+              onChange={(e) => setBoy(e.target.value === "" ? "" : parseFloat(e.target.value))}
+              placeholder="Boy"
+              className="w-full rounded-xl border border-line bg-elevated px-3.5 py-2.5 font-mono text-base font-bold text-fg transition focus:border-brand-500 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+            />
+          </div>
+
+          {/* Yükseklik */}
+          <div>
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-fg">
+              Yükseklik (cm)
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={yukseklik}
+              onChange={(e) => setYukseklik(e.target.value === "" ? "" : parseFloat(e.target.value))}
+              placeholder="Yükseklik"
+              className="w-full rounded-xl border border-line bg-elevated px-3.5 py-2.5 font-mono text-base font-bold text-fg transition focus:border-brand-500 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+            />
+          </div>
+        </div>
+
+        {/* Butonlar & Desi — Karta ortalanmış */}
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          {/* Desi — İptalin solunda */}
+          <div className="flex items-center gap-2 rounded-xl border border-line bg-elevated/40 px-3.5 py-2">
+            <span className="text-xs font-bold text-subtle">Desi:</span>
+            <span className="rounded-md bg-brand-500/10 px-2 py-0.5 font-mono text-sm font-extrabold text-brand-600 dark:bg-brand-500/20 dark:text-brand-300">
+              {kargoDesi} DS
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={onGeriDon}
+            className="rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-muted transition hover:bg-elevated hover:text-fg active:scale-95"
+          >
+            İptal
+          </button>
+          <button
+            type="button"
+            onClick={handleKaydet}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-bold text-white shadow-soft transition hover:bg-brand-700 active:scale-95"
+          >
+            <Check className="h-4 w-4" />
+            <span>Kaydet</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
 interface Api {
   seciliKapId: string | null;
   setSeciliKapId: (v: string | null) => void;
@@ -967,6 +1209,7 @@ interface Api {
   dropHedef: string | null;
   setDropHedef: (v: string | null) => void;
   birak: (parentUid: string | null) => void;
+  koliDuzenle: (uid: string) => void;
 }
 
 function KartNode({ node, api, parentTur }: { node: Node; api: Api; parentTur?: "sahne" | "palet" | "koli" }) {
@@ -1157,7 +1400,7 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
       onDragLeave={() => drop && api.setDropHedef(null)}
       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); api.birak(koli.uid); }}
       onClick={(e) => { e.stopPropagation(); api.setSeciliKapId(koli.uid); }}
-      style={!inContainer ? { minWidth: boyutGenislik(koli.no), maxWidth: Math.max(boyutGenislik(koli.no), 380) } : undefined}
+      style={!inContainer ? { minWidth: boyutGenislik(koli.no, koli.en), maxWidth: Math.max(boyutGenislik(koli.no, koli.en), 380) } : undefined}
       className={`flex min-w-0 w-full flex-col rounded-2xl border-2 p-[2px] shadow-sm transition ${b?.btn} ${secili ? `ring-2 ${b?.ring}` : ""}`}
     >
       <div className="px-2 pt-1.5 pb-0.5">
@@ -1172,7 +1415,7 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
                 <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-black ${atil ? "bg-slate-200 text-slate-600 dark:bg-slate-600/50 dark:text-slate-200" : "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300"}`}>
                   {koli.no}
                 </span>
-                <span className="truncate text-xs font-bold text-fg">{atil ? "Atıl Koli" : `Koli ${boyutKodu(koli.no)}`}</span>
+                <span className="truncate text-xs font-bold text-fg">{atil ? "Atıl Koli" : koli.kod || `Koli ${boyutKodu(koli.no)}`}</span>
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
                 <button type="button" onClick={(e) => { e.stopPropagation(); api.koliIcineEkle(koli.uid); }} className="rounded-lg p-1.5 text-subtle transition hover:bg-brand-50 hover:text-brand-600 active:scale-95 dark:hover:bg-brand-500/10" title="İçine koli ekle">
@@ -1184,8 +1427,8 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
 
             <div className="mt-1 flex flex-col gap-0.5">
               <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold text-fg">
-                <span>Boyut {koli.no}</span>
-                {boyutOl(koli.no) && <span>{boyutOl(koli.no)} cm</span>}
+                <span>{koli.kod || `Boyut ${koli.no}`}</span>
+                {(koli.ol || boyutOl(koli.no)) && <span>{koli.ol || boyutOl(koli.no)} cm</span>}
                 <span className="rounded bg-brand-100/80 px-1.5 py-0.5 text-[10px] font-extrabold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">
                   {kDesi} DS
                 </span>
@@ -1198,9 +1441,12 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
                 </p>
                 <button
                   type="button"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    api.koliDuzenle(koli.uid);
+                  }}
                   className="rounded p-0.5 text-subtle transition hover:bg-elevated hover:text-fg active:scale-95"
-                  title="Düzenle"
+                  title="Boyutları Düzenle"
                 >
                   <Pencil className="h-3 w-3" />
                 </button>
@@ -1214,15 +1460,18 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
             <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-black ${atil ? "bg-slate-200 text-slate-600 dark:bg-slate-600/50 dark:text-slate-200" : "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300"}`}>{koli.no}</span>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-fg">
-                <span>{atil ? "Atıl Koli" : `Koli ${boyutKodu(koli.no)}`}</span>
+                <span>{atil ? "Atıl Koli" : koli.kod || `Koli ${boyutKodu(koli.no)}`}</span>
                 <span className="text-xs font-bold text-fg flex items-center gap-2">
-                  <span>Boyut {koli.no}</span>
-                  {boyutOl(koli.no) && <span>{boyutOl(koli.no)} cm</span>}
+                  <span>{koli.kod || `Boyut ${koli.no}`}</span>
+                  {(koli.ol || boyutOl(koli.no)) && <span>{koli.ol || boyutOl(koli.no)} cm</span>}
                   <button
                     type="button"
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      api.koliDuzenle(koli.uid);
+                    }}
                     className="rounded p-0.5 text-subtle transition hover:bg-elevated hover:text-fg active:scale-95"
-                    title="Düzenle"
+                    title="Boyutları Düzenle"
                   >
                     <Pencil className="h-3 w-3" />
                   </button>
