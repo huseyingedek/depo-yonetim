@@ -122,6 +122,7 @@ function mesajCoz(raw: unknown): string {
       })
       .filter(Boolean);
     if (lines.length) return lines.join("\n");
+    if (parsed && typeof parsed === "object") return "";
   } catch {
 
   }
@@ -1261,23 +1262,46 @@ export const api = {
         PSTRANSFERTABLEXML: formattedItems,
       });
 
+      const d = (r.data ?? {}) as Record<string, unknown>;
+
+      // CANIAS hata tablosu kontrolü (TYPE === "E" ise hata)
+      let caniasError = "";
+      const mt = d.MESSAGETABLE as { ROW?: unknown } | undefined;
+      const mtRows = mt ? (Array.isArray(mt.ROW) ? mt.ROW : mt.ROW ? [mt.ROW] : []) : [];
+      for (const row of mtRows) {
+        const rw = row as Record<string, unknown>;
+        const type = String(rw?.TYPE || "").trim().toUpperCase();
+        if (type === "E" || type === "ERROR") {
+          caniasError = String(rw?.SYSTEMMSG || rw?.TEXT || rw?.MESSAGE || rw?.MSGTEXT || "CANIAS transfer işlemini reddetti.");
+          break;
+        }
+      }
+
+      if (caniasError) {
+        return { ok: false, message: caniasError };
+      }
+
       const mesaj = serviceMessage(r);
       if (mesaj && /error|fail|hata/i.test(mesaj)) {
         return { ok: false, message: mesaj };
       }
 
-      const rows = rowsOf(r, ["TBLTRANSFER", "TBLSTOCKTRANSFER", "TRANSFERLIST", "TBLDOC", "TBLRESULT"]);
+      const rows = rowsOf(r, ["IASINVITEM", "IASINVHEAD", "TBLTRANSFER", "TBLSTOCKTRANSFER", "TRANSFERLIST", "TBLDOC", "TBLRESULT"]);
       const firstRow = rows[0] || (r.data as Row) || {};
       const transferId =
-        pick(firstRow, ["TRANSFERID", "PSTRANSFERID", "ORDERNUM", "DOCNUM", "TRANSFERNO"]) ||
+        pick(firstRow, ["INVDOCNUM", "DOCNUM", "TRANSFERID", "PSTRANSFERID", "ORDERNUM", "TRANSFERNO"]) ||
         (r.data && typeof r.data === "object"
-          ? pick(r.data as Row, ["TRANSFERID", "PSTRANSFERID", "ORDERNUM", "DOCNUM", "TRANSFERNO"])
+          ? pick(r.data as Row, ["INVDOCNUM", "DOCNUM", "TRANSFERID", "PSTRANSFERID", "ORDERNUM", "TRANSFERNO"])
           : "");
+
+      const cleanMsg = (mesaj && !/msgtable|messagetable|\{|\}/i.test(mesaj))
+        ? mesaj
+        : "Transfer işlemi başarıyla tamamlandı.";
 
       return {
         ok: true,
         transferId: transferId || undefined,
-        message: mesaj || "Transfer işlemi başarıyla tamamlandı.",
+        message: cleanMsg,
       };
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);

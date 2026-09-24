@@ -9,7 +9,6 @@ import {
   Trash2,
   Plus,
   Minus,
-  Send,
   CheckCircle2,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
@@ -95,7 +94,7 @@ export default function StockTransferPage() {
     if (tst?.kind === "error") sesHata();
     else if (tst) sesBasarili();
     setToast(tst);
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3500);
   };
 
   const showError = useCallback((msg: string) => {
@@ -184,19 +183,55 @@ export default function StockTransferPage() {
     }
   };
 
+  const handleCompleteTransfer = useCallback(async () => {
+    const currentTarget = useTransferStore.getState().targetShelf;
+    const targetName = currentTarget?.stockPlace || "hedef";
+
+    setBusy(true);
+    setRedMesaji(null);
+    setOnayMesaji(null);
+    try {
+      const res = await completeTransfer();
+      if (res.ok) {
+        sesBasarili();
+        const successText = `Taşıma ${targetName} rafına gerçekleşti.`;
+        setOnayMesaji(successText);
+        showToast({ kind: "done", text: successText });
+        setTimeout(() => {
+          reset();
+          setActiveItem(null);
+          setLotPendingItem(null);
+          setOnayMesaji(null);
+          setRedMesaji(null);
+        }, 3500);
+      } else {
+        sesHata();
+        setRedMesaji(res.message);
+        showToast({ kind: "error", text: res.message });
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Transfer sırasında hata oluştu";
+      sesHata();
+      setRedMesaji(msg);
+      showToast({ kind: "error", text: msg });
+    } finally {
+      setBusy(false);
+    }
+  }, [completeTransfer, reset]);
+
   const handleDetected = useCallback(
     async (code: string) => {
       const barkod = code.trim().toUpperCase();
-      if (!barkod || busy) return;
+      if (!barkod || busy || onayMesaji) return;
       setBusy(true);
       setRedMesaji(null);
 
       try {
-        // 1) HEDEF ADIMINDAYSAK: Hedef raf bekliyoruz
+        // 1) HEDEF ADIMINDAYSAK: Hedef raf okutulduğunda direkt transferi yap
         if (step === "target") {
           const r = await scanTargetShelf(barkod);
           if (r.ok) {
-            showToast({ kind: "done", text: r.message });
+            await handleCompleteTransfer();
           } else {
             showError(r.message);
           }
@@ -448,60 +483,17 @@ export default function StockTransferPage() {
       getBatchRemainingStock,
       getMaxAllowedQty,
       showError,
+      handleCompleteTransfer,
     ]
   );
-
-  // 6. Kural: Transfer onayı başarılı olunca yukarıda mesaj göster ve 2 saniye sonra ana ekrana at
-  const handleCompleteTransfer = async () => {
-    setBusy(true);
-    setRedMesaji(null);
-    setOnayMesaji(null);
-    try {
-      const res = await completeTransfer();
-      if (res.ok) {
-        sesBasarili();
-        const successText =
-          res.message ||
-          (res.transferId
-            ? `Transfer ${res.transferId} nolu belge ile başarıyla gerçekleşti.`
-            : "İşlem başarıyla gerçekleşti.");
-        setOnayMesaji(successText);
-        showToast({ kind: "done", text: successText });
-        setTimeout(() => {
-          reset();
-          navigate("/home");
-        }, 5000);
-      } else {
-        sesHata();
-        setRedMesaji(res.message);
-        showToast({ kind: "error", text: res.message });
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Transfer sırasında hata oluştu";
-      sesHata();
-      setRedMesaji(msg);
-      showToast({ kind: "error", text: msg });
-    } finally {
-      setBusy(false);
-    }
-  };
 
   // ---------------------------------------------------------------------------
   // ANA TRANSFER EKRANI (TOPLAMA & HEDEF ADIMLARI)
   // Samsung A51/A71 (914x412 Yatay) Tam Uyumlu 2 Sütunlu Düzen
   // ---------------------------------------------------------------------------
-  /*      ? ""
-      : !sourceShelf
-        ? "Raf barkodunu okutun"
-        : lotPendingItem
-          ? ""
-          : activeItem
-            ? ""
-            */
-
   const promptText =
     step === "target"
-      ? ""
+      ? "Hedef raf barkodunu okutun"
       : !sourceShelf
         ? "Raf barkodunu okutun"
         : lotPendingItem
@@ -555,33 +547,22 @@ export default function StockTransferPage() {
                 <ArrowRight className="h-4 w-4" />
               </button>
             ) : (
-              <>
+              <div className="flex items-center gap-2">
+                {completing && (
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-brand-600 dark:text-brand-400">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Aktarılıyor…</span>
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={backToCollectStep}
-                  className="btn-ghost inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-semibold sm:text-sm"
+                  disabled={completing || busy}
+                  className="btn-ghost inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-semibold sm:text-sm disabled:opacity-40"
                 >
                   Malzemelere Dön
                 </button>
-                <button
-                  type="button"
-                  onClick={handleCompleteTransfer}
-                  disabled={!targetShelf || completing || busy}
-                  className="btn-primary inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-1.5 text-xs font-semibold sm:text-sm disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {completing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Gönderiliyor…</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4" />
-                      <span>Transferi Onayla</span>
-                    </>
-                  )}
-                </button>
-              </>
+              </div>
             )}
           </div>
         }
@@ -940,7 +921,7 @@ export default function StockTransferPage() {
             )}
 
             {/* BARKOD OKUYUCU (Toplama ve Hedef Adımlarında) */}
-            {step !== "success" && !activeItem && (
+            {step !== "success" && !activeItem && !onayMesaji && (
               <BarcodeScanner
                 onDetected={handleDetected}
                 prompt={promptText}
