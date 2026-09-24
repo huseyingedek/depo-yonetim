@@ -891,6 +891,10 @@ export const api = {
 
     const satir = rows.find((row) => pick(row, ["MATERIAL"]) !== "");
     if (!satir) {
+      const rawMsg = (anahtarDeger.SYSTEMMSG || serviceMessage(r) || "").trim();
+      const isKalinti = /kalıntı/i.test(rawMsg);
+      const cleanMessage = !rawMsg || isKalinti ? "Barkod bulunamadı" : rawMsg;
+
       return {
         ok: false,
         material: "",
@@ -900,7 +904,7 @@ export const api = {
         availStock: 0,
         specialStock: "",
         fields: anahtarDeger,
-        message: anahtarDeger.SYSTEMMSG || serviceMessage(r) || "Barkod tanınmadı",
+        message: cleanMessage,
       };
     }
 

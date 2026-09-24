@@ -335,7 +335,8 @@ export default function StockTransferPage() {
         );
 
         if (!res.ok || !res.material) {
-          showError(res.message || "Malzeme bulunamadı");
+          const errMsg = res.message && !/kalıntı/i.test(res.message) ? res.message : "Barkod bulunamadı";
+          showError(errMsg);
           return;
         }
 
