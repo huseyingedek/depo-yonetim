@@ -108,6 +108,17 @@ interface PickingState {
 
   selectBatch: (lineId: string, batchNum: string) => Promise<{ ok: boolean; message: string }>;
 
+  orderList: PickOrder[];
+  orderListLoaded: boolean;
+  orderListLoading: boolean;
+  orderListError: string | null;
+  searchQuery: string;
+
+  fetchOrderList: (force?: boolean) => Promise<PickOrder[]>;
+  setSearchQuery: (q: string) => void;
+  removeOrderFromList: (orderId: string) => void;
+  resetOrderList: () => void;
+
   complete: () => Promise<CompleteResult>;
 }
 
@@ -127,6 +138,55 @@ export const usePickingStore = create<PickingState>()(
   batchList: [],
   batchError: null,
   batchLoading: false,
+
+  orderList: [],
+  orderListLoaded: false,
+  orderListLoading: false,
+  orderListError: null,
+  searchQuery: "",
+
+  fetchOrderList: async (force = false) => {
+    if (!force && get().orderListLoaded && get().orderList.length > 0) {
+      return get().orderList;
+    }
+    set({ orderListLoading: true, orderListError: null });
+    try {
+      const orders = await api.getPickOrders();
+      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/picking")) {
+        return [];
+      }
+      set({ orderList: orders, orderListLoaded: true, orderListLoading: false });
+      return orders;
+    } catch (e) {
+      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/picking")) {
+        return [];
+      }
+      const errMsg = e instanceof Error ? e.message : String(e);
+      set({ orderListError: errMsg, orderListLoading: false });
+      return get().orderList;
+    }
+  },
+
+  setSearchQuery: (q: string) => set({ searchQuery: q }),
+
+  removeOrderFromList: (orderId: string) => {
+    set({ orderList: get().orderList.filter((o) => o.id !== orderId) });
+  },
+
+  resetOrderList: () => {
+    try {
+      sessionStorage.removeItem("pg:picking");
+    } catch {
+      // ignore
+    }
+    set({
+      orderList: [],
+      orderListLoaded: false,
+      orderListLoading: false,
+      orderListError: null,
+      searchQuery: "",
+    });
+  },
 
   loadOrder: async (id: string, orderType = "") => {
 
@@ -445,6 +505,7 @@ export const usePickingStore = create<PickingState>()(
       set({
         order: { ...order, startTime: undefined, lines: order.lines.map((l) => ({ ...l, records: [] })) },
         shelf: null,
+        orderList: get().orderList.filter((o) => o.id !== order.id),
       });
       return { ok: true, containerId: kap.containerId };
     } catch (e) {

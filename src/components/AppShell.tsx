@@ -31,6 +31,15 @@ export default function AppShell() {
       // Paketleme ekranından diğer ekranlara geçildiğinde sol menüyü varsayılan olarak açık getir
       setSidebarAcik(true);
     }
+
+    const wasPicking = prevPathRef.current.startsWith("/picking");
+    const isPicking = location.pathname.startsWith("/picking");
+    if (wasPicking && !isPicking) {
+      // Sipariş Toplama modülünden çıkıldı (Ana Sayfa veya başka bir menüye gidildi).
+      // Bir sonraki girişte CANIAS'tan taze liste çekilmesi için liste önbelleğini sıfırla.
+      usePickingStore.getState().resetOrderList();
+    }
+
     prevPathRef.current = location.pathname;
   }, [location.pathname]);
 
@@ -236,8 +245,8 @@ function LogoutButton() {
   return (
     <button
       onClick={() => {
-
         usePickingStore.getState().clear();
+        usePickingStore.getState().resetOrderList();
         logout();
         navigate("/login", { replace: true });
       }}

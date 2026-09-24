@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Search, ChevronRight, Package, Camera, AlertTriangle, X, Loader2 } from "lucide-react";
+import { Search, ChevronRight, Package, Camera, AlertTriangle, X, Loader2, RefreshCw } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import CameraScanOverlay from "../../components/CameraScanOverlay";
 import Pagination, { usePagination } from "../../components/Pagination";
-import { api } from "../../api/client";
 import { usePickingStore } from "../../store/pickingStore";
 import { blockingHigherPriorityOrders } from "../../store/pickingLogic";
 import type { PickOrder } from "../../types";
@@ -13,9 +12,14 @@ import type { PickOrder } from "../../types";
 export default function PickingListPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [orders, setOrders] = useState<PickOrder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState("");
+  const orders = usePickingStore((s) => s.orderList);
+  const loading = usePickingStore((s) => s.orderListLoading);
+  const orderListLoaded = usePickingStore((s) => s.orderListLoaded);
+  const storeError = usePickingStore((s) => s.orderListError);
+  const q = usePickingStore((s) => s.searchQuery);
+  const setQ = usePickingStore((s) => s.setSearchQuery);
+  const fetchOrderList = usePickingStore((s) => s.fetchOrderList);
+
   const [error, setError] = useState<string | null>(null);
   const [kamera, setKamera] = useState(false);
   const [taramaHatasi, setTaramaHatasi] = useState<string | null>(null);
@@ -26,21 +30,11 @@ export default function PickingListPage() {
   const [giriliyor, setGiriliyor] = useState<string | null>(null);
   const loadOrder = usePickingStore((s) => s.loadOrder);
 
-  const istendi = useRef(false);
-
   useEffect(() => {
-    if (istendi.current) return;
-    istendi.current = true;
-
-    api
-      .getPickOrders()
-      .then((o) => {
-        console.info("[picking] gelen emir sayısı:", o.length, o);
-        setOrders(o);
-      })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false));
-  }, []);
+    if (!orderListLoaded) {
+      fetchOrderList();
+    }
+  }, [orderListLoaded, fetchOrderList]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -103,45 +97,68 @@ export default function PickingListPage() {
         subtitle={t("picking.title")}
         backTo="/home"
         right={
-          <div className="relative hidden sm:block">
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder={t("picking.searchOrder")}
-              className="field-input w-72 pl-11 pr-12"
-            />
-            {}
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setKamera(true)}
-              aria-label={t("picking.scanOrder")}
-              title={t("picking.scanOrder")}
-              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg"
+              onClick={() => fetchOrderList(true)}
+              disabled={loading}
+              title="Listeyi Yenile"
+              aria-label="Listeyi Yenile"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line bg-surface text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-50"
             >
-              <Camera className="h-5 w-5" />
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin text-brand-600" : ""}`} />
             </button>
+            <div className="relative hidden sm:block">
+              <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={t("picking.searchOrder")}
+                className="field-input w-72 pl-11 pr-12"
+              />
+              <button
+                type="button"
+                onClick={() => setKamera(true)}
+                aria-label={t("picking.scanOrder")}
+                title={t("picking.scanOrder")}
+                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg"
+              >
+                <Camera className="h-5 w-5" />
+              </button>
+            </div>
           </div>
         }
       />
 
-      {}
-      <div className="relative mb-5 sm:hidden">
-        <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={t("picking.searchOrder")}
-          className="field-input pl-11 pr-12"
-        />
+      {/* Arama & Kamera (Mobil) */}
+      <div className="flex items-center gap-2 mb-5 sm:hidden">
         <button
           type="button"
-          onClick={() => setKamera(true)}
-          aria-label={t("picking.scanOrder")}
-          className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg"
+          onClick={() => fetchOrderList(true)}
+          disabled={loading}
+          title="Listeyi Yenile"
+          aria-label="Listeyi Yenile"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line bg-surface text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-50"
         >
-          <Camera className="h-5 w-5" />
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin text-brand-600" : ""}`} />
         </button>
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={t("picking.searchOrder")}
+            className="field-input w-full pl-11 pr-12"
+          />
+          <button
+            type="button"
+            onClick={() => setKamera(true)}
+            aria-label={t("picking.scanOrder")}
+            className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg"
+          >
+            <Camera className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       {kamera && (
@@ -203,9 +220,9 @@ export default function PickingListPage() {
         </div>
       )}
 
-      {error && (
+      {(error || storeError) && (
         <div className="mb-5 whitespace-pre-line rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm font-medium text-rose-500">
-          {error}
+          {error || storeError}
         </div>
       )}
 

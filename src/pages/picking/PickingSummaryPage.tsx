@@ -14,6 +14,7 @@ export default function PickingSummaryPage() {
   const completing = usePickingStore((s) => s.completing);
   const complete = usePickingStore((s) => s.complete);
   const clear = usePickingStore((s) => s.clear);
+  const removeOrderFromList = usePickingStore((s) => s.removeOrderFromList);
 
   const [done, setDone] = useState(false);
   const [caniasRef, setCaniasRef] = useState("");
@@ -69,6 +70,7 @@ export default function PickingSummaryPage() {
 
         <button
           onClick={() => {
+            if (order) removeOrderFromList(order.id);
             clear();
             navigate("/picking", { replace: true });
           }}
