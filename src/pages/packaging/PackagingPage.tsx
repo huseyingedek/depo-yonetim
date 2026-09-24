@@ -352,17 +352,17 @@ export default function PackagingPage() {
             ? (l.TBLITEMMATLINE[0] as Record<string, unknown>)
             : (l.TBLITEMMATLINE as Record<string, unknown>) || {};
 
-          const desi = Number(matLine?.VOLUME) || 0.2;
-          let kg = Number(matLine?.NETWEIGHT) || 0.5;
+          const desi = Number(matLine?.VOLUME) || 0;
+          let kg = Number(matLine?.NETWEIGHT) || 0;
           if (String(matLine?.NWUNIT || "").toUpperCase() === "GR") {
             kg = kg / 1000;
           }
 
-          const qty = Number(l.MOVEDQTY || l.MOVEQTY || l.QTY) || 1;
+          const qty = Number(l.MOVEDQTY || l.MOVEQTY || l.QTY) || 0;
 
           return {
             code: String(l.MATERIAL || ""),
-            name: String(l.MTEXT || l.MATERIAL || "Malzeme"),
+            name: String(l.MTEXT || l.MATERIAL || "Malzeme").trim(),
             unit: String(l.UNIT || "AD"),
             siparis: qty,
             desi: Number(desi.toFixed(2)),
@@ -373,38 +373,17 @@ export default function PackagingPage() {
         setUrunler(caniasUrunler);
         show({
           kind: "ok",
-          text: `${emir.orderType}-${emir.orderNum} paketleme başlatıldı (${caniasUrunler.length} kalem malzeme yüklendi)`,
+          text: `${emir.orderType}-${emir.orderNum} CANIAS kalemleri yüklendi (${caniasUrunler.length} kalem)`,
         });
         return;
       }
 
-      // 2) Fallback: Eğer MZYEnterPack satır döndürmediyse queryStock ile stok yerini sorgula
-      const sp = emir.stockPlace || `SO-${emir.orderNum}`;
-      const stocks = await wmsApi.queryStock({
-        warehouse: emir.warehouse || "10",
-        stockPlace: sp,
-        container: true,
-        onlyPickWarehouse: false,
+      // CANIAS'tan satır dönmediyse hiçbir mock/tahmini veri üretme
+      setUrunler([]);
+      show({
+        kind: "info",
+        text: `${emir.orderType}-${emir.orderNum} için CANIAS'ta açık paketlenecek malzeme bulunamadı`,
       });
-
-      if (stocks && stocks.length > 0) {
-        const caniasUrunler: KaynakUrun[] = stocks.map((s) => ({
-          code: s.material,
-          name: s.name || s.material,
-          unit: s.unit || "AD",
-          siparis: s.availStock || 1,
-          desi: 0.2,
-          kg: 0.5,
-        }));
-        setUrunler(caniasUrunler);
-        show({
-          kind: "ok",
-          text: `${emir.orderType}-${emir.orderNum} için ${caniasUrunler.length} kalem stok yerinden yüklendi`,
-        });
-      } else {
-        setUrunler([]);
-        show({ kind: "info", text: `${emir.orderType}-${emir.orderNum} açık malzeme bulunamadı` });
-      }
     } catch (err) {
       console.warn("enterPack hatası:", err);
       setUrunler([]);

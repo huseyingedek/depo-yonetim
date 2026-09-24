@@ -2500,7 +2500,7 @@ export const api = {
     const c = ctx();
     const companyCode = params.company || c.company || "01";
     const plantCode = params.plant || c.plant || "100";
-    const username = params.user || c.worker || c.user || "WMSWSUSER";
+    const username = params.user || c.worker || "WMSWSUSER";
     const whCode = params.warehouse || c.warehouse || "10";
     const stockPlace = params.stockPlace || "";
     const traceStatus = params.traceStatus ?? (c.trace ? 1 : 0);
@@ -2523,26 +2523,22 @@ export const api = {
     let head: Row | undefined = undefined;
     let lines: Row[] = [];
 
-    if (Array.isArray(r)) {
-      head = r[0] as Row;
+    const d = r.data as unknown;
+    if (Array.isArray(d)) {
+      head = (d[0] as Row) || undefined;
       if (head && Array.isArray((head as Record<string, unknown>).TBLPOITEMLINE)) {
         lines = (head as Record<string, unknown>).TBLPOITEMLINE as Row[];
       }
-    } else if (r && typeof r === "object") {
-      head = r as Row;
-      if (Array.isArray((r as Record<string, unknown>).TBLPOITEMLINE)) {
-        lines = (r as Record<string, unknown>).TBLPOITEMLINE as Row[];
+    } else if (d && typeof d === "object") {
+      head = d as Row;
+      if (Array.isArray((d as Record<string, unknown>).TBLPOITEMLINE)) {
+        lines = (d as Record<string, unknown>).TBLPOITEMLINE as Row[];
       } else {
         lines = rowsOf(r, ["TBLPOITEMLINE", "TBLPACKITEMS", "TBLITEMS", "TBLPACK", "TBLITEM", "ROW"]) || [];
       }
     }
 
-    const msg =
-      typeof r?.MESSAGETABLE === "string"
-        ? r.MESSAGETABLE
-        : typeof r?.MSG === "string"
-          ? r.MSG
-          : "";
+    const msg = serviceMessage(r) || "";
 
     return {
       raw: r,
