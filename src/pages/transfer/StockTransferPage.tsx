@@ -1169,43 +1169,12 @@ export default function StockTransferPage() {
 
             </div>
           ) : (
-            /* HEDEF ADIMI: Transfer Paketi İnceleme ve Onay (Tek Birleşik Beyaz Kart) */
+            /* HEDEF ADIMI: Transfer Paketi İnceleme ve Onay */
             <div className="space-y-3">
-              <div className="rounded-2xl border border-line bg-surface p-4 shadow-card space-y-4">
-                {/* ÇIKIŞ - HEDEF LOKASYONLARI (Doğrudan kart üzerinde) */}
-                <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-subtle">
-                      ÇIKIŞ LOKASYONU
-                    </p>
-                    <p className="font-mono text-xs font-extrabold text-fg sm:text-sm">
-                      Depo {sourceShelf?.warehouse || items[0]?.sourceWarehouse} ·{" "}
-                      {sourceShelf?.stockPlace || items[0]?.sourceStockPlace}
-                    </p>
-                  </div>
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-50 dark:bg-brand-950/60 text-brand-600 dark:text-brand-400">
-                    <ArrowRight className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 text-right">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-subtle">
-                      HEDEF LOKASYON
-                    </p>
-                    {targetShelf ? (
-                      <p className="font-mono text-xs font-extrabold text-emerald-600 dark:text-emerald-400 sm:text-sm">
-                        Depo {targetShelf.warehouse} · {targetShelf.stockPlace}
-                      </p>
-                    ) : (
-                      <p className="font-mono text-xs font-bold text-amber-600 animate-pulse">
-                        Hedef Raf Bekleniyor…
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Transfer Edilecek Kalemler Tablosu (Aynı kartın içinde) */}
-                <div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
+              <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+                {/* Transfer Edilecek Kalemler Tablosu */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
                       <thead>
                         <tr className="border-b border-line text-subtle">
                           <th className="pb-2 font-semibold">Malzeme & Lokasyon</th>
@@ -1257,7 +1226,6 @@ export default function StockTransferPage() {
                   </div>
                 </div>
               </div>
-            </div>
           )}
         </div>
       </div>
