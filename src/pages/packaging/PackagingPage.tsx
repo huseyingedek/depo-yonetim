@@ -335,10 +335,53 @@ export default function PackagingPage() {
     setSeciliKapId(null);
     setYukleniyor(true);
     try {
-      // CANIAS MZYGetStock ile bu siparişin stok yerindeki (Örn: SO-847786) GERÇEK malzemelerini çek
+      // 1) Yeni CANIAS MZYEnterPack servisini çağır (Paketlemeye Başla)
+      const res = await wmsApi.enterPack({
+        company: emir.company,
+        plant: emir.plant,
+        warehouse: emir.warehouse,
+        stockPlace: emir.stockPlace,
+        orderType: emir.orderType,
+        orderNum: emir.orderNum,
+      });
+
+      if (res && res.lines && res.lines.length > 0) {
+        const caniasUrunler: KaynakUrun[] = res.lines.map((l: Record<string, unknown>) => {
+          // TBLITEMMATLINE tablosundan desi ve ağırlık (NWUNIT = GR ise KG'ye dönüştürülür)
+          const matLine = Array.isArray(l.TBLITEMMATLINE)
+            ? (l.TBLITEMMATLINE[0] as Record<string, unknown>)
+            : (l.TBLITEMMATLINE as Record<string, unknown>) || {};
+
+          const desi = Number(matLine?.VOLUME) || 0.2;
+          let kg = Number(matLine?.NETWEIGHT) || 0.5;
+          if (String(matLine?.NWUNIT || "").toUpperCase() === "GR") {
+            kg = kg / 1000;
+          }
+
+          const qty = Number(l.MOVEDQTY || l.MOVEQTY || l.QTY) || 1;
+
+          return {
+            code: String(l.MATERIAL || ""),
+            name: String(l.MTEXT || l.MATERIAL || "Malzeme"),
+            unit: String(l.UNIT || "AD"),
+            siparis: qty,
+            desi: Number(desi.toFixed(2)),
+            kg: Number(kg.toFixed(3)),
+          };
+        });
+
+        setUrunler(caniasUrunler);
+        show({
+          kind: "ok",
+          text: `${emir.orderType}-${emir.orderNum} paketleme başlatıldı (${caniasUrunler.length} kalem malzeme yüklendi)`,
+        });
+        return;
+      }
+
+      // 2) Fallback: Eğer MZYEnterPack satır döndürmediyse queryStock ile stok yerini sorgula
       const sp = emir.stockPlace || `SO-${emir.orderNum}`;
       const stocks = await wmsApi.queryStock({
-        warehouse: "10",
+        warehouse: emir.warehouse || "10",
         stockPlace: sp,
         container: true,
         onlyPickWarehouse: false,
@@ -354,14 +397,21 @@ export default function PackagingPage() {
           kg: 0.5,
         }));
         setUrunler(caniasUrunler);
-        show({ kind: "ok", text: `${emir.orderType}-${emir.orderNum} için ${caniasUrunler.length} kalem malzeme CANIAS'tan yüklendi` });
+        show({
+          kind: "ok",
+          text: `${emir.orderType}-${emir.orderNum} için ${caniasUrunler.length} kalem stok yerinden yüklendi`,
+        });
       } else {
         setUrunler([]);
-        show({ kind: "info", text: `${emir.orderType}-${emir.orderNum} stok yerinde açık malzeme bulunamadı` });
+        show({ kind: "info", text: `${emir.orderType}-${emir.orderNum} açık malzeme bulunamadı` });
       }
     } catch (err) {
-      console.warn("queryStock hatası:", err);
+      console.warn("enterPack hatası:", err);
       setUrunler([]);
+      show({
+        kind: "err",
+        text: "Paketleme başlatma hatası: " + (err instanceof Error ? err.message : String(err)),
+      });
     } finally {
       setYukleniyor(false);
     }

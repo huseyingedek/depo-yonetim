@@ -410,6 +410,19 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
   - `PITRACESTATUS` (*INTEGER*): Trace Durumu (`0`: Pasif, `1`: Aktif).
 - **WMS İstemci Karşılığı**: `api.getPackagingList({ company, plant, warehouse, traceStatus })`
 
+### 8.2. `MZYEnterPack` — Paketlemeye Başla
+- **Açıklama**: Seçilen toplama emrinin paketleme kalemlerini (`TBLPOITEMLINE`) ve malzeme detaylarını (`TBLITEMMATLINE`: hacim/desi, ağırlık, boyutlar) getirir.
+- **Parametreler**:
+  - `PSCOMPANY` (*STRING*): Firma Kodu (Örn: `"01"`).
+  - `PSPLANT` (*STRING*): Tesis Kodu (Örn: `"100"`).
+  - `PSUSER` (*STRING*): Kullanıcı Adı (Örn: `"WMSWSUSER"`).
+  - `PSWAREHOUSE` (*STRING*): Depo Kodu (Örn: `"10"`).
+  - `PSSTOCKPLACE` (*STRING*): Konteyner No, Stok yeri (Örn: `"SO-847786"`).
+  - `PSORDERTYPE` (*STRING*): Toplama Emri Tipi (Örn: `"SO"`).
+  - `PSORDERNUM` (*STRING*): Toplama Emri No (Örn: `"847786"`).
+  - `PITRACESTATUS` (*INTEGER*): Trace Durumu (`0`: Pasif, `1`: Aktif).
+- **WMS İstemci Karşılığı**: `api.enterPack({ company, plant, user, warehouse, stockPlace, orderType, orderNum, traceStatus })`
+
 ---
 
 ## 9. Özet Tablo: Servis İsimleri ve Kullanım Yerleri
@@ -448,3 +461,4 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 | **Sayım Belgeleri Listesi** | `MZYListingAdjustment` | `api.getAdjustmentList` | `src/api/client.ts` |
 | **Sayım Emri Giriş** | `MZYEnterAdjustment` | `api.getAdjustmentOrder` | `src/api/client.ts` |
 | **Paketleme Listesi** | `MZYListingPack` | `api.getPackagingList` | `src/api/client.ts` |
+| **Paketlemeye Başla** | `MZYEnterPack` | `api.enterPack` | `src/api/client.ts` |
