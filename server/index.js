@@ -106,6 +106,9 @@ const ALLOWED = new Set([
   // Paketleme Servisleri
   "MZYListingPack",
   "MzyListingPack",
+  "MZYEnterPack",
+  "MzyEnterPack",
+  "MZYENTERPACK",
 ]);
 
 const app = express();
