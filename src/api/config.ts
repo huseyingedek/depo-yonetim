@@ -53,4 +53,5 @@ export const SERVICES = {
 
   // Paketleme Servisleri
   listingPack: "MZYListingPack", // Paketlenecekleri getir
+  enterPack: "MZYEnterPack", // Paketlemeye başla
 } as const;

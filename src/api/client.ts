@@ -2476,4 +2476,80 @@ export const api = {
     if (Array.isArray(r.data)) return (r.data as unknown[]).map(flattenRow);
     return rowsOf(r, ["TBLPACKLIST", "TBLLISTINGPACK", "PACKLIST", "TBLPACK", "ROW"]) || [];
   },
+
+  /**
+   * MZYEnterPack — Paketlemeye Başla
+   * @param params Paketleme emri ve kullanıcı parametreleri
+   */
+  async enterPack(params: {
+    company?: string;
+    plant?: string;
+    user?: string;
+    warehouse?: string;
+    stockPlace?: string;
+    orderType: string;
+    orderNum: string;
+    traceStatus?: number;
+  }): Promise<{
+    raw: unknown;
+    head?: Row;
+    lines: Row[];
+    message?: string;
+    success: boolean;
+  }> {
+    const c = ctx();
+    const companyCode = params.company || c.company || "01";
+    const plantCode = params.plant || c.plant || "100";
+    const username = params.user || c.worker || c.user || "WMSWSUSER";
+    const whCode = params.warehouse || c.warehouse || "10";
+    const stockPlace = params.stockPlace || "";
+    const traceStatus = params.traceStatus ?? (c.trace ? 1 : 0);
+
+    const callParams = {
+      PSCOMPANY: companyCode,
+      PSPLANT: plantCode,
+      PSUSER: username,
+      PSWAREHOUSE: whCode,
+      PSSTOCKPLACE: stockPlace,
+      PSORDERTYPE: params.orderType,
+      PSORDERNUM: params.orderNum,
+      PITRACESTATUS: traceStatus,
+    };
+
+    console.info("📤 [MZYEnterPack PARAMETRELER]", callParams);
+    const r = await call(SERVICES.enterPack, callParams);
+    console.info("📥 [MZYEnterPack GELEN YANIT]", r);
+
+    let head: Row | undefined = undefined;
+    let lines: Row[] = [];
+
+    if (Array.isArray(r)) {
+      head = r[0] as Row;
+      if (head && Array.isArray((head as Record<string, unknown>).TBLPOITEMLINE)) {
+        lines = (head as Record<string, unknown>).TBLPOITEMLINE as Row[];
+      }
+    } else if (r && typeof r === "object") {
+      head = r as Row;
+      if (Array.isArray((r as Record<string, unknown>).TBLPOITEMLINE)) {
+        lines = (r as Record<string, unknown>).TBLPOITEMLINE as Row[];
+      } else {
+        lines = rowsOf(r, ["TBLPOITEMLINE", "TBLPACKITEMS", "TBLITEMS", "TBLPACK", "TBLITEM", "ROW"]) || [];
+      }
+    }
+
+    const msg =
+      typeof r?.MESSAGETABLE === "string"
+        ? r.MESSAGETABLE
+        : typeof r?.MSG === "string"
+          ? r.MSG
+          : "";
+
+    return {
+      raw: r,
+      head,
+      lines,
+      message: msg,
+      success: true,
+    };
+  },
 };
