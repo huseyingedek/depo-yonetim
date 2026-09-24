@@ -751,11 +751,10 @@ export default function StockTransferPage() {
                       type="button"
                       onClick={handleCommitActiveItem}
                       disabled={!activeItem || activeItem.quantity <= 0}
-                      className="flex flex-col items-center justify-center rounded-xl bg-emerald-600 py-1 text-[10px] sm:text-[11px] font-black leading-tight text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-35 disabled:cursor-not-allowed"
-                      title="Malzemeyi Listeye Ekle"
+                      className="flex items-center justify-center rounded-xl bg-emerald-600 py-2 text-xs sm:text-sm font-black text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-35 disabled:cursor-not-allowed"
+                      title="Malzemeyi Ekle"
                     >
-                      <span>Listeye</span>
-                      <span>Ekle</span>
+                      Ekle
                     </button>
                   </div>
                 </div>
