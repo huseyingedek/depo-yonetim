@@ -46,7 +46,6 @@ export default function BarcodeGeneratorPage() {
 
   // --- ADIM 1: ARAMA & LİSTELEME DURUMLARI ---
   const [searchTerm, setSearchTerm] = useState("");
-  const [waybillNumber, setWaybillNumber] = useState("");
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
@@ -331,11 +330,9 @@ export default function BarcodeGeneratorPage() {
     });
   };
 
-  // Step 2'ye Geçiş: Kart seçilmiş ve irsaliye numarası girilmiş olmalıdır
-  const canContinueToStep2 = Boolean(selectedCard && waybillNumber.trim());
-
+  // Step 2'ye Geçiş
   const handleContinueToStep2 = () => {
-    if (!canContinueToStep2) return;
+    if (!selectedCard) return;
     // ComboBox'tan seçim yapılana kadar butonların kilitli kalması kuralı gereği boş başlatılır
     setSelectedUnit("");
     setCustomBarcode("");
@@ -418,10 +415,10 @@ export default function BarcodeGeneratorPage() {
               <button
                 type="button"
                 id="btn-step1-devam"
-                disabled={!canContinueToStep2}
+                disabled={!selectedCard}
                 onClick={handleContinueToStep2}
                 className={`flex h-10 items-center justify-center rounded-xl px-5 text-sm font-bold transition-all ${
-                  canContinueToStep2
+                  selectedCard
                     ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 hover:bg-blue-500 active:scale-95 ring-2 ring-blue-400 cursor-pointer"
                     : "bg-elevated text-subtle/50 border border-line cursor-not-allowed opacity-50"
                 }`}
@@ -487,24 +484,6 @@ export default function BarcodeGeneratorPage() {
                 Açıklama, ürün kodu ya da barkod girin
               </p>
             </div>
-
-            {/* İrsaliye Numarası Alanı */}
-            <div className="space-y-1">
-              <label
-                htmlFor="input-waybill-number"
-                className="text-xs font-semibold text-subtle block pl-1"
-              >
-                İrsaliye Numarası
-              </label>
-              <input
-                type="text"
-                id="input-waybill-number"
-                value={waybillNumber}
-                onChange={(e) => setWaybillNumber(e.target.value)}
-                placeholder="İrsaliye numarası giriniz..."
-                className="field-input w-full h-11 text-sm font-medium"
-              />
-            </div>
           </div>
 
           {/* Hata Bildirimi */}
@@ -530,7 +509,6 @@ export default function BarcodeGeneratorPage() {
               <div className="space-y-2.5">
                 {searchResults.map((r) => {
                   const selected = selectedCard?.id === r.id;
-                  const unitInfo = formatBarcodeUnitInfo(r.unit);
                   return (
                     <div
                       key={r.id}
@@ -555,10 +533,8 @@ export default function BarcodeGeneratorPage() {
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
-                        {/* Birim Çipi */}
-                        <span
-                          className={`chip text-xs font-bold border ${unitInfo.badgeClass}`}
-                        >
+                        {/* Birim Çipi (Renksiz / Nötr) */}
+                        <span className="chip text-xs font-bold border border-line bg-elevated text-subtle">
                           {r.unit}
                         </span>
                         {/* Seçim Rozeti */}
@@ -601,9 +577,7 @@ export default function BarcodeGeneratorPage() {
           {/* HEADER: Geri butonu Adım 1'e döndürür */}
           <PageHeader
             title="Barkod Oluşturma"
-            subtitle={`${selectedCard.name} (${selectedCard.material})${
-              waybillNumber ? ` • İrsaliye: ${waybillNumber}` : ""
-            }`}
+            subtitle={`${selectedCard.name} (${selectedCard.material})`}
             onBack={() => {
               if (saving) return;
               setStep(1);
