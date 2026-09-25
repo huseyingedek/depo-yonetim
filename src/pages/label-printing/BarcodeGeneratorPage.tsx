@@ -185,13 +185,13 @@ export default function BarcodeGeneratorPage() {
 
       const bCode = matchedBarcodeItem
         ? String(
-            matchedBarcodeItem.BARCODE ||
-            matchedBarcodeItem.barcode ||
-            matchedBarcodeItem.BARCODENUM ||
-            matchedBarcodeItem.EAN ||
-            matchedBarcodeItem.CODE ||
-            ""
-          ).trim()
+          matchedBarcodeItem.BARCODE ||
+          matchedBarcodeItem.barcode ||
+          matchedBarcodeItem.BARCODENUM ||
+          matchedBarcodeItem.EAN ||
+          matchedBarcodeItem.CODE ||
+          ""
+        ).trim()
         : "";
 
       const unitInfo = formatBarcodeUnitInfo(u);
@@ -417,11 +417,10 @@ export default function BarcodeGeneratorPage() {
                 id="btn-step1-devam"
                 disabled={!selectedCard}
                 onClick={handleContinueToStep2}
-                className={`flex h-10 items-center justify-center rounded-xl px-5 text-sm font-bold transition-all ${
-                  selectedCard
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 hover:bg-blue-500 active:scale-95 ring-2 ring-blue-400 cursor-pointer"
-                    : "bg-elevated text-subtle/50 border border-line cursor-not-allowed opacity-50"
-                }`}
+                className={`flex h-10 items-center justify-center rounded-xl px-5 text-sm font-bold transition-all ${selectedCard
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 hover:bg-blue-500 active:scale-95 ring-2 ring-blue-400 cursor-pointer"
+                  : "bg-elevated text-subtle/50 border border-line cursor-not-allowed opacity-50"
+                  }`}
               >
                 Devam
               </button>
@@ -429,9 +428,9 @@ export default function BarcodeGeneratorPage() {
           />
 
           {/* ÜST GİRİŞ KARTI (Arama & İrsaliye Alanı) */}
-          <div className="card p-4 sm:p-5 shadow-card space-y-3.5">
+          <div className="card p-4 sm:p-3 shadow-card space-y-1.5">
             {/* Barkod / Ürün Giriş Alanı */}
-            <div className="space-y-1">
+            <div className="space-y-0">
               <div className="relative flex items-center">
                 <input
                   type="text"
@@ -447,7 +446,7 @@ export default function BarcodeGeneratorPage() {
                   enterKeyHint="search"
                   inputMode="text"
                   autoComplete="off"
-                  placeholder="Barkod / Ürün Kodu / Açıklama girin..."
+                  placeholder="Barkod veya Ürün Kodu ya da Açıklama girin..."
                   className="field-input w-full pr-20 h-11 text-sm font-medium"
                 />
                 <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
@@ -459,7 +458,7 @@ export default function BarcodeGeneratorPage() {
                     disabled={!searchTerm.trim() || searching}
                     aria-label="Ara"
                     title="Ara"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-30"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-30"
                   >
                     {searching ? (
                       <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
@@ -480,9 +479,6 @@ export default function BarcodeGeneratorPage() {
                   </button>
                 </div>
               </div>
-              <p className="text-xs text-subtle pl-1">
-                Açıklama, ürün kodu ya da barkod girin
-              </p>
             </div>
           </div>
 
@@ -514,11 +510,10 @@ export default function BarcodeGeneratorPage() {
                       key={r.id}
                       id={`product-card-${r.id}`}
                       onClick={() => handleSelectCard(r)}
-                      className={`relative flex min-h-[80px] h-[80px] cursor-pointer items-center justify-between rounded-2xl border px-4 py-2.5 text-left shadow-card transition-all ${
-                        selected
-                          ? "border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30"
-                          : "border-line bg-surface hover:border-blue-300"
-                      }`}
+                      className={`relative flex min-h-[80px] h-[80px] cursor-pointer items-center justify-between rounded-2xl border px-4 py-2.5 text-left shadow-card transition-all ${selected
+                        ? "border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30"
+                        : "border-line bg-surface hover:border-blue-300"
+                        }`}
                     >
                       <div className="min-w-0 flex-1 pr-3 flex flex-col justify-center">
                         <p
@@ -539,11 +534,10 @@ export default function BarcodeGeneratorPage() {
                         </span>
                         {/* Seçim Rozeti */}
                         <span
-                          className={`chip text-xs font-bold shrink-0 ml-1 ${
-                            selected
-                              ? "bg-blue-600 text-white shadow-xs"
-                              : "bg-elevated text-subtle"
-                          }`}
+                          className={`chip text-xs font-bold shrink-0 ml-1 ${selected
+                            ? "bg-blue-600 text-white shadow-xs"
+                            : "bg-elevated text-subtle"
+                            }`}
                         >
                           {selected ? "Seçildi" : "Seç"}
                         </span>
@@ -610,7 +604,7 @@ export default function BarcodeGeneratorPage() {
           )}
 
           {/* ADIM 2 KARTI */}
-          <div className="card p-5 sm:p-6 shadow-card space-y-5">
+          <div className="card p-5 sm:p-3 shadow-card space-y-2">
             {/* A. Birim Seçim ComboBox'ı */}
             <div className="space-y-1.5">
               <label
@@ -666,13 +660,12 @@ export default function BarcodeGeneratorPage() {
                   id="btn-mode-manual"
                   disabled={isStep2Locked || saving}
                   onClick={() => setBarcodeMode("manual")}
-                  className={`flex items-center justify-center p-3 rounded-xl border text-xs sm:text-sm font-bold transition active:scale-95 text-center ${
-                    isStep2Locked
-                      ? "opacity-40 cursor-not-allowed border-line bg-elevated/20 text-subtle"
-                      : barcodeMode === "manual"
-                        ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-500 shadow-xs"
-                        : "border-line bg-elevated/40 text-subtle hover:text-fg hover:bg-elevated"
-                  }`}
+                  className={`flex items-center justify-center p-1 rounded-xl border text-xs sm:text-sm font-bold transition active:scale-95 text-center ${isStep2Locked
+                    ? "opacity-40 cursor-not-allowed border-line bg-elevated/20 text-subtle"
+                    : barcodeMode === "manual"
+                      ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-500 shadow-xs"
+                      : "border-line bg-elevated/40 text-subtle hover:text-fg hover:bg-elevated"
+                    }`}
                 >
                   Kendin Gir
                 </button>
@@ -687,13 +680,12 @@ export default function BarcodeGeneratorPage() {
                     setBarcodeMode("auto");
                     handleExecuteCreate({ isAuto: true });
                   }}
-                  className={`flex items-center justify-center p-3 rounded-xl border text-xs sm:text-sm font-bold transition active:scale-95 text-center ${
-                    isStep2Locked
-                      ? "opacity-40 cursor-not-allowed border-line bg-elevated/20 text-subtle"
-                      : barcodeMode === "auto"
-                        ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-500 shadow-xs"
-                        : "border-line bg-elevated/40 text-subtle hover:text-fg hover:bg-elevated"
-                  }`}
+                  className={`flex items-center justify-center p-2 rounded-xl border text-xs sm:text-sm font-bold transition active:scale-95 text-center ${isStep2Locked
+                    ? "opacity-40 cursor-not-allowed border-line bg-elevated/20 text-subtle"
+                    : barcodeMode === "auto"
+                      ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-500 shadow-xs"
+                      : "border-line bg-elevated/40 text-subtle hover:text-fg hover:bg-elevated"
+                    }`}
                 >
                   {saving && barcodeMode === "auto" ? (
                     <span className="flex items-center gap-1.5">
@@ -738,11 +730,10 @@ export default function BarcodeGeneratorPage() {
                         ? "Önce yukarıdan birim seçiniz"
                         : "Barkod numarasını yazıp Enter'a basınız..."
                     }
-                    className={`field-input h-11 w-full pr-12 text-sm font-mono font-bold transition ${
-                      isStep2Locked
-                        ? "bg-elevated/50 text-subtle/50 cursor-not-allowed border-dashed"
-                        : "border-blue-300 dark:border-blue-800 text-fg focus:border-blue-600"
-                    }`}
+                    className={`field-input h-11 w-full pr-12 text-sm font-mono font-bold transition ${isStep2Locked
+                      ? "bg-elevated/50 text-subtle/50 cursor-not-allowed border-dashed"
+                      : "border-blue-300 dark:border-blue-800 text-fg focus:border-blue-600"
+                      }`}
                   />
                   <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
                     <button
