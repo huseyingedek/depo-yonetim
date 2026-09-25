@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
-import { ArrowLeft, Save, CheckCircle2, AlertCircle, Loader2, Printer, Minus, Plus, X } from "lucide-react";
+import { ArrowLeft, Save, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import ProgressRing from "../../components/ProgressRing";
 import ToastView, { useToast } from "../../components/Toast";
@@ -43,31 +43,6 @@ export default function ReceivingSummaryPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Etiket basımı: bitirmeden önce "kaç etiket?" sorusu (Bora #4).
-  const [showEtiketModal, setShowEtiketModal] = useState(false);
-  const [etiketSayilari, setEtiketSayilari] = useState<Record<string, number>>({});
-  const [printing, setPrinting] = useState(false);
-
-  const etiketAdedi = (it: ReceivedItem, i: number) => {
-    const key = it.id || String(i);
-    return etiketSayilari[key] ?? 1;
-  };
-  const etiketAdediDegistir = (it: ReceivedItem, i: number, delta: number) => {
-    const key = it.id || String(i);
-    setEtiketSayilari((prev) => {
-      const mevcut = prev[key] ?? 1;
-      const yeni = Math.min(99, Math.max(0, mevcut + delta));
-      return { ...prev, [key]: yeni };
-    });
-  };
-  const etiketAdediSet = (it: ReceivedItem, i: number, val: string) => {
-    const key = it.id || String(i);
-    const n = Math.min(99, Math.max(0, parseInt(val.replace(/[^0-9]/g, ""), 10) || 0));
-    setEtiketSayilari((prev) => ({ ...prev, [key]: n }));
-  };
-
-  const toplamEtiket = items.reduce((s, it, i) => s + etiketAdedi(it, i), 0);
-
   const handleBack = () => {
     const backUrl = `/receiving/${encodeURIComponent(vendorCode || id || "")}?waybill=${encodeURIComponent(
       waybillNo
@@ -88,66 +63,13 @@ export default function ReceivingSummaryPage() {
     });
   };
 
-  // "Mal Kabul Bitir" → önce etiket modalını aç (kaç etiket sorusu).
-  const handleFinishClick = () => {
-    if (items.length === 0) {
-      sesHata();
-      show({ kind: "error", text: "Kabul edilecek malzeme bulunamadı." });
-      return;
-    }
-    // Varsayılan: her kalem için 1 etiket.
-    setEtiketSayilari(() => {
-      const base: Record<string, number> = {};
-      items.forEach((it, i) => (base[it.id || String(i)] = 1));
-      return base;
-    });
-    setShowEtiketModal(true);
-  };
-
-  // Etiketleri bas (MZYPrintMaterial — malzeme barkodu, PIREPEAT = adet).
-  const handlePrintLabels = async () => {
-    setPrinting(true);
-    let basarili = 0;
-    let hatali = 0;
-    let sonHata = "";
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      const adet = etiketAdedi(it, i);
-      if (adet <= 0) continue;
-      try {
-        const res = await api.printMaterial({
-          barcode: it.material,
-          unit: it.unit || "AD",
-          repeat: adet,
-        });
-        if (res.ok) basarili += adet;
-        else {
-          hatali += 1;
-          sonHata = res.message || sonHata;
-        }
-      } catch (e) {
-        hatali += 1;
-        sonHata = e instanceof Error ? e.message : String(e);
-      }
-    }
-    setPrinting(false);
-    if (hatali > 0) {
-      sesHata();
-      show({ kind: "error", text: `Etiket yazdırma: ${hatali} kalemde hata. ${sonHata}`.trim() });
-    } else {
-      sesBasarili();
-      show({ kind: "done", text: `${basarili} etiket yazdırma isteği CANIAS'a iletildi.` });
-    }
-  };
-
-  const doSaveReceipt = async () => {
+  const handleSaveReceipt = async () => {
     if (items.length === 0) {
       sesHata();
       show({ kind: "error", text: "Kabul edilecek malzeme bulunamadı." });
       return;
     }
 
-    setShowEtiketModal(false);
     setIsSaving(true);
     setErrorMessage("");
 
@@ -258,7 +180,7 @@ export default function ReceivingSummaryPage() {
             </button>
             <button
               type="button"
-              onClick={handleFinishClick}
+              onClick={handleSaveReceipt}
               disabled={items.length === 0 || isSaving || Boolean(successMessage)}
               className="inline-flex items-center gap-1.5 sm:gap-2 rounded-xl bg-brand-600 px-4 py-2 text-xs sm:text-sm font-extrabold text-white shadow-md hover:bg-brand-700 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
@@ -395,101 +317,6 @@ export default function ReceivingSummaryPage() {
               })}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {/* ETİKET BASIMI MODALI — Mal Kabulü Bitirmeden önce "kaç etiket?" sorar (Bora #4) */}
-      {showEtiketModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 animate-fade-in">
-          <div className="w-full max-w-lg rounded-3xl bg-surface shadow-2xl border border-line flex flex-col max-h-[85vh]">
-            {/* Başlık */}
-            <div className="flex items-center justify-between gap-2 border-b border-line px-5 py-3.5 shrink-0">
-              <div className="flex items-center gap-2">
-                <Printer className="h-5 w-5 text-brand-600" />
-                <h3 className="text-base font-extrabold text-fg">Etiket Basımı</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowEtiketModal(false)}
-                disabled={printing || isSaving}
-                className="flex h-8 w-8 items-center justify-center rounded-xl text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-40"
-                aria-label="Kapat"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <p className="px-5 pt-3 text-xs text-subtle">
-              Mal kabulü bitirmeden önce her malzeme için kaç etiket basılacağını girin.
-            </p>
-
-            {/* Kalem listesi + adet girişleri */}
-            <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
-              {items.map((it, i) => (
-                <div key={it.id || i} className="flex items-center gap-3 rounded-2xl border border-line bg-elevated/40 p-2.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-fg" title={it.name}>{it.name || it.material}</p>
-                    <p className="truncate font-mono text-[11px] text-subtle">{it.material} · {it.receivedQty} {it.unit || "AD"}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => etiketAdediDegistir(it, i, -1)}
-                      disabled={printing || isSaving}
-                      className="flex h-9 w-9 items-center justify-center rounded-xl bg-elevated text-subtle transition hover:bg-line active:scale-95 disabled:opacity-40"
-                      aria-label="Azalt"
-                    >
-                      <Minus className="h-4 w-4" />
-                    </button>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      max={99}
-                      value={etiketAdedi(it, i)}
-                      onChange={(e) => etiketAdediSet(it, i, e.target.value)}
-                      disabled={printing || isSaving}
-                      className="h-9 w-14 rounded-xl border border-line bg-surface text-center font-mono text-sm font-bold text-fg outline-none focus:border-brand-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => etiketAdediDegistir(it, i, 1)}
-                      disabled={printing || isSaving}
-                      className="flex h-9 w-9 items-center justify-center rounded-xl bg-elevated text-subtle transition hover:bg-line active:scale-95 disabled:opacity-40"
-                      aria-label="Artır"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Alt aksiyonlar */}
-            <div className="flex flex-col gap-2 border-t border-line px-5 py-3.5 shrink-0 sm:flex-row sm:items-center sm:justify-between">
-              <span className="text-xs font-semibold text-subtle">Toplam: <strong className="text-fg">{toplamEtiket}</strong> etiket</span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handlePrintLabels}
-                  disabled={printing || isSaving || toplamEtiket <= 0}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-brand-500 bg-brand-500/10 px-4 py-2 text-sm font-bold text-brand-700 dark:text-brand-300 transition hover:bg-brand-500/20 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
-                  Etiketleri Bas
-                </button>
-                <button
-                  type="button"
-                  onClick={doSaveReceipt}
-                  disabled={printing || isSaving}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-extrabold text-white shadow-md transition hover:bg-brand-700 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Bitir ve Kaydet
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       )}
 

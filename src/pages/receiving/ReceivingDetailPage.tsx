@@ -26,6 +26,7 @@ import {
   Layers,
   GripVertical,
   CalendarDays,
+  Printer,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import ToastView, { useToast } from "../../components/Toast";
@@ -188,29 +189,24 @@ function getOrderDate(ord: Record<string, unknown>): string {
   return "";
 }
 
-// Helper: Bugünün yerel tarihi (yyyy-mm-dd) — SKT alt sınırı için (UTC kaymasız).
-function bugunISODate(): string {
+// Helper: Bugüne gün ekleyip yerel yyyy-mm-dd döndürür (UTC kaymasız).
+// SKT alt sınırı = bugün + AKLEXPDATE gün (MZYGetMaterial · TBLMATSIZE.AKLEXPDATE).
+function tarihEkleISO(gun: number): string {
   const d = new Date();
+  d.setDate(d.getDate() + (gun > 0 ? gun : 0));
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-// Helper: Seçilen SKT geçmişte mi? (yyyy-mm-dd string karşılaştırması güvenli)
-function gecmisSKTMi(iso: string): boolean {
-  if (!iso) return false;
-  return iso < bugunISODate();
-}
-
 // Helper: Parti No genelde SKT'nin ters çevrilmiş hali (YYYYMMDD). Tarih gibi
-// görünüyor ve geçmişteyse true döner — SKT alanı boş bırakılıp Parti No'ya elle
-// geçmiş tarih yazılarak kontrolün atlanmasını engeller.
-function partiGecmisSKTMi(lot: string): boolean {
+// görünüyorsa yyyy-mm-dd döndürür, değilse "" — en erken SKT kontrolü için.
+function partiTarihISO(lot: string): string {
   const m = /^(\d{4})(\d{2})(\d{2})$/.exec(lot.trim());
-  if (!m) return false;
+  if (!m) return "";
   const ay = Number(m[2]);
   const gun = Number(m[3]);
-  if (ay < 1 || ay > 12 || gun < 1 || gun > 31) return false; // tarih değil → dokunma
-  return gecmisSKTMi(`${m[1]}-${m[2]}-${m[3]}`);
+  if (ay < 1 || ay > 12 || gun < 1 || gun > 31) return ""; // tarih değil
+  return `${m[1]}-${m[2]}-${m[3]}`;
 }
 
 // Helper: Ham sipariş tarihini gg.aa.yyyy biçimine çevir (YYYYMMDD, YYYY-MM-DD, ISO vb.)
@@ -481,10 +477,21 @@ export default function ReceivingDetailPage() {
       brutWeight: number;
       brutWeightUnit?: string;
     };
+    // AKLEXPDATE: bugüne eklenecek gün — en erken SKT = bugün + bu.
+    expiryAddDays?: number;
   } | null>(null);
 
   // Ölçü Formu Önbelleği
   const [matSizeForm, setMatSizeForm] = useState<Record<string, unknown> | null>(null);
+
+  // SKT alt sınırı: bugün + malzemenin AKLEXPDATE günü. Bundan öncesi seçilemez.
+  const enErkenSKT = tarihEkleISO(currentMaterial?.expiryAddDays ?? 0);
+  const enErkenSKTMetin = formatOrderDate(enErkenSKT);
+  const sktErkenMi = (iso: string): boolean => Boolean(iso) && iso < enErkenSKT;
+  const partiErkenMi = (lot: string): boolean => {
+    const t = partiTarihISO(lot);
+    return Boolean(t) && t < enErkenSKT;
+  };
 
   // Ölçü Ekranını Mevcut Ürün Değerleriyle Açma (Yeni Sayfaya Yönlendirme)
   const handleOpenDimensionModal = () => {
@@ -731,6 +738,64 @@ export default function ReceivingDetailPage() {
       localStorage.setItem(storageKey, JSON.stringify(receivedItems));
     } catch { }
   }, [receivedItems, storageKey]);
+
+  // --- Etiket basımı: üstteki yazıcı ikonuyla açılan modal (0 = basma) ---
+  const [showEtiketModal, setShowEtiketModal] = useState(false);
+  const [etiketSayilari, setEtiketSayilari] = useState<Record<string, number>>({});
+  const [printing, setPrinting] = useState(false);
+
+  const etiketAdedi = (it: ReceivedItem, i: number) => etiketSayilari[it.id || String(i)] ?? 1;
+  const etiketAdediDegistir = (it: ReceivedItem, i: number, delta: number) => {
+    const key = it.id || String(i);
+    setEtiketSayilari((prev) => {
+      const yeni = Math.min(99, Math.max(0, (prev[key] ?? 1) + delta));
+      return { ...prev, [key]: yeni };
+    });
+  };
+  const etiketAdediSet = (it: ReceivedItem, i: number, val: string) => {
+    const key = it.id || String(i);
+    const n = Math.min(99, Math.max(0, parseInt(val.replace(/[^0-9]/g, ""), 10) || 0));
+    setEtiketSayilari((prev) => ({ ...prev, [key]: n }));
+  };
+  const toplamEtiket = receivedItems.reduce((s, it, i) => s + etiketAdedi(it, i), 0);
+
+  const openEtiketModal = () => {
+    setEtiketSayilari(() => {
+      const base: Record<string, number> = {};
+      receivedItems.forEach((it, i) => (base[it.id || String(i)] = 1));
+      return base;
+    });
+    setShowEtiketModal(true);
+  };
+
+  const handlePrintLabels = async () => {
+    setPrinting(true);
+    let basarili = 0;
+    let hatali = 0;
+    let sonHata = "";
+    for (let i = 0; i < receivedItems.length; i++) {
+      const it = receivedItems[i];
+      const adet = etiketAdedi(it, i);
+      if (adet <= 0) continue; // 0 ise basma
+      try {
+        const res = await api.printMaterial({ barcode: it.material, unit: it.unit || "AD", repeat: adet });
+        if (res.ok) basarili += adet;
+        else { hatali += 1; sonHata = res.message || sonHata; }
+      } catch (e) {
+        hatali += 1;
+        sonHata = e instanceof Error ? e.message : String(e);
+      }
+    }
+    setPrinting(false);
+    if (hatali > 0) {
+      sesHata();
+      show({ kind: "error", text: `Etiket yazdırma: ${hatali} kalemde hata. ${sonHata}`.trim() });
+    } else {
+      sesBasarili();
+      show({ kind: "done", text: `${basarili} etiket yazdırma isteği CANIAS'a iletildi.` });
+      setShowEtiketModal(false);
+    }
+  };
 
   // Adım ve malzeme geri yükleme (Kayıtlar sayfasından dönüşte)
   useEffect(() => {
@@ -1174,6 +1239,8 @@ export default function ReceivingDetailPage() {
             brutWeight: brutweight,
             brutWeightUnit: bwunit,
           },
+          // AKLEXPDATE (TBLMATSIZE): en erken SKT için bugüne eklenecek gün sayısı.
+          expiryAddDays: Number(matSizeRow.AKLEXPDATE ?? nestedSizeRow.AKLEXPDATE) || 0,
         };
 
         setCurrentMaterial(matObj);
@@ -1615,6 +1682,17 @@ export default function ReceivingDetailPage() {
         backTo="/receiving"
         right={
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Etiket Bas — ekrandan çıkmadan modal açar (0 = basma) */}
+            <button
+              type="button"
+              onClick={openEtiketModal}
+              disabled={receivedItems.length === 0}
+              title="Etiket Bas"
+              aria-label="Etiket Bas"
+              className="flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-bold text-fg shadow-sm transition hover:bg-elevated active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <Printer className="h-4 w-4" /> <span className="hidden sm:inline">Etiket</span>
+            </button>
             {/* Mal Kabulü Bitir Butonu */}
             <button
               type="button"
@@ -1635,7 +1713,7 @@ export default function ReceivingDetailPage() {
 
         {/* SOL ANA KART: 1 MALZEME · 2 MİKTAR ADIMLARI */}
         <div
-          className={`card p-3 flex flex-col justify-between space-y-2.5 min-w-0 w-full ${currentMaterial?.isSpecialLot
+          className={`card p-3 flex flex-col justify-between space-y-2.5 min-w-0 w-full short:!min-h-0 short:shrink-0 short:justify-start ${currentMaterial?.isSpecialLot
             ? "min-h-[290px] sm:min-h-[300px]"
             : "min-h-[205px] sm:min-h-[215px]"
             }`}
@@ -1753,7 +1831,7 @@ export default function ReceivingDetailPage() {
           {/* ------------------------------------------------------------------- */}
           {/* Parti adımı YALNIZCA parti-takipli malzemede içerik gösterir; normal üründe tab pasif kalır. */}
           {activeStep === "lot" && currentMaterial && currentMaterial.isSpecialLot && (
-            <div className="space-y-2 animate-fade-in flex-1 flex flex-col justify-between">
+            <div className="space-y-2 animate-fade-in flex-1 flex flex-col justify-between short:flex-none short:justify-start">
               <div className="space-y-1.5 rounded-2xl border border-violet-500/30 bg-violet-500/10 p-2.5 text-xs">
                 <div className="flex items-center gap-1.5 font-bold text-violet-800 dark:text-violet-200">
                   <Tag className="h-3.5 w-3.5" />
@@ -1770,10 +1848,10 @@ export default function ReceivingDetailPage() {
                     }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && lotNumber.trim()) {
-                        // SKT KONTROLÜ: Enter ile de geçmiş tarihli SKT/parti geçilemez.
-                        if ((expiryDate && gecmisSKTMi(expiryDate)) || partiGecmisSKTMi(lotNumber)) {
+                        // SKT KONTROLÜ: en erken SKT (bugün + AKLEXPDATE gün) öncesi geçilemez.
+                        if (sktErkenMi(expiryDate) || partiErkenMi(lotNumber)) {
                           sesHata();
-                          setLotError("Geçmiş tarihli SKT/parti ile mal kabul yapılamaz. Bugün veya ileri bir tarih girin.");
+                          setLotError(`En erken son kullanma tarihi ${enErkenSKTMetin} olmalıdır.`);
                           return;
                         }
                         setLotError("");
@@ -1791,14 +1869,14 @@ export default function ReceivingDetailPage() {
                   <input
                     type="date"
                     value={expiryDate}
-                    min={bugunISODate()}
+                    min={enErkenSKT}
                     onChange={(e) => {
                       const val = e.target.value;
-                      // SKT KONTROLÜ: geçmiş tarihli SKT ile mal kabul engellenir.
-                      if (gecmisSKTMi(val)) {
+                      // SKT KONTROLÜ: en erken SKT (bugün + AKLEXPDATE gün) öncesi seçilemez.
+                      if (sktErkenMi(val)) {
                         sesHata();
-                        setLotError("Geçmiş tarihli SKT ile mal kabul yapılamaz. Bugün veya ileri bir tarih seçin.");
-                        return; // geçmiş tarihi kabul etme (input eski değerinde kalır)
+                        setLotError(`En erken son kullanma tarihi ${enErkenSKTMetin} olmalıdır.`);
+                        return; // erken tarihi kabul etme (input eski değerinde kalır)
                       }
                       setExpiryDate(val);
                       // Tarih seçilince Parti No'yu ters çevirip yaz (yyyy-mm-dd → YYYYMMDD) — toplamadaki gibi.
@@ -1810,6 +1888,11 @@ export default function ReceivingDetailPage() {
                     }}
                     className="field-input w-full font-mono text-xs h-9 py-0.5"
                   />
+                  {(currentMaterial?.expiryAddDays ?? 0) > 0 && (
+                    <p className="mt-0.5 text-[10px] font-semibold text-amber-600">
+                      En erken SKT: {enErkenSKTMetin} (bugün + {currentMaterial?.expiryAddDays} gün)
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1821,16 +1904,10 @@ export default function ReceivingDetailPage() {
                     setLotError("Bu malzeme partili olduğu için Parti No girilmesi zorunludur.");
                     return;
                   }
-                  // SKT KONTROLÜ (güvenlik ağı): geçmiş tarihli SKT ile devam edilemez.
-                  if (expiryDate && gecmisSKTMi(expiryDate)) {
+                  // SKT KONTROLÜ (güvenlik ağı): en erken SKT (bugün + AKLEXPDATE gün) öncesi engellenir.
+                  if (sktErkenMi(expiryDate) || partiErkenMi(lotNumber)) {
                     sesHata();
-                    setLotError("Geçmiş tarihli SKT ile mal kabul yapılamaz. Bugün veya ileri bir tarih seçin.");
-                    return;
-                  }
-                  // Parti No'ya elle geçmiş-tarihli (YYYYMMDD) batch yazıldıysa da engelle.
-                  if (partiGecmisSKTMi(lotNumber)) {
-                    sesHata();
-                    setLotError("Geçmiş tarihli SKT/parti ile mal kabul yapılamaz. Bugün veya ileri bir tarih girin.");
+                    setLotError(`En erken son kullanma tarihi ${enErkenSKTMetin} olmalıdır.`);
                     return;
                   }
                   setLotError("");
@@ -1847,7 +1924,7 @@ export default function ReceivingDetailPage() {
           {/* ADIM 3 GÖRÜNÜMÜ: MİKTAR GİRİŞİ */}
           {/* ------------------------------------------------------------------- */}
           {activeStep === "quantity" && currentMaterial && (
-            <div className="space-y-2 animate-fade-in flex-1 flex flex-col justify-between">
+            <div className="space-y-2 animate-fade-in flex-1 flex flex-col justify-between short:flex-none short:justify-start">
               {/* Miktar Stepper Girişi */}
               <div>
                 <div className="mb-1">
@@ -1985,7 +2062,7 @@ export default function ReceivingDetailPage() {
         </div>
 
         {/* KABUL EDİLENLER BARI (sol sütun — diğer ekranlarla aynı konum) */}
-        <div className="self-start w-full">
+        <div className="self-start w-full short:shrink-0">
           <div className="rounded-2xl border border-line bg-surface p-2.5 sm:p-3 shadow-xs hover:border-brand-500/40 transition flex items-center min-h-[66px] sm:min-h-[68px]">
             <button
               type="button"
@@ -2325,6 +2402,84 @@ export default function ReceivingDetailPage() {
 
 
 
+
+      {/* ETİKET BASIMI MODALI — üstteki yazıcı ikonuyla açılır, ekrandan çıkılmaz (0 = basma) */}
+      {showEtiketModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 animate-fade-in">
+          <div className="w-full max-w-lg rounded-3xl bg-surface shadow-2xl border border-line flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between gap-2 border-b border-line px-5 py-3.5 shrink-0">
+              <div className="flex items-center gap-2">
+                <Printer className="h-5 w-5 text-brand-600" />
+                <h3 className="text-base font-extrabold text-fg">Etiket Bas</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEtiketModal(false)}
+                disabled={printing}
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-40"
+                aria-label="Kapat"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="px-5 pt-3 text-xs text-subtle">
+              Her malzeme için kaç etiket basılacağını girin. <strong className="text-fg">0</strong> olan malzeme basılmaz.
+            </p>
+
+            <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
+              {receivedItems.length === 0 ? (
+                <p className="py-6 text-center text-sm text-subtle">Henüz kabul edilen malzeme yok.</p>
+              ) : (
+                receivedItems.map((it, i) => (
+                  <div key={it.id || i} className="flex items-center gap-3 rounded-2xl border border-line bg-elevated/40 p-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-fg" title={it.name}>{it.name || it.material}</p>
+                      <p className="truncate font-mono text-[11px] text-subtle">{it.material} · {it.receivedQty} {it.unit || "AD"}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button type="button" onClick={() => etiketAdediDegistir(it, i, -1)} disabled={printing} className="flex h-9 w-9 items-center justify-center rounded-xl bg-elevated text-subtle transition hover:bg-line active:scale-95 disabled:opacity-40" aria-label="Azalt">
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        max={99}
+                        value={etiketAdedi(it, i)}
+                        onChange={(e) => etiketAdediSet(it, i, e.target.value)}
+                        disabled={printing}
+                        className="h-9 w-14 rounded-xl border border-line bg-surface text-center font-mono text-sm font-bold text-fg outline-none focus:border-brand-500"
+                      />
+                      <button type="button" onClick={() => etiketAdediDegistir(it, i, 1)} disabled={printing} className="flex h-9 w-9 items-center justify-center rounded-xl bg-elevated text-subtle transition hover:bg-line active:scale-95 disabled:opacity-40" aria-label="Artır">
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-2 border-t border-line px-5 py-3.5 shrink-0">
+              <span className="text-xs font-semibold text-subtle">Toplam: <strong className="text-fg">{toplamEtiket}</strong> etiket</span>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setShowEtiketModal(false)} disabled={printing} className="rounded-xl border border-line bg-surface px-4 py-2 text-sm font-semibold text-muted transition hover:bg-elevated disabled:opacity-40">
+                  Kapat
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePrintLabels}
+                  disabled={printing || toplamEtiket <= 0}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-extrabold text-white shadow-md transition hover:bg-brand-700 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+                  Etiketleri Bas
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ToastView toast={toast} />
     </div>
