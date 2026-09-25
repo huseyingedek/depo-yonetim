@@ -1,7 +1,16 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, Save, ChevronDown, Check, Package, AlertCircle } from "lucide-react";
+import {
+  Loader2,
+  ChevronDown,
+  Check,
+  Package,
+  AlertCircle,
+  Camera,
+  CornerDownLeft,
+} from "lucide-react";
 import PageHeader from "../../components/PageHeader";
+import CameraScanOverlay from "../../components/CameraScanOverlay";
 import { api } from "../../api/client";
 import { sesBasarili, sesHata } from "../../sound";
 import {
@@ -16,14 +25,14 @@ const NON_BARCODE_UNITS = new Set([
   "L", "LT", "ML"
 ]);
 
-type LeftTabType = "material" | "unit" | "barcode";
-type BarcodeMode = "auto" | "manual" | null;
-type Toast = { kind: "ok" | "done" | "error"; text: string } | null;
+type StepType = 1 | 2;
+type BarcodeMode = "manual" | "auto";
 
 export default function BarcodeGeneratorPage() {
   const navigate = useNavigate();
   const redirectTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Temizlik: component unmount olduğunda timer'ı temizle
   useEffect(() => {
     return () => {
       if (redirectTimerRef.current) {
@@ -32,26 +41,30 @@ export default function BarcodeGeneratorPage() {
     };
   }, []);
 
-  // Sol Kart Sekme Durumu
-  const [activeTab, setActiveTab] = useState<LeftTabType>("material");
+  // Adım Akışı: 1 = Malzeme Arama & Kart Seçimi, 2 = Birim & Barkod Tanımlama
+  const [step, setStep] = useState<StepType>(1);
 
-  // Tab 1: Malzeme Arama Durumları
+  // --- ADIM 1: ARAMA & LİSTELEME DURUMLARI ---
   const [searchTerm, setSearchTerm] = useState("");
+  const [waybillNumber, setWaybillNumber] = useState("");
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
   const [searchResults, setSearchResults] = useState<ProductBarcodeCardItem[]>([]);
   const [selectedCard, setSelectedCard] = useState<ProductBarcodeCardItem | null>(null);
 
-  // Tab 2: Birim Durumu (Sadece seçilen malzemenin sahip olduğu birimler)
+  // --- ADIM 2: BİRİM & BARKOD DURUMLARI ---
   const [selectedUnit, setSelectedUnit] = useState<string>("");
-
-  // Tab 3: Barkod Modu, Değeri ve Yazdırma Sayısı
-  const [barcodeMode, setBarcodeMode] = useState<BarcodeMode>(null);
+  const [barcodeMode, setBarcodeMode] = useState<BarcodeMode>("manual"); // Varsayılan: Kendin Gir
   const [customBarcode, setCustomBarcode] = useState("");
-  const [printCount, setPrintCount] = useState<number | string>(0);
+
+  // İşlem ve Bildirim Durumları
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
   // Seçilen malzemenin CANIAS'ta sahip olduğu geçerli birimler
-  const currentAvailableUnits = useMemo(() => {
+  const availableUnitsForSelected = useMemo(() => {
     if (!selectedCard) return [];
     const list =
       selectedCard.availableUnits && selectedCard.availableUnits.length > 0
@@ -68,32 +81,6 @@ export default function BarcodeGeneratorPage() {
     );
   }, [selectedCard]);
 
-  // Bildirim ve Kaydetme Durumları
-  const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<Toast>(null);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
-
-  const showToast = (tst: Toast) => {
-    if (tst?.kind === "error") sesHata();
-    else if (tst) sesBasarili();
-    setToast(tst);
-    setTimeout(() => setToast(null), 3500);
-  };
-
-  // Sekme Değişimi Kontrolü (Malzeme seçilmeden Birim'e, Birim seçilmeden Barkod'a geçilemez)
-  const handleTabChange = (tabId: LeftTabType) => {
-    if (tabId === "unit" && !selectedCard) {
-      showToast({ kind: "error", text: "Lütfen önce sağ taraftan bir malzeme seçin." });
-      return;
-    }
-    if (tabId === "barcode" && (!selectedCard || !selectedUnit)) {
-      showToast({ kind: "error", text: "Lütfen önce birim seçin." });
-      return;
-    }
-    setActiveTab(tabId);
-  };
-
   // Türkçe karakter duyarsız arama normalizasyonu
   function trNormalize(str: string): string {
     return str
@@ -107,7 +94,8 @@ export default function BarcodeGeneratorPage() {
       .trim();
   }
 
-  // CANIAS MZYGetMaterial detayından malzeme kartlarını üretir 
+  // CANIAS MZYGetMaterial detayından malzeme kartlarını üretir
+  // Kural: Aynı ürünün her birimi için sadece 1 kart üretilir (Örn: 1 AD, 1 KO, 3 PK -> 1 AD, 1 KO, 1 PK)
   async function fetchCardsForMaterial(
     matCode: string,
     initialName = "",
@@ -119,7 +107,6 @@ export default function BarcodeGeneratorPage() {
     let baseUnit = initialUnit;
 
     const rawMatList = matDetail.ok && Array.isArray(matDetail.matList) ? matDetail.matList : [];
-    // CANIAS boş XML şablonunda boş satır dönebilir. Gerçek bir malzemenin kodu veya açıklaması olmalıdır:
     const m = rawMatList.find((row) => {
       const code = String(row.MATERIAL || row.MATCODE || row.ITEMCODE || "").trim();
       const text = String(row.STEXT || row.MTEXT || row.NAME1 || row.NAME || "").trim();
@@ -141,15 +128,14 @@ export default function BarcodeGeneratorPage() {
       if (qUnit) baseUnit = qUnit;
     }
 
-    // Malzemenin ne gerçek bir ERP kaydı ne barkodu ne de stok ismi yoksa kart üretme
     if (!hasRealMat && !initialName) {
       return [];
     }
 
     const rawUnitList = Array.isArray(matDetail.unitList) ? matDetail.unitList : [];
 
-    // Malzemenin CANIAS barkodlarında tanımlı birimlerini topla
-    const barcodeUnitSet = new Set<string>();
+    // Malzemenin geçerli birimlerini topla
+    const unitSet = new Set<string>();
 
     for (const b of rawBarcodeList) {
       const rawUnit = String(
@@ -158,74 +144,69 @@ export default function BarcodeGeneratorPage() {
       if (!rawUnit || NON_BARCODE_UNITS.has(rawUnit)) continue;
       const uShort = formatBarcodeUnitInfo(rawUnit).short || rawUnit;
       if (uShort && !NON_BARCODE_UNITS.has(uShort)) {
-        barcodeUnitSet.add(uShort);
+        unitSet.add(uShort);
       }
     }
 
-    // Eğer malzemenin CANIAS'ta henüz hiç tanımlı barkodu yoksa, ana birimi veya TBLUNITLIST'teki paket birimlerini al
-    if (barcodeUnitSet.size === 0) {
-      if (baseUnit && !NON_BARCODE_UNITS.has(baseUnit)) {
-        const uShort = formatBarcodeUnitInfo(baseUnit).short || baseUnit;
-        if (!NON_BARCODE_UNITS.has(uShort)) barcodeUnitSet.add(uShort);
-      }
-      for (const u of rawUnitList) {
-        const uCode = String(u.QUNIT || u.UNIT || u.BUNIT || u.IUNIT || u.TUNIT || "").trim().toUpperCase();
-        if (uCode && !NON_BARCODE_UNITS.has(uCode)) {
-          const uShort = formatBarcodeUnitInfo(uCode).short || uCode;
-          if (!NON_BARCODE_UNITS.has(uShort)) barcodeUnitSet.add(uShort);
-        }
-      }
-      if (initialUnit && !NON_BARCODE_UNITS.has(initialUnit)) {
-        const uShort = formatBarcodeUnitInfo(initialUnit).short || initialUnit;
-        if (!NON_BARCODE_UNITS.has(uShort)) barcodeUnitSet.add(uShort);
+    for (const u of rawUnitList) {
+      const uCode = String(u.QUNIT || u.UNIT || u.BUNIT || u.IUNIT || u.TUNIT || "").trim().toUpperCase();
+      if (uCode && !NON_BARCODE_UNITS.has(uCode)) {
+        const uShort = formatBarcodeUnitInfo(uCode).short || uCode;
+        if (!NON_BARCODE_UNITS.has(uShort)) unitSet.add(uShort);
       }
     }
 
-    const availableUnits = Array.from(barcodeUnitSet).filter(Boolean);
+    if (baseUnit && !NON_BARCODE_UNITS.has(baseUnit)) {
+      const uShort = formatBarcodeUnitInfo(baseUnit).short || baseUnit;
+      if (!NON_BARCODE_UNITS.has(uShort)) unitSet.add(uShort);
+    }
+    if (initialUnit && !NON_BARCODE_UNITS.has(initialUnit)) {
+      const uShort = formatBarcodeUnitInfo(initialUnit).short || initialUnit;
+      if (!NON_BARCODE_UNITS.has(uShort)) unitSet.add(uShort);
+    }
 
+    if (unitSet.size === 0) {
+      unitSet.add("AD");
+    }
+
+    const availableUnits = Array.from(unitSet);
+
+    // KURAL: Gelen yanıtta aynı birimden birden fazla barkod olsa dahi her birimden birer kart üretilir
     const cards: ProductBarcodeCardItem[] = [];
-    const seenKey = new Set<string>();
 
-    for (const b of rawBarcodeList) {
-      const bCode = String(b.BARCODE || b.barcode || b.BARCODENUM || b.EAN || b.CODE || "").trim();
-      const rawUnit = String(
-        b.BUNIT || b.UNIT || b.BARCODEUNIT || b.B_UNIT || b.QUNIT || b.SKUNIT || b.unit || baseUnit
-      ).trim().toUpperCase();
+    for (const u of availableUnits) {
+      // Bu birime ait varsa mevcut bir barkod bul
+      const matchedBarcodeItem = rawBarcodeList.find((b) => {
+        const rawUnit = String(
+          b.BUNIT || b.UNIT || b.BARCODEUNIT || b.B_UNIT || b.QUNIT || b.SKUNIT || b.unit || ""
+        ).trim().toUpperCase();
+        const uShort = formatBarcodeUnitInfo(rawUnit).short || rawUnit;
+        return uShort === u;
+      });
 
-      if (!bCode) continue;
+      const bCode = matchedBarcodeItem
+        ? String(
+            matchedBarcodeItem.BARCODE ||
+            matchedBarcodeItem.barcode ||
+            matchedBarcodeItem.BARCODENUM ||
+            matchedBarcodeItem.EAN ||
+            matchedBarcodeItem.CODE ||
+            ""
+          ).trim()
+        : "";
 
-      const unitInfo = formatBarcodeUnitInfo(rawUnit);
-      const key = `${matCode}_${bCode}_${unitInfo.short}_${rawUnit}`;
-      if (!seenKey.has(key)) {
-        seenKey.add(key);
-        cards.push({
-          id: key,
-          material: matCode,
-          name: name || matCode,
-          barcode: bCode,
-          unit: unitInfo.short,
-          unitLabel: unitInfo.label,
-          isSearchedBarcode: searchedBarcode ? bCode.toLowerCase() === searchedBarcode.toLowerCase() : false,
-          availableUnits,
-        });
-      }
-    }
+      const unitInfo = formatBarcodeUnitInfo(u);
 
-    // Malzeme ERP'de mevcut ama henüz tanımlı hiç barkodu yoksa malzeme kartı oluştur
-    if (cards.length === 0 && (hasRealMat || initialName)) {
-      // Eğer gerçek bir malzeme adı veya stok adı yoksa sahte kart üretme
-      if (!name && !initialName) {
-        return [];
-      }
-      const unitInfo = formatBarcodeUnitInfo(baseUnit || "AD");
       cards.push({
-        id: `${matCode}_${unitInfo.short}`,
+        id: `${matCode}_${u}`,
         material: matCode,
         name: name || matCode,
-        barcode: "",
-        unit: unitInfo.short,
+        barcode: bCode,
+        unit: u,
         unitLabel: unitInfo.label,
-        isSearchedBarcode: false,
+        isSearchedBarcode: Boolean(
+          searchedBarcode && bCode && bCode.toLowerCase() === searchedBarcode.toLowerCase()
+        ),
         availableUnits,
       });
     }
@@ -233,43 +214,36 @@ export default function BarcodeGeneratorPage() {
     return cards;
   }
 
-  // 1. Sekme: İsim veya Ürün Kodu ile Malzeme Arama
-  const handleSearch = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  // Malzeme Arama İşlevi (Enter veya Kamera okutulduğunda tetiklenir)
+  const handleSearch = async (termToSearch?: string) => {
+    const term = (termToSearch !== undefined ? termToSearch : searchTerm).trim();
+    if (!term) return;
+
     setErrorMsg("");
     setSuccessMsg("");
-
-    const term = searchTerm.trim();
-    if (!term) {
-      setErrorMsg("Lütfen arama terimi girin.");
-      showToast({ kind: "error", text: "Lütfen malzeme adı veya kodu girin." });
-      return;
-    }
-
     setSearching(true);
     setSearchDone(false);
+    setSelectedCard(null);
 
     try {
       let cards: ProductBarcodeCardItem[] = [];
       let apiError: string | null = null;
 
-      // A) Doğrudan malzeme detayı / barkod çağrısı (yalnızca gerçek bir malzeme eşleşirse)
+      // A) Doğrudan malzeme detayı / barkod çağrısı
       try {
-        const directCards = await fetchCardsForMaterial(term);
-        // Sadece dönen kartın adı aranan terimden farklı gerçek bir açıklamaya sahipse doğrudan sonuç say
+        const directCards = await fetchCardsForMaterial(term, "", "", term);
         if (directCards.length > 0 && directCards[0].name.toLowerCase() !== term.toLowerCase()) {
           cards = directCards;
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         apiError = msg;
-        // Bağlantı / sunucu hatalarında hemen fırlat
         if (/bağlantı|cevaplanmadı|proxy|zaman aşımı|fetch|500|network/i.test(msg)) {
           throw err;
         }
       }
 
-      // B) Stok sorgusu (Açıklama veya malzeme koduna göre tüm stokta arama)
+      // B) Stok sorgusu (Açıklama veya malzeme koduna göre arama)
       if (cards.length === 0) {
         try {
           const allStock = await api.queryStock({});
@@ -284,7 +258,7 @@ export default function BarcodeGeneratorPage() {
           for (const r of matches) {
             if (r.material && !uniqueMaterials.has(r.material)) {
               uniqueMaterials.set(r.material, { name: r.name, unit: r.unit });
-              if (uniqueMaterials.size >= 30) break;
+              if (uniqueMaterials.size >= 25) break;
             }
           }
 
@@ -305,7 +279,7 @@ export default function BarcodeGeneratorPage() {
         }
       }
 
-      // C) Hala kart bulunamadıysa barkod okuyucu servisi
+      // C) Hala kart bulunamadıysa readBarcode servisi
       if (cards.length === 0) {
         try {
           const readRes = await api.readBarcode(term);
@@ -318,49 +292,36 @@ export default function BarcodeGeneratorPage() {
         }
       }
 
-      // Eğer hiç kart bulunamadıysa ve bir hata oluştuysa hata mesajını fırlat
       if (cards.length === 0 && apiError) {
         throw new Error(apiError);
       }
 
-      // Aynı malzeme koduna sahip olanları tekilleştir (her malzeme kodundan sadece 1 kart)
-      const seenMaterial = new Set<string>();
+      // Tekilleştirme: Her (material_unit) kombinasyonundan yalnızca 1 kart
+      const seenCardIds = new Set<string>();
       const uniqueCards = cards.filter((c) => {
-        const matKey = c.material.trim().toUpperCase();
-        if (!matKey || seenMaterial.has(matKey)) return false;
-        seenMaterial.add(matKey);
+        if (seenCardIds.has(c.id)) return false;
+        seenCardIds.add(c.id);
         return true;
       });
 
       setSearchResults(uniqueCards);
       setSearchDone(true);
-      setSelectedCard(null);
-      setSelectedUnit("");
-      setBarcodeMode(null);
-      setCustomBarcode("");
-      setActiveTab("material");
-
-      if (uniqueCards.length > 0) {
-        showToast({ kind: "ok", text: `${uniqueCards.length} malzeme bulundu. Sağ taraftan malzeme seçiniz.` });
-      } else {
-        showToast({ kind: "error", text: "Aranan kriterde ürün bulunamadı." });
-      }
     } catch (err: unknown) {
       setSearchResults([]);
       setSearchDone(true);
-      const msg = err instanceof Error ? err.message : "Malzeme araması sırasında hata oluştu.";
+      const msg = err instanceof Error ? err.message : "Arama sırasında bir hata oluştu.";
       setErrorMsg(msg);
-      showToast({ kind: "error", text: msg });
+      sesHata();
     } finally {
       setSearching(false);
     }
   };
 
-  // Malzeme kartı seçimi (Sağ taraftan malzeme seçilince Birim tabına atar)
+  // Kart Seçimi: Seçilen kart listenin en üstüne taşınır, Header'daki Devam butonu aktifleşir
   const handleSelectCard = (item: ProductBarcodeCardItem) => {
     setSelectedCard(item);
 
-    // Seçilen kartı sonuç listesinin en üstüne taşı
+    // Kural: "seçilen kart yukarı taşınacak eğer alt sıralardaysa"
     setSearchResults((prev) => {
       const idx = prev.findIndex((c) => c.id === item.id);
       if (idx <= 0) return prev;
@@ -368,492 +329,486 @@ export default function BarcodeGeneratorPage() {
       const [moved] = copy.splice(idx, 1);
       return [moved, ...copy];
     });
+  };
 
-    // Kullanıcının birim ve barkod modunu seçebilmesi için seçimleri sıfırla ve Birim tabına geç
+  // Step 2'ye Geçiş
+  const handleContinueToStep2 = () => {
+    if (!selectedCard) return;
+    // ComboBox'tan seçim yapılana kadar butonların kilitli kalması kuralı gereği boş başlatılır
     setSelectedUnit("");
-    setBarcodeMode(null);
     setCustomBarcode("");
-    setActiveTab("unit");
-    showToast({ kind: "ok", text: `Seçildi: ${item.name}` });
-  };
-
-  // 3. Sekme: Sıradaki Numarayı Ata seçimi
-  const handleSelectAutoBarcode = () => {
-    setBarcodeMode("auto");
-    setCustomBarcode("");
-  };
-
-  // 3. Sekme: Kendin Gir seçimi
-  const handleSelectManualBarcode = () => {
     setBarcodeMode("manual");
-  };
-
-  // Header Kaydet Butonu Tıklaması
-  const handleSave = async () => {
     setErrorMsg("");
     setSuccessMsg("");
+    setStep(2);
+  };
 
-    if (!selectedCard) {
-      showToast({ kind: "error", text: "Lütfen önce listeden bir malzeme seçin." });
-      setActiveTab("material");
-      return;
-    }
+  // Adım 2: Barkod Oluşturma İşlemini Otomatik Kabul Edip Çalıştırma
+  const handleExecuteCreate = async ({
+    isAuto,
+    newBarcode,
+  }: {
+    isAuto: boolean;
+    newBarcode?: string;
+  }) => {
+    if (!selectedCard || !selectedUnit || saving) return;
 
-    if (!selectedUnit) {
-      showToast({ kind: "error", text: "Lütfen önce birim seçin." });
-      setActiveTab("unit");
-      return;
-    }
-
-    if (!barcodeMode) {
-      showToast({
-        kind: "error",
-        text: "Lütfen 'Sıradaki Numarayı Ata' veya 'Kendin Gir' seçeneğini belirleyin.",
-      });
-      setActiveTab("barcode");
-      return;
-    }
-
-    if (barcodeMode === "manual" && !customBarcode.trim()) {
-      showToast({ kind: "error", text: "Lütfen bir barkod numarası yazın." });
-      setActiveTab("barcode");
+    if (!isAuto && (!newBarcode || !newBarcode.trim())) {
+      setErrorMsg("Lütfen geçerli bir barkod numarası yazınız.");
+      sesHata();
       return;
     }
 
     setSaving(true);
+    setErrorMsg("");
+    setSuccessMsg("");
 
     try {
-      const isAuto = barcodeMode === "auto";
-      const newBarcode = isAuto ? "" : customBarcode.trim();
+      const barcodeValue = isAuto ? "" : (newBarcode || customBarcode).trim();
 
-      // CANIAS MZYCreateBarcode servisine kaydetme bildirimi
-      // PARAMETRELER: PSCOMPANY, PSMATERIAL, PSUNIT, PIAUTOGENERATE, PSNEWBARCODE, PIPRINTCOUNT, PITRACESTATUS
-      const count = printCount === "" ? 0 : Number(printCount);
-
+      // CANIAS MZYCreateBarcode servisine kaydetme isteği
       const res = await api.createBarcode({
         company: "01",
         material: selectedCard.material,
         unit: selectedUnit,
         autoGenerate: isAuto ? 1 : 0,
-        newBarcode: newBarcode,
-        printCount: count,
+        newBarcode: barcodeValue,
+        printCount: 0,
       });
 
       if (res.ok) {
-        const assignedCode = res.barcode || (!isAuto ? newBarcode : "Sıradaki Numara");
-        const printText = count > 0 ? ` ve ${count} adet etiket yazdırıldı` : "";
-        const okText = `Barkod (${assignedCode}) başarıyla oluşturuldu${printText}!`;
+        const assigned = res.barcode || (isAuto ? "Sıradaki Numara" : barcodeValue);
+        const okText = `Barkod (${assigned}) başarıyla oluşturuldu!`;
         setSuccessMsg(okText);
-        showToast({ kind: "done", text: okText });
-
-        redirectTimerRef.current = setTimeout(() => {
-          navigate("/label-printing");
-        }, 3500);
+        sesBasarili();
       } else {
         const errText = res.message || "Barkod oluşturulurken bir sorun oluştu.";
         setErrorMsg(errText);
-        showToast({ kind: "error", text: errText });
+        sesHata();
       }
     } catch (err: unknown) {
-      const errText = err instanceof Error ? err.message : "Kaydetme sırasında bir hata oluştu.";
+      const errText = err instanceof Error ? err.message : "Kayıt işlemi sırasında bir hata oluştu.";
       setErrorMsg(errText);
-      showToast({ kind: "error", text: errText });
+      sesHata();
     } finally {
       setSaving(false);
+      // KURAL: 3 saniye sonra kullanıcı otomatik olarak anasayfaya (/home) yönlendirilecek
+      redirectTimerRef.current = setTimeout(() => {
+        navigate("/home");
+      }, 3000);
     }
   };
 
+  const isStep2Locked = !selectedUnit;
+
   return (
-    <div className="mx-auto max-w-6xl p-3 sm:p-4 lg:p-6 space-y-4">
-      {/* HEADER: Başlık ve En Sağda Kopya + Mavi Kaydet Butonu */}
-      <PageHeader
-        title="Barkod Oluşturma"
-        subtitle="Ürün seçin, birim ve barkod parametrelerini belirleyin"
-        backTo="/label-printing"
-        right={
-          <div className="hidden sm:flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
-              <input
-                type="number"
-                min={0}
-                max={99}
-                value={printCount}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === "") {
-                    setPrintCount("");
-                    return;
-                  }
-                  const v = parseInt(val, 10);
-                  if (!isNaN(v)) {
-                    setPrintCount(Math.min(99, Math.max(0, v)));
-                  }
-                }}
-                onBlur={() => {
-                  if (printCount === "") {
-                    setPrintCount(0);
-                  }
-                }}
-                className="field-input w-16 py-1.5 px-2 text-center text-xs font-bold"
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={
-                saving ||
-                !selectedCard ||
-                !selectedUnit ||
-                !barcodeMode ||
-                (barcodeMode === "manual" && !customBarcode.trim())
-              }
-              className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-soft hover:bg-blue-700 transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Kaydediliyor...</span>
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  <span>Kaydet</span>
-                </>
-              )}
-            </button>
-          </div>
-        }
-      />
-
-      {/* Mobile Action Bar */}
-      <div className="flex items-center justify-between gap-3 sm:hidden mb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
-          <input
-            type="number"
-            min={0}
-            max={99}
-            value={printCount}
-            onChange={(e) => {
-              const val = e.target.value;
-              if (val === "") {
-                setPrintCount("");
-                return;
-              }
-              const v = parseInt(val, 10);
-              if (!isNaN(v)) {
-                setPrintCount(Math.min(99, Math.max(0, v)));
-              }
-            }}
-            onBlur={() => {
-              if (printCount === "") {
-                setPrintCount(0);
-              }
-            }}
-            className="field-input w-20 py-1.5 px-2 text-center text-xs font-bold"
+    <div className="mx-auto max-w-2xl p-3 sm:p-4 lg:p-6 space-y-4">
+      {/* ========================================================================= */}
+      {/* ADIM 1: ARAMA & MALZEME KARTLARI SEÇİM EKRANI                            */}
+      {/* ========================================================================= */}
+      {step === 1 && (
+        <>
+          {/* HEADER: Barkod Oluşturma Başlığı ve Sağda Devam Butonu */}
+          <PageHeader
+            title="Barkod Oluşturma"
+            backTo="/label-printing"
+            right={
+              <button
+                type="button"
+                id="btn-step1-devam"
+                disabled={!selectedCard}
+                onClick={handleContinueToStep2}
+                className={`flex h-10 items-center justify-center rounded-xl px-5 text-sm font-bold transition-all ${
+                  selectedCard
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 hover:bg-blue-500 active:scale-95 ring-2 ring-blue-400 cursor-pointer"
+                    : "bg-elevated text-subtle/50 border border-line cursor-not-allowed opacity-50"
+                }`}
+              >
+                Devam
+              </button>
+            }
           />
-        </div>
 
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={
-            saving ||
-            !selectedCard ||
-            !selectedUnit ||
-            !barcodeMode ||
-            (barcodeMode === "manual" && !customBarcode.trim())
-          }
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 py-2 text-xs font-bold text-white shadow-soft hover:bg-blue-700 transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {saving ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Kaydediliyor...</span>
-            </>
-          ) : (
-            <>
-              <Save className="h-4 w-4" />
-              <span>Kaydet</span>
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* Toast Bildirimi */}
-      {toast && (
-        <div
-          className={`fixed top-5 right-5 z-50 flex items-center gap-2.5 rounded-2xl px-4 py-3 text-xs font-bold shadow-soft transition animate-fade-in ${toast.kind === "error"
-            ? "bg-red-600 text-white"
-            : toast.kind === "done"
-              ? "bg-emerald-600 text-white"
-              : "bg-blue-600 text-white"
-            }`}
-        >
-          {toast.kind === "error" ? (
-            <AlertCircle className="h-4 w-4" />
-          ) : (
-            <Check className="h-4 w-4" />
-          )}
-          <span>{toast.text}</span>
-        </div>
-      )}
-
-      {/* Global Hata ve Başarı Banner'ları */}
-      {errorMsg && (
-        <div className="flex items-center gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>{errorMsg}</span>
-        </div>
-      )}
-
-      {successMsg && (
-        <div className="flex items-center gap-2.5 rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-xs text-blue-600 dark:text-blue-400">
-          <Check className="h-4 w-4 shrink-0" />
-          <span>{successMsg}</span>
-        </div>
-      )}
-
-      {/* İKİ SÜTUNLU TRANSFER EKRANI DÜZENİ */}
-      <div className="grid min-w-0 gap-2 md:grid-cols-[250px_minmax(0,1fr)] lg:grid-cols-[250px_minmax(0,1fr)]">
-        {/* SOL KOLON: Sayfada Sabit/Sticky, 3 Tablı Sabit Ölçülü Kart */}
-        <div className="min-w-0 md:sticky md:top-4 md:self-start">
-          <div className="card p-1 sm:p-2">
-            {/* 3 Tablı Sekme Barı (Sadece isimler) */}
-            <div className="flex items-center justify-center gap-1.5 mb-3">
-              {[
-                { id: "material" as const, label: "Malzeme", disabled: false },
-                { id: "unit" as const, label: "Birim", disabled: !selectedCard },
-                { id: "barcode" as const, label: "Barkod", disabled: !selectedCard || !selectedUnit },
-              ].map((tab) => {
-                const isActive = activeTab === tab.id;
-                const isDisabled = tab.disabled;
-                return (
+          {/* ÜST GİRİŞ KARTI (Arama & İrsaliye Alanı) */}
+          <div className="card p-4 sm:p-5 shadow-card space-y-3.5">
+            {/* Barkod / Ürün Giriş Alanı */}
+            <div className="space-y-1">
+              <div className="relative flex items-center">
+                <input
+                  type="text"
+                  id="input-barcode-search"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleSearch(searchTerm);
+                    }
+                  }}
+                  enterKeyHint="search"
+                  inputMode="text"
+                  autoComplete="off"
+                  placeholder="Barkod / Ürün Kodu / Açıklama girin..."
+                  className="field-input w-full pr-20 h-11 text-sm font-medium"
+                />
+                <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
+                  {/* Enter Butonu */}
                   <button
-                    key={tab.id}
                     type="button"
-                    disabled={isDisabled}
-                    onClick={() => handleTabChange(tab.id)}
-                    className={`flex h-9 min-w-0 flex-1 items-center justify-center truncate rounded-xl px-2 text-[11px] font-bold transition ${isDisabled
-                      ? "bg-elevated/40 text-subtle/40 cursor-not-allowed opacity-40"
-                      : isActive
-                        ? "bg-blue-600 text-white shadow-soft active:scale-95"
-                        : "bg-elevated text-subtle hover:text-fg hover:bg-elevated/80 active:scale-95"
-                      }`}
+                    id="btn-search-enter"
+                    onClick={() => handleSearch(searchTerm)}
+                    disabled={!searchTerm.trim() || searching}
+                    aria-label="Ara"
+                    title="Ara"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-30"
                   >
-                    <span className="truncate">{tab.label}</span>
+                    {searching ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                    ) : (
+                      <CornerDownLeft className="h-4 w-4" />
+                    )}
                   </button>
-                );
-              })}
-            </div>
-
-            {/* TAB İÇERİĞİ: Dinamik Ölçülü Alan */}
-            <div className="pt-1">
-              {/* TAB 1: MALZEME ARAMA */}
-              {activeTab === "material" && (
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-fg block">
-                    Malzeme Arama
-                  </label>
-                  <form onSubmit={handleSearch} className="flex items-center gap-1">
-                    <div className="relative flex-1">
-                      <input
-                        type="text"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Açıklama veya ürün kodu girin"
-                        className="field-input h-10 w-full px-1.5 text-[12px] placeholder:text-[12px]"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={searching || !searchTerm.trim()}
-                      className="flex h-9 items-center justify-center rounded-xl bg-blue-600 px-1.5 text-xs font-bold text-white shadow-soft hover:bg-blue-700 transition active:scale-95 disabled:opacity-50 shrink-0"
-                    >
-                      <span>{searching ? "..." : "Ara"}</span>
-                    </button>
-                  </form>
-                </div>
-              )}
-
-              {/* TAB 2: BİRİM SEÇİMİ (Sadece seçilen malzemenin sahip olduğu birimler sorulur) */}
-              {activeTab === "unit" && (
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs font-bold text-fg block">
-                      Birim Seçimi
-                    </label>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    {/* Birim Combo Box (SADECE bu malzemenin sahip olduğu birimler listelenir) */}
-                    <div className="relative flex-1">
-                      <select
-                        value={selectedUnit}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val) {
-                            setSelectedUnit(val);
-                            setActiveTab("barcode");
-                          }
-                        }}
-                        className="field-input h-10 px-3 text-xs font-bold appearance-none bg-surface cursor-pointer pr-8 border-line focus:border-blue-500"
-                      >
-                        <option value="" disabled>
-                          {currentAvailableUnits.length > 0
-                            ? "Birim Seçiniz..."
-                            : "Tanımlı birim bulunamadı"}
-                        </option>
-                        {currentAvailableUnits.map((u) => (
-                          <option key={u} value={u}>
-                            {u}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle pointer-events-none" />
-                    </div>
-
-                    {/* Combo Box Sağında SADECE Seçilen Birim */}
-                    <div className="flex items-center justify-center min-w-[54px]">
-                      <span className="text-2xl font-black font-mono text-blue-600 dark:text-blue-400 tracking-wider">
-                        {selectedUnit || "-"}
-                      </span>
-                    </div>
-                  </div>
-
-                  {currentAvailableUnits.length === 0 && (
-                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                      Bu malzeme için CANIAS sisteminde tanımlı birim bulunamadı.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* TAB 3: BARKOD MODU VE GİRİŞİ */}
-              {activeTab === "barcode" && (
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-fg block">
-                      Barkod Seçeneği
-                    </label>
-                    {/* İki Buton Kartı: Sıradaki Numarayı Ata & Kendin Gir */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={handleSelectAutoBarcode}
-                        className={`flex items-center justify-center p-2.5 rounded-xl border text-xs font-bold transition active:scale-95 text-center leading-tight ${barcodeMode === "auto"
-                          ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-500 shadow-xs"
-                          : "border-line bg-elevated/40 text-subtle hover:text-fg hover:bg-elevated"
-                          }`}
-                      >
-                        <span>Sıradaki Numarayı Ata</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleSelectManualBarcode}
-                        className={`flex items-center justify-center p-2.5 rounded-xl border text-xs font-bold transition active:scale-95 text-center leading-tight ${barcodeMode === "manual"
-                          ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-500 shadow-xs"
-                          : "border-line bg-elevated/40 text-subtle hover:text-fg hover:bg-elevated"
-                          }`}
-                      >
-                        <span>Kendin Gir</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Butonların Altında Barkod Metin Kutusu */}
-                  <div>
-                    <label className="text-[11px] font-semibold text-subtle mb-1 block">
-                      Barkod Numarası
-                    </label>
-                    <input
-                      type="text"
-                      disabled={barcodeMode !== "manual"}
-                      value={barcodeMode === "manual" ? customBarcode : ""}
-                      onChange={(e) => setCustomBarcode(e.target.value.toUpperCase())}
-                      placeholder={
-                        !barcodeMode
-                          ? "Lütfen yukarıdan bir seçenek belirleyin"
-                          : barcodeMode === "auto"
-                            ? "Sistem otomatik atayacak"
-                            : "Barkod numarasını yazınız..."
-                      }
-                      className={`field-input h-10 px-3 text-xs font-mono font-bold transition ${barcodeMode !== "manual"
-                        ? "bg-elevated/50 text-subtle/70 cursor-not-allowed border-dashed"
-                        : "border-blue-300 dark:border-blue-800 text-fg focus:border-blue-600"
-                        }`}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Sağ Kolon: Kartlar */}
-        <div className="min-w-0 space-y-2.5">
-          {searching ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((n) => (
-                <div key={n} className="h-16 animate-pulse rounded-2xl bg-elevated/60" />
-              ))}
-            </div>
-          ) : searchResults.length > 0 ? (
-            <div className="space-y-2.5">
-              {searchResults.map((r) => {
-                const selected = selectedCard?.id === r.id;
-                return (
-                  <div
-                    key={r.id}
-                    id={`product-card-${r.id}`}
-                    onClick={() => handleSelectCard(r)}
-                    className={`relative flex min-h-[80px] h-[80px] cursor-pointer items-center justify-between rounded-2xl border px-4 py-2.5 text-left shadow-card transition-all ${selected
-                      ? "border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30"
-                      : "border-line bg-surface hover:border-blue-300"
-                      }`}
+                  {/* Kamera Butonu */}
+                  <button
+                    type="button"
+                    id="btn-search-camera"
+                    onClick={() => setIsCameraOpen(true)}
+                    aria-label="Kamera ile barkod oku"
+                    title="Kamera ile barkod oku"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg"
                   >
-                    <div className="min-w-0 flex-1 pr-3 flex flex-col justify-center">
-                      <p
-                        className="font-semibold text-fg text-xs sm:text-sm line-clamp-2 leading-snug"
-                        title={r.name}
-                      >
-                        {r.name}
-                      </p>
-                      <p className="text-[11px] sm:text-xs font-mono text-subtle truncate mt-0.5">
-                        {r.material}
-                      </p>
-                    </div>
-
-                    <span
-                      className={`chip text-xs font-bold shrink-0 ml-1 ${selected
-                        ? "bg-blue-600 text-white shadow-xs"
-                        : "bg-elevated text-subtle"
-                        }`}
-                    >
-                      {selected ? "Seçildi" : "Seç"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          ) : searchDone ? (
-            <div className="card p-8 text-center">
-              <Package className="h-8 w-8 text-subtle mx-auto mb-2 opacity-50" />
-              <p className="text-xs text-subtle">Aranan kriterde ürün kaydı bulunamadı.</p>
-            </div>
-          ) : (
-            <div className="card p-8 text-center border-dashed">
-              <Package className="h-8 w-8 text-subtle mx-auto mb-2 opacity-40" />
-              <p className="text-xs text-subtle">
-                Arama yapmak için sol taraftaki panelden isim veya malzeme kodu giriniz.
+                    <Camera className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-subtle pl-1">
+                Açıklama, ürün kodu ya da barkod girin
               </p>
             </div>
+
+            {/* İrsaliye Numarası Alanı */}
+            <div className="space-y-1">
+              <label
+                htmlFor="input-waybill-number"
+                className="text-xs font-semibold text-subtle block pl-1"
+              >
+                İrsaliye Numarası
+              </label>
+              <input
+                type="text"
+                id="input-waybill-number"
+                value={waybillNumber}
+                onChange={(e) => setWaybillNumber(e.target.value)}
+                placeholder="İrsaliye numarası giriniz..."
+                className="field-input w-full h-11 text-sm font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Hata Bildirimi */}
+          {errorMsg && (
+            <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-xs sm:text-sm font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
           )}
-        </div>
-      </div>
+
+          {/* SONUÇ KARTLARI LİSTESİ */}
+          <div className="space-y-2.5">
+            {searching ? (
+              <div className="space-y-2.5">
+                {[1, 2, 3].map((n) => (
+                  <div
+                    key={n}
+                    className="h-20 animate-pulse rounded-2xl bg-elevated/60 border border-line"
+                  />
+                ))}
+              </div>
+            ) : searchResults.length > 0 ? (
+              <div className="space-y-2.5">
+                {searchResults.map((r) => {
+                  const selected = selectedCard?.id === r.id;
+                  const unitInfo = formatBarcodeUnitInfo(r.unit);
+                  return (
+                    <div
+                      key={r.id}
+                      id={`product-card-${r.id}`}
+                      onClick={() => handleSelectCard(r)}
+                      className={`relative flex min-h-[80px] h-[80px] cursor-pointer items-center justify-between rounded-2xl border px-4 py-2.5 text-left shadow-card transition-all ${
+                        selected
+                          ? "border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30"
+                          : "border-line bg-surface hover:border-blue-300"
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1 pr-3 flex flex-col justify-center">
+                        <p
+                          className="font-semibold text-fg text-xs sm:text-sm line-clamp-2 leading-snug"
+                          title={r.name}
+                        >
+                          {r.name}
+                        </p>
+                        <p className="text-[11px] sm:text-xs font-mono text-subtle truncate mt-0.5">
+                          {r.material}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Birim Çipi */}
+                        <span
+                          className={`chip text-xs font-bold border ${unitInfo.badgeClass}`}
+                        >
+                          {r.unit}
+                        </span>
+                        {/* Seçim Rozeti */}
+                        <span
+                          className={`chip text-xs font-bold shrink-0 ml-1 ${
+                            selected
+                              ? "bg-blue-600 text-white shadow-xs"
+                              : "bg-elevated text-subtle"
+                          }`}
+                        >
+                          {selected ? "Seçildi" : "Seç"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : searchDone ? (
+              <div className="card p-8 text-center">
+                <Package className="h-8 w-8 text-subtle mx-auto mb-2 opacity-50" />
+                <p className="text-xs text-subtle">Aranan kriterde ürün kaydı bulunamadı.</p>
+              </div>
+            ) : (
+              <div className="card p-8 text-center border-dashed">
+                <Package className="h-8 w-8 text-subtle mx-auto mb-2 opacity-40" />
+                <p className="text-xs text-subtle">
+                  Arama yapmak için yukarıdaki alandan ürün kodu, açıklama ya da barkod okutunuz.
+                </p>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ADIM 2: BİRİM VE BARKOD TANIMLAMA EKRANI                                 */}
+      {/* ========================================================================= */}
+      {step === 2 && selectedCard && (
+        <>
+          {/* HEADER: Geri butonu Adım 1'e döndürür */}
+          <PageHeader
+            title="Barkod Oluşturma"
+            subtitle={`${selectedCard.name} (${selectedCard.material})`}
+            onBack={() => {
+              if (saving) return;
+              setStep(1);
+            }}
+          />
+
+          {/* İŞLEM VE BİLDİRİM BANNERLARI */}
+          {successMsg && (
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-3">
+              <Check className="h-5 w-5 shrink-0" />
+              <div>
+                <p>{successMsg}</p>
+                <p className="text-xs text-emerald-600/80 mt-0.5">
+                  3 saniye sonra anasayfaya yönlendirileceksiniz...
+                </p>
+              </div>
+            </div>
+          )}
+
+          {errorMsg && (
+            <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 shrink-0" />
+              <div>
+                <p>{errorMsg}</p>
+                <p className="text-xs text-rose-600/80 mt-0.5">
+                  3 saniye sonra anasayfaya yönlendirileceksiniz...
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ADIM 2 KARTI */}
+          <div className="card p-5 sm:p-6 shadow-card space-y-5">
+            {/* A. Birim Seçim ComboBox'ı */}
+            <div className="space-y-1.5">
+              <label
+                htmlFor="select-material-unit"
+                className="text-xs font-bold text-fg block"
+              >
+                Birim Seçimi
+              </label>
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <select
+                    id="select-material-unit"
+                    disabled={saving}
+                    value={selectedUnit}
+                    onChange={(e) => {
+                      setSelectedUnit(e.target.value);
+                      setErrorMsg("");
+                    }}
+                    className="field-input h-11 w-full px-3 text-sm font-semibold appearance-none bg-surface cursor-pointer pr-9 border-line focus:border-blue-500"
+                  >
+                    <option value="" disabled>
+                      {availableUnitsForSelected.length > 0
+                        ? "Birim Seçiniz..."
+                        : "Tanımlı birim bulunamadı"}
+                    </option>
+                    {availableUnitsForSelected.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle pointer-events-none" />
+                </div>
+
+                {/* Seçilen Birim: ComboBox'ın sağında mavi ve aynı puntoda */}
+                <div className="flex items-center justify-center min-w-[50px] h-11 px-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800">
+                  <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                    {selectedUnit || "-"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* B. Barkod Modu Seçenekleri ("Kendin Gir" & "Sıradakini Al") */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-fg block">
+                Barkod Seçeneği
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Sol Buton: Kendin Gir (Varsayılan Açık) */}
+                <button
+                  type="button"
+                  id="btn-mode-manual"
+                  disabled={isStep2Locked || saving}
+                  onClick={() => setBarcodeMode("manual")}
+                  className={`flex items-center justify-center p-3 rounded-xl border text-xs sm:text-sm font-bold transition active:scale-95 text-center ${
+                    isStep2Locked
+                      ? "opacity-40 cursor-not-allowed border-line bg-elevated/20 text-subtle"
+                      : barcodeMode === "manual"
+                        ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-500 shadow-xs"
+                        : "border-line bg-elevated/40 text-subtle hover:text-fg hover:bg-elevated"
+                  }`}
+                >
+                  Kendin Gir
+                </button>
+
+                {/* Sağ Buton: Sıradakini Al (Tıklanınca otomatik kabul edip işlemi yürütür) */}
+                <button
+                  type="button"
+                  id="btn-mode-auto"
+                  disabled={isStep2Locked || saving}
+                  onClick={() => {
+                    if (isStep2Locked || saving) return;
+                    setBarcodeMode("auto");
+                    handleExecuteCreate({ isAuto: true });
+                  }}
+                  className={`flex items-center justify-center p-3 rounded-xl border text-xs sm:text-sm font-bold transition active:scale-95 text-center ${
+                    isStep2Locked
+                      ? "opacity-40 cursor-not-allowed border-line bg-elevated/20 text-subtle"
+                      : barcodeMode === "auto"
+                        ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-500 shadow-xs"
+                        : "border-line bg-elevated/40 text-subtle hover:text-fg hover:bg-elevated"
+                  }`}
+                >
+                  {saving && barcodeMode === "auto" ? (
+                    <span className="flex items-center gap-1.5">
+                      <Loader2 className="h-4 w-4 animate-spin" /> İşleniyor...
+                    </span>
+                  ) : (
+                    "Sıradakini Al"
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* C. Kendin Gir Barkod Giriş Alanı */}
+            {barcodeMode === "manual" && (
+              <div className="space-y-1.5 pt-1">
+                <label
+                  htmlFor="input-custom-barcode"
+                  className="text-xs font-semibold text-subtle block"
+                >
+                  Barkod Numarası
+                </label>
+                <div className="relative flex items-center">
+                  <input
+                    type="text"
+                    id="input-custom-barcode"
+                    disabled={isStep2Locked || saving}
+                    value={customBarcode}
+                    onChange={(e) => setCustomBarcode(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (customBarcode.trim() && !saving && !isStep2Locked) {
+                          handleExecuteCreate({
+                            isAuto: false,
+                            newBarcode: customBarcode.trim(),
+                          });
+                        }
+                      }
+                    }}
+                    placeholder={
+                      isStep2Locked
+                        ? "Önce yukarıdan birim seçiniz"
+                        : "Barkod numarasını yazıp Enter'a basınız..."
+                    }
+                    className={`field-input h-11 w-full pr-12 text-sm font-mono font-bold transition ${
+                      isStep2Locked
+                        ? "bg-elevated/50 text-subtle/50 cursor-not-allowed border-dashed"
+                        : "border-blue-300 dark:border-blue-800 text-fg focus:border-blue-600"
+                    }`}
+                  />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                    <button
+                      type="button"
+                      id="btn-confirm-custom-barcode"
+                      disabled={isStep2Locked || saving || !customBarcode.trim()}
+                      onClick={() => {
+                        if (customBarcode.trim() && !saving && !isStep2Locked) {
+                          handleExecuteCreate({
+                            isAuto: false,
+                            newBarcode: customBarcode.trim(),
+                          });
+                        }
+                      }}
+                      aria-label="Onayla"
+                      title="Onayla"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-30"
+                    >
+                      {saving && barcodeMode === "manual" ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                      ) : (
+                        <CornerDownLeft className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Kamera Tarama Modal / Overlay */}
+      {isCameraOpen && (
+        <CameraScanOverlay
+          onDetected={(code) => {
+            setIsCameraOpen(false);
+            setSearchTerm(code);
+            handleSearch(code);
+          }}
+          onClose={() => setIsCameraOpen(false)}
+          prompt="Açıklama, ürün kodu ya da barkod okutun"
+        />
+      )}
     </div>
   );
 }
