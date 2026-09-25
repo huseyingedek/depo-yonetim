@@ -331,9 +331,11 @@ export default function BarcodeGeneratorPage() {
     });
   };
 
-  // Step 2'ye Geçiş
+  // Step 2'ye Geçiş: Kart seçilmiş ve irsaliye numarası girilmiş olmalıdır
+  const canContinueToStep2 = Boolean(selectedCard && waybillNumber.trim());
+
   const handleContinueToStep2 = () => {
-    if (!selectedCard) return;
+    if (!canContinueToStep2) return;
     // ComboBox'tan seçim yapılana kadar butonların kilitli kalması kuralı gereği boş başlatılır
     setSelectedUnit("");
     setCustomBarcode("");
@@ -416,10 +418,10 @@ export default function BarcodeGeneratorPage() {
               <button
                 type="button"
                 id="btn-step1-devam"
-                disabled={!selectedCard}
+                disabled={!canContinueToStep2}
                 onClick={handleContinueToStep2}
                 className={`flex h-10 items-center justify-center rounded-xl px-5 text-sm font-bold transition-all ${
-                  selectedCard
+                  canContinueToStep2
                     ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 hover:bg-blue-500 active:scale-95 ring-2 ring-blue-400 cursor-pointer"
                     : "bg-elevated text-subtle/50 border border-line cursor-not-allowed opacity-50"
                 }`}
@@ -599,7 +601,9 @@ export default function BarcodeGeneratorPage() {
           {/* HEADER: Geri butonu Adım 1'e döndürür */}
           <PageHeader
             title="Barkod Oluşturma"
-            subtitle={`${selectedCard.name} (${selectedCard.material})`}
+            subtitle={`${selectedCard.name} (${selectedCard.material})${
+              waybillNumber ? ` • İrsaliye: ${waybillNumber}` : ""
+            }`}
             onBack={() => {
               if (saving) return;
               setStep(1);
