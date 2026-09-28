@@ -20,7 +20,22 @@ Bu doküman, Aktüel Ofis Depo Yönetim Uygulamasında (WMS) kullanılan CANIAS 
   - `PITRACESTATUS` (*INTEGER*): Trace Durumu (`0`: Pasif, `1`: Aktif).
 - **WMS İstemci Karşılığı**: `api.getUserDefault({ user, traceStatus })`
 
-### 1.3. `MZYListingPick` — Toplama Emri Listeleri
+### 1.3. `MZYSaveUserDefault` — Kullanıcı Öndeğerlerini Sakla
+- **Açıklama**: Kullanıcının varsayılan firma, tesis, dil, depolar (mal kabul, paketleme, sevkiyat, kalite) ve yazıcı öndeğerlerini kaydeder.
+- **Parametreler**:
+  - `COMPANY` (*STRING*): Firma Kodu.
+  - `PLANT` (*STRING*): Tesis Kodu.
+  - `USER` (*STRING*): Kullanıcı Adı.
+  - `LANGU` (*STRING*): Dil (Örn: `"T"`).
+  - `RECEIPTWH` (*STRING*): Mal Kabul Deposu.
+  - `PACKWH` (*STRING*): Paketleme Deposu.
+  - `DELIVERYWH` (*STRING*): Sevkiyat Deposu.
+  - `QLTWH` (*STRING*): Kalite Deposu.
+  - `PRINTNAME` (*STRING*): Yazıcı Adı.
+  - `PITRACESTATUS` (*INTEGER*): Trace Durumu (`0`: Pasif, `1`: Aktif).
+- **WMS İstemci Karşılığı**: `api.saveUserDefault({ company, plant, user, langu, receiptWh, packWh, deliveryWh, qltWh, printName, traceStatus })`
+
+### 1.4. `MZYListingPick` — Toplama Emri Listeleri
 - **Açıklama**: Giriş yapan kullanıcıya atanmış ve açık durumdaki toplama emirlerini listeler.
 - **Parametreler**:
   - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
@@ -470,3 +485,4 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 | **Paketleme Listesi** | `MZYListingPack` | `api.getPackagingList` | `src/api/client.ts` |
 | **Paketlemeye Başla** | `MZYEnterPack` | `api.enterPack` | `src/api/client.ts` |
 | **Kullanıcı Öndeğerleri** | `MZYGetUserDefault` | `api.getUserDefault` | `src/api/client.ts` |
+| **Kullanıcı Öndeğerlerini Kaydet** | `MZYSaveUserDefault` | `api.saveUserDefault` | `src/api/client.ts` |

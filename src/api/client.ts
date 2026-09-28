@@ -2627,4 +2627,67 @@ export const api = {
       success: true,
     };
   },
+
+  /**
+   * MZYSaveUserDefault — Kullanıcı Öndeğerlerini Sakla
+   * @param params Firma, Tesis, Kullanıcı, Dil, Depolar, Yazıcı ve Trace durumu
+   */
+  async saveUserDefault(params?: {
+    company?: string;
+    plant?: string;
+    user?: string;
+    langu?: string;
+    receiptWh?: string;
+    packWh?: string;
+    deliveryWh?: string;
+    qltWh?: string;
+    printName?: string;
+    traceStatus?: number;
+  }): Promise<{
+    raw: unknown;
+    data: Row | null;
+    rows: Row[];
+    message?: string;
+    success: boolean;
+  }> {
+    const c = ctx();
+    const callParams = {
+      COMPANY: params?.company ?? c.company ?? "01",
+      PLANT: params?.plant ?? c.plant ?? "100",
+      USER: params?.user ?? c.worker ?? "WMSWSUSER",
+      LANGU: params?.langu ?? "T",
+      RECEIPTWH: params?.receiptWh ?? "",
+      PACKWH: params?.packWh ?? "",
+      DELIVERYWH: params?.deliveryWh ?? "",
+      QLTWH: params?.qltWh ?? "",
+      PRINTNAME: params?.printName ?? "",
+      PITRACESTATUS: params?.traceStatus ?? (c.trace ? 1 : 0),
+    };
+
+    console.info("📤 [MZYSaveUserDefault PARAMETRELER]", callParams);
+    const r = await call(SERVICES.saveUserDefault, callParams);
+    console.info("📥 [MZYSaveUserDefault GELEN YANIT]", r);
+
+    let data: Row | null = null;
+    let rows: Row[] = [];
+
+    const d = r.data as unknown;
+    if (Array.isArray(d)) {
+      rows = d as Row[];
+      data = (d[0] as Row) || null;
+    } else if (d && typeof d === "object") {
+      data = d as Row;
+      rows = rowsOf(r, ["TBLUSERDEFAULT", "TBLDEFAULT", "USERDEFAULT", "TBLDATA", "ROW"]) || [data];
+    }
+
+    const msg = serviceMessage(r) || "";
+
+    return {
+      raw: r,
+      data,
+      rows,
+      message: msg,
+      success: true,
+    };
+  }
 };

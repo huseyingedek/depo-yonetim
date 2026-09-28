@@ -140,6 +140,11 @@ const ALLOWED = new Set([
   "MZYGetUserDefault",
   "MzyGetUserDefault",
   "MZYGETUSERDEFAULT",
+
+  // Kullanıcı Save Değerleri
+  "MZYSaveUserDefault",
+  "MzySaveUserDefault",
+  "MZYSAVEUSERDEFAULT",
 ]);
 
 // -----------------------------------------------------------------------------
@@ -402,7 +407,10 @@ async function callServiceInner(serviceId, params, retry = true) {
     serviceId === "MzyStockTransfer" ||
     serviceId === "MZYSaveAdjustment" ||
     serviceId === "MzySaveAdjustment" ||
-    serviceId === "MZYSAVEADJUSTMENT";
+    serviceId === "MZYSAVEADJUSTMENT" ||
+    serviceId === "MZYSaveUserDefault" ||
+    serviceId === "MzySaveUserDefault" ||
+    serviceId === "MZYSAVEUSERDEFAULT";
 
   const bosYanit = !String(rawResponse ?? "").trim();
   const oturumHatasi = /session/i.test(String(sysError) + String(rawResponse));

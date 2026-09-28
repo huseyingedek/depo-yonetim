@@ -57,4 +57,7 @@ export const SERVICES = {
 
   // Kullanıcı Öndeğerleri
   getUserDefault: "MZYGetUserDefault", // Kullanıcı öndeğerlerini getir (Firma, Tesis, Depolar)
+
+  // Kullanıcı Save Değerleri
+  saveUserDefault: "MZYSaveUserDefault", // Kullanıcı öndeğerlerini kaydet (Firma, Tesis, Depolar)
 } as const;
