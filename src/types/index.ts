@@ -18,7 +18,9 @@ export interface User {
 export interface Settings {
   company: string; // Firma
   facility: string; // Tesis
-  warehouse: string; // Depo
+  warehouseReceiving: string; // Mal Kabul Deposu
+  warehousePackaging: string; // Paketleme Deposu
+  warehouseDelivery: string; // Dağıtım Deposu
   language: "tr" | "en";
 }
 
