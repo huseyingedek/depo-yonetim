@@ -193,17 +193,18 @@ export default function InquiryPage() {
           <div className="min-w-0">
             <div className="mb-1.5 flex items-center justify-between gap-2">
               <span className="shrink-0 text-[13px] font-semibold text-muted">Raf <span className="font-normal text-subtle">(opsiyonel)</span></span>
-              {shelf && (
-                <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
-                  <Warehouse className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{shelf.warehouse}/{shelf.stockPlace}</span>
-                  <button onClick={clearShelf} aria-label="Rafı temizle" className="ml-0.5 shrink-0 hover:text-emerald-900">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </span>
-              )}
             </div>
-            <BarcodeScanner onDetected={handleShelf} prompt="Raf barkodunu okutun" />
+            {shelf ? (
+              <div className="flex items-center justify-between gap-2 rounded-2xl border border-line bg-surface px-3.5 py-2.5 shadow-card">
+                <span className="inline-flex min-w-0 items-center gap-2 text-xs text-subtle">
+                  <Warehouse className="h-4 w-4 shrink-0 text-emerald-600" />
+                  <span className="truncate">Raf: <span className="font-mono font-semibold text-fg">{shelf.warehouse}/{shelf.stockPlace}</span></span>
+                </span>
+                <button type="button" onClick={clearShelf} className="shrink-0 text-xs font-semibold text-brand-600 hover:underline">Yeni arama</button>
+              </div>
+            ) : (
+              <BarcodeScanner onDetected={handleShelf} prompt="Raf barkodunu okutun" />
+            )}
             {shelfBusy && (
               <p className="mt-2 flex items-center gap-1.5 text-xs text-subtle">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> raf okunuyor…
@@ -216,17 +217,18 @@ export default function InquiryPage() {
           <div className="min-w-0">
             <div className="mb-1.5 flex items-center justify-between gap-2">
               <span className="shrink-0 text-[13px] font-semibold text-muted">Ürün <span className="font-normal text-subtle">(opsiyonel)</span></span>
-              {productCode && (
-                <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-cyan-50 px-2.5 py-0.5 font-mono text-xs font-semibold text-cyan-700">
-                  <Package className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{productCode}</span>
-                  <button onClick={clearProduct} aria-label="Ürünü temizle" className="ml-0.5 shrink-0 hover:text-cyan-900">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </span>
-              )}
             </div>
-            <BarcodeScanner onDetected={handleProduct} prompt="Ürün barkodunu okutun" />
+            {productCode ? (
+              <div className="flex items-center justify-between gap-2 rounded-2xl border border-line bg-surface px-3.5 py-2.5 shadow-card">
+                <span className="inline-flex min-w-0 items-center gap-2 text-xs text-subtle">
+                  <Package className="h-4 w-4 shrink-0 text-cyan-600" />
+                  <span className="truncate">Ürün: <span className="font-mono font-semibold text-fg">{productCode}</span></span>
+                </span>
+                <button type="button" onClick={clearProduct} className="shrink-0 text-xs font-semibold text-brand-600 hover:underline">Yeni arama</button>
+              </div>
+            ) : (
+              <BarcodeScanner onDetected={handleProduct} prompt="Ürün barkodunu okutun" />
+            )}
             {queryBusy && (
               <p className="mt-2 flex items-center gap-1.5 text-xs text-subtle">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> sorgulanıyor…

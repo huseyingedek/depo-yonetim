@@ -25,6 +25,8 @@ import {
   Pencil,
   Ruler,
   ChevronDown,
+  Copy,
+  Check,
   Loader2,
   Clock,
   Flame,
@@ -249,6 +251,7 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
   const [internalData, setInternalData] = useState<MaterialDetailData | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedBarcodeState, setSelectedBarcodeState] = useState<string>("");
+  const [copied, setCopied] = useState(false);
 
   // Üst bileşenden barcode prop'u değişirse seçili barkodu senkronize et
   useEffect(() => {
@@ -627,6 +630,26 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
     }
   };
 
+  // Seçili barkodu panoya kopyala (kısa "Kopyalandı" geri bildirimi).
+  const handleCopyBarcode = async () => {
+    const bc = (selectedBarcodeState || activeMaterial?.selectedBarcode || "").trim();
+    if (!bc) return;
+    try {
+      await navigator.clipboard.writeText(bc);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = bc;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch { /* yok */ }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1200);
+  };
+
   const handleEditClick = () => {
     if (onEditDimensions && activeMaterial) {
       onEditDimensions(activeMaterial);
@@ -680,17 +703,13 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
           </h4>
         </div>
 
-        {/* 2. Satır: Fotoğraf + 3D Şema + Sağ Bilgi & Barkod Paneli */}
-        <div className="flex items-stretch gap-0 w-full min-w-0 pt-0.5 pb-0 min-h-0">
-          {/* 1. Bölüm: Solda Ürün Görseli ve Altında Ürün Kodu */}
-          <div className="flex flex-col items-center shrink-0 mr-1.5 self-start w-24 sm:w-26 min-w-0">
-            <div className="h-24 w-24 sm:h-26 sm:w-26 rounded-2xl overflow-hidden shrink-0 border border-line bg-elevated/40 flex items-center justify-center shadow-xs">
+        {/* 2. Satır: Görsel (foto + 3D) + sağ üstte barkod & kopyala */}
+        <div className="flex flex-wrap items-start gap-2 w-full min-w-0 pt-0.5">
+          {/* Fotoğraf + ürün kodu */}
+          <div className="flex flex-col items-center shrink-0 w-24 min-w-0">
+            <div className="h-24 w-24 rounded-2xl overflow-hidden shrink-0 border border-line bg-elevated/40 flex items-center justify-center shadow-xs">
               {activeMaterial.image ? (
-                <img
-                  src={activeMaterial.image}
-                  alt={activeMaterial.name}
-                  className="h-full w-full object-cover"
-                />
+                <img src={activeMaterial.image} alt={activeMaterial.name} className="h-full w-full object-cover" />
               ) : (
                 <div className="flex flex-col items-center justify-center text-subtle/70 gap-1 p-1 text-center">
                   <ImageIcon className="h-5 w-5 text-subtle/50" />
@@ -698,29 +717,19 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
                 </div>
               )}
             </div>
-
-            <span
-              className="mt-1 w-full text-center font-mono font-bold text-[11px] sm:text-xs text-fg truncate select-all"
-              title={activeMaterial.material}
-            >
+            <span className="mt-1 w-full text-center font-mono font-bold text-[11px] sm:text-xs text-fg truncate select-all" title={activeMaterial.material}>
               {activeMaterial.material}
             </span>
           </div>
 
-          {/* Çizgi 1: Resim ile 3D Model Arasındaki Ayırıcı Çizgi */}
-          <div className="w-px bg-line shrink-0 self-stretch mr-1" />
+          {/* Ayırıcı */}
+          <div className="w-px bg-line shrink-0 self-stretch" />
 
-          {/* 2. Bölüm: 3D Şema */}
+          {/* 3D Şema */}
           <div className="shrink-0 flex items-start justify-start overflow-visible self-start">
             {hasDimensions ? (
               <div className="relative flex flex-col items-center">
-                <Dimension3DBoxVisual
-                  width={dims!.width}
-                  length={dims!.length}
-                  height={dims!.height}
-                  unit="CM"
-                  compact={compact}
-                />
+                <Dimension3DBoxVisual width={dims!.width} length={dims!.length} height={dims!.height} unit="CM" compact={compact} />
                 {showEditButton && onEditDimensions && (
                   <button
                     type="button"
@@ -734,11 +743,9 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
                 )}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center text-center p-1.5 gap-1 text-subtle/70 my-auto ml-2">
+              <div className="flex flex-col items-center justify-center text-center p-1.5 gap-1 text-subtle/70 my-auto">
                 <Ruler className="h-4 w-4 text-amber-500/60" />
-                <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">
-                  Ölçü tanımlanmamış
-                </span>
+                <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">Ölçü tanımlanmamış</span>
                 {showEditButton && onEditDimensions && (
                   <button
                     type="button"
@@ -754,82 +761,69 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
             )}
           </div>
 
-          {/* Çizgi 2: Boy Yazısının Sağındaki Ayırıcı Çizgi */}
-          <div className="w-px bg-line shrink-0 self-stretch ml-1.5 mr-2" />
-
-          {/* 3. Bölüm: Sağ Bilgi & Barkod Paneli */}
-          <div className="flex-1 min-w-0 flex flex-col justify-between min-h-0">
-            {/* Üst Kısım: 2x2 Simetrik Grid (Stok Birimi, Net, Desi, Brüt) */}
-            <div className="grid grid-cols-2 gap-x-2.5 gap-y-1 text-xs sm:text-[12px] leading-tight">
-              <div className="flex items-center gap-1 min-w-0">
-                <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Stok Birimi:</span>
-                <span className="font-mono font-black text-fg text-xs sm:text-[12.5px] truncate">
-                  {activeMaterial.unit || "AD"}
-                </span>
+          {/* Sağ üst: barkod seçimi + kopyala (dar ekranda alta kayar) */}
+          {activeMaterial.barcodes && activeMaterial.barcodes.length > 0 && (
+            <div className="ml-auto flex shrink-0 items-center gap-1.5 self-start">
+              <div className="relative inline-flex items-center">
+                <select
+                  value={selectedBarcodeState || activeMaterial.selectedBarcode}
+                  onChange={(e) => handleBarcodeChange(e.target.value)}
+                  className="text-[11px] sm:text-xs font-mono font-black py-1 pl-2 pr-6 rounded-md border border-line bg-surface text-fg shadow-2xs cursor-pointer focus:outline-none focus:border-brand-500 appearance-none tracking-wide"
+                  title="Barkod Seçimi"
+                >
+                  {activeMaterial.barcodes.map((b) => {
+                    const u = (b.unit || "").toUpperCase();
+                    return (
+                      <option key={b.barcode} value={b.barcode}>
+                        {b.barcode} ({u || "AD"})
+                      </option>
+                    );
+                  })}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-1.5 h-3 w-3 text-subtle" />
               </div>
-
-              <div className="flex items-center gap-1 min-w-0">
-                <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Net:</span>
-                <span className="font-mono font-black text-fg text-xs sm:text-[12.5px] truncate">
-                  {dims?.netWeight ?? 0} {dims?.netWeightUnit || "KG"}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1 min-w-0">
-                <span className="text-subtle font-bold text-[11.5px] sm:text-[11.5px] shrink-0">Desi:</span>
-                <span className="font-mono font-black text-fg text-xs sm:text-[12.5px] truncate">
-                  {desiCalculated} DS
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1 min-w-0">
-                <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">Brüt:</span>
-                <span className="font-mono font-black text-fg text-xs sm:text-[12.5px] truncate">
-                  {dims?.brutWeight ?? 0} {dims?.brutWeightUnit || "KG"}
-                </span>
-              </div>
+              <button
+                type="button"
+                onClick={handleCopyBarcode}
+                title="Barkodu kopyala"
+                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-line bg-surface px-2 text-[11px] font-bold text-subtle transition hover:bg-elevated hover:text-fg active:scale-95"
+              >
+                {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                <span>{copied ? "Kopyalandı" : "Kopyala"}</span>
+              </button>
             </div>
-
-            {/* Orta Kısım: Güvenlik / Nitelik Rozetleri */}
-            {activeSpecialAttrs.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1 my-1 pt-1 border-t border-line/40">
-                {activeSpecialAttrs.map((attr) => (
-                  <span
-                    key={attr.id}
-                    className={`inline-flex items-center justify-center px-1 py-0.5 leading-tight tracking-tight shadow-2xs truncate select-none text-center ${attr.colorClass}`}
-                    title={attr.label}
-                  >
-                    <span className="truncate">{attr.label}</span>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Alt Kısım: Barkod Listesi / Combobox */}
-            {activeMaterial.barcodes && activeMaterial.barcodes.length > 0 && (
-              <div className="w-full mt-1 pt-1 pb-0.5 border-t border-line/40 flex items-center justify-start">
-                <div className="relative inline-flex items-center w-auto max-w-full">
-                  <select
-                    value={selectedBarcodeState || activeMaterial.selectedBarcode}
-                    onChange={(e) => handleBarcodeChange(e.target.value)}
-                    className="text-[10px] sm:text-[10.5px] font-mono font-black py-0 pl-1.5 pr-5 h-5.5 sm:h-6 rounded-md border border-line bg-surface text-fg shadow-2xs cursor-pointer focus:outline-none focus:border-brand-500 appearance-none w-auto tracking-wide shrink-0 leading-none"
-                    title="Barkod Seçimi"
-                  >
-                    {activeMaterial.barcodes.map((b) => {
-                      const u = (b.unit || "").toUpperCase();
-                      return (
-                        <option key={b.barcode} value={b.barcode}>
-                          {b.barcode} ({u || "AD"})
-                        </option>
-                      );
-                    })}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-1 h-2.5 w-2.5 text-subtle" />
-                </div>
-              </div>
-            )}
-          </div>
+          )}
         </div>
+
+        {/* 3. Satır: Bilgiler — TAM GENİŞLİK, 4 stat (dar ekranda 2x2) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1.5 mt-1 border-t border-line/40">
+          {[
+            { l: "Stok Birimi", v: `${activeMaterial.unit || "AD"}` },
+            { l: "Net", v: `${dims?.netWeight ?? 0} ${dims?.netWeightUnit || "KG"}` },
+            { l: "Desi", v: `${desiCalculated} DS` },
+            { l: "Brüt", v: `${dims?.brutWeight ?? 0} ${dims?.brutWeightUnit || "KG"}` },
+          ].map((it) => (
+            <div key={it.l} className="min-w-0 rounded-lg bg-elevated/40 px-2.5 py-1.5">
+              <div className="text-subtle font-bold text-[10px] uppercase tracking-wide truncate">{it.l}</div>
+              <div className="font-mono font-black text-fg text-[13px] sm:text-sm truncate leading-tight">{it.v}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Güvenlik / Nitelik Rozetleri */}
+        {activeSpecialAttrs.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1 mt-1">
+            {activeSpecialAttrs.map((attr) => (
+              <span
+                key={attr.id}
+                className={`inline-flex items-center justify-center px-1.5 py-0.5 leading-tight tracking-tight shadow-2xs truncate select-none text-center ${attr.colorClass}`}
+                title={attr.label}
+              >
+                <span className="truncate">{attr.label}</span>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

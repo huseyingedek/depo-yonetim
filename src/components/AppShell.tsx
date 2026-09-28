@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Boxes, Home, Settings as SettingsIcon, LogOut, Building2, Bell, ClipboardList, ScanSearch, Menu, ChevronDown } from "lucide-react";
+import { Boxes, Home, Settings as SettingsIcon, LogOut, Building2, Bell, ScanSearch, Barcode, CalendarDays, LayoutGrid, Menu, ChevronDown, type LucideIcon } from "lucide-react";
 import { useAppStore } from "../store/appStore";
 import { usePickingStore } from "../store/pickingStore";
 import { OPERATIONS } from "./operations";
+import { useOverlayStore, type OverlayAppId } from "../store/overlayStore";
+import AppOverlayHost from "./AppOverlayHost";
 import GlobalHataToast from "./GlobalHataToast";
 
 export default function AppShell() {
@@ -104,6 +106,9 @@ export default function AppShell() {
       {}
       <MobileTabBar />
 
+      {/* Yardımcı uygulama overlay altyapısı (tetikleyici eski barın üzerine eklenecek) */}
+      <AppOverlayHost />
+
       {/* Tek yerden global hata bildirimi */}
       <GlobalHataToast />
     </div>
@@ -114,14 +119,18 @@ function MobileTabBar() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const overlayOpen = useOverlayStore((s) => s.open);
+  const overlayApp = useOverlayStore((s) => s.openApp);
 
   const [acik, setAcik] = useState(false);
 
+  // Sorgu/Barkod/SKT: işlem KAPANMADAN üstte overlay açar. Diğerleri normal route.
   const tabs = [
-    { to: "/home", icon: Home, label: t("nav.home"), active: pathname === "/home" },
-    { to: "/picking", icon: ClipboardList, label: t("nav.picking"), active: pathname.startsWith("/picking") },
-    { to: "/inquiry", icon: ScanSearch, label: t("nav.inquiry"), active: pathname.startsWith("/inquiry") },
-    { to: "/settings", icon: SettingsIcon, label: t("nav.settings"), active: pathname.startsWith("/settings") },
+    { key: "home", icon: Home, label: t("nav.home"), onClick: () => navigate("/home"), active: pathname === "/home" && !overlayApp },
+    { key: "inquiry", icon: ScanSearch, label: t("nav.inquiry"), onClick: () => overlayOpen("inquiry"), active: overlayApp === "inquiry" },
+    { key: "barcode", icon: Barcode, label: "Barkod", onClick: () => overlayOpen("barcode"), active: overlayApp === "barcode" },
+    { key: "skt", icon: CalendarDays, label: "SKT", onClick: () => overlayOpen("skt"), active: overlayApp === "skt" },
+    { key: "settings", icon: SettingsIcon, label: t("nav.settings"), onClick: () => navigate("/settings"), active: pathname.startsWith("/settings") && !overlayApp },
   ];
 
   return (
@@ -145,8 +154,8 @@ function MobileTabBar() {
         const Icon = tab.icon;
         return (
           <button
-            key={tab.to}
-            onClick={() => { navigate(tab.to); setAcik(false); }}
+            key={tab.key}
+            onClick={() => { tab.onClick(); setAcik(false); }}
             className={`flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-semibold transition-colors duration-200 ease-soft active:scale-95 ${
               tab.active ? "text-brand-600" : "text-subtle"
             }`}
@@ -171,6 +180,9 @@ function MobileTabBar() {
 function SidebarContent({ onNavigate }: { onNavigate: () => void }) {
   const { t } = useTranslation();
   const settings = useAppStore((s) => s.settings);
+  const overlayOpen = useOverlayStore((s) => s.open);
+  const overlayApp = useOverlayStore((s) => s.openApp);
+  const [yardimciAcik, setYardimciAcik] = useState(true);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 ease-soft ${
@@ -224,6 +236,45 @@ function SidebarContent({ onNavigate }: { onNavigate: () => void }) {
             </NavLink>
           );
         })}
+
+        {/* Yardımcı Uygulamalar — mavi menüde AÇILIR alt menü; seçilince işlem
+            KAPANMADAN üstte overlay açılır ("İşleme Dön" ile kaldığın yere dönersin). */}
+        <button
+          type="button"
+          onClick={() => setYardimciAcik((v) => !v)}
+          className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/70 transition-all duration-200 ease-soft hover:bg-white/10 hover:text-white"
+        >
+          <LayoutGrid className="h-5 w-5" />
+          <span className="flex-1 text-left">Yardımcı Uygulamalar</span>
+          <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${yardimciAcik ? "rotate-180" : ""}`} />
+        </button>
+        {yardimciAcik && (
+          <div className="ml-3 space-y-1 border-l border-white/10 pl-2">
+            {([
+              { id: "inquiry", icon: ScanSearch, label: "Ürün Sorgulama" },
+              { id: "barcode", icon: Barcode, label: "Barkod Oluşturma" },
+              { id: "skt", icon: CalendarDays, label: "SKT Etiketi" },
+            ] as { id: OverlayAppId; icon: LucideIcon; label: string }[]).map((h) => {
+              const Icon = h.icon;
+              const aktif = overlayApp === h.id;
+              return (
+                <button
+                  key={h.id}
+                  type="button"
+                  onClick={() => { overlayOpen(h.id); onNavigate(); }}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 ease-soft ${
+                    aktif ? "bg-white/15 text-white shadow-soft" : "text-white/70 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <span className="flex-1 text-left">{h.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </nav>
 
       {}

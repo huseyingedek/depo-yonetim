@@ -1,6 +1,7 @@
 import { ChevronLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
+import { useOverlay } from "./overlayContext";
 
 interface Props {
   title: string;
@@ -13,12 +14,18 @@ interface Props {
 
 export default function PageHeader({ title, subtitle, backTo, onBack, right }: Props) {
   const navigate = useNavigate();
-  const geriGoster = onBack || backTo;
+  const overlay = useOverlay();
+  // Overlay içindeysek geri tuşu route değiştirmez → overlay'i kapatır (işleme dön).
+  const geriGoster = onBack || backTo || overlay;
   return (
     <div className="mb-6 flex items-start gap-3">
       {geriGoster && (
         <button
-          onClick={() => (onBack ? onBack() : backTo && navigate(backTo))}
+          onClick={() => {
+            if (onBack) onBack();
+            else if (overlay) overlay.close();
+            else if (backTo) navigate(backTo);
+          }}
           className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line bg-surface text-muted transition hover:bg-elevated active:scale-95"
           aria-label="Geri"
         >

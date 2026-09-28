@@ -2065,19 +2065,48 @@ export const api = {
     });
 
     const mesaj = serviceMessage(r);
-    // MZYSaveReceipt: HATA, data.MESSAGETABLE.ROW içinde TYPE="E" olarak döner
-    // (mesaj Türkçe olduğu için "hata/error/fail" kelimesi GEÇMEYEBİLİR!).
-    // Başarıda ise INVITEMTRNBACKUP döner. O yüzden TYPE'a bakıyoruz.
+    // ------------------------------------------------------------------
+    // BAŞARI "hata yokluğu"ndan DEĞİL, OLUMLU TEYİTTEN çıkarılır.
+    // Neden: CANIAS başarısızlığı her zaman TYPE="E" ile dönmez. Yazma
+    // servisinde BOŞ ya da yalnızca mesaj içeren (oluşturulan kayıt tablosu
+    // OLMAYAN) yanıtlar da gelir. Eski kod bunları yanlışlıkla "başarılı"
+    // sayıyordu → işlem gerçekleşmemiş, trace oluşmamış ama "başarılı" deniyordu.
+    // CANIAS başarıda oluşturduğu hareket kaydını (INVITEMTRNBACKUP gibi bir
+    // sonuç tablosu) döner; MESSAGETABLE dışında en az bir tablo bekleriz.
+    // ------------------------------------------------------------------
     const d = (r.data ?? {}) as Record<string, unknown>;
+    const dataKeys = d && typeof d === "object" ? Object.keys(d) : [];
     const mt = d.MESSAGETABLE as { ROW?: unknown } | undefined;
     const mtRows = mt ? (Array.isArray(mt.ROW) ? mt.ROW : mt.ROW ? [mt.ROW] : []) : [];
+    const rowType = (row: unknown) =>
+      String((row as Record<string, unknown>)?.TYPE || "").trim().toUpperCase();
+
     const hataVar =
-      mtRows.some(
-        (row) => String((row as Record<string, unknown>)?.TYPE || "").trim().toUpperCase() === "E"
-      ) || /error|fail|hata/i.test(mesaj);
+      mtRows.some((row) => rowType(row) === "E") || /error|fail|hata/i.test(mesaj);
+
+    // Olumlu teyit: MESSAGETABLE dışında bir sonuç tablosu (oluşturulan kayıt,
+    // ör. INVITEMTRNBACKUP) VEYA açık başarı mesajı (TYPE="S").
+    const basariliTeyit =
+      dataKeys.some((k) => {
+        const ku = k.toUpperCase();
+        // "raw" = parse edilemeyen ham yanıt; başarı tablosu SAYILMAZ.
+        return ku !== "MESSAGETABLE" && ku !== "RAW";
+      }) ||
+      mtRows.some((row) => rowType(row) === "S");
 
     if (hataVar) {
       return { ok: false, message: mesaj || "Mal kabul kaydedilemedi." };
+    }
+
+    // Hata yok AMA teyit de yok (boş / yalnızca mesaj içeren yanıt) →
+    // işlem CANIAS'ta GERÇEKLEŞMEMİŞ say; kullanıcıyı yanıltma.
+    if (!basariliTeyit) {
+      return {
+        ok: false,
+        message:
+          mesaj ||
+          "Mal kabul CANIAS tarafından onaylanmadı — kayıt oluşmadı. Lütfen tekrar deneyin ve stoğu kontrol edin.",
+      };
     }
 
     return {

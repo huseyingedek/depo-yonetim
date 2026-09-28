@@ -2239,6 +2239,14 @@ export default function ReceivingDetailPage() {
                         {currentMaterial.dimensions?.brutWeight ?? 0} {currentMaterial.dimensions?.brutWeightUnit || "KG"}
                       </span>
                     </div>
+
+                    {/* Tam satır: SKT Süresi (AKLEXPDATE) — birimi gün */}
+                    <div className="col-span-2 flex items-center gap-1 min-w-0">
+                      <span className="text-subtle font-bold text-[11px] sm:text-[11.5px] shrink-0">SKT Süresi:</span>
+                      <span className="font-mono font-black text-fg text-xs sm:text-[12.5px] truncate">
+                        {currentMaterial.expiryAddDays ?? 0} gün
+                      </span>
+                    </div>
                   </div>
 
                   {/* Orta Kısım: Öz Nitelikler (Hacim & Brüt'ün Altı, Barkodun Üstü - İkonsuz, Sadece Yazı 3'lü Kolon) */}

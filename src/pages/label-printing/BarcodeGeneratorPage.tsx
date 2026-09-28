@@ -10,6 +10,7 @@ import {
   CornerDownLeft,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
+import { useOverlay } from "../../components/overlayContext";
 import CameraScanOverlay from "../../components/CameraScanOverlay";
 import { api } from "../../api/client";
 import { sesBasarili, sesHata } from "../../sound";
@@ -30,6 +31,7 @@ type BarcodeMode = "manual" | "auto";
 
 export default function BarcodeGeneratorPage() {
   const navigate = useNavigate();
+  const overlay = useOverlay();
   const redirectTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Temizlik: component unmount olduğunda timer'ı temizle
@@ -393,7 +395,8 @@ export default function BarcodeGeneratorPage() {
       setSaving(false);
       // KURAL: 3 saniye sonra kullanıcı otomatik olarak anasayfaya (/home) yönlendirilecek
       redirectTimerRef.current = setTimeout(() => {
-        navigate("/home");
+        if (overlay) overlay.close();
+        else navigate("/home");
       }, 3000);
     }
   };

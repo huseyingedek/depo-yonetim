@@ -451,8 +451,8 @@ export default function PickingDetailPage() {
 
           </div>
 
-          <div className="card mt-4 p-4">
-            <div className="mb-2 flex items-center justify-between text-sm">
+          <div className="card mt-3 px-4 py-2.5">
+            <div className="mb-1.5 flex items-center justify-between text-sm">
               <span className="font-semibold text-muted">{t("picking.progress")}</span>
               <span className="font-bold text-fg">{Math.round(progress)}%</span>
             </div>
