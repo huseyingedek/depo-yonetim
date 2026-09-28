@@ -54,4 +54,7 @@ export const SERVICES = {
   // Paketleme Servisleri
   listingPack: "MZYListingPack", // Paketlenecekleri getir
   enterPack: "MZYEnterPack", // Paketlemeye başla
+
+  // Kullanıcı Öndeğerleri
+  getUserDefault: "MZYGetUserDefault", // Kullanıcı öndeğerlerini getir (Firma, Tesis, Depolar)
 } as const;

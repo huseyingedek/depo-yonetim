@@ -2577,4 +2577,54 @@ export const api = {
       success: true,
     };
   },
+
+  /**
+   * MZYGetUserDefault — Kullanıcı Öndeğerlerini Getir
+   * @param params Kullanıcı adı ve Trace durumu
+   */
+  async getUserDefault(params?: {
+    user?: string;
+    traceStatus?: number;
+  }): Promise<{
+    raw: unknown;
+    data: Row | null;
+    rows: Row[];
+    message?: string;
+    success: boolean;
+  }> {
+    const c = ctx();
+    const username = params?.user || c.worker || "WMSWSUSER";
+    const traceStatus = params?.traceStatus ?? (c.trace ? 1 : 0);
+
+    const callParams = {
+      PSUSER: username,
+      PITRACESTATUS: traceStatus,
+    };
+
+    console.info("📤 [MZYGetUserDefault PARAMETRELER]", callParams);
+    const r = await call(SERVICES.getUserDefault, callParams);
+    console.info("📥 [MZYGetUserDefault GELEN YANIT]", r);
+
+    let data: Row | null = null;
+    let rows: Row[] = [];
+
+    const d = r.data as unknown;
+    if (Array.isArray(d)) {
+      rows = d as Row[];
+      data = (d[0] as Row) || null;
+    } else if (d && typeof d === "object") {
+      data = d as Row;
+      rows = rowsOf(r, ["TBLUSERDEFAULT", "TBLDEFAULT", "USERDEFAULT", "TBLDATA", "ROW"]) || [data];
+    }
+
+    const msg = serviceMessage(r) || "";
+
+    return {
+      raw: r,
+      data,
+      rows,
+      message: msg,
+      success: true,
+    };
+  },
 };

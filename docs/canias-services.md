@@ -13,7 +13,14 @@ Bu doküman, Aktüel Ofis Depo Yönetim Uygulamasında (WMS) kullanılan CANIAS 
   - `PSPASSWORD` (*STRING*): Kullanıcının şifresi.
 - **WMS İstemci Karşılığı**: `api.checkUser(username, password)`
 
-### 1.2. `MZYListingPick` — Toplama Emri Listeleri
+### 1.2. `MZYGetUserDefault` — Kullanıcı Öndeğerlerini Getir
+- **Açıklama**: Giriş yapan kullanıcının varsayılan firma, tesis, mal kabul deposu, paketleme deposu ve sevkiyat deposu öndeğerlerini getirir.
+- **Parametreler**:
+  - `PSUSER` (*STRING*): Kullanıcı Adı.
+  - `PITRACESTATUS` (*INTEGER*): Trace Durumu (`0`: Pasif, `1`: Aktif).
+- **WMS İstemci Karşılığı**: `api.getUserDefault({ user, traceStatus })`
+
+### 1.3. `MZYListingPick` — Toplama Emri Listeleri
 - **Açıklama**: Giriş yapan kullanıcıya atanmış ve açık durumdaki toplama emirlerini listeler.
 - **Parametreler**:
   - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
@@ -28,7 +35,7 @@ Bu doküman, Aktüel Ofis Depo Yönetim Uygulamasında (WMS) kullanılan CANIAS 
   - `PIORDER` (*INTEGER*): Sıralama parametresi (`0`).
 - **WMS İstemci Karşılığı**: `api.getPickOrders()`
 
-### 1.3. `MZYEnterPick` — Toplama Emrine Gir
+### 1.4. `MZYEnterPick` — Toplama Emrine Gir
 - **Açıklama**: Seçilen toplama emrinin detaylarını ve kalemlerini getirir.
 - **Parametreler**:
   - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
@@ -38,7 +45,7 @@ Bu doküman, Aktüel Ofis Depo Yönetim Uygulamasında (WMS) kullanılan CANIAS 
   - `PSUSER` (*STRING*): Giriş yapan kullanıcı adı.
 - **WMS İstemci Karşılığı**: `api.getPickOrder(orderNum, orderType)`
 
-### 1.4. `MZYCrtSuggestListPickFromSP` — Stok Yerinden Toplama Önerisi Oluştur
+### 1.5. `MZYCrtSuggestListPickFromSP` — Stok Yerinden Toplama Önerisi Oluştur
 - **Açıklama**: Seçilen toplama emri kalemi için kaynak stok yeri önerilerini (FEFO/FIFO) getirir.
 - **Parametreler**:
   - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
@@ -48,7 +55,7 @@ Bu doküman, Aktüel Ofis Depo Yönetim Uygulamasında (WMS) kullanılan CANIAS 
   - `PIITEMNO` (*INTEGER*): Seçilen toplama emrinin kalem numarası.
 - **WMS İstemci Karşılığı**: `api.suggestForLine(orderNum, orderType, itemNo)`
 
-### 1.5. `MZYReadBarcodeSP` — Raf/Konteyner Barkodu Okut
+### 1.6. `MZYReadBarcodeSP` — Raf/Konteyner Barkodu Okut
 - **Açıklama**: Stok yeri / raf barkodunu okutarak raf bilgilerini veya yarım kalan toplamaları döndürür.
 - **Parametreler**:
   - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
@@ -56,7 +63,7 @@ Bu doküman, Aktüel Ofis Depo Yönetim Uygulamasında (WMS) kullanılan CANIAS 
   - `PSBARCODE` (*STRING*): Okutulan raf barkodu.
 - **WMS İstemci Karşılığı**: `api.readShelfBarcode(barcode)`
 
-### 1.6. `MZYReadBarcode` — Malzeme Barkodu Okut
+### 1.7. `MZYReadBarcode` — Malzeme Barkodu Okut
 - **Açıklama**: Malzeme veya koli barkodunu okutarak malzeme bilgilerini ve katsayısını döndürür.
 - **Parametreler**:
   - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
@@ -68,7 +75,7 @@ Bu doküman, Aktüel Ofis Depo Yönetim Uygulamasında (WMS) kullanılan CANIAS 
   - `PSBATCHNUM` (*STRING*): Parti numarası (opsiyonel).
 - **WMS İstemci Karşılığı**: `api.readBarcode(barcode, warehouse, stockPlace, quantity, batchNum)`
 
-### 1.7. `MZYCreateContainer` — Palet/Konteyner Oluştur
+### 1.8. `MZYCreateContainer` — Palet/Konteyner Oluştur
 - **Açıklama**: Toplama veya paketleme için yeni toplama palet/konteyner numarası oluşturur.
 - **Parametreler**:
   - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
@@ -79,7 +86,7 @@ Bu doküman, Aktüel Ofis Depo Yönetim Uygulamasında (WMS) kullanılan CANIAS 
   - `PSORDERTYPE` (*STRING*): Emir tipi (opsiyonel).
 - **WMS İstemci Karşılığı**: `api.placeInPackage(targetWarehouse, material, orderNum, orderType)`
 
-### 1.8. `MZYClosePick` — Toplamadan Vazgeç
+### 1.9. `MZYClosePick` — Toplamadan Vazgeç
 - **Açıklama**: Devam eden toplama işleminden vazgeçer ve kilidi kaldırır.
 - **Parametreler**:
   - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
@@ -88,7 +95,7 @@ Bu doküman, Aktüel Ofis Depo Yönetim Uygulamasında (WMS) kullanılan CANIAS 
   - `PSORDERTYPE` (*STRING*): Toplama emri tipi.
 - **WMS İstemci Karşılığı**: `api.cancelPick(orderNum, orderType)`
 
-### 1.9. `MZYSavePick` — Toplamayı Sakla / Tamamla
+### 1.10. `MZYSavePick` — Toplamayı Sakla / Tamamla
 - **Açıklama**: Toplanan tüm kalemleri (raf, parti, miktar detaylarıyla) saklar.
 - **Parametreler**:
   - `PSCOMPANY` (*STRING*): Firma kodu (`"01"`).
@@ -462,3 +469,4 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 | **Sayım Emri Giriş** | `MZYEnterAdjustment` | `api.getAdjustmentOrder` | `src/api/client.ts` |
 | **Paketleme Listesi** | `MZYListingPack` | `api.getPackagingList` | `src/api/client.ts` |
 | **Paketlemeye Başla** | `MZYEnterPack` | `api.enterPack` | `src/api/client.ts` |
+| **Kullanıcı Öndeğerleri** | `MZYGetUserDefault` | `api.getUserDefault` | `src/api/client.ts` |
