@@ -28,6 +28,17 @@ export default function LoginPage() {
       const user = await api.checkUser(username.trim(), password);
 
       login(username.trim(), user?.displayName);
+
+      // MZYGetUserDefault — CANIAS'tan kullanıcının Firma, Tesis ve Depo öndeğerlerini çek
+      try {
+        const defRes = await api.getUserDefault({ user: username.trim() });
+        if (defRes.defaults) {
+          useAppStore.getState().updateSettings(defRes.defaults);
+        }
+      } catch (defErr) {
+        console.warn("Kullanıcı öndeğerleri CANIAS'tan alınamadı, yerel ayarlar kullanılacak:", defErr);
+      }
+
       navigate("/home", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : t("login.error"));

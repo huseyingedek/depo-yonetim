@@ -97,7 +97,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     persist({ user: null, settings: get().settings, theme: get().theme, trace: get().trace });
   },
   updateSettings: (patch: Partial<Settings>) => {
-    const settings = { ...get().settings, ...patch };
+    const prev = get().settings;
+    const settings = {
+      ...prev,
+      ...patch,
+      warehouse: patch.warehouse || patch.warehouseDelivery || prev.warehouse || prev.warehouseDelivery || "01",
+    };
     if (patch.language && patch.language !== i18n.language) {
       i18n.changeLanguage(patch.language);
     }

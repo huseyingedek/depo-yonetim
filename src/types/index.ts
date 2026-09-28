@@ -16,12 +16,14 @@ export interface User {
 }
 
 export interface Settings {
-  company: string; // Firma
-  facility: string; // Tesis
-  warehouse?: string; // Genel / Varsayılan Depo (Geriye dönük uyumluluk)
-  warehouseReceiving: string; // Mal Kabul Deposu
-  warehousePackaging: string; // Paketleme Deposu
-  warehouseDelivery: string; // Dağıtım Deposu
+  company: string; // Firma (UDCompany)
+  facility: string; // Tesis (UDPlant)
+  warehouse: string; // Genel / Aktif Depo (Varsayılan olarak Sevkiyat Deposu)
+  warehouseReceiving: string; // Mal Kabul Deposu (RECEIPTWH)
+  warehousePackaging: string; // Paketleme Deposu (PACKWH)
+  warehouseDelivery: string; // Sevkiyat Deposu (DELIVERYWH)
+  warehouseQuality?: string; // Kalite Deposu (QLTWH)
+  printerName?: string; // Yazıcı Adı (PRINTNAME)
   language: "tr" | "en";
 }
 

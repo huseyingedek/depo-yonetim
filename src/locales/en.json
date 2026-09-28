@@ -60,7 +60,9 @@
     "account": "Account",
     "signOut": "Sign Out",
     "save": "Save",
+    "saving": "Saving...",
     "saved": "Saved",
+    "loading": "Loading...",
     "version": "Version"
   },
   "picking": {

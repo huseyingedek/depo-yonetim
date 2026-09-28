@@ -60,7 +60,9 @@
     "account": "Hesap",
     "signOut": "Çıkış Yap",
     "save": "Kaydet",
+    "saving": "Kaydediliyor...",
     "saved": "Kaydedildi",
+    "loading": "Yükleniyor...",
     "version": "Sürüm"
   },
   "picking": {

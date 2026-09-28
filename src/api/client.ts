@@ -27,6 +27,7 @@ import type {
   StockTransferPayload,
   SaveAdjustmentPayload,
   SaveAdjustmentResult,
+  Settings,
 } from "../types";
 
 interface MzyResult {
@@ -146,6 +147,7 @@ const READ_ONLY = new Set<string>([
   SERVICES.listingPick,
   SERVICES.getSourceType,
   SERVICES.getPlant,
+  SERVICES.getUserDefault,
 ]);
 const inflight = new Map<string, Promise<MzyResult>>();
 
@@ -213,12 +215,14 @@ async function doCall(service: string, params: Record<string, unknown>): Promise
 function ctx() {
   const st = useAppStore.getState();
   return {
-    company: st.settings.company,
-    plant: st.settings.facility,
+    company: st.settings.company || "01",
+    plant: st.settings.facility || "100",
     warehouse: st.settings.warehouse || st.settings.warehouseDelivery || st.settings.warehouseReceiving || "01",
-    warehouseDelivery: st.settings.warehouseDelivery,
-    warehousePackaging: st.settings.warehousePackaging,
-    warehouseReceiving: st.settings.warehouseReceiving,
+    warehouseDelivery: st.settings.warehouseDelivery || "01",
+    warehousePackaging: st.settings.warehousePackaging || "10",
+    warehouseReceiving: st.settings.warehouseReceiving || "00",
+    warehouseQuality: st.settings.warehouseQuality || "",
+    printerName: st.settings.printerName || "",
     worker: st.user?.username ?? "",
     trace: st.trace ?? false,
   };
@@ -2045,7 +2049,7 @@ export const api = {
     const startTimeStr = payload.startTime || nowStr;
     const compCode = String(payload.company ?? c.company ?? "").trim();
     const plantCode = String(payload.plant ?? c.plant ?? "").trim();
-    const rawWh = String(payload.warehouse || payload.targetWarehouse || c.warehouse || "00").trim();
+    const rawWh = String(payload.warehouse || payload.targetWarehouse || c.warehouseReceiving || c.warehouse || "00").trim();
     const whCode = rawWh.includes("$") ? rawWh.split("$")[0].trim() : rawWh;
     const spCode = payload.stockPlace && payload.stockPlace !== "*"
       ? String(payload.stockPlace).trim()
@@ -2491,7 +2495,7 @@ export const api = {
     const c = ctx();
     const companyCode = params?.company || c.company || "01";
     const plantCode = params?.plant || c.plant || "100";
-    const whCode = params?.warehouse || "10";
+    const whCode = params?.warehouse || c.warehousePackaging || c.warehouse || "10";
     const traceStatus = params?.traceStatus ?? (c.trace ? 1 : 0);
 
     const callParams = {
@@ -2533,7 +2537,7 @@ export const api = {
     const companyCode = params.company || c.company || "01";
     const plantCode = params.plant || c.plant || "100";
     const username = params.user || c.worker || "WMSWSUSER";
-    const whCode = params.warehouse || c.warehouse || "10";
+    const whCode = params.warehouse || c.warehousePackaging || c.warehouse || "10";
     const stockPlace = params.stockPlace || "";
     const traceStatus = params.traceStatus ?? (c.trace ? 1 : 0);
 
@@ -2592,6 +2596,7 @@ export const api = {
     raw: unknown;
     data: Row | null;
     rows: Row[];
+    defaults: Partial<Settings> | null;
     message?: string;
     success: boolean;
   }> {
@@ -2620,12 +2625,38 @@ export const api = {
       rows = rowsOf(r, ["TBLUSERDEFAULT", "TBLDEFAULT", "USERDEFAULT", "TBLDATA", "ROW"]) || [data];
     }
 
+    const first = (rows && rows[0]) || data || {};
+    const company = pick(first, ["COMPANY", "PSCOMPANY"]);
+    const plant = pick(first, ["PLANT", "PSPLANT"]);
+    const receiptWh = pick(first, ["RECEIPTWH", "PSRECEIPTWH", "WAREHOUSERECEIVING"]);
+    const packWh = pick(first, ["PACKWH", "PSPACKWH", "WAREHOUSEPACKAGING"]);
+    const deliveryWh = pick(first, ["DELIVERYWH", "PSDELIVERYWH", "WAREHOUSEDELIVERY"]);
+    const qltWh = pick(first, ["QLTWH", "PSQLTWH"]);
+    const printName = pick(first, ["PRINTNAME", "PSPRINTNAME"]);
+    const rawLangu = pick(first, ["LANGU", "PSLANGU", "LANGUAGE"]);
+    const language: "tr" | "en" = rawLangu.toUpperCase() === "E" ? "en" : "tr";
+
+    const defaults: Partial<Settings> | null =
+      company || plant || receiptWh || packWh || deliveryWh
+        ? {
+            ...(company ? { company } : {}),
+            ...(plant ? { facility: plant } : {}),
+            ...(receiptWh ? { warehouseReceiving: receiptWh } : {}),
+            ...(packWh ? { warehousePackaging: packWh } : {}),
+            ...(deliveryWh ? { warehouseDelivery: deliveryWh, warehouse: deliveryWh } : {}),
+            ...(qltWh ? { warehouseQuality: qltWh } : {}),
+            ...(printName ? { printerName: printName } : {}),
+            ...(rawLangu ? { language } : {}),
+          }
+        : null;
+
     const msg = serviceMessage(r) || "";
 
     return {
       raw: r,
       data,
       rows,
+      defaults,
       message: msg,
       success: true,
     };
@@ -2654,16 +2685,17 @@ export const api = {
     success: boolean;
   }> {
     const c = ctx();
+    const st = useAppStore.getState();
     const callParams = {
       COMPANY: params?.company ?? c.company ?? "01",
       PLANT: params?.plant ?? c.plant ?? "100",
       USER: params?.user ?? c.worker ?? "WMSWSUSER",
-      LANGU: params?.langu ?? "T",
-      RECEIPTWH: params?.receiptWh ?? "",
-      PACKWH: params?.packWh ?? "",
-      DELIVERYWH: params?.deliveryWh ?? "",
-      QLTWH: params?.qltWh ?? "",
-      PRINTNAME: params?.printName ?? "",
+      LANGU: params?.langu ?? (st.settings.language === "en" ? "E" : "T"),
+      RECEIPTWH: params?.receiptWh ?? c.warehouseReceiving ?? "",
+      PACKWH: params?.packWh ?? c.warehousePackaging ?? "",
+      DELIVERYWH: params?.deliveryWh ?? c.warehouseDelivery ?? "",
+      QLTWH: params?.qltWh ?? c.warehouseQuality ?? "",
+      PRINTNAME: params?.printName ?? c.printerName ?? "",
       PITRACESTATUS: params?.traceStatus ?? (c.trace ? 1 : 0),
     };
 
