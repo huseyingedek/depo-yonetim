@@ -215,7 +215,9 @@ function ctx() {
   return {
     company: st.settings.company,
     plant: st.settings.facility,
-    warehouse: st.settings.warehouse,
+    warehouseDelivery: st.settings.warehouseDelivery,
+    warehousePackaging: st.settings.warehousePackaging,
+    warehouseReceiving: st.settings.warehouseReceiving,
     worker: st.user?.username ?? "",
     trace: st.trace ?? false,
   };

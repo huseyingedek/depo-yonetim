@@ -28,7 +28,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl p-4 lg:p-8">
+    <div className="mx-auto max-w-3xl p-4 lg:p-5">
       <PageHeader title={t("settings.title")} backTo="/home" />
 
       <section className="card p-5 lg:p-6">
@@ -46,8 +46,16 @@ export default function SettingsPage() {
             <input value={form.facility} onChange={(e) => set({ facility: e.target.value })} className="field-input" />
           </div>
           <div className="sm:col-span-2">
-            <label className="field-label">{t("settings.warehouse")}</label>
-            <input value={form.warehouse} onChange={(e) => set({ warehouse: e.target.value })} className="field-input" />
+            <label className="field-label">{t("settings.warehouseDelivery")}</label>
+            <input value={form.warehouseDelivery} onChange={(e) => set({ warehouseDelivery: e.target.value })} className="field-input" />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="field-label">{t("settings.warehousePackaging")}</label>
+            <input value={form.warehousePackaging} onChange={(e) => set({ warehousePackaging: e.target.value })} className="field-input" />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="field-label">{t("settings.warehouseReceiving")}</label>
+            <input value={form.warehouseReceiving} onChange={(e) => set({ warehouseReceiving: e.target.value })} className="field-input" />
           </div>
         </div>
 
@@ -58,11 +66,10 @@ export default function SettingsPage() {
               <button
                 key={lng}
                 onClick={() => set({ language: lng })}
-                className={`flex h-12 items-center justify-center gap-2 rounded-2xl border text-sm font-semibold transition-all duration-200 ease-soft ${
-                  form.language === lng
-                    ? "border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-300"
-                    : "border-line bg-surface text-muted hover:bg-elevated"
-                }`}
+                className={`flex h-12 items-center justify-center gap-2 rounded-2xl border text-sm font-semibold transition-all duration-200 ease-soft ${form.language === lng
+                  ? "border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-300"
+                  : "border-line bg-surface text-muted hover:bg-elevated"
+                  }`}
               >
                 <Globe className="h-4 w-4" />
                 {lng === "tr" ? "Türkçe" : "English"}
@@ -82,7 +89,7 @@ export default function SettingsPage() {
         </button>
       </section>
 
-      {}
+      { }
       <section className="card mt-5 p-5 lg:p-6">
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-subtle">
           {t("settings.appearance")}
@@ -95,11 +102,10 @@ export default function SettingsPage() {
             <button
               key={key}
               onClick={() => setTheme(key)}
-              className={`flex h-12 items-center justify-center gap-2 rounded-2xl border text-sm font-semibold transition-all duration-200 ease-soft ${
-                theme === key
-                  ? "border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-300"
-                  : "border-line bg-surface text-muted hover:bg-elevated"
-              }`}
+              className={`flex h-12 items-center justify-center gap-2 rounded-2xl border text-sm font-semibold transition-all duration-200 ease-soft ${theme === key
+                ? "border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-300"
+                : "border-line bg-surface text-muted hover:bg-elevated"
+                }`}
             >
               <Icon className="h-4 w-4" />
               {label}
