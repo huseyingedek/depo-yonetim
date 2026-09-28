@@ -16,6 +16,7 @@ interface PersistedState {
 const defaultSettings: Settings = {
   company: "01", // COMPANY
   facility: "100", // PLANT
+  warehouse: "D3", // Varsayılan Depo
   warehouseReceiving: "D1", // Mal Kabul Deposu
   warehousePackaging: "D2", // Paketleme Deposu
   warehouseDelivery: "D3", // Dağıtım Deposu

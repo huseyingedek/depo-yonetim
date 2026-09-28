@@ -18,6 +18,7 @@ export interface User {
 export interface Settings {
   company: string; // Firma
   facility: string; // Tesis
+  warehouse?: string; // Genel / Varsayılan Depo (Geriye dönük uyumluluk)
   warehouseReceiving: string; // Mal Kabul Deposu
   warehousePackaging: string; // Paketleme Deposu
   warehouseDelivery: string; // Dağıtım Deposu

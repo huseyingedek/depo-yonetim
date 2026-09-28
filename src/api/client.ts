@@ -2027,7 +2027,7 @@ export const api = {
       const specialStock = isPartili ? "1" : (rawSpecial !== "" && rawSpecial !== "0" && rawSpecial !== "Serbest" ? rawSpecial : "*");
       const batchNum = isPartili && it.batchNum && it.batchNum !== "*" && it.batchNum !== "—" ? String(it.batchNum).trim() : "*";
 
-      // MZYSaveReceipt spec'i (Bora): yalnızca bu 8 alan.
+      // MZYSaveReceipt spec'i 
       return {
         MATERIAL: String(it.material || "").trim(),
         SPECIALSTOCK: specialStock,
@@ -2053,7 +2053,7 @@ export const api = {
     const waybill = String(payload.waybillNo || "").trim();
     const vendorCode = String(payload.vendor || "").trim();
 
-    // MZYSaveReceipt spec'i (Bora): yalnızca bu 9 üst parametre.
+    // MZYSaveReceipt spec'i 
     const r = await call(SERVICES.saveReceipt, {
       PSCOMPANY: compCode,
       PSPLANT: plantCode,

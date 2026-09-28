@@ -28,7 +28,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl p-4 lg:p-5">
+    <div className="mx-auto max-w-3xl p-6 lg:p-5">
       <PageHeader title={t("settings.title")} backTo="/home" />
 
       <section className="card p-5 lg:p-6">
@@ -36,7 +36,7 @@ export default function SettingsPage() {
           {t("settings.workContext")}
         </h2>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <label className="field-label">{t("settings.company")}</label>
             <input value={form.company} onChange={(e) => set({ company: e.target.value })} className="field-input" />
@@ -45,15 +45,15 @@ export default function SettingsPage() {
             <label className="field-label">{t("settings.facility")}</label>
             <input value={form.facility} onChange={(e) => set({ facility: e.target.value })} className="field-input" />
           </div>
-          <div className="sm:col-span-2">
+          <div>
             <label className="field-label">{t("settings.warehouseDelivery")}</label>
             <input value={form.warehouseDelivery} onChange={(e) => set({ warehouseDelivery: e.target.value })} className="field-input" />
           </div>
-          <div className="sm:col-span-2">
+          <div>
             <label className="field-label">{t("settings.warehousePackaging")}</label>
             <input value={form.warehousePackaging} onChange={(e) => set({ warehousePackaging: e.target.value })} className="field-input" />
           </div>
-          <div className="sm:col-span-2">
+          <div>
             <label className="field-label">{t("settings.warehouseReceiving")}</label>
             <input value={form.warehouseReceiving} onChange={(e) => set({ warehouseReceiving: e.target.value })} className="field-input" />
           </div>
