@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Boxes, Home, Settings as SettingsIcon, LogOut, Building2, Bell, ScanSearch, Barcode, CalendarDays, LayoutGrid, Menu, ChevronDown, type LucideIcon } from "lucide-react";
+import { Boxes, Home, Settings as SettingsIcon, LogOut, Building2, Bell, ScanSearch, Barcode, CalendarDays, LayoutGrid, Menu, X, ChevronDown, type LucideIcon } from "lucide-react";
 import { useAppStore } from "../store/appStore";
 import { usePickingStore } from "../store/pickingStore";
 import { OPERATIONS } from "./operations";
@@ -115,64 +115,157 @@ export default function AppShell() {
   );
 }
 
+type RadialItem = {
+  key: string;
+  label: string;
+  onClick: () => void;
+  active: boolean;
+  short?: string;
+  isTrace?: boolean;
+  icon?: LucideIcon;
+};
+
+// Ortak çeyrek daire (radyal) menü. side="right" → saat 12→9 (sola açılır),
+// side="left" → saat 12→3 (sağa açılır). Yalnız ikon, zemin şeffaf.
+function RadialMenu({
+  items,
+  open,
+  onClose,
+  side,
+  trace,
+}: {
+  items: RadialItem[];
+  open: boolean;
+  onClose: () => void;
+  side: "left" | "right";
+  trace: boolean;
+}) {
+  const N = items.length;
+  const R = 116;
+  const anchor = side === "right" ? { right: "32px" } : { left: "32px" };
+  return (
+    <div
+      className={`fixed z-[55] lg:hidden ${open ? "pointer-events-auto" : "pointer-events-none"}`}
+      style={{ ...anchor, bottom: "56px", width: 0, height: 0 }}
+    >
+      {items.map((item, idx) => {
+        const f = N === 1 ? 0 : idx / (N - 1);
+        const deg = side === "right" ? 90 + f * 90 : 90 - f * 90; // sağ: 12→9, sol: 12→3
+        const a = (deg * Math.PI) / 180;
+        const dx = Math.round(R * Math.cos(a));
+        const dy = Math.round(-R * Math.sin(a));
+        const Icon = item.icon;
+        return (
+          <div
+            key={item.key}
+            style={{
+              transform: open
+                ? `translate(${dx}px, ${dy}px) translate(-50%, -50%) scale(1)`
+                : "translate(-50%, -50%) scale(0.4)",
+              opacity: open ? 1 : 0,
+              transitionDelay: open ? `${idx * 30}ms` : "0ms",
+            }}
+            className="absolute left-0 top-0 flex flex-col items-center gap-1 transition-all duration-200 ease-soft"
+          >
+            <button
+              type="button"
+              onClick={() => { item.onClick(); onClose(); }}
+              aria-label={item.label}
+              title={item.label}
+              className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-lg shadow-black/10 backdrop-blur-sm transition-transform duration-200 ease-soft hover:scale-110 active:scale-95 ${
+                item.isTrace
+                  ? trace
+                    ? "border-rose-300 bg-rose-500 text-white"
+                    : "border-line/70 bg-surface/95 text-muted"
+                  : item.active
+                  ? "border-brand-300 bg-brand-600 text-white"
+                  : "border-line/70 bg-surface/95 text-fg"
+              }`}
+            >
+              {item.isTrace ? (
+                <span className="text-sm font-black">{trace ? "1" : "0"}</span>
+              ) : Icon ? (
+                <Icon className="h-[20px] w-[20px]" />
+              ) : null}
+            </button>
+            <span
+              className={`whitespace-nowrap rounded-full bg-surface/85 px-1.5 py-0.5 text-[10px] font-bold leading-none shadow-sm backdrop-blur-sm ${
+                item.isTrace ? (trace ? "text-rose-600" : "text-subtle") : item.active ? "text-brand-700" : "text-fg"
+              }`}
+            >
+              {item.short ?? item.label}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function MobileTabBar() {
-  const { t } = useTranslation();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const overlayOpen = useOverlayStore((s) => s.open);
   const overlayApp = useOverlayStore((s) => s.openApp);
+  const trace = useAppStore((s) => s.trace);
+  const toggleTrace = useAppStore((s) => s.toggleTrace);
 
-  const [acik, setAcik] = useState(false);
+  const [sagAcik, setSagAcik] = useState(false);
+  const [solAcik, setSolAcik] = useState(false);
 
-  // Sorgu/Barkod/SKT: işlem KAPANMADAN üstte overlay açar. Diğerleri normal route.
-  const tabs = [
-    { key: "home", icon: Home, label: t("nav.home"), onClick: () => navigate("/home"), active: pathname === "/home" && !overlayApp },
-    { key: "inquiry", icon: ScanSearch, label: t("nav.inquiry"), onClick: () => overlayOpen("inquiry"), active: overlayApp === "inquiry" },
-    { key: "barcode", icon: Barcode, label: "Barkod", onClick: () => overlayOpen("barcode"), active: overlayApp === "barcode" },
-    { key: "skt", icon: CalendarDays, label: "SKT", onClick: () => overlayOpen("skt"), active: overlayApp === "skt" },
-    { key: "settings", icon: SettingsIcon, label: t("nav.settings"), onClick: () => navigate("/settings"), active: pathname.startsWith("/settings") && !overlayApp },
+  // SAĞ menü: yalnızca yardımcı uygulamalar (işlem kapanmadan overlay açar).
+  const helperItems: RadialItem[] = [
+    { key: "inquiry", icon: ScanSearch, label: "Ürün Sorgulama", short: "Sorgu", onClick: () => overlayOpen("inquiry"), active: overlayApp === "inquiry" },
+    { key: "barcode", icon: Barcode, label: "Barkod Oluşturma", short: "Barkod", onClick: () => overlayOpen("barcode"), active: overlayApp === "barcode" },
+    { key: "skt", icon: CalendarDays, label: "SKT Etiketi", short: "SKT", onClick: () => overlayOpen("skt"), active: overlayApp === "skt" },
   ];
+
+  // SOL menü: ana menü + ayarlar + trace.
+  const systemItems: RadialItem[] = [
+    { key: "home", icon: Home, label: "Ana Menü", short: "Ana Menü", onClick: () => navigate("/home"), active: pathname === "/home" && !overlayApp },
+    { key: "settings", icon: SettingsIcon, label: "Ayarlar", short: "Ayarlar", onClick: () => navigate("/settings"), active: pathname.startsWith("/settings") && !overlayApp },
+    { key: "trace", label: "Trace", short: "Trace", onClick: () => toggleTrace(), active: trace, isTrace: true },
+  ];
+
+  const acik = sagAcik || solAcik;
+  const closeAll = () => { setSagAcik(false); setSolAcik(false); };
 
   return (
     <>
-      {}
+      {/* Karartma — açıkken dışarı dokununca ikisi de kapanır (zemin şeffaf) */}
+      {acik && (
+        <button
+          type="button"
+          aria-label="Menüyü kapat"
+          onClick={closeAll}
+          className="fixed inset-0 z-[54] bg-transparent lg:hidden"
+        />
+      )}
+
+      {/* SAĞ: yardımcılar (çeyrek daire, sola açılır) */}
+      <RadialMenu items={helperItems} open={sagAcik} onClose={closeAll} side="right" trace={trace} />
+      {/* SOL: ana menü/ayarlar/trace (çeyrek daire, sağa açılır) */}
+      <RadialMenu items={systemItems} open={solAcik} onClose={closeAll} side="left" trace={trace} />
+
+      {/* Sağ alt FAB — yardımcılar */}
       <button
         type="button"
-        onClick={() => setAcik((v) => !v)}
-        aria-label={acik ? "Menüyü kapat" : "Menüyü aç"}
-        className="fixed bottom-2 right-2 z-50 hidden h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white shadow-soft active:scale-95 short:flex lg:!hidden"
+        onClick={() => { setSagAcik((v) => !v); setSolAcik(false); }}
+        aria-label={sagAcik ? "Yardımcıları kapat" : "Yardımcılar"}
+        className="fixed bottom-2 right-2 z-[56] flex h-11 w-11 items-center justify-center rounded-full bg-brand-600 text-white shadow-soft transition active:scale-95 lg:!hidden"
       >
-        {acik ? <ChevronDown className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        {sagAcik ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
       </button>
-    <nav
-      className={`fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-surface/95 backdrop-blur transition-transform lg:hidden ${
-        acik ? "short:translate-y-0" : "short:translate-y-full"
-      }`}
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-    >
-      {tabs.map((tab) => {
-        const Icon = tab.icon;
-        return (
-          <button
-            key={tab.key}
-            onClick={() => { tab.onClick(); setAcik(false); }}
-            className={`flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-semibold transition-colors duration-200 ease-soft active:scale-95 ${
-              tab.active ? "text-brand-600" : "text-subtle"
-            }`}
-          >
-            <span
-              className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-200 ease-soft ${
-                tab.active ? "bg-brand-50" : "bg-transparent"
-              }`}
-            >
-              <Icon className={`h-[21px] w-[21px] transition-transform duration-200 ease-soft ${tab.active ? "scale-110" : ""}`} />
-            </span>
-            {tab.label}
-          </button>
-        );
-      })}
-      <TraceSwitch />
-    </nav>
+
+      {/* Sol alt FAB — ana menü / ayarlar / trace */}
+      <button
+        type="button"
+        onClick={() => { setSolAcik((v) => !v); setSagAcik(false); }}
+        aria-label={solAcik ? "Menüyü kapat" : "Menü"}
+        className="fixed bottom-2 left-2 z-[56] flex h-11 w-11 items-center justify-center rounded-full bg-slate-800 text-white shadow-soft transition active:scale-95 lg:!hidden"
+      >
+        {solAcik ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+      </button>
     </>
   );
 }
