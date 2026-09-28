@@ -31,12 +31,12 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-3xl p-6 lg:p-5">
       <PageHeader title={t("settings.title")} backTo="/home" />
 
-      <section className="card p-5 lg:p-6">
-        <h2 className="mb-5 text-sm font-semibold uppercase tracking-wide text-subtle">
+      <section className="card p-9 lg:p-4">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-subtle">
           {t("settings.workContext")}
         </h2>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-10 sm:grid-cols-2 max-w-lg mx-auto">
           <div>
             <label className="field-label">{t("settings.company")}</label>
             <input value={form.company} onChange={(e) => set({ company: e.target.value })} className="field-input" />
@@ -45,17 +45,21 @@ export default function SettingsPage() {
             <label className="field-label">{t("settings.facility")}</label>
             <input value={form.facility} onChange={(e) => set({ facility: e.target.value })} className="field-input" />
           </div>
-          <div>
-            <label className="field-label">{t("settings.warehouseDelivery")}</label>
-            <input value={form.warehouseDelivery} onChange={(e) => set({ warehouseDelivery: e.target.value })} className="field-input" />
-          </div>
-          <div>
-            <label className="field-label">{t("settings.warehousePackaging")}</label>
-            <input value={form.warehousePackaging} onChange={(e) => set({ warehousePackaging: e.target.value })} className="field-input" />
-          </div>
-          <div>
-            <label className="field-label">{t("settings.warehouseReceiving")}</label>
-            <input value={form.warehouseReceiving} onChange={(e) => set({ warehouseReceiving: e.target.value })} className="field-input" />
+        </div>
+        <div className="py-2">
+          <div className="grid gap-2 sm:grid-cols-3 py-3">
+            <div>
+              <label className="field-label">{t("settings.warehouseDelivery")}</label>
+              <input value={form.warehouseDelivery} onChange={(e) => set({ warehouseDelivery: e.target.value })} className="field-input" />
+            </div>
+            <div>
+              <label className="field-label">{t("settings.warehousePackaging")}</label>
+              <input value={form.warehousePackaging} onChange={(e) => set({ warehousePackaging: e.target.value })} className="field-input" />
+            </div>
+            <div>
+              <label className="field-label">{t("settings.warehouseReceiving")}</label>
+              <input value={form.warehouseReceiving} onChange={(e) => set({ warehouseReceiving: e.target.value })} className="field-input" />
+            </div>
           </div>
         </div>
 

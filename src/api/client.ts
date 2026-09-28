@@ -215,6 +215,7 @@ function ctx() {
   return {
     company: st.settings.company,
     plant: st.settings.facility,
+    warehouse: st.settings.warehouse || st.settings.warehouseDelivery || st.settings.warehouseReceiving || "01",
     warehouseDelivery: st.settings.warehouseDelivery,
     warehousePackaging: st.settings.warehousePackaging,
     warehouseReceiving: st.settings.warehouseReceiving,
