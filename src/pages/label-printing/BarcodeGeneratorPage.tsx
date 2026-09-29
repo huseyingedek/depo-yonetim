@@ -1,7 +1,6 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState } from "react";
 import {
   Loader2,
-  ChevronDown,
   Check,
   Package,
   AlertCircle,
@@ -27,16 +26,6 @@ type StepType = 1 | 2;
 type BarcodeMode = "manual" | "auto";
 
 export default function BarcodeGeneratorPage() {
-  const redirectTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Temizlik: component unmount olduğunda timer'ı temizle
-  useEffect(() => {
-    return () => {
-      if (redirectTimerRef.current) {
-        clearTimeout(redirectTimerRef.current);
-      }
-    };
-  }, []);
 
   // Adım Akışı: 1 = Malzeme Arama & Kart Seçimi, 2 = Birim & Barkod Tanımlama
   const [step, setStep] = useState<StepType>(1);
@@ -51,8 +40,9 @@ export default function BarcodeGeneratorPage() {
 
   // --- ADIM 2: BİRİM & BARKOD DURUMLARI ---
   const [selectedUnit, setSelectedUnit] = useState<string>("");
-  const [barcodeMode, setBarcodeMode] = useState<BarcodeMode>("manual"); // Varsayılan: Kendin Gir
+  const [barcodeMode, setBarcodeMode] = useState<BarcodeMode>("auto"); // Varsayılan: Sıradaki numarayı al AÇIK
   const [customBarcode, setCustomBarcode] = useState("");
+  const [copyCount, setCopyCount] = useState<string>("0"); // serbest metin — boş bırakılabilir
 
   // İşlem ve Bildirim Durumları
   const [saving, setSaving] = useState(false);
@@ -62,23 +52,6 @@ export default function BarcodeGeneratorPage() {
   const [copied, setCopied] = useState(false);
 
   // Seçilen malzemenin CANIAS'ta sahip olduğu geçerli birimler
-  const availableUnitsForSelected = useMemo(() => {
-    if (!selectedCard) return [];
-    const list =
-      selectedCard.availableUnits && selectedCard.availableUnits.length > 0
-        ? selectedCard.availableUnits
-        : selectedCard.unit
-          ? [selectedCard.unit]
-          : [];
-    return Array.from(
-      new Set(
-        list
-          .map((u) => (formatBarcodeUnitInfo(u).short || u).trim().toUpperCase())
-          .filter((u) => u && !NON_BARCODE_UNITS.has(u))
-      )
-    );
-  }, [selectedCard]);
-
   // Türkçe karakter duyarsız arama normalizasyonu
   function trNormalize(str: string): string {
     return str
@@ -318,16 +291,6 @@ export default function BarcodeGeneratorPage() {
   };
 
   // Step 2'ye Geçiş
-  const handleContinueToStep2 = () => {
-    if (!selectedCard || !selectedUnit) return;
-    // Birim, Birimler kartından zaten seçildi → SIFIRLAMIYORUZ.
-    setCustomBarcode("");
-    setBarcodeMode("manual");
-    setErrorMsg("");
-    setSuccessMsg("");
-    setStep(2);
-  };
-
   // Adım 2: Barkod Oluşturma İşlemini Otomatik Kabul Edip Çalıştırma
   // Bir malzeme+birim için mevcut barkodları getir (oluşturma teyidi + yeni no).
   const birimBarkodlari = async (mat: string, unit: string): Promise<string[]> => {
@@ -414,7 +377,7 @@ export default function BarcodeGeneratorPage() {
         unit,
         autoGenerate: isAuto ? 1 : 0,
         newBarcode: barcodeValue,
-        printCount: 0,
+        printCount: parseInt(copyCount, 10) || 0,
       });
 
       if (!res.ok) {
@@ -449,7 +412,30 @@ export default function BarcodeGeneratorPage() {
     }
   };
 
-  const isStep2Locked = !selectedUnit;
+  // Birim seçilir seçilmez doğrudan 2. adıma geç (Devam beklemeden).
+  const birimSecVeGec = (kart: ProductBarcodeCardItem, unit: string) => {
+    setSelectedCard(kart);
+    setSelectedUnit(unit);
+    setBarcodeMode("auto");
+    setCustomBarcode("");
+    setCopyCount("0");
+    setErrorMsg("");
+    setSuccessMsg("");
+    setCreatedBarcode("");
+    setCopied(false);
+    setStep(2);
+  };
+
+  const handleOlusturTikla = () => {
+    if (saving) return;
+    const isAuto = barcodeMode === "auto";
+    if (!isAuto && !customBarcode.trim()) {
+      setErrorMsg("Barkod numarası boş olamaz — yazın ya da 'Sıradaki numarayı al'ı açın.");
+      sesHata();
+      return;
+    }
+    handleExecuteCreate({ isAuto, newBarcode: customBarcode.trim() });
+  };
 
   return (
     <div className="mx-auto max-w-2xl p-3 sm:p-4 lg:p-6 space-y-4">
@@ -458,24 +444,10 @@ export default function BarcodeGeneratorPage() {
       {/* ========================================================================= */}
       {step === 1 && (
         <>
-          {/* HEADER: Barkod Oluşturma Başlığı ve Sağda Devam Butonu */}
+          {/* HEADER: Barkod Oluşturma başlığı (Devam butonu yok — birim seçilince otomatik 2. adıma geçilir) */}
           <PageHeader
             title="Barkod Oluşturma"
             backTo="/label-printing"
-            right={
-              <button
-                type="button"
-                id="btn-step1-devam"
-                disabled={!selectedCard || !selectedUnit}
-                onClick={handleContinueToStep2}
-                className={`flex h-10 items-center justify-center rounded-xl px-5 text-sm font-bold transition-all ${selectedCard && selectedUnit
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 hover:bg-blue-500 active:scale-95 ring-2 ring-blue-400 cursor-pointer"
-                  : "bg-elevated text-subtle/50 border border-line cursor-not-allowed opacity-50"
-                  }`}
-              >
-                Devam
-              </button>
-            }
           />
 
           {/* ÜST GİRİŞ KARTI (Arama & İrsaliye Alanı) */}
@@ -562,19 +534,8 @@ export default function BarcodeGeneratorPage() {
                     <MaterialUnitsCard
                       material={r.material}
                       selectedUnit={selectedCard?.material === r.material ? selectedUnit : ""}
-                      onSelectUnit={(u) => { setSelectedCard(r); setSelectedUnit(u); }}
+                      onSelectUnit={(u) => birimSecVeGec(r, u)}
                     />
-                    {/* Birim seçilince HEMEN buraya (seçimin yanına) Devam butonu gelir */}
-                    {selectedCard?.material === r.material && selectedUnit && (
-                      <button
-                        type="button"
-                        onClick={handleContinueToStep2}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-400 transition hover:bg-blue-500 active:scale-[0.99]"
-                      >
-                        <span className="rounded bg-white/20 px-1.5 py-0.5 text-[12px] font-black">{selectedUnit}</span>
-                        birimi için barkod oluştur → Devam
-                      </button>
-                    )}
                   </div>
                 ))}
               </div>
@@ -649,164 +610,133 @@ export default function BarcodeGeneratorPage() {
           )}
 
           {/* ADIM 2 KARTI */}
-          <div className="card p-5 sm:p-3 shadow-card space-y-2">
-            {/* A. Birim Seçim ComboBox'ı */}
+          <div className="card p-5 sm:p-4 shadow-card space-y-3">
+            {/* A. Barkod oluşturulacak birim (1. adımda seçildi; değiştirmek için Geri) */}
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2.5 dark:border-blue-800 dark:bg-blue-950/40">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-blue-600/80 dark:text-blue-300/80">
+                  Barkod oluşturulacak birim
+                </p>
+                <p className="truncate text-sm font-bold text-fg">{selectedCard.name}</p>
+              </div>
+              <span className="inline-flex h-9 shrink-0 items-center rounded-lg bg-blue-600 px-3 text-sm font-black text-white">
+                {selectedUnit || "-"}
+              </span>
+            </div>
+
+            {/* C. Barkod Numarası (barkod okuma alanı) — üstte.
+                "Sıradaki numarayı al" AÇIKken pasif, KAPALIyken aktif. */}
             <div className="space-y-1.5">
               <label
-                htmlFor="select-material-unit"
-                className="text-xs font-bold text-fg block"
+                htmlFor="input-custom-barcode"
+                className="text-xs font-semibold text-subtle block"
               >
-                Birim Seçimi
+                Barkod Numarası
               </label>
-              <div className="flex items-center gap-3">
-                <div className="relative flex-1">
-                  <select
-                    id="select-material-unit"
-                    disabled={saving}
-                    value={selectedUnit}
-                    onChange={(e) => {
-                      setSelectedUnit(e.target.value);
-                      setErrorMsg("");
-                    }}
-                    className="field-input h-11 w-full px-3 text-sm font-semibold appearance-none bg-surface cursor-pointer pr-9 border-line focus:border-blue-500"
-                  >
-                    <option value="" disabled>
-                      {availableUnitsForSelected.length > 0
-                        ? "Birim Seçiniz..."
-                        : "Tanımlı birim bulunamadı"}
-                    </option>
-                    {availableUnitsForSelected.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle pointer-events-none" />
-                </div>
+              <input
+                type="text"
+                id="input-custom-barcode"
+                disabled={barcodeMode === "auto" || saving}
+                value={customBarcode}
+                onChange={(e) => setCustomBarcode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleOlusturTikla();
+                  }
+                }}
+                placeholder={
+                  barcodeMode === "auto"
+                    ? "Sıradaki numara otomatik alınacak"
+                    : "Barkod numarasını yazınız…"
+                }
+                className={`field-input h-11 w-full text-sm font-mono font-bold transition ${barcodeMode === "auto"
+                  ? "bg-elevated/50 text-subtle/50 cursor-not-allowed border-dashed"
+                  : "border-blue-300 dark:border-blue-800 text-fg focus:border-blue-600"
+                  }`}
+              />
 
-                {/* Seçilen Birim: ComboBox'ın sağında mavi ve aynı puntoda */}
-                <div className="flex items-center justify-center min-w-[50px] h-11 px-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800">
-                  <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                    {selectedUnit || "-"}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* B. Barkod Modu Seçenekleri ("Kendin Gir" & "Sıradakini Al") */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-fg block">
-                Barkod Seçeneği
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                {/* Sol Buton: Kendin Gir (Varsayılan Açık) */}
-                <button
-                  type="button"
-                  id="btn-mode-manual"
-                  disabled={isStep2Locked || saving}
-                  onClick={() => setBarcodeMode("manual")}
-                  className={`flex items-center justify-center p-1 rounded-xl border text-xs sm:text-sm font-bold transition active:scale-95 text-center ${isStep2Locked
-                    ? "opacity-40 cursor-not-allowed border-line bg-elevated/20 text-subtle"
-                    : barcodeMode === "manual"
-                      ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-500 shadow-xs"
-                      : "border-line bg-elevated/40 text-subtle hover:text-fg hover:bg-elevated"
+              {/* B. "Sıradaki numarayı al" anahtarı — Trace gibi, barkod alanının HEMEN ALTINDA.
+                  Ekran açılışında AÇIK (1) gelir → barkod alanı pasif.
+                  Aktif edilince barkod boşaltılır ve pasifleşir (ters ilişki). */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={barcodeMode === "auto"}
+                aria-label="Sıradaki numarayı al aç/kapa"
+                title={barcodeMode === "auto" ? "Sıradaki numarayı al AÇIK (1)" : "Sıradaki numarayı al KAPALI (0)"}
+                disabled={saving}
+                onClick={() => {
+                  setBarcodeMode((m) => {
+                    const next = m === "auto" ? "manual" : "auto";
+                    if (next === "auto") setCustomBarcode(""); // aktif → barkodu boşalt
+                    return next;
+                  });
+                  setErrorMsg("");
+                }}
+                className="mt-1.5 flex items-center gap-2.5 rounded-xl px-1 py-1 transition active:scale-95 disabled:opacity-60"
+              >
+                <span
+                  className={`text-sm font-semibold ${barcodeMode === "auto" ? "text-blue-600" : "text-subtle"}`}
+                >
+                  Sıradaki numarayı al
+                </span>
+                <span
+                  className={`relative flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 ${barcodeMode === "auto" ? "bg-blue-600" : "bg-slate-300 dark:bg-slate-600"
                     }`}
                 >
-                  Kendin Gir
-                </button>
-
-                {/* Sağ Buton: Sıradakini Al (Tıklanınca otomatik kabul edip işlemi yürütür) */}
-                <button
-                  type="button"
-                  id="btn-mode-auto"
-                  disabled={isStep2Locked || saving}
-                  onClick={() => {
-                    if (isStep2Locked || saving) return;
-                    setBarcodeMode("auto");
-                    handleExecuteCreate({ isAuto: true });
-                  }}
-                  className={`flex items-center justify-center p-2 rounded-xl border text-xs sm:text-sm font-bold transition active:scale-95 text-center ${isStep2Locked
-                    ? "opacity-40 cursor-not-allowed border-line bg-elevated/20 text-subtle"
-                    : barcodeMode === "auto"
-                      ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-500 shadow-xs"
-                      : "border-line bg-elevated/40 text-subtle hover:text-fg hover:bg-elevated"
-                    }`}
-                >
-                  {saving && barcodeMode === "auto" ? (
-                    <span className="flex items-center gap-1.5">
-                      <Loader2 className="h-4 w-4 animate-spin" /> İşleniyor...
-                    </span>
-                  ) : (
-                    "Sıradakini Al"
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* C. Kendin Gir Barkod Giriş Alanı */}
-            {barcodeMode === "manual" && (
-              <div className="space-y-1.5 pt-1">
-                <label
-                  htmlFor="input-custom-barcode"
-                  className="text-xs font-semibold text-subtle block"
-                >
-                  Barkod Numarası
-                </label>
-                <div className="relative flex items-center">
-                  <input
-                    type="text"
-                    id="input-custom-barcode"
-                    disabled={isStep2Locked || saving}
-                    value={customBarcode}
-                    onChange={(e) => setCustomBarcode(e.target.value.toUpperCase())}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        if (customBarcode.trim() && !saving && !isStep2Locked) {
-                          handleExecuteCreate({
-                            isAuto: false,
-                            newBarcode: customBarcode.trim(),
-                          });
-                        }
-                      }
-                    }}
-                    placeholder={
-                      isStep2Locked
-                        ? "Önce yukarıdan birim seçiniz"
-                        : "Barkod numarasını yazıp Enter'a basınız..."
-                    }
-                    className={`field-input h-11 w-full pr-12 text-sm font-mono font-bold transition ${isStep2Locked
-                      ? "bg-elevated/50 text-subtle/50 cursor-not-allowed border-dashed"
-                      : "border-blue-300 dark:border-blue-800 text-fg focus:border-blue-600"
+                  <span
+                    className={`absolute flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold shadow transition-transform duration-200 ${barcodeMode === "auto" ? "translate-x-[22px] text-blue-600" : "translate-x-0.5 text-slate-500"
                       }`}
-                  />
-                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
-                    <button
-                      type="button"
-                      id="btn-confirm-custom-barcode"
-                      disabled={isStep2Locked || saving || !customBarcode.trim()}
-                      onClick={() => {
-                        if (customBarcode.trim() && !saving && !isStep2Locked) {
-                          handleExecuteCreate({
-                            isAuto: false,
-                            newBarcode: customBarcode.trim(),
-                          });
-                        }
-                      }}
-                      aria-label="Onayla"
-                      title="Onayla"
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-30"
-                    >
-                      {saving && barcodeMode === "manual" ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                      ) : (
-                        <CornerDownLeft className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+                  >
+                    {barcodeMode === "auto" ? "1" : "0"}
+                  </span>
+                </span>
+              </button>
+            </div>
+
+            {/* D. Kopya (yazdırma) sayısı */}
+            <div className="space-y-1.5">
+              <label
+                htmlFor="input-copy-count"
+                className="text-xs font-semibold text-subtle block"
+              >
+                Kopya (yazdırma) sayısı
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                id="input-copy-count"
+                disabled={saving}
+                value={copyCount}
+                onChange={(e) => {
+                  let v = e.target.value.replace(/[^0-9]/g, "");
+                  if (v.length > 1) v = v.replace(/^0+/, "") || "0"; // baştaki sıfırları temizle
+                  if (v !== "" && parseInt(v, 10) > 99) v = "99"; // üst sınır
+                  setCopyCount(v); // boş bırakmaya izin ver
+                }}
+                placeholder="0"
+                className="field-input h-11 w-full text-sm font-semibold"
+              />
+              <p className="text-[11px] text-subtle">0 = yazdırma yok, yalnızca barkod oluştur.</p>
+            </div>
+
+            {/* E. Barkod Oluştur */}
+            <button
+              type="button"
+              id="btn-barcode-create"
+              disabled={saving || (barcodeMode === "manual" && !customBarcode.trim())}
+              onClick={handleOlusturTikla}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/30 transition hover:bg-blue-500 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> İşleniyor…
+                </>
+              ) : (
+                "Barkod Oluştur"
+              )}
+            </button>
           </div>
         </>
       )}
