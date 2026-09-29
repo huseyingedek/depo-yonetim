@@ -33,6 +33,7 @@ export default function StockTransferPage() {
   const items = useTransferStore((s) => s.items);
   const step = useTransferStore((s) => s.step);
   const completing = useTransferStore((s) => s.completing);
+  const completedResult = useTransferStore((s) => s.completedResult);
 
   const scanSourceShelf = useTransferStore((s) => s.scanSourceShelf);
   const clearSourceShelf = useTransferStore((s) => s.clearSourceShelf);
@@ -195,16 +196,12 @@ export default function StockTransferPage() {
       const res = await completeTransfer();
       if (res.ok) {
         sesBasarili();
-        const successText = `Taşıma ${targetName} rafına gerçekleşti.`;
-        setOnayMesaji(successText);
-        showToast({ kind: "done", text: successText });
-        setTimeout(() => {
-          reset();
-          setActiveItem(null);
-          setLotPendingItem(null);
-          setOnayMesaji(null);
-          setRedMesaji(null);
-        }, 3500);
+        // Tamamlanma ekranı completedResult üzerinden gösterilir (Yerleştirme/Toplama
+        // ile bütünlük). Otomatik sessiz reset YOK — kullanıcı "Yeni transfer" veya
+        // "Ana sayfaya dön" ile döner.
+        setActiveItem(null);
+        setLotPendingItem(null);
+        showToast({ kind: "done", text: `Taşıma ${targetName} rafına gerçekleşti.` });
       } else {
         sesHata();
         setRedMesaji(res.message);
@@ -540,6 +537,64 @@ export default function StockTransferPage() {
           : activeItem
             ? ""
             : `Malzeme barkodunu okutun `;
+
+  // ---------------------------------------------------------------------------
+  // TAMAMLANDI: Yerleştirme/Toplama ile aynı bütünlükte tamamlanma özet ekranı.
+  // completedResult store'da tutulur; kullanıcı "Yeni transfer" ya da "Ana sayfaya
+  // dön" ile çıkana kadar ekranda kalır (sessiz otomatik dönüş yok).
+  // ---------------------------------------------------------------------------
+  if (completedResult) {
+    const p = completedResult.payload;
+    const kalem = p.items.length;
+    const yeniTransfer = () => {
+      reset();
+      setActiveItem(null);
+      setLotPendingItem(null);
+      setOnayMesaji(null);
+      setRedMesaji(null);
+    };
+    return (
+      <div className="mx-auto flex max-w-md flex-col items-center px-4 py-16 text-center">
+        <div className="mb-5 flex h-24 w-24 animate-pop-in items-center justify-center rounded-full bg-emerald-100">
+          <CheckCircle2 className="h-12 w-12 text-emerald-600" />
+        </div>
+        <h1 className="text-2xl font-extrabold text-fg">Transfer tamamlandı</h1>
+        <p className="mt-1 text-sm text-emerald-600">Malzemeler hedef rafa taşındı</p>
+
+        <div className="mt-6 w-full rounded-2xl border border-line bg-surface p-5 shadow-card">
+          <div className="flex items-center justify-between border-b border-line py-2">
+            <span className="text-sm text-subtle">Hedef</span>
+            <span className="font-mono text-sm font-bold text-fg">
+              {p.targetWarehouse} / {p.targetStockPlace}
+            </span>
+          </div>
+          <div className="flex items-center justify-between border-b border-line py-2">
+            <span className="text-sm text-subtle">Kalem sayısı</span>
+            <span className="text-sm font-bold text-fg">{kalem}</span>
+          </div>
+          {completedResult.transferId && (
+            <div className="flex items-center justify-between py-2">
+              <span className="text-sm text-subtle">Transfer No</span>
+              <span className="font-mono text-sm font-bold text-fg">{completedResult.transferId}</span>
+            </div>
+          )}
+        </div>
+
+        <button onClick={yeniTransfer} className="btn-primary btn-lg mt-6 w-full">
+          <ArrowLeftRight className="h-5 w-5" /> Yeni transfer
+        </button>
+        <button
+          onClick={() => {
+            reset();
+            navigate("/home");
+          }}
+          className="mt-3 text-sm font-semibold text-subtle transition hover:text-fg"
+        >
+          Ana sayfaya dön
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl p-3 md:p-4 lg:p-8 short:h-[100dvh] short:max-w-none short:flex short:flex-col short:overflow-hidden short:p-2">

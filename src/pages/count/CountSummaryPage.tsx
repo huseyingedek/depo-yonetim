@@ -28,6 +28,9 @@ export default function CountSummaryPage() {
   const [, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Bora: özet ekranında farkları listele. Bu filtre AÇIKken yalnızca
+  // hedef (beklenen) ile sayılan miktarın FARKLI olduğu kalemler gösterilir.
+  const [sadeceFark, setSadeceFark] = useState(false);
 
   const docNum = order?.invDocNum || order?.id || id || state?.invDocNum || "";
   const docType = order?.docType || state?.orderType || "";
@@ -237,6 +240,13 @@ export default function CountSummaryPage() {
 
   const totalCountedCount = lines.filter((l) => l.countedQty > 0).length;
 
+  // Fark = sayılan - hedef. Farklı olan (fazla/eksik/yeni/hiç sayılmayan) kalemler.
+  const farkliLines = useMemo(
+    () => sortedLines.filter((l) => l.countedQty !== l.targetQty),
+    [sortedLines]
+  );
+  const gosterilecekLines = sadeceFark ? farkliLines : sortedLines;
+
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8 animate-fade-in">
       {/* ÜST BAŞLIK: Sol üstte chevron YOK, Sağ üstte "Sayıma geri dön" ve sağında "Bitir" butonu var */}
@@ -287,8 +297,28 @@ export default function CountSummaryPage() {
           <p className="mt-2 font-bold">Sayım kalemi bulunamadı.</p>
         </div>
       ) : (
+        <>
+        {/* Kontrol çubuğu: fark sayısı + Sadece farklar filtresi */}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-subtle">
+            Toplam <span className="font-bold text-fg">{lines.length}</span> kalem ·{" "}
+            <span className="font-bold text-rose-600">{farkliLines.length}</span> farklı
+          </p>
+          <button
+            type="button"
+            onClick={() => setSadeceFark((v) => !v)}
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold transition active:scale-95 ${
+              sadeceFark
+                ? "border-rose-500 bg-rose-500/10 text-rose-600"
+                : "border-line bg-surface text-fg hover:bg-elevated"
+            }`}
+          >
+            {sadeceFark ? "Tümünü göster" : `Sadece farklar (${farkliLines.length})`}
+          </button>
+        </div>
+
         <div className="overflow-x-auto rounded-2xl border border-line bg-surface shadow-card">
-          <table className="w-full min-w-[850px] text-left text-xs">
+          <table className="w-full min-w-[980px] text-left text-xs">
             <thead className="border-b border-line bg-elevated">
               <tr>
                 <th className="px-3 py-2.5 font-bold text-muted">Malzeme / Ürün</th>
@@ -297,11 +327,13 @@ export default function CountSummaryPage() {
                 <th className="whitespace-nowrap px-3 py-2.5 font-bold text-muted">Parti</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-bold text-muted">Stok Birimi</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-bold text-muted">Okutulan Birim</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-bold text-muted">Hedef (Beklenen)</th>
                 <th className="whitespace-nowrap px-3 py-2.5 font-bold text-muted">Sayım Miktarı</th>
+                <th className="whitespace-nowrap px-3 py-2.5 font-bold text-muted">Fark</th>
               </tr>
             </thead>
             <tbody>
-              {sortedLines.map((line) => {
+              {gosterilecekLines.map((line) => {
                 const cat = getCategory(line);
                 const wh = (line.warehouse || warehouse || "").trim();
                 let sp = (line.stockPlace || "").trim().replace(/\$/g, "");
@@ -358,9 +390,44 @@ export default function CountSummaryPage() {
                       )}
                     </td>
 
+                    {/* Hedef (Beklenen) — Bora'nın sayılması için gönderdiği miktar */}
+                    <td className="whitespace-nowrap px-3 py-2.5 font-mono font-semibold text-slate-600 dark:text-slate-300">
+                      {line.targetQty > 0 ? (
+                        <>
+                          {line.targetQty}{" "}
+                          <span className="text-[11px] font-medium uppercase text-slate-400">
+                            {line.skunit || line.unit || "AD"}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+
                     {/* Sayım Miktarı */}
                     <td className={`whitespace-nowrap px-3 py-2.5 font-mono ${cat.textClass}`}>
                       {renderQuantityText(line)}
+                    </td>
+
+                    {/* Fark (Sayılan − Hedef) */}
+                    <td className="whitespace-nowrap px-3 py-2.5 font-mono font-bold">
+                      {(() => {
+                        const fark = line.countedQty - line.targetQty;
+                        if (fark === 0) return <span className="text-muted">—</span>;
+                        const renk =
+                          fark > 0
+                            ? "text-rose-600 dark:text-rose-400"
+                            : "text-amber-600 dark:text-amber-400";
+                        return (
+                          <span className={renk}>
+                            {fark > 0 ? "+" : ""}
+                            {fark}{" "}
+                            <span className="text-[11px] font-medium uppercase">
+                              {line.skunit || line.unit || "AD"}
+                            </span>
+                          </span>
+                        );
+                      })()}
                     </td>
                   </tr>
                 );
@@ -368,6 +435,7 @@ export default function CountSummaryPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <ToastView toast={toast} />

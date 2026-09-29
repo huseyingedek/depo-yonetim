@@ -1,209 +1,21 @@
 import { useState } from "react";
-import { Calendar, Search, Printer, Check, Loader2, Package } from "lucide-react";
+import { Calendar, Printer, Loader2 } from "lucide-react";
 import { api } from "../../api/client";
-import type { StockRow } from "../../types";
 import PageHeader from "../../components/PageHeader";
-import MaterialDetailCard from "../../components/MaterialDetailCard";
 
-type TabType = "directDate" | "searchGrid";
-
+// SKT (Son Kullanma Tarihi) Etiketi — Bora: bu ekranın amacı yalnızca üzerinde SKT
+// bulunan barkodu basmak. Tablı ürün araması YOK. Sadece: tarih (seç/elle gir) + adet.
+// Yazdır → MZYPrintBarcode (PSCOMPANY, PSPLANT, PSBARCODE, PIREPEAT, PSUSER, PITRACESTATUS).
 export default function ExpiryLabelPage() {
-  const [activeTab, setActiveTab] = useState<TabType>("directDate");
-
-  // Form & Selection State
-  const [directExpiryDate, setDirectExpiryDate] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
   const [repeatCount, setRepeatCount] = useState<number | string>(1);
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [activeBarcode, setActiveBarcode] = useState("");
-  const [searching, setSearching] = useState(false);
-  const [searchDone, setSearchDone] = useState(false);
-  const [searchResults, setSearchResults] = useState<StockRow[]>([]);
-  const [selectedMaterials, setSelectedMaterials] = useState<StockRow[]>([]);
-
-  const activeMaterialCode = selectedMaterials[0]?.material || searchResults[0]?.material || "";
-
-  // Status & Printing State
   const [printing, setPrinting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
   const todayStr = new Date().toISOString().split("T")[0];
 
-  const handleTabChange = (tab: TabType) => {
-    setActiveTab(tab);
-    setDirectExpiryDate("");
-    setSearchTerm("");
-    setActiveBarcode("");
-    setSearchDone(false);
-    setSearchResults([]);
-    setSelectedMaterials([]);
-    setRepeatCount(1);
-    setErrorMsg("");
-    setSuccessMsg("");
-  };
-
-  // Search Handler for Tab 2
-  const handleSearchMaterial = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg("");
-    setSuccessMsg("");
-
-    const term = searchTerm.trim();
-    if (!term) {
-      setErrorMsg("Lütfen arama terimi girin.");
-      return;
-    }
-
-    setSearching(true);
-    setSearchDone(false);
-    setSelectedMaterials([]);
-
-    try {
-      let rows: StockRow[] = [];
-
-      // 1. Barkod ile doğrudan stok sorgulama (MZYGetStock PSBARCODE)
-      try {
-        const barcodeRows = await api.queryStock({ barcode: term });
-        if (barcodeRows && barcodeRows.length > 0) {
-          rows = barcodeRows;
-        }
-      } catch {
-        // Devam et
-      }
-
-      // 2. Malzeme kodu ile stok sorgulama (MZYGetStock PSMATERIAL)
-      if (rows.length === 0) {
-        try {
-          const matRows = await api.queryStock({ material: term });
-          if (matRows && matRows.length > 0) {
-            rows = matRows;
-          }
-        } catch {
-          // Devam et
-        }
-      }
-
-      // 3. Barkod okuma servisi ile doğrudan malzeme çözümleme (MZYReadBarcode)
-      if (rows.length === 0) {
-        try {
-          const readRes = await api.readBarcode(term);
-          if (readRes.ok && readRes.material) {
-            const matCode = readRes.material;
-            const matName = readRes.name || matCode;
-            const unit = readRes.unit || "AD";
-
-            let stockFound: StockRow[] = [];
-            try {
-              stockFound = await api.queryStock({ material: matCode });
-            } catch {
-              stockFound = [];
-            }
-
-            if (stockFound && stockFound.length > 0) {
-              rows = stockFound;
-            } else {
-              rows = [
-                {
-                  material: matCode,
-                  name: matName,
-                  warehouse: "10",
-                  stockPlace: "*",
-                  batchNum: "*",
-                  specialStock: "*",
-                  availStock: 0,
-                  unit: unit,
-                },
-              ];
-            }
-          }
-        } catch {
-          // Devam et
-        }
-      }
-
-      // 4. MZYGetMaterial ile ana kart sorgulama (Stokta olmasa bile CANIAS'taki barkod/malzeme eşleşmesini getirir)
-      if (rows.length === 0) {
-        try {
-          const matDetail = await api.getMaterialDetail(term);
-          if (matDetail.ok && matDetail.matList && matDetail.matList.length > 0) {
-            const m = matDetail.matList[0];
-            const matCode = String(m.MATERIAL || m.MATCODE || term).trim();
-            const matName = String(m.STEXT || m.MTEXT || m.NAME1 || m.NAME || matCode).trim();
-            const unit = String(m.QUNIT || m.UNIT || m.IUNIT || "AD").trim();
-
-            let stockFound: StockRow[] = [];
-            try {
-              stockFound = await api.queryStock({ material: matCode });
-            } catch {
-              stockFound = [];
-            }
-
-            if (stockFound && stockFound.length > 0) {
-              rows = stockFound;
-            } else {
-              rows = [
-                {
-                  material: matCode,
-                  name: matName,
-                  warehouse: "10",
-                  stockPlace: "*",
-                  batchNum: "*",
-                  specialStock: "*",
-                  availStock: 0,
-                  unit: unit,
-                },
-              ];
-            }
-          }
-        } catch {
-          // Devam et
-        }
-      }
-
-      // 4. Açıklama / Genel Arama (Tüm stok listesinde isim filtresi)
-      if (rows.length === 0) {
-        try {
-          const all = await api.queryStock({});
-          const lowerTerm = term.toLowerCase();
-          rows = all.filter(
-            (r) =>
-              (r.name && r.name.toLowerCase().includes(lowerTerm)) ||
-              (r.material && r.material.toLowerCase().includes(lowerTerm))
-          );
-        } catch {
-          // Devam et
-        }
-      }
-
-      setSearchResults(rows || []);
-      setSearchDone(true);
-      if (rows.length > 0) {
-        setSelectedMaterials([rows[0]]);
-        setActiveBarcode(term);
-      }
-    } catch (err: unknown) {
-      setSearchResults([]);
-      setSearchDone(true);
-      setErrorMsg(err instanceof Error ? err.message : "CANIAS servisi ile iletişim kurulurken hata oluştu.");
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  const toggleSelectMaterial = (item: StockRow) => {
-    setSelectedMaterials((prev) => {
-      const exists = prev.some((m) => m.material === item.material && m.batchNum === item.batchNum);
-      if (exists) return [];
-      return [item];
-    });
-  };
-
-  const isMaterialSelected = (item: StockRow) => {
-    return selectedMaterials.some((m) => m.material === item.material && m.batchNum === item.batchNum);
-  };
-
-  // Main Print Action (Called from top header print button)
   const handlePrint = async () => {
     setErrorMsg("");
     setSuccessMsg("");
@@ -214,118 +26,79 @@ export default function ExpiryLabelPage() {
       return;
     }
 
-    if (activeTab === "directDate") {
-      if (!directExpiryDate) {
-        setErrorMsg("Lütfen Son Kullanma Tarihi (SKT) seçin.");
-        return;
-      }
+    if (!expiryDate) {
+      setErrorMsg("Lütfen Son Kullanma Tarihi (SKT) seçin veya girin.");
+      return;
+    }
+    if (expiryDate < todayStr) {
+      setErrorMsg("Son Kullanma Tarihi (SKT) geçmiş bir tarih olamaz. Lütfen bugün veya gelecek bir tarih seçin.");
+      return;
+    }
+    const yearNum = parseInt(expiryDate.split("-")[0], 10);
+    if (isNaN(yearNum) || yearNum > 2099) {
+      setErrorMsg("Geçerli bir Son Kullanma Tarihi girin (Yıl en fazla 2099 olabilir).");
+      return;
+    }
 
-      if (directExpiryDate < todayStr) {
-        setErrorMsg("Son Kullanma Tarihi (SKT) geçmiş bir tarih olamaz. Lütfen bugün veya gelecek bir tarih seçin.");
-        return;
-      }
+    setPrinting(true);
+    try {
+      const res = await api.printBarcode({
+        company: "01",
+        plant: "100",
+        barcode: expiryDate,
+        repeat: count,
+        traceStatus: 0,
+      });
 
-      const yearNum = parseInt(directExpiryDate.split("-")[0], 10);
-      if (isNaN(yearNum) || yearNum > 2099) {
-        setErrorMsg("Geçerli bir Son Kullanma Tarihi girin (Yıl en fazla 2099 olabilir).");
-        return;
-      }
-
-      setPrinting(true);
-      try {
-        const res = await api.printBarcode({
-          company: "01",
-          plant: "100",
-          barcode: directExpiryDate,
-          repeat: count,
-        });
-
-        if (res.ok) {
-          setSuccessMsg(`Doğrudan SKT etiket siparişi (${directExpiryDate} - ${count} kopya) başarıyla CANIAS'a iletildi.`);
-          setDirectExpiryDate("");
-          setRepeatCount(1);
-        } else {
-          setErrorMsg("SKT etiketi yazdırılırken CANIAS servisinde hata oluştu.");
-        }
-      } catch {
-        setErrorMsg("CANIAS servisi ile iletişim kurulurken hata oluştu.");
-      } finally {
-        setPrinting(false);
-      }
-    } else {
-      if (selectedMaterials.length === 0) {
-        setErrorMsg("Lütfen listeden en az bir ürün seçin.");
-        return;
-      }
-
-      setPrinting(true);
-      let successCount = 0;
-      let failedCount = 0;
-
-      for (const mat of selectedMaterials) {
-        const batch = mat.batchNum && mat.batchNum !== "*" ? mat.batchNum : (activeBarcode || mat.material);
-        try {
-          const res = await api.printBarcode({
-            company: "01",
-            plant: "100",
-            barcode: batch,
-            repeat: count,
-          });
-          if (res.ok) successCount++;
-          else failedCount++;
-        } catch {
-          failedCount++;
-        }
-      }
-
-      setPrinting(false);
-      setRepeatCount(1);
-      if (failedCount === 0) {
-        setSuccessMsg(`Seçilen ${successCount} adet üründen ${count}'er kopya SKT etiketi yazdırıldı.`);
-        setSelectedMaterials([]);
+      if (res.ok) {
+        setSuccessMsg(`SKT etiketi (${expiryDate} · ${count} kopya) yazdırma isteği CANIAS'a iletildi.`);
+        setExpiryDate("");
+        setRepeatCount(1);
       } else {
-        setErrorMsg(`${successCount} etiket yazdırıldı, ${failedCount} adet siparişte hata oluştu.`);
+        setErrorMsg(res.message || "SKT etiketi yazdırılırken CANIAS servisinde hata oluştu.");
       }
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "CANIAS servisi ile iletişim kurulurken hata oluştu.");
+    } finally {
+      setPrinting(false);
     }
   };
 
-  const isPrintDisabled =
-    printing ||
-    (activeTab === "directDate" ? !directExpiryDate : selectedMaterials.length === 0);
+  const isPrintDisabled = printing || !expiryDate;
+
+  const kopyaInput = (widthCls: string) => (
+    <input
+      type="number"
+      min={1}
+      max={99}
+      value={repeatCount}
+      onChange={(e) => {
+        const val = e.target.value;
+        if (val === "") {
+          setRepeatCount("");
+          return;
+        }
+        const v = parseInt(val, 10);
+        if (!isNaN(v)) setRepeatCount(Math.min(99, Math.max(1, v)));
+      }}
+      onBlur={() => {
+        if (repeatCount === "" || Number(repeatCount) < 1) setRepeatCount(1);
+      }}
+      className={`field-input ${widthCls} py-1.5 px-2 text-center text-xs font-bold`}
+    />
+  );
 
   return (
-    <div className="mx-auto max-w-6xl p-4 lg:p-8 space-y-6">
+    <div className="mx-auto max-w-3xl p-4 lg:p-8 space-y-6">
       <PageHeader
         title="SKT (Son Kullanma Tarihi) Etiketi Yazdırma"
-        subtitle="Doğrudan SKT tarihi seçerek veya ürün aratarak etiket yazdırın"
+        subtitle="SKT tarihini seçin veya elle girin, adedi belirleyip yazdırın"
         backTo="/label-printing"
         right={
           <div className="hidden sm:flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
-              <input
-                type="number"
-                min={0}
-                max={99}
-                value={repeatCount}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === "") {
-                    setRepeatCount("");
-                    return;
-                  }
-                  const v = parseInt(val, 10);
-                  if (!isNaN(v)) {
-                    setRepeatCount(Math.min(99, Math.max(0, v)));
-                  }
-                }}
-                onBlur={() => {
-                  if (repeatCount === "") {
-                    setRepeatCount(0);
-                  }
-                }}
-                className="field-input w-16 py-1.5 px-2 text-center text-xs font-bold"
-              />
+              {kopyaInput("w-16")}
             </div>
 
             <button
@@ -342,9 +115,7 @@ export default function ExpiryLabelPage() {
               ) : (
                 <>
                   <Printer className="h-4 w-4" />
-                  <span>
-                    Yazdır {activeTab === "searchGrid" && selectedMaterials.length > 0 ? `(${selectedMaterials.length})` : ""}
-                  </span>
+                  <span>Yazdır</span>
                 </>
               )}
             </button>
@@ -352,32 +123,11 @@ export default function ExpiryLabelPage() {
         }
       />
 
-      <div className="flex items-center justify-between gap-3 sm:hidden mb-2">
+      {/* Mobil: Kopya + Yazdır */}
+      <div className="flex items-center justify-between gap-3 sm:hidden">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-fg">Kopya:</span>
-          <input
-            type="number"
-            min={0}
-            max={99}
-            value={repeatCount}
-            onChange={(e) => {
-              const val = e.target.value;
-              if (val === "") {
-                setRepeatCount("");
-                return;
-              }
-              const v = parseInt(val, 10);
-              if (!isNaN(v)) {
-                setRepeatCount(Math.min(99, Math.max(0, v)));
-              }
-            }}
-            onBlur={() => {
-              if (repeatCount === "") {
-                setRepeatCount(0);
-              }
-            }}
-            className="field-input w-20 py-1.5 px-2 text-center text-xs font-bold"
-          />
+          {kopyaInput("w-20")}
         </div>
 
         <button
@@ -386,71 +136,37 @@ export default function ExpiryLabelPage() {
           disabled={isPrintDisabled}
           className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
         >
-          {printing ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Printer className="h-4 w-4" />
-          )}
-          <span>
-            Yazdır {activeTab === "searchGrid" && selectedMaterials.length > 0 ? `(${selectedMaterials.length})` : ""}
-          </span>
+          {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+          <span>Yazdır</span>
         </button>
       </div>
 
-      {/* Segmented Tab Bar */}
-      <div className="flex rounded-2xl border border-line bg-surface p-1.5 shadow-sm">
-        <button
-          type="button"
-          onClick={() => handleTabChange("directDate")}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition-all ${activeTab === "directDate"
-            ? "bg-blue-600 text-white shadow-md"
-            : "text-subtle hover:text-fg hover:bg-elevated"
-            }`}
-        >
-          <Calendar className="h-4 w-4" />
-          <span>1. Yöntem: Doğrudan SKT Tarihi Girerek Yazdırma</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleTabChange("searchGrid")}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition-all ${activeTab === "searchGrid"
-            ? "bg-blue-600 text-white shadow-md"
-            : "text-subtle hover:text-fg hover:bg-elevated"
-            }`}
-        >
-          <Package className="h-4 w-4" />
-          <span>2. Yöntem: Ürün Barkodu / Kodu ile Arama</span>
-        </button>
-      </div>
-
-      {/* Global Alerts */}
+      {/* Uyarılar */}
       {errorMsg && (
         <div className="flex items-center gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-600 dark:text-red-400">
           <span>{errorMsg}</span>
         </div>
       )}
-
       {successMsg && (
         <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 text-xs text-emerald-600 dark:text-emerald-400">
           <span>{successMsg}</span>
         </div>
       )}
 
-      {/* TAB 1: Doğrudan SKT Tarihi Girerek Yazdırma */}
-      {activeTab === "directDate" && (
-        <div className="rounded-2xl border border-line bg-surface p-6 shadow-card space-y-4">
-          <div>
-            <h3 className="text-base font-extrabold text-fg flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              <span>Doğrudan SKT Tarihi Seçimi</span>
-            </h3>
-            <p className="text-xs text-subtle mt-0.5">
-              Tarihi seçip sayfa başındaki Kopya ve Yazdır butonlarını kullanarak etiketi basabilirsiniz.
-            </p>
-          </div>
+      {/* SKT Tarihi + Adet */}
+      <div className="rounded-2xl border border-line bg-surface p-6 shadow-card space-y-5">
+        <div>
+          <h3 className="text-base font-extrabold text-fg flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <span>SKT Tarihi</span>
+          </h3>
+          <p className="text-xs text-subtle mt-0.5">
+            Tarihi takvimden seçebilir veya gg.aa.yyyy olarak elle girebilirsiniz. Etikette yalnızca bu tarih basılır.
+          </p>
+        </div>
 
-          <div className="max-w-md">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
             <label className="mb-1.5 block text-xs font-semibold text-fg">
               Son Kullanma Tarihi (SKT) <span className="text-red-500">*</span>
             </label>
@@ -459,100 +175,20 @@ export default function ExpiryLabelPage() {
               required
               min={todayStr}
               max="2099-12-31"
-              value={directExpiryDate}
-              onChange={(e) => setDirectExpiryDate(e.target.value)}
+              value={expiryDate}
+              onChange={(e) => setExpiryDate(e.target.value)}
               className="field-input w-full"
             />
           </div>
-        </div>
-      )}
 
-      {/* TAB 2: Ürün Barkodu / Kodu ile Arama (3x1 Grid) */}
-      {activeTab === "searchGrid" && (
-        <div className="rounded-2xl border border-line bg-surface p-6 shadow-card space-y-5">
           <div>
-            <h3 className="text-base font-extrabold text-fg flex items-center gap-2">
-              <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              <span>Ürün Barkodu / Kodu ile Arama ve Seçim</span>
-            </h3>
-            <p className="text-xs text-subtle mt-0.5">
-              Arama yapın, çıkan kartlardan seçim yapıp sayfa başındaki Yazdır butonunu kullanın.
-            </p>
+            <label className="mb-1.5 block text-xs font-semibold text-fg">
+              Basılacak Etiket Adedi <span className="text-red-500">*</span>
+            </label>
+            {kopyaInput("w-full")}
           </div>
-
-          {/* Unified Search Form */}
-          <form onSubmit={handleSearchMaterial} className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Barkod No veya Ürün Kodu Girin..."
-                className="field-input pl-11"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={searching || !searchTerm.trim()}
-              className="btn-primary flex items-center justify-center gap-2 py-2.5 px-6 shadow-sm shrink-0"
-            >
-              {searching ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Search className="h-4 w-4" />
-              )}
-              <span>Ara</span>
-            </button>
-          </form>
-
-          {/* Single Result Card (Only product code & name, no quantity, no 3x1 grid) */}
-          {searching ? (
-            <div className="h-24 animate-pulse rounded-2xl bg-elevated mt-2" />
-          ) : searchResults.length > 0 ? (
-            <div className="pt-2 border-t border-line space-y-4">
-              {/* Malzeme Detay Kartı — Gelen sonucun hemen üstünde */}
-              {activeMaterialCode && (
-                <MaterialDetailCard
-                  materialCode={activeMaterialCode}
-                  barcode={activeBarcode}
-                  onBarcodeSelect={(barcode) => setActiveBarcode(barcode)}
-                />
-              )}
-
-              {(() => {
-                const r = searchResults[0];
-                const selected = isMaterialSelected(r);
-                return (
-                  <div
-                    onClick={() => toggleSelectMaterial(r)}
-                    className={`relative flex cursor-pointer items-center justify-between rounded-2xl border p-5 text-left shadow-card transition-all ${selected
-                      ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
-                      : "border-line bg-bg hover:border-emerald-300"
-                      }`}
-                  >
-                    <div>
-                      <span className="font-mono text-lg font-extrabold text-fg">{r.material}</span>
-                      <p className="mt-1 text-sm text-subtle font-medium">{r.name}</p>
-                    </div>
-
-                    <span
-                      className={`chip text-xs font-bold ${selected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
-                        }`}
-                    >
-                      {selected ? <Check className="h-4 w-4 inline mr-1" /> : null}
-                      {selected ? "Seçildi" : "Seç"}
-                    </span>
-                  </div>
-                );
-              })()}
-            </div>
-          ) : searchDone ? (
-            <p className="text-xs text-subtle py-4 text-center">Aranan kriterde ürün kaydı bulunamadı.</p>
-          ) : null}
         </div>
-      )}
+      </div>
     </div>
   );
 }

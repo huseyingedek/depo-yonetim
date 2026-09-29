@@ -1647,7 +1647,7 @@ export const api = {
   },
 
   // 4. MZYPrintBarcode - Barkodu Bas (SKT / Parti)
-  // PARAMETRELER: PSCOMPANY, PSPLANT, PSBARCODE, PIREPEAT, PSUSER
+  // PARAMETRELER: PSCOMPANY, PSPLANT, PSBARCODE, PIREPEAT, PSUSER, PITRACESTATUS
   async printBarcode(payload: {
     company?: string;
     plant?: string;
@@ -1655,6 +1655,7 @@ export const api = {
     container?: string;
     repeat?: number;
     user?: string;
+    traceStatus?: number;
   }): Promise<{ ok: boolean; message: string }> {
     const c = ctx();
     const barcodeStr = (payload.barcode || payload.container || "").trim();
@@ -1672,6 +1673,7 @@ export const api = {
       PSBARCODE: barcodeStr,
       PIREPEAT: repeatNum,
       PSUSER: payload.user || c.worker,
+      PITRACESTATUS: Number(payload.traceStatus ?? 0),
     });
 
     const mesaj = serviceMessage(r);

@@ -1,10 +1,9 @@
 import { useState, useRef } from "react";
-import { Search, Printer, Check, Loader2, Package, Tag, FileText } from "lucide-react";
+import { Printer, Check, Loader2, Package, Camera, CornerDownLeft } from "lucide-react";
 import { api } from "../../api/client";
 import PageHeader from "../../components/PageHeader";
 import MaterialDetailCard from "../../components/MaterialDetailCard";
-
-type TabType = "materialCode" | "barcode" | "description";
+import CameraScanOverlay from "../../components/CameraScanOverlay";
 
 export interface ProductBarcodeCardItem {
   id: string; // `${material}_${barcode}_${unit}`
@@ -162,10 +161,9 @@ async function fetchCardsForMaterial(
 }
 
 export default function ProductBarcodePage() {
-  const [activeTab, setActiveTab] = useState<TabType>("materialCode");
-
   // Search & Results State
   const [searchTerm, setSearchTerm] = useState("");
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
   const [searchResults, setSearchResults] = useState<ProductBarcodeCardItem[]>([]);
@@ -181,24 +179,12 @@ export default function ProductBarcodePage() {
   const activeBarcode = selectedCards[0]?.barcode || searchResults[0]?.barcode || "";
   const detailCardRef = useRef<HTMLDivElement>(null);
 
-  const handleTabChange = (tab: TabType) => {
-    setActiveTab(tab);
-    setSearchTerm("");
-    setSearchDone(false);
-    setSearchResults([]);
-    setSelectedCards([]);
-    setRepeatCount(1);
+  // Birleşik Arama — Barkod Oluşturma ekranındaki ile AYNI: tek alandan
+  // malzeme kodu / barkod / açıklama aratılır (sekme yok). Enter veya kamera tetikler.
+  const handleSearch = async (termToSearch?: string) => {
+    const term = (termToSearch !== undefined ? termToSearch : searchTerm).trim();
     setErrorMsg("");
     setSuccessMsg("");
-  };
-
-  // Search Handler per tab type
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg("");
-    setSuccessMsg("");
-
-    const term = searchTerm.trim();
     if (!term) {
       setErrorMsg("Lütfen arama terimi girin.");
       return;
@@ -211,109 +197,62 @@ export default function ProductBarcodePage() {
     try {
       let cards: ProductBarcodeCardItem[] = [];
 
-      // 1. SEKME: Malzeme Kodu ile Arama
-      if (activeTab === "materialCode") {
-        cards = await fetchCardsForMaterial(term);
-
-        // Eğer malzeme kodundan doğrudan gelmediyse stock ve barcode fallbacklerini dene
-        if (cards.length === 0 || (cards.length === 1 && cards[0].name === cards[0].material)) {
-          try {
-            const stockRows = await api.queryStock({ material: term });
-            if (stockRows && stockRows.length > 0) {
-              const primary = stockRows[0];
-              const detailCards = await fetchCardsForMaterial(primary.material, primary.name, primary.unit);
-              if (detailCards.length > 0) {
-                cards = detailCards;
-              }
-            }
-          } catch {
-            // Devam et
-          }
+      // 1) Doğrudan malzeme kodu / barkod detayı (MZYGetMaterial)
+      try {
+        const direct = await fetchCardsForMaterial(term, "", "AD", term);
+        if (direct.length > 0 && !(direct.length === 1 && direct[0].name === direct[0].material)) {
+          cards = direct;
         }
-
-        // Eğer hala bulunamadıysa terim barkod olabilir, barkod olarak dene
-        if (cards.length === 0 || (cards.length === 1 && cards[0].name === cards[0].material)) {
-          try {
-            const readRes = await api.readBarcode(term);
-            if (readRes.ok && readRes.material) {
-              cards = await fetchCardsForMaterial(readRes.material, readRes.name, readRes.unit, term);
-            }
-          } catch {
-            // Devam et
-          }
-        }
+      } catch {
+        // Devam et
       }
 
-      // 2. SEKME: Barkod ile Arama
-      else if (activeTab === "barcode") {
-        let matCode = "";
-        let matName = "";
-        let scannedUnit = "AD";
-
+      // 2) Barkod okuma servisi (MZYReadBarcode) → malzemeyi çöz
+      if (cards.length === 0) {
         try {
           const readRes = await api.readBarcode(term);
           if (readRes.ok && readRes.material) {
-            matCode = readRes.material;
-            matName = readRes.name;
-            scannedUnit = readRes.unit || "AD";
+            cards = await fetchCardsForMaterial(readRes.material, readRes.name, readRes.unit, term);
+
+            // Okutulan barkodun listede olduğundan emin ol, en başa al
+            const hasExact = cards.some((c) => c.barcode.toLowerCase() === term.toLowerCase());
+            if (!hasExact) {
+              const unitInfo = formatBarcodeUnitInfo(readRes.unit || "AD");
+              cards.unshift({
+                id: `${readRes.material}_${term}_${unitInfo.short}`,
+                material: readRes.material,
+                name: readRes.name || readRes.material,
+                barcode: term,
+                unit: unitInfo.short,
+                unitLabel: unitInfo.label,
+                isSearchedBarcode: true,
+              });
+            }
+            cards.sort((a, b) => (b.isSearchedBarcode ? 1 : 0) - (a.isSearchedBarcode ? 1 : 0));
           }
         } catch {
           // Devam et
         }
+      }
 
-        // Eğer readBarcode bulunamadıysa MZYGetMaterial dene
-        if (!matCode) {
-          try {
-            const matDetail = await api.getMaterialDetail(term);
-            if (matDetail.ok && Array.isArray(matDetail.matList) && matDetail.matList.length > 0) {
-              matCode = String(matDetail.matList[0].MATERIAL || matDetail.matList[0].MATCODE || term).trim();
-              matName = String(matDetail.matList[0].STEXT || matDetail.matList[0].MTEXT || matDetail.matList[0].NAME || "").trim();
-              scannedUnit = String(matDetail.matList[0].QUNIT || matDetail.matList[0].UNIT || "AD").trim();
-            }
-          } catch {
-            // Devam et
+      // 3) Stok sorgusu (MZYGetStock) — barkod, olmazsa malzeme koduyla
+      if (cards.length === 0) {
+        try {
+          let stockRows = await api.queryStock({ barcode: term });
+          if (!stockRows || stockRows.length === 0) {
+            stockRows = await api.queryStock({ material: term });
           }
-        }
-
-        // Eğer hala bulunamadıysa queryStock({ barcode: term }) dene
-        if (!matCode) {
-          try {
-            const stockRows = await api.queryStock({ barcode: term });
-            if (stockRows && stockRows.length > 0) {
-              matCode = stockRows[0].material;
-              matName = stockRows[0].name;
-              scannedUnit = stockRows[0].unit;
-            }
-          } catch {
-            // Devam et
+          if (stockRows && stockRows.length > 0) {
+            const primary = stockRows[0];
+            cards = await fetchCardsForMaterial(primary.material, primary.name, primary.unit, term);
           }
-        }
-
-        if (matCode) {
-          cards = await fetchCardsForMaterial(matCode, matName, scannedUnit, term);
-
-          // Okutulan barkodun tam listede olduğundan emin ol
-          const hasExactScanned = cards.some((c) => c.barcode.toLowerCase() === term.toLowerCase());
-          if (!hasExactScanned) {
-            const unitInfo = formatBarcodeUnitInfo(scannedUnit);
-            cards.unshift({
-              id: `${matCode}_${term}_${unitInfo.short}`,
-              material: matCode,
-              name: matName || matCode,
-              barcode: term,
-              unit: unitInfo.short,
-              unitLabel: unitInfo.label,
-              isSearchedBarcode: true,
-            });
-          }
-
-          // Aranan barkodu en başa al
-          cards.sort((a, b) => (b.isSearchedBarcode ? 1 : 0) - (a.isSearchedBarcode ? 1 : 0));
+        } catch {
+          // Devam et
         }
       }
 
-      // 3. SEKME: Ürün Açıklaması ile Arama
-      else if (activeTab === "description") {
+      // 4) Açıklama / genel arama (isim veya kod filtresi, ilk 10 farklı ürün)
+      if (cards.length === 0) {
         try {
           const allStock = await api.queryStock({});
           const lower = term.toLowerCase();
@@ -323,7 +262,6 @@ export default function ProductBarcodePage() {
               (r.material && r.material.toLowerCase().includes(lower))
           );
 
-          // Tekil malzemeleri al (Aşırı istek göndermemek için ilk 10 farklı ürün)
           const uniqueMaterials = new Map<string, { name: string; unit: string }>();
           for (const r of matches) {
             if (r.material && !uniqueMaterials.has(r.material)) {
@@ -463,7 +401,7 @@ export default function ProductBarcodePage() {
   const isPrintDisabled = selectedCards.length === 0 || printing;
 
   return (
-    <div className="mx-auto max-w-6xl p-4 lg:p-8">
+    <div className="mx-auto max-w-7xl p-4 lg:p-8 space-y-4">
       {/* Top Header with Kopya Input & Green Print Button aligned right */}
       <PageHeader
         title="Ürün Barkodu Yazdırma"
@@ -521,7 +459,7 @@ export default function ProductBarcodePage() {
       />
 
       {/* Mobile Action Bar */}
-      <div className="flex items-center justify-between gap-3 sm:hidden mb-2">
+      <div className="flex items-center justify-between gap-3 sm:hidden">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-fg">Kopya:</span>
           <input
@@ -564,44 +502,79 @@ export default function ProductBarcodePage() {
         </button>
       </div>
 
-      {/* 3 Option Segmented Tab Bar */}
-      <div className="flex flex-col sm:flex-row rounded-2xl border border-line bg-surface p-1.5 shadow-sm gap-1">
-        <button
-          type="button"
-          onClick={() => handleTabChange("materialCode")}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-3 text-xs font-bold transition-all ${activeTab === "materialCode"
-            ? "bg-blue-600 text-white shadow-md"
-            : "text-subtle hover:text-fg hover:bg-elevated"
-            }`}
-        >
-          <Package className="h-4 w-4" />
-          <span>1. Malzeme Kodu ile Arama</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleTabChange("barcode")}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-3 text-xs font-bold transition-all ${activeTab === "barcode"
-            ? "bg-blue-600 text-white shadow-md"
-            : "text-subtle hover:text-fg hover:bg-elevated"
-            }`}
-        >
-          <Tag className="h-4 w-4" />
-          <span>2. Barkod ile Arama</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleTabChange("description")}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 px-3 text-xs font-bold transition-all ${activeTab === "description"
-            ? "bg-blue-600 text-white shadow-md"
-            : "text-subtle hover:text-fg hover:bg-elevated"
-            }`}
-        >
-          <FileText className="h-4 w-4" />
-          <span>3. Ürün Açıklaması ile Arama</span>
-        </button>
+      {/* Arama: sonuç varken kompakt çubuk (yer kaplamasın), yoksa tam arama kutusu */}
+      {searchDone && searchResults.length > 0 ? (
+        <div className="flex items-center justify-between gap-2 rounded-2xl border border-line bg-surface px-3.5 py-2.5 shadow-card">
+          <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-subtle">
+            Arama:{" "}
+            <span className="truncate font-semibold text-fg">{searchTerm || "—"}</span>
+            <span className="shrink-0 text-subtle">· {searchResults.length} sonuç</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchTerm("");
+              setSearchResults([]);
+              setSearchDone(false);
+              setSelectedCards([]);
+              setErrorMsg("");
+              setSuccessMsg("");
+            }}
+            className="shrink-0 text-xs font-semibold text-brand-600 hover:underline"
+          >
+            Yeni arama
+          </button>
+        </div>
+      ) : (
+      <div className="card p-4 sm:p-3 shadow-card">
+        <div className="relative flex items-center">
+          <input
+            type="text"
+            id="input-product-search"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSearch(searchTerm);
+              }
+            }}
+            enterKeyHint="search"
+            inputMode="text"
+            autoComplete="off"
+            placeholder="Barkod veya Ürün Kodu ya da Açıklama girin..."
+            className="field-input w-full pr-20 h-11 text-sm font-medium"
+          />
+          <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
+            {/* Enter / Ara Butonu */}
+            <button
+              type="button"
+              onClick={() => handleSearch(searchTerm)}
+              disabled={!searchTerm.trim() || searching}
+              aria-label="Ara"
+              title="Ara"
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg disabled:opacity-30"
+            >
+              {searching ? (
+                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+              ) : (
+                <CornerDownLeft className="h-4 w-4" />
+              )}
+            </button>
+            {/* Kamera Butonu */}
+            <button
+              type="button"
+              onClick={() => setIsCameraOpen(true)}
+              aria-label="Kamera ile barkod oku"
+              title="Kamera ile barkod oku"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle transition hover:bg-elevated hover:text-fg"
+            >
+              <Camera className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       </div>
+      )}
 
       {/* Global Alerts */}
       {errorMsg && (
@@ -616,122 +589,94 @@ export default function ProductBarcodePage() {
         </div>
       )}
 
-      {/* TAB CONTENT: Dedicated Search Card & Results */}
-      <div className="rounded-2xl border border-line bg-surface p-6 shadow-card space-y-5">
-        <div>
-          <h3 className="text-base font-extrabold text-fg flex items-center gap-2">
-            {activeTab === "materialCode" && (
-              <>
-                <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                <span>Malzeme Kodu ile Arama ve Seçim</span>
-              </>
-            )}
-            {activeTab === "barcode" && (
-              <>
-                <Tag className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                <span>Malzeme Barkodu (EAN) ile Arama ve Seçim</span>
-              </>
-            )}
-            {activeTab === "description" && (
-              <>
-                <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                <span>Ürün Açıklaması ile Arama ve Seçim</span>
-              </>
-            )}
-          </h3>
-          <p className="text-xs text-subtle mt-0.5">
-            {activeTab === "materialCode" && "Malzeme kodunu girin, çıkan ürünleri seçip sayfa başındaki Yazdır butonunu kullanın."}
-            {activeTab === "barcode" && "Barkod numarasını (EAN) okutun veya yazın, çıkan ürünleri seçip sayfa başındaki Yazdır butonunu kullanın."}
-            {activeTab === "description" && "Ürün adını veya açıklamasını yazın, eşleşen ürünleri seçip sayfa başındaki Yazdır butonunu kullanın."}
-          </p>
+      {/* Sonuçlar */}
+      {searching ? (
+        <div className="space-y-2.5">
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="h-20 animate-pulse rounded-2xl bg-elevated/60 border border-line" />
+          ))}
         </div>
-
-        {/* Dedicated Search Form per Option */}
-        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-subtle" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder={
-                activeTab === "materialCode"
-                  ? "Malzeme Kodu Girin (ör. MAL001)..."
-                  : activeTab === "barcode"
-                    ? "Barkod No veya EAN Girin..."
-                    : "Ürün Açıklaması veya Adı Girin..."
-              }
-              className="field-input pl-11"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={searching || !searchTerm.trim()}
-            className="btn-primary flex items-center justify-center gap-2 py-2.5 px-6 shadow-sm shrink-0"
-          >
-            {searching ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Search className="h-4 w-4" />
-            )}
-            <span>Ara</span>
-          </button>
-        </form>
-
-        {/* Result Cards in Classic/Original Layout with KO, PK, AD Badge */}
-        {searching ? (
-          <div className="h-24 animate-pulse rounded-2xl bg-elevated mt-2" />
-        ) : searchResults.length > 0 ? (
-          <div ref={detailCardRef} className="pt-2 border-t border-line space-y-4 scroll-mt-20">
-            {/* Seçili Malzemenin 3D ve Detay Kartı */}
-            {activeMaterialCode && (
+      ) : searchResults.length > 0 ? (
+        <div ref={detailCardRef} className="grid gap-4 scroll-mt-20 lg:grid-cols-2">
+          {/* Sol: Seçili Malzemenin 3D ve Detay Kartı */}
+          {activeMaterialCode && (
+            <div className="min-w-0 lg:sticky lg:top-4 lg:self-start">
               <MaterialDetailCard
                 materialCode={activeMaterialCode}
                 barcode={activeBarcode}
                 onBarcodeSelect={handleCardBarcodeSelect}
               />
-            )}
+            </div>
+          )}
 
-            {/* Arama Sonuçları Listesi */}
-            <div className="space-y-3">
-              {searchResults.map((r) => {
-                const selected = isCardSelected(r);
-                return (
-                  <div
-                    key={r.id}
-                    id={`product-card-${r.id}`}
-                    onClick={() => toggleSelectCard(r)}
-                    className={`relative flex cursor-pointer items-center justify-between rounded-2xl border p-5 text-left shadow-card transition-all ${selected
-                      ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
-                      : "border-line bg-bg hover:border-emerald-300"
+          {/* Sağ: Arama Sonuçları Listesi */}
+          <div className="min-w-0 space-y-3">
+            {searchResults.map((r) => {
+              const selected = isCardSelected(r);
+              return (
+                <div
+                  key={r.id}
+                  id={`product-card-${r.id}`}
+                  onClick={() => toggleSelectCard(r)}
+                  className={`relative flex cursor-pointer items-center justify-between gap-3 rounded-2xl border p-4 text-left shadow-card transition-all ${selected
+                    ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
+                    : "border-line bg-bg hover:border-emerald-300"
+                    }`}
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    {/* Birim rozeti — MaterialDetailCard ile aynı renk ailesi */}
+                    <span
+                      className={`inline-flex h-7 w-12 shrink-0 items-center justify-center rounded-lg border text-[11px] font-bold ${formatBarcodeUnitInfo(r.unit).badgeClass}`}
+                    >
+                      {r.unit}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className="font-mono text-sm font-bold text-fg">{r.barcode}</span>
+                        <span className="font-mono text-xs font-semibold text-subtle">{r.material}</span>
+                      </div>
+                      <p className="truncate text-xs text-subtle">{r.name}</p>
+                    </div>
+                  </div>
+
+                  <span
+                    className={`chip text-xs font-bold ${selected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
                       }`}
                   >
-                    <div>
-                      <div className="flex items-center gap-8">
-                        <p>{r.barcode}</p>
-                        <p>{r.unit}</p>
-                        <p>{r.material}</p>
-                        <p>{r.name}</p>
-                      </div>
-                    </div>
-
-                    <span
-                      className={`chip text-xs font-bold ${selected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
-                        }`}
-                    >
-                      {selected ? <Check className="h-4 w-4 inline mr-1" /> : null}
-                      {selected ? "Seçildi" : "Seç"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                    {selected ? <Check className="h-4 w-4 inline mr-1" /> : null}
+                    {selected ? "Seçildi" : "Seç"}
+                  </span>
+                </div>
+              );
+            })}
           </div>
-        ) : searchDone ? (
-          <p className="text-xs text-subtle py-4 text-center">Aranan kriterde ürün kaydı bulunamadı.</p>
-        ) : null}
-      </div>
+        </div>
+      ) : searchDone ? (
+        <div className="card p-8 text-center">
+          <Package className="h-8 w-8 text-subtle mx-auto mb-2 opacity-50" />
+          <p className="text-xs text-subtle">Aranan kriterde ürün kaydı bulunamadı.</p>
+        </div>
+      ) : (
+        <div className="card p-8 text-center border-dashed">
+          <Package className="h-8 w-8 text-subtle mx-auto mb-2 opacity-40" />
+          <p className="text-xs text-subtle">
+            Arama yapmak için yukarıdaki alandan ürün kodu, açıklama ya da barkod okutunuz.
+          </p>
+        </div>
+      )}
+
+      {/* Kamera Tarama Modal / Overlay */}
+      {isCameraOpen && (
+        <CameraScanOverlay
+          onDetected={(code) => {
+            setIsCameraOpen(false);
+            setSearchTerm(code);
+            handleSearch(code);
+          }}
+          onClose={() => setIsCameraOpen(false)}
+          prompt="Açıklama, ürün kodu ya da barkod okutun"
+        />
+      )}
     </div>
   );
 }
