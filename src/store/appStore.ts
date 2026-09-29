@@ -20,6 +20,8 @@ const defaultSettings: Settings = {
   warehouseReceiving: "D1", // Mal Kabul Deposu
   warehousePackaging: "D2", // Paketleme Deposu
   warehouseDelivery: "D3", // Dağıtım Deposu
+  warehouseQuality: "", // Kalite Deposu
+  printerName: "", // Yazıcı Adı
   language: "tr",
 };
 
