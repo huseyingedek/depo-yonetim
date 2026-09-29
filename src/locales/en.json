@@ -53,6 +53,8 @@
     "warehouseDelivery": "Delivery Warehouse",
     "warehousePackaging": "Packaging Warehouse",
     "warehouseReceiving": "Receiving Warehouse",
+    "warehouseQuality": "Quality Warehouse",
+    "printerName": "Printer Name",
     "language": "Language",
     "appearance": "Appearance",
     "themeLight": "Light",

@@ -53,6 +53,8 @@
     "warehouseDelivery": "Sevkiyat Deposu",
     "warehousePackaging": "Paketleme Deposu",
     "warehouseReceiving": "Mal Kabul Deposu",
+    "warehouseQuality": "Kalite Deposu",
+    "printerName": "Yazıcı Adı",
     "language": "Dil",
     "appearance": "Görünüm",
     "themeLight": "Açık",

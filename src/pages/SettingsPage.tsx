@@ -66,6 +66,8 @@ export default function SettingsPage() {
         receiptWh: form.warehouseReceiving,
         packWh: form.warehousePackaging,
         deliveryWh: form.warehouseDelivery,
+        qltWh: form.warehouseQuality,
+        printName: form.printerName,
       });
 
       // 2. Uygulama hafızasını güncelle
@@ -123,6 +125,14 @@ export default function SettingsPage() {
             <div>
               <label className="field-label">{t("settings.warehouseReceiving")}</label>
               <input value={form.warehouseReceiving} onChange={(e) => set({ warehouseReceiving: e.target.value })} className="field-input" />
+            </div>
+            <div>
+              <label className="field-label">{t("settings.warehouseQuality")}</label>
+              <input value={form.warehouseQuality ?? ""} onChange={(e) => set({ warehouseQuality: e.target.value })} className="field-input" />
+            </div>
+            <div>
+              <label className="field-label">{t("settings.printerName")}</label>
+              <input value={form.printerName ?? ""} onChange={(e) => set({ printerName: e.target.value })} className="field-input" />
             </div>
           </div>
         </div>
