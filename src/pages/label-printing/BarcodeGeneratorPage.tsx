@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Loader2,
   ChevronDown,
@@ -8,9 +7,11 @@ import {
   AlertCircle,
   Camera,
   CornerDownLeft,
+  Copy,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
-import { useOverlay } from "../../components/overlayContext";
+import MaterialDetailCard from "../../components/MaterialDetailCard";
+import MaterialUnitsCard from "../../components/MaterialUnitsCard";
 import CameraScanOverlay from "../../components/CameraScanOverlay";
 import { api } from "../../api/client";
 import { sesBasarili, sesHata } from "../../sound";
@@ -19,19 +20,13 @@ import {
   formatBarcodeUnitInfo,
 } from "./ProductBarcodePage";
 
-const NON_BARCODE_UNITS = new Set([
-  "KG", "GR", "G", "MG", "TON",
-  "DS", "DESI",
-  "M", "M2", "M3", "CM", "MM",
-  "L", "LT", "ML"
-]);
+// Koşul KALDIRILDI (Bora): her tanımlı birim barkodlanabilir — kısıt yok.
+const NON_BARCODE_UNITS = new Set<string>();
 
 type StepType = 1 | 2;
 type BarcodeMode = "manual" | "auto";
 
 export default function BarcodeGeneratorPage() {
-  const navigate = useNavigate();
-  const overlay = useOverlay();
   const redirectTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Temizlik: component unmount olduğunda timer'ı temizle
@@ -63,6 +58,8 @@ export default function BarcodeGeneratorPage() {
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [createdBarcode, setCreatedBarcode] = useState("");
+  const [copied, setCopied] = useState(false);
 
   // Seçilen malzemenin CANIAS'ta sahip olduğu geçerli birimler
   const availableUnitsForSelected = useMemo(() => {
@@ -297,11 +294,13 @@ export default function BarcodeGeneratorPage() {
         throw new Error(apiError);
       }
 
-      // Tekilleştirme: Her (material_unit) kombinasyonundan yalnızca 1 kart
-      const seenCardIds = new Set<string>();
+      // Tekilleştirme: her MALZEMEDEN yalnızca 1 kart (birimler ayrı komponentte
+      // gösterilir → artık birim başına tekrar YOK).
+      const seenMats = new Set<string>();
       const uniqueCards = cards.filter((c) => {
-        if (seenCardIds.has(c.id)) return false;
-        seenCardIds.add(c.id);
+        const key = (c.material || "").trim().toUpperCase();
+        if (seenMats.has(key)) return false;
+        seenMats.add(key);
         return true;
       });
 
@@ -318,25 +317,10 @@ export default function BarcodeGeneratorPage() {
     }
   };
 
-  // Kart Seçimi: Seçilen kart listenin en üstüne taşınır, Header'daki Devam butonu aktifleşir
-  const handleSelectCard = (item: ProductBarcodeCardItem) => {
-    setSelectedCard(item);
-
-    // Kural: "seçilen kart yukarı taşınacak eğer alt sıralardaysa"
-    setSearchResults((prev) => {
-      const idx = prev.findIndex((c) => c.id === item.id);
-      if (idx <= 0) return prev;
-      const copy = [...prev];
-      const [moved] = copy.splice(idx, 1);
-      return [moved, ...copy];
-    });
-  };
-
   // Step 2'ye Geçiş
   const handleContinueToStep2 = () => {
-    if (!selectedCard) return;
-    // ComboBox'tan seçim yapılana kadar butonların kilitli kalması kuralı gereği boş başlatılır
-    setSelectedUnit("");
+    if (!selectedCard || !selectedUnit) return;
+    // Birim, Birimler kartından zaten seçildi → SIFIRLAMIYORUZ.
     setCustomBarcode("");
     setBarcodeMode("manual");
     setErrorMsg("");
@@ -345,6 +329,56 @@ export default function BarcodeGeneratorPage() {
   };
 
   // Adım 2: Barkod Oluşturma İşlemini Otomatik Kabul Edip Çalıştırma
+  // Bir malzeme+birim için mevcut barkodları getir (oluşturma teyidi + yeni no).
+  const birimBarkodlari = async (mat: string, unit: string): Promise<string[]> => {
+    try {
+      const d = await api.getMaterialDetail(mat);
+      const list = Array.isArray(d.barcodeList) ? d.barcodeList : [];
+      const U = unit.toUpperCase();
+      return list
+        .filter((b) => String(b.BUNIT || b.UNIT || b.BARCODEUNIT || b.B_UNIT || b.QUNIT || b.unit || "").trim().toUpperCase() === U)
+        .map((b) => String(b.BARCODE || b.barcode || b.BARCODENUM || b.EAN || b.CODE || "").trim())
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
+  };
+
+  const handleCopyCreated = async () => {
+    const bc = createdBarcode.trim();
+    if (!bc) return;
+    try {
+      await navigator.clipboard.writeText(bc);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = bc;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch { /* yok */ }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  };
+
+  const handleOkutmayaDon = () => {
+    // Yeni barkod okutmak için 1. adıma (arama/okutma ekranına) temiz dön.
+    setStep(1);
+    setSearchTerm("");
+    setSearchResults([]);
+    setSearchDone(false);
+    setSelectedCard(null);
+    setSelectedUnit("");
+    setCustomBarcode("");
+    setBarcodeMode("manual");
+    setSuccessMsg("");
+    setCreatedBarcode("");
+    setCopied(false);
+    setErrorMsg("");
+  };
+
   const handleExecuteCreate = async ({
     isAuto,
     newBarcode,
@@ -363,41 +397,55 @@ export default function BarcodeGeneratorPage() {
     setSaving(true);
     setErrorMsg("");
     setSuccessMsg("");
+    setCreatedBarcode("");
+    setCopied(false);
+
+    const mat = selectedCard.material;
+    const unit = selectedUnit;
+    const barcodeValue = isAuto ? "" : (newBarcode || customBarcode).trim();
 
     try {
-      const barcodeValue = isAuto ? "" : (newBarcode || customBarcode).trim();
+      // Oluşturma ÖNCESİ barkodlar (auto numarayı bulmak + teyit için).
+      const oncekiSet = new Set(await birimBarkodlari(mat, unit));
 
-      // CANIAS MZYCreateBarcode servisine kaydetme isteği
       const res = await api.createBarcode({
         company: "01",
-        material: selectedCard.material,
-        unit: selectedUnit,
+        material: mat,
+        unit,
         autoGenerate: isAuto ? 1 : 0,
         newBarcode: barcodeValue,
         printCount: 0,
       });
 
-      if (res.ok) {
-        const assigned = res.barcode || (isAuto ? "Sıradaki Numara" : barcodeValue);
-        const okText = `Barkod (${assigned}) başarıyla oluşturuldu!`;
-        setSuccessMsg(okText);
-        sesBasarili();
-      } else {
-        const errText = res.message || "Barkod oluşturulurken bir sorun oluştu.";
-        setErrorMsg(errText);
+      if (!res.ok) {
+        setErrorMsg(res.message || "Barkod oluşturulurken bir sorun oluştu.");
         sesHata();
+        return;
       }
+
+      // Oluşturma SONRASI: yeniden çek → gerçek barkodu bul ve TEYİT et.
+      const sonraki = await birimBarkodlari(mat, unit);
+      const created = isAuto
+        ? (sonraki.find((b) => !oncekiSet.has(b)) || String(res.barcode || ""))
+        : barcodeValue;
+
+      const eklendi = isAuto
+        ? Boolean(created)
+        : sonraki.some((b) => b.toUpperCase() === barcodeValue.toUpperCase());
+      if (!eklendi) {
+        setErrorMsg("Barkod oluşturulamadı — kayıt doğrulanamadı. Lütfen tekrar deneyin.");
+        sesHata();
+        return;
+      }
+
+      setCreatedBarcode(created);
+      setSuccessMsg(`${unit} birimi için barkod oluşturuldu.`);
+      sesBasarili();
     } catch (err: unknown) {
-      const errText = err instanceof Error ? err.message : "Kayıt işlemi sırasında bir hata oluştu.";
-      setErrorMsg(errText);
+      setErrorMsg(err instanceof Error ? err.message : "Kayıt işlemi sırasında bir hata oluştu.");
       sesHata();
     } finally {
       setSaving(false);
-      // KURAL: 3 saniye sonra kullanıcı otomatik olarak anasayfaya (/home) yönlendirilecek
-      redirectTimerRef.current = setTimeout(() => {
-        if (overlay) overlay.close();
-        else navigate("/home");
-      }, 3000);
     }
   };
 
@@ -418,9 +466,9 @@ export default function BarcodeGeneratorPage() {
               <button
                 type="button"
                 id="btn-step1-devam"
-                disabled={!selectedCard}
+                disabled={!selectedCard || !selectedUnit}
                 onClick={handleContinueToStep2}
-                className={`flex h-10 items-center justify-center rounded-xl px-5 text-sm font-bold transition-all ${selectedCard
+                className={`flex h-10 items-center justify-center rounded-xl px-5 text-sm font-bold transition-all ${selectedCard && selectedUnit
                   ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 hover:bg-blue-500 active:scale-95 ring-2 ring-blue-400 cursor-pointer"
                   : "bg-elevated text-subtle/50 border border-line cursor-not-allowed opacity-50"
                   }`}
@@ -505,49 +553,30 @@ export default function BarcodeGeneratorPage() {
                 ))}
               </div>
             ) : searchResults.length > 0 ? (
-              <div className="space-y-2.5">
-                {searchResults.map((r) => {
-                  const selected = selectedCard?.id === r.id;
-                  return (
-                    <div
-                      key={r.id}
-                      id={`product-card-${r.id}`}
-                      onClick={() => handleSelectCard(r)}
-                      className={`relative flex min-h-[80px] h-[80px] cursor-pointer items-center justify-between rounded-2xl border px-4 py-2.5 text-left shadow-card transition-all ${selected
-                        ? "border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30"
-                        : "border-line bg-surface hover:border-blue-300"
-                        }`}
-                    >
-                      <div className="min-w-0 flex-1 pr-3 flex flex-col justify-center">
-                        <p
-                          className="font-semibold text-fg text-xs sm:text-sm line-clamp-2 leading-snug"
-                          title={r.name}
-                        >
-                          {r.name}
-                        </p>
-                        <p className="text-[11px] sm:text-xs font-mono text-subtle truncate mt-0.5">
-                          {r.material}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* Birim Çipi (Renksiz / Nötr) */}
-                        <span className="chip text-xs font-bold border border-line bg-elevated text-subtle">
-                          {r.unit}
-                        </span>
-                        {/* Seçim Rozeti */}
-                        <span
-                          className={`chip text-xs font-bold shrink-0 ml-1 ${selected
-                            ? "bg-blue-600 text-white shadow-xs"
-                            : "bg-elevated text-subtle"
-                            }`}
-                        >
-                          {selected ? "Seçildi" : "Seç"}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="space-y-4">
+                {searchResults.map((r) => (
+                  <div key={r.material} className="space-y-2">
+                    {/* Malzeme kartı (resim/barkod/ölçü/özellik) */}
+                    <MaterialDetailCard materialCode={r.material} showEditButton={false} />
+                    {/* Birimler komponenti — barkod oluşturmak için birim seç */}
+                    <MaterialUnitsCard
+                      material={r.material}
+                      selectedUnit={selectedCard?.material === r.material ? selectedUnit : ""}
+                      onSelectUnit={(u) => { setSelectedCard(r); setSelectedUnit(u); }}
+                    />
+                    {/* Birim seçilince HEMEN buraya (seçimin yanına) Devam butonu gelir */}
+                    {selectedCard?.material === r.material && selectedUnit && (
+                      <button
+                        type="button"
+                        onClick={handleContinueToStep2}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-400 transition hover:bg-blue-500 active:scale-[0.99]"
+                      >
+                        <span className="rounded bg-white/20 px-1.5 py-0.5 text-[12px] font-black">{selectedUnit}</span>
+                        birimi için barkod oluştur → Devam
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             ) : searchDone ? (
               <div className="card p-8 text-center">
@@ -583,26 +612,39 @@ export default function BarcodeGeneratorPage() {
 
           {/* İŞLEM VE BİLDİRİM BANNERLARI */}
           {successMsg && (
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-3">
-              <Check className="h-5 w-5 shrink-0" />
-              <div>
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-3">
+              <div className="flex items-center gap-3 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                <Check className="h-5 w-5 shrink-0" />
                 <p>{successMsg}</p>
-                <p className="text-xs text-emerald-600/80 mt-0.5">
-                  3 saniye sonra anasayfaya yönlendirileceksiniz...
-                </p>
               </div>
+              {createdBarcode && (
+                <div className="flex items-center gap-2 rounded-xl border border-emerald-300/60 bg-white/70 px-3 py-2 dark:bg-black/20">
+                  <span className="shrink-0 text-[11px] font-bold text-subtle">Barkod:</span>
+                  <span className="min-w-0 flex-1 truncate font-mono text-base font-black text-fg">{createdBarcode}</span>
+                  <button
+                    type="button"
+                    onClick={handleCopyCreated}
+                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-line bg-surface px-2.5 text-[12px] font-bold text-subtle transition hover:bg-elevated hover:text-fg active:scale-95"
+                  >
+                    {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                    {copied ? "Kopyalandı" : "Kopyala"}
+                  </button>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={handleOkutmayaDon}
+                className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-500 active:scale-[0.99]"
+              >
+                Okutmaya Geri Dön
+              </button>
             </div>
           )}
 
           {errorMsg && (
             <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-3">
               <AlertCircle className="h-5 w-5 shrink-0" />
-              <div>
-                <p>{errorMsg}</p>
-                <p className="text-xs text-rose-600/80 mt-0.5">
-                  3 saniye sonra anasayfaya yönlendirileceksiniz...
-                </p>
-              </div>
+              <p>{errorMsg}</p>
             </div>
           )}
 
