@@ -8,7 +8,6 @@ import {
   Loader2,
   Warehouse,
   X,
-  Printer,
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
@@ -69,7 +68,6 @@ export default function InquiryPage() {
   const [shelfError, setShelfError] = useState<string | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
 
-  const [printingIndex, setPrintingIndex] = useState<number | null>(null);
   const [toastMsg, setToastMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Filtre switch'leri — öndeğerler Bora spec: konteyner KAPALI(0), toplama AÇIK(1).
@@ -184,34 +182,6 @@ export default function InquiryPage() {
     const yeni = !konteynerGetir;
     setKonteynerGetir(yeni);
     if (queried) void runQuery(currentArgs(), { konteyner: yeni });
-  };
-
-  // Bora, 05.08: Satır Etiketi Basma (MZYPrintWHSP)
-  const handlePrintRowLabel = async (b: StockRow, index: number) => {
-    setPrintingIndex(index);
-    setToastMsg(null);
-    try {
-      const res = await api.printWHSP({
-        company: "01",
-        plant: "100",
-        warehouse: b.warehouse,
-        stockPlace: b.stockPlace,
-        repeat: 1,
-      });
-      if (res.ok) {
-        setToastMsg({
-          type: "success",
-          text: res.message || `${b.material || "Ürün"} (${b.warehouse}/${b.stockPlace}) etiket yazdırma isteği iletildi.`,
-        });
-      } else {
-        setToastMsg({ type: "error", text: res.message || "Etiket yazdırma başarısız oldu." });
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Yazdırma işlemi sırasında hata oluştu.";
-      setToastMsg({ type: "error", text: msg });
-    } finally {
-      setPrintingIndex(null);
-    }
   };
 
   // Birim bazında toplamlar (farklı birimler toplanmaz).
