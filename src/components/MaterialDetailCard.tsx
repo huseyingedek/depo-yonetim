@@ -249,6 +249,7 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
   const [internalData, setInternalData] = useState<MaterialDetailData | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedBarcodeState, setSelectedBarcodeState] = useState<string>("");
+  const [imgErrIdx, setImgErrIdx] = useState<number>(0); // görsel fallback sırası: web → CANIAS → yok
 
   // Üst bileşenden barcode prop'u değişirse seçili barkodu senkronize et
   useEffect(() => {
@@ -540,6 +541,11 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
 
   const activeMaterial = data || internalData;
 
+  // Malzeme değişince görsel hata sırasını sıfırla
+  useEffect(() => {
+    setImgErrIdx(0);
+  }, [activeMaterial?.material]);
+
   // Aktif Güvenlik / Öz Nitelik Rozetleri
   const activeSpecialAttrs = useMemo(() => {
     if (!activeMaterial) return [];
@@ -655,6 +661,14 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
     );
   }
 
+  // Ürün görseli: aktuelofis sitesinden, malzeme kodu küçük harf + .webp.
+  // Öncelik web görseli → CANIAS görseli → "Fotoğraf Yok".
+  const webImage = activeMaterial.material
+    ? `https://www.aktuelofis.com.tr/image/data/urunler/${activeMaterial.material.trim().toLowerCase()}.webp`
+    : undefined;
+  const imgSources = [webImage, activeMaterial.image].filter(Boolean) as string[];
+  const currentImg = imgSources[imgErrIdx];
+
   const dims = activeMaterial.dimensions;
   const hasDimensions = Boolean(dims && dims.width > 0 && dims.length > 0 && dims.height > 0);
   const desiCalculated =
@@ -685,11 +699,13 @@ export const MaterialDetailCard: React.FC<MaterialDetailCardProps> = ({
           {/* 1. Bölüm: Solda Ürün Görseli ve Altında Ürün Kodu */}
           <div className="flex flex-col items-center shrink-0 mr-1.5 self-start w-24 sm:w-26 min-w-0">
             <div className="h-24 w-24 sm:h-26 sm:w-26 rounded-2xl overflow-hidden shrink-0 border border-line bg-elevated/40 flex items-center justify-center shadow-xs">
-              {activeMaterial.image ? (
+              {currentImg ? (
                 <img
-                  src={activeMaterial.image}
+                  src={currentImg}
                   alt={activeMaterial.name}
-                  className="h-full w-full object-cover"
+                  loading="lazy"
+                  onError={() => setImgErrIdx((i) => i + 1)}
+                  className="h-full w-full object-contain bg-white"
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center text-subtle/70 gap-1 p-1 text-center">

@@ -719,6 +719,7 @@ export const api = {
     material?: string;
     warehouse?: string;
     stockPlace?: string;
+    batch?: string; // PSBATCHNUM: parti no ile filtre (boş olabilir)
     container?: boolean; // PICONTAINER: konteynerları da getir (öndeğer kapalı)
     onlyPickWarehouse?: boolean; // PIISPICKWH: yalnızca toplama depoları (öndeğer açık)
   }): Promise<StockRow[]> {
@@ -729,7 +730,7 @@ export const api = {
       PSMATERIAL: opts.material ?? "",
       PSWAREHOUSE: opts.warehouse ?? "",
       PSSTOCKPLACE: opts.stockPlace ?? "",
-      PSBATCHNUM: "",
+      PSBATCHNUM: opts.batch ?? "",
       PSSPECIALSTOCK: "",
       PSVOPTIONS: "",
       PSBARCODE: opts.barcode ?? "",

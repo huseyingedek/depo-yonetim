@@ -20,5 +20,10 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    strictPort: true, // 5173 doluysa sessizce başka porta kaçma, hata ver (hayalet süreç yakala)
+    watch: {
+      usePolling: true, // köprüden/dış araçtan yazılan değişiklikleri de algıla (HMR tetiklensin)
+      interval: 300,
+    },
   },
 });

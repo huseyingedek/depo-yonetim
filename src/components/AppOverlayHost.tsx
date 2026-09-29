@@ -16,7 +16,7 @@ import BarcodeGeneratorPage from "../pages/label-printing/BarcodeGeneratorPage";
 import ExpiryLabelPage from "../pages/label-printing/ExpiryLabelPage";
 
 const BASLIK: Record<string, string> = {
-  inquiry: "Ürün Sorgulama",
+  inquiry: "Stok Sorgulama",
   barcode: "Barkod Oluşturma",
   skt: "SKT Etiketi",
 };

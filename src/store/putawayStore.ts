@@ -40,6 +40,8 @@ interface PutawayState {
   clear: () => void;
 
   scanSource: (barcode: string) => Promise<{ ok: boolean; message: string }>;
+  // Toplamadaki clearShelf karşılığı: kaynağı ve alt adımları (parti/hedef) sıfırlar.
+  clearSource: () => void;
 
   scanProduct: (barcode: string, adet?: number) => Promise<PlacementOutcome>;
 
@@ -89,6 +91,8 @@ export const usePutawayStore = create<PutawayState>()(
       },
 
       clear: () => set({ order: null, source: null, ready: null, records: [], pendingProduct: null, batchList: [], batchLoading: false, batchError: null }),
+
+      clearSource: () => set({ source: null, ready: null, pendingProduct: null, batchList: [], batchLoading: false, batchError: null }),
 
       scanSource: async (barcode) => {
         const order = get().order;

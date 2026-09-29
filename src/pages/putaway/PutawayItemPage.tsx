@@ -32,6 +32,7 @@ export default function PutawayItemPage() {
   const scanSource = usePutawayStore((s) => s.scanSource);
   const scanTarget = usePutawayStore((s) => s.scanTarget);
   const clearReady = usePutawayStore((s) => s.clearReady);
+  const clearSource = usePutawayStore((s) => s.clearSource);
   const scanProduct = usePutawayStore((s) => s.scanProduct);
   const setBatch = usePutawayStore((s) => s.setBatch);
   const clear = usePutawayStore((s) => s.clear);
@@ -230,11 +231,13 @@ export default function PutawayItemPage() {
     ? "Hedef raf barkodunu okutun"
     : "Ürün barkodunu okutun";
 
+  // Toplama (picking) ekranındaki gibi: adımlar ilerledikçe yeşil ✓ (done) olur,
+  // Kaynak adımı tamamlanınca tıklanıp sıfırlanabilir (clearSource).
   const adimlar = [
-    { key: "source", label: "Kaynak", active: !source, done: !!source },
-    { key: "urun", label: "Ürün", active: !!source && !pending && !ready, done: false },
-    { key: "parti", label: "Parti", active: !!pending, done: false },
-    { key: "hedef", label: "Hedef", active: !!ready, done: false },
+    { label: "Kaynak", active: !source, done: !!source, disabled: !source, onClick: () => clearSource() },
+    { label: "Ürün", active: !!source && !pending && !ready, done: !!(pending || ready), disabled: true },
+    { label: "Parti", active: !!pending, done: !!ready, disabled: true },
+    { label: "Hedef", active: !!ready, done: false, disabled: true },
   ];
 
   // Aktif malzeme: ürün okunur okunmaz (parti beklense bile) o kalem aktif sayılır →
