@@ -2638,17 +2638,17 @@ export const api = {
     const language: "tr" | "en" = rawLangu.toUpperCase() === "E" ? "en" : "tr";
 
     const defaults: Partial<Settings> | null =
-      company || plant || receiptWh || packWh || deliveryWh
+      company || plant || receiptWh || packWh || deliveryWh || qltWh || printName
         ? {
-            ...(company ? { company } : {}),
-            ...(plant ? { facility: plant } : {}),
-            ...(receiptWh ? { warehouseReceiving: receiptWh } : {}),
-            ...(packWh ? { warehousePackaging: packWh } : {}),
-            ...(deliveryWh ? { warehouseDelivery: deliveryWh, warehouse: deliveryWh } : {}),
-            ...(qltWh ? { warehouseQuality: qltWh } : {}),
-            ...(printName ? { printerName: printName } : {}),
-            ...(rawLangu ? { language } : {}),
-          }
+          ...(company ? { company } : {}),
+          ...(plant ? { facility: plant } : {}),
+          ...(receiptWh ? { warehouseReceiving: receiptWh } : {}),
+          ...(packWh ? { warehousePackaging: packWh } : {}),
+          ...(deliveryWh ? { warehouseDelivery: deliveryWh, warehouse: deliveryWh } : {}),
+          ...(qltWh ? { warehouseQuality: qltWh } : {}),
+          ...(printName ? { printerName: printName } : {}),
+          ...(rawLangu ? { language } : {}),
+        }
         : null;
 
     const msg = serviceMessage(r) || "";

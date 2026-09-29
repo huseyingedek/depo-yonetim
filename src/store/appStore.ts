@@ -15,10 +15,10 @@ interface PersistedState {
 export const defaultSettings: Settings = {
   company: "01", // COMPANY
   facility: "100", // PLANT
-  warehouse: "D3", // Varsayılan Depo
-  warehouseReceiving: "D1", // Mal Kabul Deposu
-  warehousePackaging: "D2", // Paketleme Deposu
-  warehouseDelivery: "D3", // Dağıtım Deposu
+  warehouse: "", // Varsayılan Depo
+  warehouseReceiving: "", // Mal Kabul Deposu
+  warehousePackaging: "", // Paketleme Deposu
+  warehouseDelivery: "", // Dağıtım Deposu
   warehouseQuality: "", // Kalite Deposu
   printerName: "", // Yazıcı Adı
   language: "tr",
