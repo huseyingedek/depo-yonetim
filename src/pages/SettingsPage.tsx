@@ -21,31 +21,32 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const fetchedRef = useRef(false);
+  const lastFetchedUser = useRef<string | null>(null);
 
-  // Sayfa açıldığında CANIAS'tan en güncel öndeğerleri çek
+  // Sayfa açıldığında CANIAS'tan giriş yapan kullanıcının en güncel öndeğerlerini çek
   useEffect(() => {
-    if (fetchedRef.current) return;
     const username = user?.username;
-    if (username) {
-      fetchedRef.current = true;
-      setLoading(true);
-      api
-        .getUserDefault({ user: username })
-        .then((res) => {
-          if (res.defaults) {
-            setForm((prev) => ({ ...prev, ...res.defaults }));
-            updateSettings(res.defaults);
-          }
-        })
-        .catch((err) => {
-          console.warn("CANIAS öndeğerleri çekilemedi, yerel ayarlar geçerli:", err);
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    }
-  }, [user?.username, updateSettings]);
+    if (!username || lastFetchedUser.current === username) return;
+    lastFetchedUser.current = username;
+    setLoading(true);
+    api
+      .getUserDefault({ user: username })
+      .then((res) => {
+        if (res.defaults) {
+          setForm((prev) => ({ ...prev, ...res.defaults }));
+          updateSettings(res.defaults);
+        } else {
+          // CANIAS'tan veri gelmezse alanlar boş kalır
+          setForm(settings);
+        }
+      })
+      .catch((err) => {
+        console.warn("CANIAS öndeğerleri çekilemedi:", err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [user?.username, updateSettings, settings]);
 
   const set = (patch: Partial<Settings>) => {
     setForm((f) => ({ ...f, ...patch }));
@@ -70,14 +71,12 @@ export default function SettingsPage() {
         printName: form.printerName,
       });
 
-      // 2. Uygulama hafızasını güncelle
+      // 2. Uygulama hafızasını güncelle (oturum boyunca geçerli)
       updateSettings(form);
       setSaved(true);
       setTimeout(() => setSaved(false), 2200);
     } catch (err) {
       console.error("Ayarlar CANIAS'a kaydedilemedi:", err);
-      // Yerel olarak yine de güncelle
-      updateSettings(form);
       setErrorMsg(err instanceof Error ? err.message : "CANIAS servisine kaydedilemedi");
     } finally {
       setSaving(false);
@@ -180,8 +179,6 @@ export default function SettingsPage() {
           )}
         </button>
       </section>
-
-      { }
       <section className="card mt-2 p-5 lg:p-5">
         <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-subtle">
           {t("settings.appearance")}

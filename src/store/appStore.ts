@@ -8,12 +8,11 @@ export type Theme = "light" | "dark";
 
 interface PersistedState {
   user: User | null;
-  settings: Settings;
   theme: Theme;
   trace: boolean;
 }
 
-const defaultSettings: Settings = {
+export const defaultSettings: Settings = {
   company: "01", // COMPANY
   facility: "100", // PLANT
   warehouse: "D3", // Varsayılan Depo
@@ -29,10 +28,14 @@ function load(): PersistedState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as Partial<PersistedState>;
+      const parsed = JSON.parse(raw) as Partial<PersistedState & { settings?: unknown }>;
+      // Eski sürümden kalan yerel ayarları temizle (ayarlar yalnızca CANIAS'tan çekilmeli)
+      if ("settings" in parsed) {
+        delete parsed.settings;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      }
       return {
         user: parsed.user ?? null,
-        settings: { ...defaultSettings, ...parsed.settings },
         theme: parsed.theme === "dark" ? "dark" : "light",
         trace: parsed.trace === true,
       };
@@ -40,7 +43,7 @@ function load(): PersistedState {
   } catch {
 
   }
-  return { user: null, settings: defaultSettings, theme: "light", trace: false };
+  return { user: null, theme: "light", trace: false };
 }
 
 function applyTheme(theme: Theme) {
@@ -64,9 +67,6 @@ interface AppState {
 }
 
 const initial = load();
-if (initial.settings.language !== i18n.language) {
-  i18n.changeLanguage(initial.settings.language);
-}
 applyTheme(initial.theme);
 
 function persist(state: PersistedState) {
@@ -79,11 +79,10 @@ function persist(state: PersistedState) {
 
 export const useAppStore = create<AppState>((set, get) => ({
   user: initial.user,
-  settings: initial.settings,
+  settings: { ...defaultSettings },
   theme: initial.theme,
   trace: initial.trace,
   login: (username: string, displayName?: string) => {
-
     const user: User = {
       username,
       displayName:
@@ -91,38 +90,40 @@ export const useAppStore = create<AppState>((set, get) => ({
         username.replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) ||
         "Depo Kullanıcısı",
     };
-    set({ user });
-    persist({ user, settings: get().settings, theme: get().theme, trace: get().trace });
+    // Yeni kullanıcı girişi: Ayarları sıfırla, CANIAS MZYGetUserDefault'tan dolacak
+    set({ user, settings: { ...defaultSettings } });
+    persist({ user, theme: get().theme, trace: get().trace });
   },
   logout: () => {
-    set({ user: null });
-    persist({ user: null, settings: get().settings, theme: get().theme, trace: get().trace });
+    // Çıkış yapıldığında oturumu ve ayarları tamamen sıfırla (başka kullanıcıya geçmemesi için)
+    set({ user: null, settings: { ...defaultSettings } });
+    persist({ user: null, theme: get().theme, trace: get().trace });
   },
   updateSettings: (patch: Partial<Settings>) => {
     const prev = get().settings;
     const settings = {
       ...prev,
       ...patch,
-      warehouse: patch.warehouse || patch.warehouseDelivery || prev.warehouse || prev.warehouseDelivery || "01",
+      warehouse: patch.warehouse || patch.warehouseDelivery || prev.warehouse || prev.warehouseDelivery || "",
     };
     if (patch.language && patch.language !== i18n.language) {
       i18n.changeLanguage(patch.language);
     }
+    // DİKKAT: Ayarlar ASLA localStorage'a yazılmaz! Yalnızca aktif oturumda bellekte tutulur.
     set({ settings });
-    persist({ user: get().user, settings, theme: get().theme, trace: get().trace });
   },
   setTheme: (theme: Theme) => {
     applyTheme(theme);
     set({ theme });
-    persist({ user: get().user, settings: get().settings, theme, trace: get().trace });
+    persist({ user: get().user, theme, trace: get().trace });
   },
   toggleTrace: () => {
     const trace = !get().trace;
     set({ trace });
-    persist({ user: get().user, settings: get().settings, theme: get().theme, trace });
+    persist({ user: get().user, theme: get().theme, trace });
   },
   setTrace: (trace: boolean) => {
     set({ trace });
-    persist({ user: get().user, settings: get().settings, theme: get().theme, trace });
+    persist({ user: get().user, theme: get().theme, trace });
   },
 }));
