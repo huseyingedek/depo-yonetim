@@ -680,6 +680,23 @@ export default function PackagingPage() {
   const hacim = (uid: string, v: number) => map(uid, (n) => (n.tur === "koli" ? { ...n, hacim: Math.max(0, v) } : n));
   // Paket miktarı (çarpan) — koli veya palet için
   const carpanla = (uid: string, delta: number) => map(uid, (n) => (n.tur !== "urun" ? ({ ...n, carpan: Math.max(1, Math.round((n.carpan ?? 1) + delta)) } as Node) : n));
+  // Ürün miktarını doğrudan (elle) ayarla — sipariş miktarını (çarpan dahil) aşamaz.
+  const urunAdetSet = (uid: string, value: number) => {
+    const node = nodeFind(sahne, uid);
+    if (!node || node.tur !== "urun") return;
+    let v = Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
+    const k = urunler.find((x) => x.code === node.code);
+    if (k) {
+      const F = pathCarpan(sahne, uid); // bu ürüne uygulanan toplam paket çarpanı
+      const digerFiziksel = paketlenmis(sahne, node.code) - node.qty * F; // bu düğüm hariç
+      const maxV = F > 0 ? Math.floor((k.siparis - digerFiziksel) / F) : 0;
+      if (v > maxV) {
+        v = Math.max(0, maxV);
+        show({ kind: "info", text: F > 1 ? `Sipariş miktarı aşılamaz — bu pakette en fazla ${v} (×${F})` : `Sipariş miktarı aşılamaz — en fazla ${v}` });
+      }
+    }
+    setSahne((prev) => temizle(nodeMap(prev, uid, (n) => (n.tur === "urun" ? { ...n, qty: v } : n))));
+  };
   const hazardToggle = (uid: string, h: Hazard) => map(uid, (n) => (n.tur === "koli" ? { ...n, hazards: n.hazards.includes(h) ? n.hazards.filter((x) => x !== h) : n.hazards.concat(h) } : n));
   const beklet = (uid: string) => map(uid, (n) => (n.tur === "koli" ? { ...n, beklemede: !n.beklemede } : n));
 
@@ -878,6 +895,7 @@ export default function PackagingPage() {
     setSeciliKapId,
     sil,
     urunAdet,
+    urunAdetSet,
     hacim,
     carpanla,
     hazardToggle,
@@ -941,7 +959,7 @@ export default function PackagingPage() {
 
       {/* ÜST ARAÇ ÇUBUĞU — tek satır */}
       <div className="card mt-3 px-3 py-2">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 xl:flex-nowrap">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           {/* Sevkiyat Seçimi / CANIAS Paketleme Emri */}
           <div className="flex min-w-0 items-center gap-1.5">
             <select
@@ -1005,51 +1023,6 @@ export default function PackagingPage() {
             <button type="button" onClick={() => setAtilMod((v) => !v)} className={`inline-flex h-11 items-center gap-1 rounded-xl border-2 px-2.5 text-[11px] font-bold transition ${atilMod ? "border-slate-400 bg-slate-200 text-slate-700 dark:border-slate-500 dark:bg-slate-600/40 dark:text-slate-200" : "border-line bg-surface text-subtle hover:text-fg"}`} title="Atıl koli"><Recycle className="h-4 w-4" /> Atıl</button>
             <button type="button" onClick={paletEkle} className="inline-flex h-11 items-center gap-1.5 rounded-xl border border-brand-300/80 bg-brand-50/80 px-3 text-xs font-bold text-brand-700 transition hover:bg-brand-100 active:scale-95 dark:border-brand-500/30 dark:bg-brand-500/15 dark:text-brand-300 dark:hover:bg-brand-500/25" title="Yeni Palet Ekle"><Layers className="h-4 w-4" /> Palet Ekle</button>
 
-            {/* Malzeme Ekle Barkod Kartı */}
-            <div
-              className={`flex shrink-0 flex-col justify-between rounded-xl border px-2.5 py-1 transition ${barkodHatasi
-                ? "border-red-400 bg-red-50/70 dark:border-red-500/50 dark:bg-red-500/10"
-                : "border-brand-300/80 bg-brand-50/80 dark:border-brand-500/30 dark:bg-brand-500/15"
-                }`}
-            >
-              <span className="text-center text-[12px] font-bold tracking-tight text-brand-700 dark:text-brand-300">
-                Malzeme Ekle
-              </span>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  barkodIsle(barkodGiris);
-                }}
-                className="mt-1 flex items-center gap-1"
-              >
-                <div className="relative flex items-center">
-                  <input
-                    type="text"
-                    value={barkodGiris}
-                    onChange={(e) => setBarkodGiris(e.target.value)}
-                    placeholder="Barkod gir"
-                    className="h-7 w-28 rounded-lg border border-brand-200/80 bg-white pl-2 pr-7 text-xs font-medium text-fg placeholder:text-subtle focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-brand-500/30 dark:bg-card sm:w-32"
-                  />
-                  <button
-                    type="submit"
-                    title="Enter (Barkodu Onayla)"
-                    aria-label="Enter"
-                    disabled={!barkodGiris.trim()}
-                    className="absolute right-1 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-brand-600 transition hover:bg-brand-100 hover:text-brand-800 disabled:opacity-30 dark:text-brand-300 dark:hover:bg-brand-500/25"
-                  >
-                    <CornerDownLeft className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setKameraAcik(true)}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-200/80 bg-white text-brand-700 transition hover:bg-brand-100 hover:text-brand-800 active:scale-95 dark:border-brand-500/30 dark:bg-card dark:text-brand-300 dark:hover:bg-brand-500/25"
-                  title="Kamera ile barkod okut"
-                >
-                  <Camera className="h-3.5 w-3.5" />
-                </button>
-              </form>
-            </div>
           </div>
 
           {/* Aksiyonlar */}
@@ -1147,6 +1120,38 @@ export default function PackagingPage() {
                 <span className="rounded-full bg-elevated px-2 py-0.5 text-[10px] font-bold text-subtle">{urunler.length}</span>
               </div>
             </div>
+            {/* Malzeme Ekle — Barkod ile hızlı ekleme */}
+            <form
+              onSubmit={(e) => { e.preventDefault(); barkodIsle(barkodGiris); }}
+              className={`flex items-center gap-1.5 border-b px-3 py-2 transition ${barkodHatasi ? "border-red-400 bg-red-50/70 dark:border-red-500/50 dark:bg-red-500/10" : "border-line bg-brand-50/50 dark:bg-brand-500/10"}`}
+            >
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={barkodGiris}
+                  onChange={(e) => setBarkodGiris(e.target.value)}
+                  placeholder="Barkod ile malzeme ekle"
+                  className="h-8 w-full rounded-lg border border-brand-200/80 bg-white pl-2.5 pr-8 text-xs font-medium text-fg placeholder:text-subtle focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-brand-500/30 dark:bg-card"
+                />
+                <button
+                  type="submit"
+                  title="Enter (Barkodu Onayla)"
+                  aria-label="Enter"
+                  disabled={!barkodGiris.trim()}
+                  className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-brand-600 transition hover:bg-brand-100 hover:text-brand-800 disabled:opacity-30 dark:text-brand-300 dark:hover:bg-brand-500/25"
+                >
+                  <CornerDownLeft className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setKameraAcik(true)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-brand-200/80 bg-white text-brand-700 transition hover:bg-brand-100 hover:text-brand-800 active:scale-95 dark:border-brand-500/30 dark:bg-card dark:text-brand-300 dark:hover:bg-brand-500/25"
+                title="Kamera ile barkod okut"
+              >
+                <Camera className="h-4 w-4" />
+              </button>
+            </form>
             <div className="max-h-[calc(100vh-200px)] space-y-2 overflow-y-auto p-2.5">
               {!seciliEmir ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-8 text-center text-subtle">
@@ -1400,6 +1405,7 @@ interface Api {
   setSeciliKapId: (v: string | null) => void;
   sil: (uid: string) => void;
   urunAdet: (uid: string, d: number) => void;
+  urunAdetSet: (uid: string, value: number) => void;
   hacim: (uid: string, v: number) => void;
   carpanla: (uid: string, delta: number) => void;
   hazardToggle: (uid: string, h: Hazard) => void;
@@ -1767,6 +1773,12 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
 
 function UrunKart({ urun, api, parentTur }: { urun: UrunNode; api: Api; parentTur?: "sahne" | "palet" | "koli" }) {
   const isPalet = parentTur === "palet";
+  const [draft, setDraft] = useState(String(urun.qty));
+  useEffect(() => { setDraft(String(urun.qty)); }, [urun.qty]);
+  const commit = () => {
+    const v = parseInt(draft, 10);
+    api.urunAdetSet(urun.uid, Number.isNaN(v) ? 0 : v);
+  };
   return (
     <div
       draggable
@@ -1782,12 +1794,24 @@ function UrunKart({ urun, api, parentTur }: { urun: UrunNode; api: Api; parentTu
         {urun.paketli && <PackageCheck className="h-3 w-3 shrink-0 text-emerald-600" />}
       </div>
       <div className="mt-1 flex flex-wrap items-center justify-between gap-1">
-        <span className={`font-mono text-sm font-black ${urun.paketli ? "text-slate-900" : "text-fg"}`}>{urun.qty}<span className={`ml-0.5 text-[10px] font-bold ${urun.paketli ? "text-slate-900" : "text-fg"}`}>{urun.unit}</span></span>
-        <div className="flex flex-wrap items-center justify-end gap-0.5">
-          <button type="button" onClick={(e) => { e.stopPropagation(); api.urunAdet(urun.uid, -1); }} className="flex h-6 w-6 items-center justify-center rounded-md border border-rose-300 text-rose-500 transition hover:bg-rose-50 active:scale-95 dark:hover:bg-rose-500/10"><Minus className="h-3.5 w-3.5" /></button>
-          <button type="button" onClick={(e) => { e.stopPropagation(); api.urunAdet(urun.uid, +1); }} className="flex h-6 w-6 items-center justify-center rounded-md border border-emerald-300 text-emerald-600 transition hover:bg-emerald-50 active:scale-95 dark:hover:bg-emerald-500/10"><Plus className="h-3.5 w-3.5" /></button>
-          <SilButon onSil={() => api.sil(urun.uid)} className="flex h-6 w-6 items-center justify-center rounded-md text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-3 w-3" />
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={(e) => { e.stopPropagation(); api.urunAdet(urun.uid, -1); }} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-rose-300 text-rose-500 transition hover:bg-rose-50 active:scale-95 dark:hover:bg-rose-500/10"><Minus className="h-3.5 w-3.5" /></button>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ""))}
+            onFocus={(e) => { e.stopPropagation(); e.currentTarget.select(); }}
+            onClick={(e) => e.stopPropagation()}
+            onBlur={commit}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
+            className="h-6 w-14 rounded-md border border-line bg-surface px-1 text-center font-mono text-sm font-black text-fg focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            title="Miktarı elle gir (sipariş miktarını aşamaz)"
+          />
+          <button type="button" onClick={(e) => { e.stopPropagation(); api.urunAdet(urun.uid, +1); }} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-emerald-300 text-emerald-600 transition hover:bg-emerald-50 active:scale-95 dark:hover:bg-emerald-500/10"><Plus className="h-3.5 w-3.5" /></button>
+          <span className={`ml-0.5 text-[10px] font-bold ${urun.paketli ? "text-slate-900" : "text-fg"}`}>{urun.unit}</span>
         </div>
+        <SilButon onSil={() => api.sil(urun.uid)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-3 w-3" />
       </div>
     </div>
   );

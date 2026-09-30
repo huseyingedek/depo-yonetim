@@ -412,6 +412,9 @@ async function callServiceInner(serviceId, params, retry = true) {
     serviceId === "MZYSaveAdjustment" ||
     serviceId === "MzySaveAdjustment" ||
     serviceId === "MZYSAVEADJUSTMENT" ||
+    serviceId === "MZYSavePack" ||
+    serviceId === "MzySavePack" ||
+    serviceId === "MZYSAVEPACK" ||
     serviceId === "MZYSaveUserDefault" ||
     serviceId === "MzySaveUserDefault" ||
     serviceId === "MZYSAVEUSERDEFAULT";
