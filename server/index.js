@@ -136,6 +136,9 @@ const ALLOWED = new Set([
   "MZYEnterPack",
   "MzyEnterPack",
   "MZYENTERPACK",
+  "MZYSavePack",
+  "MzySavePack",
+  "MZYSAVEPACK",
 
   // Kullanıcı Öndeğerleri Servisi
   "MZYGetUserDefault",

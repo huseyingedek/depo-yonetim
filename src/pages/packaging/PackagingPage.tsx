@@ -250,6 +250,15 @@ const nodeDesi = (n: Node): number => {
   return cocuk(n).reduce((s, c) => s + nodeDesi(c), 0) * carpanOf(n);
 };
 
+// Ham hacim (patron yuvarlaması YOK) — MZYSavePack için Bora hesap tablosuna göre.
+// Ürün: birim desi × miktar. Koli: kolinin kendi hacmi × paket miktarı (içerik hariç).
+// Palet: içindekilerin ham hacim toplamı × paket miktarı.
+const nodeVolRaw = (n: Node): number => {
+  if (n.tur === "urun") return n.desi * n.qty;
+  if (n.tur === "koli") return n.hacim * carpanOf(n);
+  return cocuk(n).reduce((s, c) => s + nodeVolRaw(c), 0) * carpanOf(n);
+};
+
 // Node kilosu:
 // - Ürün ise: ürün kg * adet
 // - Koli ise: içindeki her şeyin kg toplamı + koli darası (kayıtlıysa, yoksa 0)
@@ -353,26 +362,27 @@ function buildPackXml(nodes: Node[], ctx: { company: string; plant: string }): s
       const r3 = (x: number) => Math.round(x * 1000) / 1000;
       let ISPACKITEM = 0, ISSCRAPBOX = 0, ISMANUEL = 0;
       let MATERIAL = "", MTEXT = "", QUANTITY = 0, QUNIT = "AD";
-      let volBirim = 0, wtBirim = 0; // Birim hacim (desi) / birim ağırlık (kg)
+      let VOLUME = 0, RVOLUME = 0, NETWEIGHT = 0, RNETWEIGHT = 0;
       if (n.tur === "urun") {
-        // Ürün: değerler malzeme kartından (birim), toplam = birim × miktar
+        // Ürün: birim = malzeme kartı; satır toplamı = birim × miktar (üst çarpan burada yok)
         MATERIAL = n.code; MTEXT = n.name; QUANTITY = n.qty; QUNIT = n.unit || "AD";
-        volBirim = n.desi; wtBirim = n.kg;
+        VOLUME = r3(n.desi); RVOLUME = r3(n.desi * n.qty);
+        NETWEIGHT = r3(n.kg); RNETWEIGHT = r3(n.kg * n.qty);
       } else if (n.tur === "koli") {
-        // Koli: kendi ebat desisi (hacim) + kendi darası (ağırlık). İçerik ayrı satırlarda.
         ISPACKITEM = 1; ISSCRAPBOX = n.atil ? 1 : 0; ISMANUEL = n.elle ? 1 : 0;
         MATERIAL = n.kod || boyutKodu(n.no);
         MTEXT = n.atil ? "Atıl Koli" : (n.kod || `Koli ${boyutKodu(n.no)}`);
         QUANTITY = 1; QUNIT = "AD";
-        volBirim = koliKendiDesi(n); wtBirim = koliDara(n);
+        // Hacim: SADECE kolinin kendi hacmi (içerik hariç) × paket miktarı
+        VOLUME = r3(n.hacim); RVOLUME = r3(n.hacim * carpan);
+        // Ağırlık: birim = koli darası; toplam = (içerik + dara) × paket miktarı
+        NETWEIGHT = r3(koliDara(n)); RNETWEIGHT = r3(nodeKg(n));
       } else {
-        // Palet: kendi hacmi/ağırlığı yok; taşıdıkları ayrı satırlarda.
+        // Palet: kendi hacmi/ağırlığı yok; toplam içindekilerden × paket miktarı
         ISPACKITEM = 2; MATERIAL = ""; MTEXT = n.ad; QUANTITY = 1; QUNIT = "AD";
+        VOLUME = r3(nodeVolRaw(n) / carpan); RVOLUME = r3(nodeVolRaw(n));
+        NETWEIGHT = r3(nodeKg(n) / carpan); RNETWEIGHT = r3(nodeKg(n));
       }
-      const VOLUME = r3(volBirim);
-      const RVOLUME = r3(volBirim * QUANTITY);
-      const NETWEIGHT = r3(wtBirim);
-      const RNETWEIGHT = r3(wtBirim * QUANTITY);
       rows.push(
         "  <ROW>" +
         `<TID>${tid}</TID>` +
@@ -1715,9 +1725,9 @@ function KoliKart({ koli, api, parentTur }: { koli: KoliNode; api: Api; parentTu
         <div className="mt-1.5 flex items-center gap-2" title={`Doluluk: %${Math.round(dolu)} (İçerik: ${icDesiYuvarlanmis} DS / Kapasite: ${kDesi} DS)`}>
           <span className="flex items-center gap-1 text-[11px] font-bold text-fg"><Weight className="h-3.5 w-3.5" /> Doluluk</span>
           <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-elevated">
-            <div className={`h-full rounded-full ${dolu > 100 ? "bg-rose-500" : "bg-emerald-500"}`} style={{ width: `${Math.min(100, dolu)}%` }} />
+            <div className={`h-full rounded-full ${dolu > 100 ? "bg-rose-500" : "bg-amber-500"}`} style={{ width: `${Math.min(100, dolu)}%` }} />
           </div>
-          <span className={`font-mono text-[10px] font-bold ${dolu > 100 ? "text-rose-500" : "text-emerald-500"}`}>%{Math.round(dolu)}</span>
+          <span className={`font-mono text-[10px] font-bold ${dolu > 100 ? "text-rose-500" : "text-amber-500"}`}>%{Math.round(dolu)}</span>
         </div>
 
         <div className="mt-2 flex flex-wrap gap-1">
