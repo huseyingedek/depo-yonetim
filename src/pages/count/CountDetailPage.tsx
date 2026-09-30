@@ -1649,10 +1649,12 @@ export default function CountDetailPage() {
                     </button>
                     <input
                       type="number"
+                      inputMode="numeric"
                       min={0}
                       step={1}
-                      value={activeItem.quantity}
+                      value={activeItem.quantity === 0 ? "" : activeItem.quantity}
                       placeholder="0"
+                      onFocus={(e) => e.currentTarget.select()}
                       onChange={(e) => {
                         const raw = e.target.value;
                         if (raw === "") {

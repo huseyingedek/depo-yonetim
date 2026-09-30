@@ -33,6 +33,7 @@ import {
 import PageHeader from "../../components/PageHeader";
 import ToastView, { useToast } from "../../components/Toast";
 import CameraScanOverlay from "../../components/CameraScanOverlay";
+import { useLocation } from "react-router-dom";
 import { api as wmsApi } from "../../api/client";
 import { useAppStore } from "../../store/appStore";
 
@@ -317,6 +318,8 @@ export default function PackagingPage() {
   const packWh = useAppStore((st) => st.settings.warehousePackaging);
   const compCode = useAppStore((st) => st.settings.company);
   const plantCode = useAppStore((st) => st.settings.facility);
+  const location = useLocation();
+  const navState = (location.state as { order?: PackOrder } | null) || null;
   const idRef = useRef(100);
   const yid = () => `x${++idRef.current}`;
 
@@ -441,7 +444,15 @@ export default function PackagingPage() {
   };
 
   useEffect(() => {
-    listeGetir();
+    // Ara liste ekranından seçilen emirle gelindiyse doğrudan onu aç (MZYEnterPack).
+    if (navState?.order) {
+      setEmirler([navState.order]);
+      emirSec(navState.order);
+    } else {
+      // Doğrudan /packaging/pack açıldıysa (state yok) eski davranış: listeyi çek.
+      listeGetir();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Sürükle-bırak sırasında kenara yaklaşınca otomatik kaydırma (tablet + fare).
@@ -765,7 +776,7 @@ export default function PackagingPage() {
 
   return (
     <div className="w-full px-1.5 py-3 lg:py-4">
-      <PageHeader title="Paketleme" subtitle="Paketleme alanı › Palet › Koli › Ürün" backTo="/home" />
+      <PageHeader title="Paketleme" subtitle="Paketleme alanı › Palet › Koli › Ürün" backTo="/packaging" />
 
       {bitti && (
         <div className="mt-3 flex flex-col items-start gap-3 rounded-2xl border border-emerald-400 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10 sm:flex-row sm:items-center">

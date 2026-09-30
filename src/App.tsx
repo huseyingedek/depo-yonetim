@@ -26,6 +26,7 @@ import CountDetailPage from "./pages/count/CountDetailPage";
 import CountSummaryPage from "./pages/count/CountSummaryPage";
 import CountRecordsPage from "./pages/count/CountRecordsPage";
 import InquiryPage from "./pages/inquiry/InquiryPage";
+import PackagingListPage from "./pages/packaging/PackagingListPage";
 import PackagingPage from "./pages/packaging/PackagingPage";
 import DagitimPage from "./pages/dagitim/DagitimPage";
 import ReportingPage from "./pages/reporting/ReportingPage";
@@ -93,7 +94,8 @@ export default function App() {
         <Route path="/inquiry" element={<InquiryPage />} />
 
         {/* Paketleme (tasarım aşaması) */}
-        <Route path="/packaging" element={<PackagingPage />} />
+        <Route path="/packaging" element={<PackagingListPage />} />
+        <Route path="/packaging/pack" element={<PackagingPage />} />
 
         {/* Dağıtım (tasarım aşaması) */}
         <Route path="/dagitim" element={<DagitimPage />} />
