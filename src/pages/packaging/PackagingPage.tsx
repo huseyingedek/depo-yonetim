@@ -34,6 +34,7 @@ import PageHeader from "../../components/PageHeader";
 import ToastView, { useToast } from "../../components/Toast";
 import CameraScanOverlay from "../../components/CameraScanOverlay";
 import { api as wmsApi } from "../../api/client";
+import { useAppStore } from "../../store/appStore";
 
 // -----------------------------------------------------------------------------
 // PAKETLEME — TASARIM AŞAMASI · KART SİSTEMİ
@@ -312,6 +313,8 @@ let drag: { kind: "node"; uid: string } | { kind: "kaynak"; code: string } | nul
 
 export default function PackagingPage() {
   const { toast, show } = useToast();
+  // Paketleme deposu ayarlardan (hardcode değil)
+  const packWh = useAppStore((st) => st.settings.warehousePackaging);
   const idRef = useRef(100);
   const yid = () => `x${++idRef.current}`;
 
@@ -400,12 +403,12 @@ export default function PackagingPage() {
     setYukleniyor(true);
     try {
       // CANIAS Depo 10 üzerinden paketlenecek açık emirleri çek
-      const rows = await wmsApi.getPackagingList({ warehouse: "10" });
+      const rows = await wmsApi.getPackagingList({ warehouse: packWh });
       if (rows && rows.length > 0) {
         const yeniEmirler: PackOrder[] = rows.map((r) => ({
           company: String(r.COMPANY || "01"),
           plant: String(r.PLANT || "100"),
-          warehouse: String(r.WAREHOUSE || "10"),
+          warehouse: String(r.WAREHOUSE || packWh),
           stockPlace: String(r.STOCKPLACE || ""),
           worker: String(r.WORKER || ""),
           orderType: String(r.ORDERTYPE || "SO"),
@@ -610,7 +613,7 @@ export default function PackagingPage() {
       try {
         const res = await wmsApi.readBarcode(
           ham,
-          seciliEmir?.warehouse || "10",
+          seciliEmir?.warehouse || packWh,
           seciliEmir?.stockPlace || ""
         );
         if (res && res.material) {

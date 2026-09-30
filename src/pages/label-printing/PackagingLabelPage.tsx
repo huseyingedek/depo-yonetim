@@ -1,17 +1,22 @@
 import { useState } from "react";
-import { Package, Search, Printer, RefreshCw, MapPin, Check, Loader2 } from "lucide-react";
+import { Package, Search, Printer, RefreshCw, MapPin, Check, Loader2, Settings as SettingsIcon } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
+import { useAppStore } from "../../store/appStore";
 import PageHeader from "../../components/PageHeader";
 import Pagination, { usePagination } from "../../components/Pagination";
 
 type ContainerRow = { company: string; plant: string; warehouse: string; stockPlace: string; name: string };
 
-// Paketleme Etiketi — İrsaliye ekranının birebir aynısı; TEK farkı depo (10).
-// Bora: MZYGetContainer (PSCOMPANY=01, PSPLANT=100, PSWAREHOUSE=10).
+// Paketleme Etiketi — İrsaliye ekranının birebir aynısı; TEK farkı depo.
+// Depo SABİT DEĞİL: kullanıcı ayarlarındaki "Paketleme Deposu" (warehousePackaging) kullanılır.
+// Bora: MZYGetContainer (PSCOMPANY, PSPLANT, PSWAREHOUSE) — company/plant ctx()'ten (ayarlar) gelir.
 // Ekran açılır açılmaz servis çağrılmaz; kullanıcı "Listele"/Enter ile getirir.
-const WAREHOUSE = "10";
 
 export default function PackagingLabelPage() {
+  const navigate = useNavigate();
+  const warehouse = useAppStore((s) => s.settings.warehousePackaging);
+
   const [rows, setRows] = useState<ContainerRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -25,13 +30,19 @@ export default function PackagingLabelPage() {
   const [successMsg, setSuccessMsg] = useState("");
 
   const fetchContainers = async () => {
+    if (!warehouse) {
+      setSearched(true);
+      setRows([]);
+      setErrorMsg("Ayarlarda Paketleme Deposu tanımlı değil. Lütfen Ayarlar ekranından seçin.");
+      return;
+    }
     setLoading(true);
     setSearched(true);
     setSelectedRows([]);
     setErrorMsg("");
     setSuccessMsg("");
     try {
-      const list = await api.getContainer(WAREHOUSE);
+      const list = await api.getContainer(warehouse);
       setRows(list || []);
     } catch (e) {
       setRows([]);
@@ -76,9 +87,9 @@ export default function PackagingLabelPage() {
     for (const r of selectedRows) {
       try {
         const res = await api.printContainer({
-          company: r.company || "01",
-          plant: r.plant || "100",
-          warehouse: r.warehouse || WAREHOUSE,
+          company: r.company,
+          plant: r.plant,
+          warehouse: r.warehouse || warehouse,
           container: r.stockPlace,
           repeat: count,
         });
@@ -133,7 +144,7 @@ export default function PackagingLabelPage() {
     <div className="mx-auto max-w-6xl p-4 lg:p-8">
       <PageHeader
         title="Paketleme Etiketi Yazdırma"
-        subtitle="Depo 10 konteynerleri — Listele, seç ve yazdır"
+        subtitle={warehouse ? `Paketleme deposu (${warehouse}) konteynerleri — Listele, seç ve yazdır` : "Paketleme deposu ayarlardan alınır"}
         backTo="/label-printing"
         right={
           <div className="hidden sm:flex items-center gap-3">
@@ -162,6 +173,20 @@ export default function PackagingLabelPage() {
           </div>
         }
       />
+
+      {/* Depo ayarda tanımlı değilse uyarı + ayarlara git */}
+      {!warehouse && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-700 dark:text-amber-400">
+          <span>Paketleme Deposu ayarlarda tanımlı değil. Bu ekranın çalışması için önce depoyu seçin.</span>
+          <button
+            type="button"
+            onClick={() => navigate("/settings")}
+            className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 font-bold text-white hover:bg-amber-700"
+          >
+            <SettingsIcon className="h-3.5 w-3.5" /> Ayarlar
+          </button>
+        </div>
+      )}
 
       {/* Arama/Listele — açılışta servis çağrılmaz; Enter ya da Listele ile getirilir.
           Liste geldikten sonra kutu, stok yeri / açıklamaya göre yerelde süzer. */}
@@ -256,7 +281,7 @@ export default function PackagingLabelPage() {
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-line bg-surface text-subtle">
           <Package className="mb-2 h-10 w-10" />
-          <p className="text-sm">Depo {WAREHOUSE} için konteyner bulunamadı.</p>
+          <p className="text-sm">Paketleme deposu ({warehouse || "—"}) için konteyner bulunamadı.</p>
         </div>
       ) : (
         <>
