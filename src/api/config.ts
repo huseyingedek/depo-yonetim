@@ -26,6 +26,7 @@ export const SERVICES = {
   getPlant: "GetPlant", // PSCOMPANY
   getWarehouse: "GetWarehouse", // PSCOMPANY, PSPLANT
   getStockPlace: "GetStockPlace", // PSCOMPANY, PSPLANT, PSWAREHOUSE
+  getContainer: "MZYGetContainer", // PSCOMPANY, PSPLANT, PSWAREHOUSE -> COMPANY,PLANT,WAREHOUSE,STOCKPLACE,STEXT
 
   getTransaction: "MZYGetTransaction", // Raporlama — PSCOMPANY, PSPLANT?, PSUSER?, PDSTARTDATE, PDENDDATE, PISOURCETYPE?, PISRCTYPE?
   getSourceType: "MZYGetSourceType", // İşlem türü açıklamaları — PSCOMPANY, PISOURCETYPE (0: işlem, 2: alt işlem), PITRACESTATUS

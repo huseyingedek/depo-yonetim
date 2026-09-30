@@ -95,6 +95,7 @@ const ALLOWED = new Set([
   "GetPlant",
   "GetWarehouse",
   "GetStockPlace",
+  "MZYGetContainer",
 
   // Etiket Basma & Barkod Servisleri
   "MZYPrintContainer",
