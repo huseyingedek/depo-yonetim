@@ -1,111 +1,78 @@
-import { useEffect, useMemo, useState } from "react";
-import { Warehouse, Search, Printer, MapPin, Check, RefreshCw, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { Warehouse, Printer, MapPin, Check, Loader2, Search } from "lucide-react";
 import { api } from "../../api/client";
-import type { StockRow } from "../../types";
 import PageHeader from "../../components/PageHeader";
 import Pagination, { usePagination } from "../../components/Pagination";
 
-interface RealShelf {
-  warehouse: string;
-  stockPlace: string;
-  materials: string[];
-  totalStock: number;
-}
+type StockPlace = { code: string; name: string };
 
+// Raf Etiketi Bastırma — Bora: DEPO verilir, o depodaki raflar (stok yerleri)
+// MZYGetStockPlace (PSCOMPANY=01, PSPLANT=100, PSWAREHOUSE) ile listelenir.
+// Seçilen raflar için baskı sayısı sorulur ve MZYPrintWHSP ile yazdırılır.
 export default function ShelfLocationPage() {
-  const [stockRows, setStockRows] = useState<StockRow[]>([]);
-  const [loadingStock, setLoadingStock] = useState(false);
+  const [warehouse, setWarehouse] = useState("");
+  const [loadedWarehouse, setLoadedWarehouse] = useState("");
+  const [places, setPlaces] = useState<StockPlace[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
   const [q, setQ] = useState("");
 
-  // Multi-selection state
-  const [selectedShelves, setSelectedShelves] = useState<RealShelf[]>([]);
+  const [selected, setSelected] = useState<StockPlace[]>([]);
   const [repeatCount, setRepeatCount] = useState<number | string>(1);
   const [printing, setPrinting] = useState(false);
 
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  useEffect(() => {
-    fetchRealShelves();
-  }, []);
-
-  const fetchRealShelves = async () => {
-    setLoadingStock(true);
+  const fetchPlaces = async () => {
+    const wh = warehouse.trim();
+    setErrorMsg("");
+    setSuccessMsg("");
+    if (!wh) {
+      setErrorMsg("Lütfen depo (warehouse) girin.");
+      return;
+    }
+    setLoading(true);
+    setSearched(false);
+    setSelected([]);
     try {
-      const rows = await api.queryStock({});
-      setStockRows(rows || []);
-    } catch {
-      setStockRows([]);
+      // Bora: GetStockPlace → firma 01, tesis 100, depo = rafları istenen depo
+      const rows = await api.getStockPlaces(wh);
+      setPlaces(rows || []);
+      setLoadedWarehouse(wh);
+      setSearched(true);
+    } catch (e) {
+      setPlaces([]);
+      setSearched(true);
+      setErrorMsg(e instanceof Error ? e.message : "Raflar getirilemedi.");
     } finally {
-      setLoadingStock(false);
+      setLoading(false);
     }
   };
 
-  // Group CANIAS stock rows into unique real shelf locations
-  const realShelves = useMemo(() => {
-    const map = new Map<string, RealShelf>();
-    for (const r of stockRows) {
-      const sp = (r.stockPlace || "").trim();
-      const wh = (r.warehouse || "").trim();
-      if (!sp) continue;
-
-      const key = `${wh}/${sp}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          warehouse: wh,
-          stockPlace: sp,
-          materials: r.material ? [r.material] : [],
-          totalStock: r.availStock || 0,
-        });
-      } else {
-        const item = map.get(key)!;
-        if (r.material && !item.materials.includes(r.material)) {
-          item.materials.push(r.material);
-        }
-        item.totalStock += r.availStock || 0;
-      }
-    }
-    return Array.from(map.values());
-  }, [stockRows]);
-
-  // Filter real shelves by single search term
-  const filteredShelves = useMemo(() => {
+  const filtered = places.filter((p) => {
     const s = q.trim().toLowerCase();
-    if (!s) return realShelves;
-    return realShelves.filter(
-      (sh) =>
-        sh.stockPlace.toLowerCase().includes(s) ||
-        sh.warehouse.toLowerCase().includes(s) ||
-        `${sh.warehouse}/${sh.stockPlace}`.toLowerCase().includes(s) ||
-        sh.materials.some((m) => m.toLowerCase().includes(s))
+    if (!s) return true;
+    return p.code.toLowerCase().includes(s) || (p.name || "").toLowerCase().includes(s);
+  });
+
+  const pg = usePagination(filtered, 12);
+
+  const isSelected = (p: StockPlace) => selected.some((x) => x.code === p.code);
+  const toggleSelect = (p: StockPlace) => {
+    setSelected((prev) =>
+      prev.some((x) => x.code === p.code) ? prev.filter((x) => x.code !== p.code) : [...prev, p]
     );
-  }, [realShelves, q]);
-
-  const pg = usePagination(filteredShelves, 9);
-  useEffect(() => pg.reset(), [q]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const toggleSelectShelf = (shelf: RealShelf) => {
-    setSelectedShelves((prev) => {
-      const exists = prev.some((s) => s.warehouse === shelf.warehouse && s.stockPlace === shelf.stockPlace);
-      if (exists) {
-        return prev.filter((s) => !(s.warehouse === shelf.warehouse && s.stockPlace === shelf.stockPlace));
-      }
-      return [...prev, shelf];
-    });
-  };
-
-  const isShelfSelected = (shelf: RealShelf) => {
-    return selectedShelves.some((s) => s.warehouse === shelf.warehouse && s.stockPlace === shelf.stockPlace);
   };
 
   const handlePrintSelected = async () => {
-    if (selectedShelves.length === 0) return;
+    if (selected.length === 0) return;
     setErrorMsg("");
     setSuccessMsg("");
 
     const count = Number(repeatCount);
     if (!Number.isInteger(count) || count < 1 || count > 99) {
-      setErrorMsg("Kopya sayısı en az 1 olmalıdır (1-99 arası).");
+      setErrorMsg("Baskı sayısı en az 1 olmalıdır (1-99 arası).");
       return;
     }
 
@@ -114,18 +81,17 @@ export default function ShelfLocationPage() {
     let failedCount = 0;
     let lastError = "";
 
-    for (const shelf of selectedShelves) {
+    for (const p of selected) {
       try {
         const res = await api.printWHSP({
           company: "01",
           plant: "100",
-          warehouse: shelf.warehouse || "10",
-          stockPlace: shelf.stockPlace || "",
+          warehouse: loadedWarehouse,
+          stockPlace: p.code,
           repeat: count,
         });
-        if (res.ok) {
-          successCount++;
-        } else {
+        if (res.ok) successCount++;
+        else {
           failedCount++;
           if (res.message) lastError = res.message;
         }
@@ -138,8 +104,8 @@ export default function ShelfLocationPage() {
     setPrinting(false);
     setRepeatCount(1);
     if (failedCount === 0) {
-      setSuccessMsg(`Seçilen ${successCount} adet raf etiketinden ${count}'er kopya yazdırıldı.`);
-      setSelectedShelves([]);
+      setSuccessMsg(`Seçilen ${successCount} raf etiketinden ${count}'er kopya yazdırma isteği iletildi.`);
+      setSelected([]);
     } else {
       setErrorMsg(
         `${successCount} raf etiketi yazdırıldı, ${failedCount} adet etikette hata oluştu.${
@@ -150,94 +116,114 @@ export default function ShelfLocationPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl p-4 lg:p-8">
-      {/* Top Header with Short Search, Kopya Input, & Print Button */}
+    <div className="mx-auto max-w-5xl p-4 lg:p-8 space-y-5">
       <PageHeader
         title="Depo Raf Etiketi Yazdırma"
-        subtitle="Gerçek raf adreslerini seçip yazdırın"
+        subtitle="Depoyu girin, raflar listelensin; seçip baskı sayısıyla yazdırın"
         backTo="/label-printing"
         right={
-          <div className="hidden sm:flex items-center gap-3">
-            {/* Search Bar */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Raf veya Depo Ara..."
-                className="field-input w-52 py-1.5 pl-9 text-xs uppercase"
-              />
+          places.length > 0 ? (
+            <div className="hidden sm:flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={repeatCount}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "") {
+                      setRepeatCount("");
+                      return;
+                    }
+                    const v = parseInt(val, 10);
+                    if (!isNaN(v)) setRepeatCount(Math.min(99, Math.max(1, v)));
+                  }}
+                  onBlur={() => {
+                    if (repeatCount === "" || Number(repeatCount) < 1) setRepeatCount(1);
+                  }}
+                  className="field-input w-16 py-1.5 px-2 text-center text-xs font-bold"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handlePrintSelected}
+                disabled={selected.length === 0 || printing}
+                className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+              >
+                {printing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Yazdırılıyor...</span>
+                  </>
+                ) : (
+                  <>
+                    <Printer className="h-4 w-4" />
+                    <span>Yazdır ({selected.length})</span>
+                  </>
+                )}
+              </button>
             </div>
-
-            {/* Kopya Sayısı Input */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
-              <input
-                type="number"
-                min={0}
-                max={99}
-                value={repeatCount}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === "") {
-                    setRepeatCount("");
-                    return;
-                  }
-                  const v = parseInt(val, 10);
-                  if (!isNaN(v)) {
-                    setRepeatCount(Math.min(99, Math.max(0, v)));
-                  }
-                }}
-                onBlur={() => {
-                  if (repeatCount === "") {
-                    setRepeatCount(0);
-                  }
-                }}
-                className="field-input w-16 py-1.5 px-2 text-center text-xs font-bold"
-              />
-            </div>
-
-            {/* Yazdır Button */}
-            <button
-              type="button"
-              onClick={handlePrintSelected}
-              disabled={selectedShelves.length === 0 || printing}
-              className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-            >
-              {printing ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Yazdırılıyor...</span>
-                </>
-              ) : (
-                <>
-                  <Printer className="h-4 w-4" />
-                  <span>Yazdır ({selectedShelves.length})</span>
-                </>
-              )}
-            </button>
-          </div>
+          ) : undefined
         }
       />
 
-      {/* Mobile Search & Action Bar */}
-      <div className="mb-5 flex flex-col gap-3 sm:hidden">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Raf veya Depo Ara..."
-            className="field-input pl-9 text-xs uppercase"
-          />
+      {/* Depo giriş kartı */}
+      <div className="card p-4 shadow-card">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <label className="mb-1.5 block text-xs font-semibold text-fg">
+              Depo (Warehouse) <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <Warehouse className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
+              <input
+                value={warehouse}
+                onChange={(e) => setWarehouse(e.target.value.toUpperCase())}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    fetchPlaces();
+                  }
+                }}
+                placeholder="Örn. 10"
+                className="field-input w-full pl-9 text-sm font-mono font-bold uppercase"
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={fetchPlaces}
+            disabled={loading || !warehouse.trim()}
+            className="btn-primary flex items-center justify-center gap-2 px-6 py-2.5 shadow-sm shrink-0 disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            <span>Rafları Getir</span>
+          </button>
         </div>
+      </div>
 
-        <div className="flex items-center justify-between gap-3">
+      {/* Uyarılar */}
+      {errorMsg && (
+        <div className="flex items-center gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-600 dark:text-red-400">
+          <span>{errorMsg}</span>
+        </div>
+      )}
+      {successMsg && (
+        <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 text-xs text-emerald-600 dark:text-emerald-400">
+          <span>{successMsg}</span>
+        </div>
+      )}
+
+      {/* Mobil: Kopya + Yazdır */}
+      {places.length > 0 && (
+        <div className="flex items-center justify-between gap-3 sm:hidden">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-fg">Kopya Sayısı:</span>
+            <span className="text-xs font-bold text-fg">Kopya:</span>
             <input
               type="number"
-              min={0}
+              min={1}
               max={99}
               value={repeatCount}
               onChange={(e) => {
@@ -247,143 +233,105 @@ export default function ShelfLocationPage() {
                   return;
                 }
                 const v = parseInt(val, 10);
-                if (!isNaN(v)) {
-                  setRepeatCount(Math.min(99, Math.max(0, v)));
-                }
+                if (!isNaN(v)) setRepeatCount(Math.min(99, Math.max(1, v)));
               }}
               onBlur={() => {
-                if (repeatCount === "") {
-                  setRepeatCount(0);
-                }
+                if (repeatCount === "" || Number(repeatCount) < 1) setRepeatCount(1);
               }}
               className="field-input w-20 py-1.5 px-2 text-center text-xs font-bold"
             />
           </div>
-
           <button
             type="button"
             onClick={handlePrintSelected}
-            disabled={selectedShelves.length === 0 || printing}
+            disabled={selected.length === 0 || printing}
             className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
           >
-            {printing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Printer className="h-4 w-4" />
-            )}
-            <span>Yazdır ({selectedShelves.length})</span>
+            {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+            <span>Yazdır ({selected.length})</span>
           </button>
         </div>
-      </div>
-
-      {/* Alerts */}
-      {errorMsg && (
-        <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-600 dark:text-red-400">
-          <span>{errorMsg}</span>
-        </div>
       )}
 
-      {successMsg && (
-        <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 text-xs text-emerald-600 dark:text-emerald-400">
-          <span>{successMsg}</span>
-        </div>
-      )}
-
-      {/* List Header */}
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-bold text-fg">
-          CANIAS Gerçek Depo Rafları ({realShelves.length})
-          {selectedShelves.length > 0 && (
-            <span className="ml-2 text-xs font-semibold text-brand">({selectedShelves.length} Raf Seçili)</span>
-          )}
-        </h2>
-        <button
-          type="button"
-          onClick={fetchRealShelves}
-          disabled={loadingStock}
-          className="flex items-center gap-1.5 text-xs font-semibold text-brand hover:underline"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${loadingStock ? "animate-spin" : ""}`} />
-          Yenile
-        </button>
-      </div>
-
-      {/* 3x3 Grid Layout */}
-      {loadingStock ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {/* Raf listesi */}
+      {loading ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[0, 1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-32 animate-pulse rounded-2xl bg-elevated" />
+            <div key={i} className="h-16 animate-pulse rounded-2xl bg-elevated" />
           ))}
         </div>
-      ) : filteredShelves.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-line bg-surface text-subtle">
-          <Warehouse className="mb-2 h-10 w-10" />
-          <p className="text-sm">CANIAS sisteminde aranan kriterlere uygun aktif raf kaydı bulunamadı.</p>
-        </div>
-      ) : (
+      ) : places.length > 0 ? (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {pg.pageItems.map((sh, idx) => {
-              const selected = isShelfSelected(sh);
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-fg">
+              Depo {loadedWarehouse} · Raflar ({places.length})
+              {selected.length > 0 && (
+                <span className="ml-2 text-xs font-semibold text-brand">({selected.length} seçili)</span>
+              )}
+            </h2>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Raf ara..."
+                className="field-input w-40 py-1 pl-8 text-xs uppercase"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {pg.pageItems.map((p) => {
+              const sel = isSelected(p);
               return (
-                <div
-                  key={`${sh.warehouse}-${sh.stockPlace}-${idx}`}
-                  onClick={() => toggleSelectShelf(sh)}
-                  className={`relative flex cursor-pointer flex-col justify-between rounded-2xl border p-5 text-left shadow-card transition-all hover:shadow-soft ${
-                    selected
+                <button
+                  key={p.code}
+                  type="button"
+                  onClick={() => toggleSelect(p)}
+                  className={`flex items-center justify-between gap-2 rounded-2xl border p-4 text-left shadow-card transition-all ${
+                    sel
                       ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
                       : "border-line bg-surface hover:border-emerald-300"
                   }`}
                 >
-                  <div>
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-5 w-5 text-rose-500 shrink-0" />
-                        <span className="font-mono text-base font-extrabold text-fg">{sh.stockPlace}</span>
-                      </div>
-                      <span className="chip bg-rose-100 text-rose-700 font-mono text-xs dark:bg-rose-900/30 dark:text-rose-300">
-                        Depo {sh.warehouse}
-                      </span>
-                    </div>
-
-                    {sh.materials.length > 0 && (
-                      <p className="mt-2 line-clamp-1 text-xs text-subtle">
-                        Malzeme: {sh.materials.slice(0, 2).join(", ")} {sh.materials.length > 2 ? "..." : ""}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between border-t border-line/60 pt-3 text-xs">
-                    <span className="font-mono text-subtle">
-                      Toplam Stok: {sh.totalStock}
+                  <span className="inline-flex min-w-0 items-center gap-2">
+                    <MapPin className="h-4 w-4 shrink-0 text-rose-500" />
+                    <span className="min-w-0">
+                      <span className="block truncate font-mono text-sm font-bold text-fg">{p.code}</span>
+                      {p.name && p.name !== p.code && (
+                        <span className="block truncate text-[11px] text-subtle">{p.name}</span>
+                      )}
                     </span>
-                    <span
-                      className={`chip text-[11px] ${
-                        selected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
-                      }`}
-                    >
-                      {selected ? <Check className="h-3.5 w-3.5 inline mr-1" /> : null}
-                      {selected ? "Seçildi" : "Seç"}
-                    </span>
-                  </div>
-                </div>
+                  </span>
+                  <span
+                    className={`chip shrink-0 text-[11px] ${
+                      sel ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"
+                    }`}
+                  >
+                    {sel ? <Check className="mr-1 inline h-3.5 w-3.5" /> : null}
+                    {sel ? "Seçildi" : "Seç"}
+                  </span>
+                </button>
               );
             })}
           </div>
 
-          <div className="mt-4">
-            <Pagination
-              page={pg.page}
-              pageCount={pg.pageCount}
-              onChange={pg.setPage}
-              rangeStart={pg.rangeStart}
-              rangeEnd={pg.rangeEnd}
-              total={pg.total}
-              label="Raf"
-            />
-          </div>
+          <Pagination
+            page={pg.page}
+            pageCount={pg.pageCount}
+            onChange={pg.setPage}
+            rangeStart={pg.rangeStart}
+            rangeEnd={pg.rangeEnd}
+            total={pg.total}
+            label="Raf"
+          />
         </>
-      )}
+      ) : searched ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-line bg-surface py-16 text-subtle">
+          <Warehouse className="mb-2 h-10 w-10 opacity-40" />
+          <p className="text-sm">Depo {loadedWarehouse} için raf (stok yeri) bulunamadı.</p>
+        </div>
+      ) : null}
     </div>
   );
 }

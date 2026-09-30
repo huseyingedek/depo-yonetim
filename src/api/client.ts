@@ -66,6 +66,27 @@ export function serviceMessage(r: MzyResult): string {
   return "";
 }
 
+
+// CANIAS MESSAGETABLE icinde TYPE="E" (hata) satiri varsa mesajini dondurur.
+// Basari/hata karari kelime aramaya degil bu TYPE alanina gore verilir.
+export function caniasErrorMessage(r: MzyResult): string | null {
+  const d = (r && r.data ? r.data : {}) as Record<string, unknown>;
+  const tables = ["MESSAGETABLE", "TBLMESSAGE", "MSGTABLE", "TBLMSG"];
+  for (const t of tables) {
+    const mt = d[t] as { ROW?: unknown } | undefined;
+    if (!mt) continue;
+    const rows = Array.isArray(mt.ROW) ? mt.ROW : mt.ROW ? [mt.ROW] : [];
+    for (const row of rows) {
+      const rw = (row || {}) as Record<string, unknown>;
+      const type = String(rw.TYPE == null ? "" : rw.TYPE).trim().toUpperCase();
+      if (type === "E" || type === "ERROR") {
+        return String(rw.SYSTEMMSG || rw.TEXT || rw.MESSAGE || rw.MSGTEXT || "CANIAS islemi reddetti.").trim();
+      }
+    }
+  }
+  return null;
+}
+
 function mesajTablosu(data: unknown): string {
   if (!data || typeof data !== "object") return "";
 
@@ -1113,6 +1134,26 @@ export const api = {
     ];
   },
 
+  // MZYGetContainer - Konteyner (irsaliye/paket) listesi. Params: PSCOMPANY, PSPLANT, PSWAREHOUSE.
+  // Doner: COMPANY, PLANT, WAREHOUSE, STOCKPLACE, STEXT.
+  async getContainer(warehouse = ""): Promise<{ company: string; plant: string; warehouse: string; stockPlace: string; name: string }[]> {
+    const c = ctx();
+    const r = await call(SERVICES.getContainer, {
+      PSCOMPANY: c.company,
+      PSPLANT: c.plant,
+      PSWAREHOUSE: warehouse,
+    });
+    return rowsOf(r, ["TBLCONTAINER", "CONTAINERLIST", "IASCONTAINER", "TBLCONT", "CONTAINER", "TABLE"])
+      .map((row) => ({
+        company: pick(row, ["COMPANY"]),
+        plant: pick(row, ["PLANT"]),
+        warehouse: pick(row, ["WAREHOUSE"]),
+        stockPlace: pick(row, ["STOCKPLACE"]),
+        name: pick(row, ["STEXT", "MTEXT", "NAME", "DESCRIPTION"]),
+      }))
+      .filter((x) => x.stockPlace || x.name);
+  },
+
   async getReceipts(): Promise<Receipt[]> {
     const res = await api.getOpenOrders();
     if (!res.ok || !res.orders) return [];
@@ -1567,6 +1608,10 @@ export const api = {
       PSUSER: payload.user || c.worker,
     });
 
+    const hataMsg = caniasErrorMessage(r);
+    if (hataMsg) {
+      return { ok: false, message: hataMsg };
+    }
     const mesaj = serviceMessage(r);
     if (mesaj && /error|fail|hata/i.test(mesaj)) {
       return { ok: false, message: mesaj };
@@ -1600,6 +1645,10 @@ export const api = {
       PSUSER: payload.user || c.worker,
     });
 
+    const hataMsg = caniasErrorMessage(r);
+    if (hataMsg) {
+      return { ok: false, message: hataMsg };
+    }
     const mesaj = serviceMessage(r);
     if (mesaj && /error|fail|hata/i.test(mesaj)) {
       return { ok: false, message: mesaj };
@@ -1638,6 +1687,10 @@ export const api = {
       PSUSER: payload.user || c.worker,
     });
 
+    const hataMsg = caniasErrorMessage(r);
+    if (hataMsg) {
+      return { ok: false, message: hataMsg };
+    }
     const mesaj = serviceMessage(r);
     if (mesaj && /error|fail|hata/i.test(mesaj)) {
       return { ok: false, message: mesaj };
@@ -1676,6 +1729,10 @@ export const api = {
       PITRACESTATUS: Number(payload.traceStatus ?? 0),
     });
 
+    const hataMsg = caniasErrorMessage(r);
+    if (hataMsg) {
+      return { ok: false, message: hataMsg };
+    }
     const mesaj = serviceMessage(r);
     if (mesaj && /error|fail|hata/i.test(mesaj)) {
       return { ok: false, message: mesaj };
@@ -2192,8 +2249,6 @@ export const api = {
     const params: Record<string, unknown> = {
       PSCOMPANY: String(compCode).trim(),
       PSPLANT: String(plantCode).trim(),
-      // Hem WAREHOUSE hem PSWAREHOUSE parametre desteği
-      WAREHOUSE: String(warehouse).trim(),
       PSWAREHOUSE: String(warehouse).trim(),
       // Hem PSORDERNUM hem PSINVDOCNUM parametre desteği
       PSORDERNUM: String(orderNum).trim(),
@@ -2399,44 +2454,26 @@ export const api = {
       return {
         COMPANY: compCode,
         PLANT: plantCode,
-        INVDOCNUM: docNum,
-        INVDOCTYPE: docType,
         INVDOCITEM: idx + 1,
         MATERIAL: String(line.material || "").trim(),
         SPECIALSTOCK: specialStock,
         BATCHNUM: batchNum,
         WAREHOUSE: String(line.warehouse || whCode).trim(),
         STOCKPLACE: String(line.stockPlace || "*").trim(),
-        QUANTITY: countedStockQty, // Stok birimi cinsinden sayım miktarı
-        REVISESTOCKN: countedStockQty, // CANIAS revize stok miktarı
-        COUNTEDQTY: countedStockQty,
-        READQUANTITY: countedStockQty,
-        QUNIT: skunit, // Stok birimi
-        SKUNIT: skunit, // Stok birimi
-        BARCODE: String(line.barcode || "").trim(),
-        TARGETQTY: Number(line.targetQty ?? 0),
-        AVAILSTOCKN: Number(line.targetQty ?? 0),
+        QUANTITY: countedStockQty,
+        SKUNIT: skunit,
       };
     });
 
     const params: Record<string, unknown> = {
       PSCOMPANY: compCode,
-      PCOMPANY: compCode,
       PSPLANT: plantCode,
-      PPLANT: plantCode,
       PSWAREHOUSE: whCode,
-      PWAREHOUSE: whCode,
       PSINVDOCTYPE: docType,
-      PINVDOCTYPE: docType,
       PSINVDOCNUM: docNum,
-      PINVDOCNUM: docNum,
       PSUSER: userCode,
-      PUSER: userCode,
       PITRACESTATUS: traceStatus,
-      PTRACESTATUS: traceStatus,
-      TRACESTATUS: traceStatus,
-      TBLADJUSTMENTLIST: formattedItems,
-      TBLADJUSMENTLIST: formattedItems,
+      PSINVADJITEMXML: formattedItems,
     };
 
     console.info("📦 [MZYSaveAdjustment İSTEK PAYLOAD]", {
@@ -2470,9 +2507,20 @@ export const api = {
         return { ok: false, message: mesaj || "Sayım kaydedilemedi (CANIAS hata bildirdi)." };
       }
 
+      // Başarı POZİTİF sinyale baglidir: CANIAS kaydi islediyse IASINVADJITEM tablosunu
+      // (belge kalemlerini) geri dondurur. Bos MESSAGETABLE / bos / null yanit BASARI SAYILMAZ.
+      const adjTable = d.IASINVADJITEM as { ROW?: unknown } | undefined;
+      const adjRows = adjTable ? (Array.isArray(adjTable.ROW) ? adjTable.ROW : adjTable.ROW ? [adjTable.ROW] : []) : [];
+      if (adjRows.length === 0) {
+        return {
+          ok: false,
+          message: "Sunucu boş/onaysız yanıt döndü — sayım kaydedilmedi. Lütfen tekrar deneyin.",
+        };
+      }
+
       return {
         ok: true,
-        message: mesaj || "Sayım başarıyla CANIAS'a kaydedildi.",
+        message: mesaj || "Sayim basariyla CANIAS'a kaydedildi.",
         docNum,
       };
     } catch (err) {

@@ -817,11 +817,10 @@ export default function CountDetailPage() {
         return;
       }
 
-      // 3. Barkod tabındayken kullanıcı doğrudan depo$raf barkodu okuttuysa rafa geçir
-      if (rawCode.includes("$")) {
-        handleSelectShelf(rawCode);
-        return;
-      }
+      // Barkod (malzeme) adımında SADECE malzeme/ürün barkodu doğrulanır. Raf barkodu
+      // (depo$raf dahil) burada rafa geçirilmez; ürün bulunamazsa hata verilir.
+      // Kural: her adım kendi barkodunu kontrol eder, ancak başarılı olursa sonraki adıma
+      // geçilir — yeni adım açılıp sonra hata verilmez (Bora).
 
       setBusy(true);
       let barcodeMat = "";
@@ -1122,7 +1121,7 @@ export default function CountDetailPage() {
       sesHata();
       show({
         kind: "error",
-        text: `${rawCode} barkodu bulunamadı`,
+        text: `${rawCode} için ürün/malzeme bulunamadı. Bu adımda malzeme barkodu okutun.`,
       });
     },
     [lines, order, show, activeItem, lotPendingItem, tab, selectedShelf, selectedWarehouse, selectedStockPlace, handleSelectBatch, handleSelectShelf]

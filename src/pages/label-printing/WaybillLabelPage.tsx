@@ -1,68 +1,64 @@
-import { useEffect, useMemo, useState } from "react";
-import { FileText, Search, Printer, Check, Loader2, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { FileText, Search, Printer, RefreshCw, MapPin, Check, Loader2 } from "lucide-react";
 import { api } from "../../api/client";
-import { useAppStore } from "../../store/appStore";
-import type { PickOrder } from "../../types";
 import PageHeader from "../../components/PageHeader";
 import Pagination, { usePagination } from "../../components/Pagination";
 
+type ContainerRow = { company: string; plant: string; warehouse: string; stockPlace: string; name: string };
+
+// İrsaliye Etiketi — Paketleme ekranının birebir aynısı; TEK farkı depo (20).
+// Bora: MZYGetContainer (PSCOMPANY=01, PSPLANT=100, PSWAREHOUSE=20).
+// Ekran açılır açılmaz servis çağrılmaz; kullanıcı "Listele"/Enter ile getirir.
+const WAREHOUSE = "20";
+
 export default function WaybillLabelPage() {
-  const settings = useAppStore((s) => s.settings);
-  const [pickOrders, setPickOrders] = useState<PickOrder[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState<ContainerRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
   const [q, setQ] = useState("");
 
-  // Multi-selection state
-  const [selectedWaybills, setSelectedWaybills] = useState<PickOrder[]>([]);
+  const [selectedRows, setSelectedRows] = useState<ContainerRow[]>([]);
   const [repeatCount, setRepeatCount] = useState<number | string>(1);
   const [printing, setPrinting] = useState(false);
 
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  useEffect(() => {
-    fetchWaybills();
-  }, []);
-
-  const fetchWaybills = () => {
+  const fetchContainers = async () => {
     setLoading(true);
-    api
-      .getPickOrders()
-      .then(setPickOrders)
-      .catch(() => setPickOrders([]))
-      .finally(() => setLoading(false));
+    setSearched(true);
+    setSelectedRows([]);
+    setErrorMsg("");
+    setSuccessMsg("");
+    try {
+      const list = await api.getContainer(WAREHOUSE);
+      setRows(list || []);
+    } catch (e) {
+      setRows([]);
+      setErrorMsg(e instanceof Error ? e.message : "Konteynerler getirilemedi.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const filteredWaybills = useMemo(() => {
+  const filtered = rows.filter((r) => {
     const s = q.trim().toLowerCase();
-    if (!s) return pickOrders;
-    return pickOrders.filter(
-      (o) =>
-        o.id.toLowerCase().includes(s) ||
-        (o.customer && o.customer.toLowerCase().includes(s)) ||
-        (o.orderType && o.orderType.toLowerCase().includes(s))
+    if (!s) return true;
+    return (r.stockPlace || "").toLowerCase().includes(s) || (r.name || "").toLowerCase().includes(s);
+  });
+
+  const pg = usePagination(filtered, 9);
+
+  const rowKey = (r: ContainerRow) => `${r.warehouse}|${r.stockPlace}`;
+  const isSelected = (r: ContainerRow) => selectedRows.some((p) => rowKey(p) === rowKey(r));
+  const toggleSelect = (r: ContainerRow) => {
+    setSelectedRows((prev) =>
+      prev.some((p) => rowKey(p) === rowKey(r)) ? prev.filter((p) => rowKey(p) !== rowKey(r)) : [...prev, r]
     );
-  }, [pickOrders, q]);
-
-  const pg = usePagination(filteredWaybills, 9);
-  useEffect(() => pg.reset(), [q]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const toggleSelectWaybill = (waybill: PickOrder) => {
-    setSelectedWaybills((prev) => {
-      const exists = prev.some((w) => w.id === waybill.id);
-      if (exists) {
-        return prev.filter((w) => w.id !== waybill.id);
-      }
-      return [...prev, waybill];
-    });
-  };
-
-  const isWaybillSelected = (waybill: PickOrder) => {
-    return selectedWaybills.some((w) => w.id === waybill.id);
   };
 
   const handlePrintSelected = async () => {
-    if (selectedWaybills.length === 0) return;
+    if (selectedRows.length === 0) return;
     setErrorMsg("");
     setSuccessMsg("");
 
@@ -77,18 +73,17 @@ export default function WaybillLabelPage() {
     let failedCount = 0;
     let lastError = "";
 
-    for (const waybill of selectedWaybills) {
+    for (const r of selectedRows) {
       try {
         const res = await api.printContainer({
-          company: "01",
-          plant: "100",
-          warehouse: settings.warehouse || "10",
-          container: waybill.id,
+          company: r.company || "01",
+          plant: r.plant || "100",
+          warehouse: r.warehouse || WAREHOUSE,
+          container: r.stockPlace,
           repeat: count,
         });
-        if (res.ok) {
-          successCount++;
-        } else {
+        if (res.ok) successCount++;
+        else {
           failedCount++;
           if (res.message) lastError = res.message;
         }
@@ -102,7 +97,7 @@ export default function WaybillLabelPage() {
     setRepeatCount(1);
     if (failedCount === 0) {
       setSuccessMsg(`Seçilen ${successCount} adet irsaliye etiketinden ${count}'er kopya yazdırıldı.`);
-      setSelectedWaybills([]);
+      setSelectedRows([]);
     } else {
       setErrorMsg(
         `${successCount} irsaliye etiketi yazdırıldı, ${failedCount} adet etikette hata oluştu.${
@@ -112,59 +107,44 @@ export default function WaybillLabelPage() {
     }
   };
 
+  const kopyaInput = (widthCls: string) => (
+    <input
+      type="number"
+      min={0}
+      max={99}
+      value={repeatCount}
+      onChange={(e) => {
+        const val = e.target.value;
+        if (val === "") {
+          setRepeatCount("");
+          return;
+        }
+        const v = parseInt(val, 10);
+        if (!isNaN(v)) setRepeatCount(Math.min(99, Math.max(0, v)));
+      }}
+      onBlur={() => {
+        if (repeatCount === "") setRepeatCount(0);
+      }}
+      className={`field-input ${widthCls} py-1.5 px-2 text-center text-xs font-bold`}
+    />
+  );
+
   return (
     <div className="mx-auto max-w-6xl p-4 lg:p-8">
-      {/* Top Header with Short Search, Kopya Input, & Print Button */}
       <PageHeader
         title="İrsaliye Etiketi Yazdırma"
-        subtitle="İrsaliyeleri seçip yazdırın"
+        subtitle="Depo 20 konteynerleri — Listele, seç ve yazdır"
         backTo="/label-printing"
         right={
           <div className="hidden sm:flex items-center gap-3">
-            {/* Search Bar */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="İrsaliye veya Müşteri Ara..."
-                className="field-input w-52 py-1.5 pl-9 text-xs"
-              />
-            </div>
-
-            {/* Kopya Sayısı Input */}
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
-              <input
-                type="number"
-                min={0}
-                max={99}
-                value={repeatCount}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === "") {
-                    setRepeatCount("");
-                    return;
-                  }
-                  const v = parseInt(val, 10);
-                  if (!isNaN(v)) {
-                    setRepeatCount(Math.min(99, Math.max(0, v)));
-                  }
-                }}
-                onBlur={() => {
-                  if (repeatCount === "") {
-                    setRepeatCount(0);
-                  }
-                }}
-                className="field-input w-16 py-1.5 px-2 text-center text-xs font-bold"
-              />
+              {kopyaInput("w-16")}
             </div>
-
-            {/* Yazdır Button */}
             <button
               type="button"
               onClick={handlePrintSelected}
-              disabled={selectedWaybills.length === 0 || printing}
+              disabled={selectedRows.length === 0 || printing}
               className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
             >
               {printing ? (
@@ -175,7 +155,7 @@ export default function WaybillLabelPage() {
               ) : (
                 <>
                   <Printer className="h-4 w-4" />
-                  <span>Yazdır ({selectedWaybills.length})</span>
+                  <span>Yazdır ({selectedRows.length})</span>
                 </>
               )}
             </button>
@@ -183,115 +163,110 @@ export default function WaybillLabelPage() {
         }
       />
 
-      {/* Mobile Search & Action Bar */}
-      <div className="mb-5 flex flex-col gap-3 sm:hidden">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
+      {/* Arama/Listele — açılışta servis çağrılmaz; Enter ya da Listele ile getirilir.
+          Liste geldikten sonra kutu, stok yeri / açıklamaya göre yerelde süzer. */}
+      <div className="mb-4 flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="İrsaliye veya Müşteri Ara..."
-            className="field-input pl-9 text-xs"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                fetchContainers();
+              }
+            }}
+            placeholder="Listele'ye basın; sonra stok yeri / açıklamaya göre süzebilirsiniz…"
+            className="field-input w-full pl-10 text-sm"
           />
         </div>
-
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-fg">Kopya Sayısı:</span>
-            <input
-              type="number"
-              min={0}
-              max={99}
-              value={repeatCount}
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val === "") {
-                  setRepeatCount("");
-                  return;
-                }
-                const v = parseInt(val, 10);
-                if (!isNaN(v)) {
-                  setRepeatCount(Math.min(99, Math.max(0, v)));
-                }
-              }}
-              onBlur={() => {
-                if (repeatCount === "") {
-                  setRepeatCount(0);
-                }
-              }}
-              className="field-input w-20 py-1.5 px-2 text-center text-xs font-bold"
-            />
-          </div>
-
-          <button
-            type="button"
-            onClick={handlePrintSelected}
-            disabled={selectedWaybills.length === 0 || printing}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {printing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Printer className="h-4 w-4" />
-            )}
-            <span>Yazdır ({selectedWaybills.length})</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={fetchContainers}
+          disabled={loading}
+          className="btn-primary flex items-center justify-center gap-2 px-6 shadow-sm shrink-0 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+          <span>Listele</span>
+        </button>
       </div>
 
-      {/* Alerts */}
+      {/* Mobil: Kopya + Yazdır */}
+      <div className="mb-5 flex items-center justify-between gap-3 sm:hidden">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-fg">Kopya:</span>
+          {kopyaInput("w-20")}
+        </div>
+        <button
+          type="button"
+          onClick={handlePrintSelected}
+          disabled={selectedRows.length === 0 || printing}
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+        >
+          {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+          <span>Yazdır ({selectedRows.length})</span>
+        </button>
+      </div>
+
+      {/* Uyarılar */}
       {errorMsg && (
         <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-600 dark:text-red-400">
           <span>{errorMsg}</span>
         </div>
       )}
-
       {successMsg && (
         <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 text-xs text-emerald-600 dark:text-emerald-400">
           <span>{successMsg}</span>
         </div>
       )}
 
-      {/* List Header */}
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-bold text-fg">
-          İrsaliyeler ({pickOrders.length})
-          {selectedWaybills.length > 0 && (
-            <span className="ml-2 text-xs font-semibold text-brand">({selectedWaybills.length} İrsaliye Seçili)</span>
-          )}
-        </h2>
-        <button
-          type="button"
-          onClick={fetchWaybills}
-          disabled={loading}
-          className="flex items-center gap-1.5 text-xs font-semibold text-brand hover:underline"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          Yenile
-        </button>
-      </div>
+      {/* Liste başlığı */}
+      {searched && (
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-fg">
+            İrsaliye Konteynerleri ({rows.length})
+            {selectedRows.length > 0 && (
+              <span className="ml-2 text-xs font-semibold text-brand">({selectedRows.length} Seçili)</span>
+            )}
+          </h2>
+          <button
+            type="button"
+            onClick={fetchContainers}
+            disabled={loading}
+            className="flex items-center gap-1.5 text-xs font-semibold text-brand hover:underline"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            Yenile
+          </button>
+        </div>
+      )}
 
-      {/* 3x3 Grid Layout */}
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="h-32 animate-pulse rounded-2xl bg-elevated" />
           ))}
         </div>
-      ) : filteredWaybills.length === 0 ? (
+      ) : !searched ? (
+        <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-dashed border-line bg-surface text-subtle text-center px-6">
+          <FileText className="mb-2 h-10 w-10 opacity-50" />
+          <p className="text-sm">Konteynerleri getirmek için "Listele"ye (veya Enter) basın.</p>
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-line bg-surface text-subtle">
           <FileText className="mb-2 h-10 w-10" />
-          <p className="text-sm">Aranan kriterde irsaliye kaydı bulunamadı.</p>
+          <p className="text-sm">Depo {WAREHOUSE} için konteyner bulunamadı.</p>
         </div>
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {pg.pageItems.map((o) => {
-              const selected = isWaybillSelected(o);
+            {pg.pageItems.map((r, idx) => {
+              const selected = isSelected(r);
               return (
                 <div
-                  key={o.id}
-                  onClick={() => toggleSelectWaybill(o)}
+                  key={`${rowKey(r)}|${idx}`}
+                  onClick={() => toggleSelect(r)}
                   className={`relative flex cursor-pointer flex-col justify-between rounded-2xl border p-5 text-left shadow-card transition-all hover:shadow-soft ${
                     selected
                       ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30"
@@ -300,19 +275,17 @@ export default function WaybillLabelPage() {
                 >
                   <div>
                     <div className="flex items-start justify-between">
-                      <span className="font-mono text-base font-extrabold text-fg">{o.id}</span>
-                      {o.orderType && (
-                        <span className="chip bg-violet-100 font-mono text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
-                          {o.orderType}
+                      <span className="font-mono text-base font-extrabold text-fg">{r.stockPlace || "—"}</span>
+                      {r.warehouse && (
+                        <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold text-cyan-600 dark:text-cyan-400">
+                          <MapPin className="h-3.5 w-3.5" /> Depo {r.warehouse}
                         </span>
                       )}
                     </div>
-                    {o.customer && <p className="mt-2 truncate text-xs font-medium text-subtle">{o.customer}</p>}
-                    {o.reference && <p className="mt-1 line-clamp-1 text-[11px] text-muted">{o.reference}</p>}
+                    <p className="mt-2 line-clamp-2 text-xs text-subtle">{r.name || "—"}</p>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between border-t border-line/60 pt-3 text-xs">
-                    <span className="text-subtle font-mono">{o.createdAt || "CANIAS"}</span>
+                  <div className="mt-4 flex items-center justify-end border-t border-line/60 pt-3">
                     <span
                       className={`chip text-[11px] ${
                         selected ? "bg-emerald-600 text-white" : "bg-elevated text-subtle"

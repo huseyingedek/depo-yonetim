@@ -119,14 +119,17 @@ export default function CountSummaryPage() {
     };
   };
 
-  // KESİN SIRALAMA: 1. Maviler -> 2. Kırmızılar -> 3. Sarılar -> 4. Okutulmayanlar -> 5. Yeşiller
+  // Özette YALNIZCA sayılan (işlem yapılan) kalemler listelenir — hiç sayılmayanlar
+  // (countedQty === 0) gösterilmez. Sıralama: Yeni/Planda Yok -> Fazla -> Eksik -> Tam Eşleşti.
   const sortedLines = useMemo(() => {
-    return [...lines].sort((a, b) => {
-      const tierA = getCategory(a).tier;
-      const tierB = getCategory(b).tier;
-      if (tierA !== tierB) return tierA - tierB;
-      return a.material.localeCompare(b.material);
-    });
+    return [...lines]
+      .filter((l) => l.countedQty > 0)
+      .sort((a, b) => {
+        const tierA = getCategory(a).tier;
+        const tierB = getCategory(b).tier;
+        if (tierA !== tierB) return tierA - tierB;
+        return a.material.localeCompare(b.material);
+      });
   }, [lines]);
 
   // Sayıma geri dönme (hiçbir veri silinmeden state taşınır)
@@ -145,6 +148,16 @@ export default function CountSummaryPage() {
   // Sağ üstteki "Bitir" butonuna basılınca çalışacak handler (MZYSaveAdjustment servisi çağrılır)
   const handleFinish = async () => {
     if (saving) return;
+
+    // Servise YALNIZCA sayılan (işlem yapılan) kalemler gönderilir. Tüm belge
+    // (ör. 999 satır) gönderilince gövde çok büyüyor ve sunucu 413 (Payload Too
+    // Large) dönüyordu; ayrıca spec de "Sayımı yapılanlar listesi" istiyor.
+    const sayilanlar = lines.filter((l) => l.countedQty > 0);
+    if (sayilanlar.length === 0) {
+      setError("Kaydedilecek sayılmış kalem yok. Önce en az bir kalem sayın.");
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -154,7 +167,7 @@ export default function CountSummaryPage() {
         warehouse: warehouse || order?.warehouse,
         invDocType: docType || order?.docType,
         invDocNum: docNum,
-        lines,
+        lines: sayilanlar,
       });
 
       if (!res.ok) {
@@ -291,17 +304,18 @@ export default function CountSummaryPage() {
         </div>
       )}
 
-      {!lines.length ? (
+      {!sortedLines.length ? (
         <div className="rounded-2xl border border-line bg-surface p-10 text-center text-sm text-subtle">
           <Package className="mx-auto h-10 w-10 text-subtle opacity-40" />
-          <p className="mt-2 font-bold">Sayım kalemi bulunamadı.</p>
+          <p className="mt-2 font-bold">Henüz sayılan kalem yok.</p>
+          <p className="mt-1 text-xs">Özet yalnızca sayım yaptığınız kalemleri listeler.</p>
         </div>
       ) : (
         <>
-        {/* Kontrol çubuğu: fark sayısı + Sadece farklar filtresi */}
+        {/* Kontrol çubuğu: sayılan + fark sayısı + Sadece farklar filtresi */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-subtle">
-            Toplam <span className="font-bold text-fg">{lines.length}</span> kalem ·{" "}
+            Sayılan <span className="font-bold text-fg">{sortedLines.length}</span> kalem ·{" "}
             <span className="font-bold text-rose-600">{farkliLines.length}</span> farklı
           </p>
           <button

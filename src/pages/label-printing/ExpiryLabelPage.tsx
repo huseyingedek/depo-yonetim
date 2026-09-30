@@ -96,11 +96,6 @@ export default function ExpiryLabelPage() {
         backTo="/label-printing"
         right={
           <div className="hidden sm:flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-fg whitespace-nowrap">Kopya:</span>
-              {kopyaInput("w-16")}
-            </div>
-
             <button
               type="button"
               onClick={handlePrint}
@@ -123,18 +118,13 @@ export default function ExpiryLabelPage() {
         }
       />
 
-      {/* Mobil: Kopya + Yazdır */}
-      <div className="flex items-center justify-between gap-3 sm:hidden">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-fg">Kopya:</span>
-          {kopyaInput("w-20")}
-        </div>
-
+      {/* Mobil: Yazdır */}
+      <div className="sm:hidden">
         <button
           type="button"
           onClick={handlePrint}
           disabled={isPrintDisabled}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
         >
           {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
           <span>Yazdır</span>
