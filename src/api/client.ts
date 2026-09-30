@@ -2637,6 +2637,39 @@ export const api = {
   },
 
   /**
+   * MZYSavePack — Paketlemeyi Sakla
+   * @param params Emir bilgileri + PSPACKITEMXML (paketleme hiyerarşisi)
+   */
+  async savePack(params: {
+    company?: string;
+    plant?: string;
+    user?: string;
+    warehouse?: string;
+    stockPlace: string;
+    orderType: string;
+    orderNum: string;
+    xml: string;
+    traceStatus?: number;
+  }): Promise<{ raw: unknown; message: string; success: boolean }> {
+    const c = ctx();
+    const callParams = {
+      PSCOMPANY: params.company || c.company,
+      PSPLANT: params.plant || c.plant,
+      PSUSER: params.user || c.worker || "WMSWSUSER",
+      PSWAREHOUSE: params.warehouse || c.warehousePackaging || c.warehouse,
+      PSSTOCKPLACE: params.stockPlace || "",
+      PSORDERTYPE: params.orderType,
+      PSORDERNUM: params.orderNum,
+      PITRACESTATUS: params.traceStatus ?? (c.trace ? 1 : 0),
+      PSPACKITEMXML: params.xml,
+    };
+    console.info("📤 [MZYSavePack PARAMETRELER]", { ...callParams, PSPACKITEMXML: `(${params.xml.length} karakter)` });
+    const r = await call(SERVICES.savePack, callParams);
+    console.info("📥 [MZYSavePack GELEN YANIT]", r);
+    return { raw: r, message: serviceMessage(r) || "", success: true };
+  },
+
+  /**
    * MZYGetUserDefault — Kullanıcı Öndeğerlerini Getir
    * @param params Kullanıcı adı ve Trace durumu
    */
