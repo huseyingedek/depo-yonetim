@@ -1,3 +1,4 @@
+import { useAppStore } from "../../store/appStore";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { caniasDateTime } from "../../store/pickingStore";
@@ -421,7 +422,7 @@ export default function ReceivingDetailPage() {
   const vendorName = searchParams.get("vendorName") || supplierState?.name || location.state?.vendorName || "Tedarikçi";
 
   const waybillNo = searchParams.get("waybill") || location.state?.waybillNo || "";
-  const rawTargetWH = searchParams.get("targetWH") || location.state?.targetWarehouse || "00";
+  const rawTargetWH = searchParams.get("targetWH") || location.state?.targetWarehouse || useAppStore.getState().settings.warehouseReceiving;
   const rawTargetSP = searchParams.get("targetSP") || location.state?.targetStockPlace || "*";
 
   const targetWH = rawTargetWH.includes("$") ? rawTargetWH.split("$")[0].trim() : rawTargetWH.trim();
@@ -1525,7 +1526,7 @@ export default function ReceivingDetailPage() {
             orderType: getOrderType(ord) || "OP",
             orderNum,
             itemNum,
-            warehouse: targetWH || "00",
+            warehouse: targetWH || useAppStore.getState().settings.warehouseReceiving,
             stockPlace: (ord.STOCKPLACE && ord.STOCKPLACE !== "*" ? String(ord.STOCKPLACE).trim() : targetSP) || "*",
             specialStock: currentMaterial.isSpecialLot ? "1" : "*",
             expectedQty: totalStockQty,
@@ -1554,7 +1555,7 @@ export default function ReceivingDetailPage() {
           orderType: openOrders[0] ? getOrderType(openOrders[0]) : "OP",
           orderNum: openOrders[0] ? getOrderNum(openOrders[0], 0) : "SERBEST",
           itemNum: openOrders[0] ? getOrderItemNum(openOrders[0], 0) : 1,
-          warehouse: targetWH || "00",
+          warehouse: targetWH || useAppStore.getState().settings.warehouseReceiving,
           stockPlace: targetSP || "*",
           specialStock: currentMaterial.isSpecialLot ? "1" : "*",
           expectedQty: remainingToDistribute,
@@ -1581,7 +1582,7 @@ export default function ReceivingDetailPage() {
         orderType: "OP",
         orderNum: "SERBEST",
         itemNum: 1,
-        warehouse: targetWH || "00",
+        warehouse: targetWH || useAppStore.getState().settings.warehouseReceiving,
         stockPlace: targetSP || "*",
         specialStock: currentMaterial.isSpecialLot ? "1" : "*",
         expectedQty: totalReceivedStockQty,

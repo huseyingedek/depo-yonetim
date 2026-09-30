@@ -43,8 +43,6 @@ export default function ExpiryLabelPage() {
     setPrinting(true);
     try {
       const res = await api.printBarcode({
-        company: "01",
-        plant: "100",
         barcode: expiryDate,
         repeat: count,
         traceStatus: 0,

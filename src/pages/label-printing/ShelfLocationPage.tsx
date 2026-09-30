@@ -84,8 +84,6 @@ export default function ShelfLocationPage() {
     for (const p of selected) {
       try {
         const res = await api.printWHSP({
-          company: "01",
-          plant: "100",
           warehouse: loadedWarehouse,
           stockPlace: p.code,
           repeat: count,

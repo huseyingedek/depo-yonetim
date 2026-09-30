@@ -372,7 +372,6 @@ export default function BarcodeGeneratorPage() {
       const oncekiSet = new Set(await birimBarkodlari(mat, unit));
 
       const res = await api.createBarcode({
-        company: "01",
         material: mat,
         unit,
         autoGenerate: isAuto ? 1 : 0,

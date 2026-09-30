@@ -236,12 +236,12 @@ async function doCall(service: string, params: Record<string, unknown>): Promise
 function ctx() {
   const st = useAppStore.getState();
   return {
-    company: st.settings.company || "01",
-    plant: st.settings.facility || "100",
-    warehouse: st.settings.warehouse || st.settings.warehouseDelivery || st.settings.warehouseReceiving || "01",
-    warehouseDelivery: st.settings.warehouseDelivery || "01",
-    warehousePackaging: st.settings.warehousePackaging || "10",
-    warehouseReceiving: st.settings.warehouseReceiving || "00",
+    company: st.settings.company,
+    plant: st.settings.facility,
+    warehouse: st.settings.warehouse || st.settings.warehouseDelivery || st.settings.warehouseReceiving,
+    warehouseDelivery: st.settings.warehouseDelivery,
+    warehousePackaging: st.settings.warehousePackaging,
+    warehouseReceiving: st.settings.warehouseReceiving,
     warehouseQuality: st.settings.warehouseQuality || "",
     printerName: st.settings.printerName || "",
     worker: st.user?.username ?? "",
@@ -1776,7 +1776,7 @@ export const api = {
     const printCount = Math.max(0, Math.min(99, Number(payload.printCount ?? 0)));
 
     const r = await call(SERVICES.createBarcode, {
-      PSCOMPANY: String(payload.company ?? c.company ?? "01").trim(),
+      PSCOMPANY: String(payload.company ?? c.company).trim(),
       PSMATERIAL: matStr,
       PSUNIT: unitStr,
       PIAUTOGENERATE: isAuto ? 1 : 0,
@@ -2109,7 +2109,7 @@ export const api = {
     const startTimeStr = payload.startTime || nowStr;
     const compCode = String(payload.company ?? c.company ?? "").trim();
     const plantCode = String(payload.plant ?? c.plant ?? "").trim();
-    const rawWh = String(payload.warehouse || payload.targetWarehouse || c.warehouseReceiving || c.warehouse || "00").trim();
+    const rawWh = String(payload.warehouse || payload.targetWarehouse || c.warehouseReceiving || c.warehouse).trim();
     const whCode = rawWh.includes("$") ? rawWh.split("$")[0].trim() : rawWh;
     const spCode = payload.stockPlace && payload.stockPlace !== "*"
       ? String(payload.stockPlace).trim()
@@ -2124,7 +2124,7 @@ export const api = {
       PSPLANT: plantCode,
       PSVENDOR: vendorCode,
       PSEXTDELNUM: waybill,
-      PSWAREHOUSE: whCode || "00",
+      PSWAREHOUSE: whCode,
       PSSTOCKPLACE: spCode || "*",
       PSUSER: userCode,
       PDTSTARTTIME: startTimeStr,
@@ -2198,8 +2198,8 @@ export const api = {
     const isTrace = useAppStore.getState().trace;
     const traceStatus = params?.traceStatus ?? (isTrace ? 1 : 0);
     const r = await call(SERVICES.listingAdjustment, {
-      PSCOMPANY: String(params?.company ?? c.company ?? "01").trim(),
-      PSPLANT: String(params?.plant ?? c.plant ?? "100").trim(),
+      PSCOMPANY: String(params?.company ?? c.company).trim(),
+      PSPLANT: String(params?.plant ?? c.plant).trim(),
       PDSTARTDATE: params?.startDate ?? DATE_MIN,
       PDENDDATE: params?.endDate ?? DATE_MAX,
       PITRACESTATUS: traceStatus,
@@ -2240,9 +2240,9 @@ export const api = {
     const isTrace = useAppStore.getState().trace;
     const orderNum = typeof payload === "string" ? payload : (payload.invDocNum || payload.orderNum);
     const orderType = typeof payload === "string" ? "" : (payload.invDocType || payload.orderType || "");
-    const warehouse = typeof payload === "string" ? (c.warehouse ?? "01") : (payload.warehouse ?? c.warehouse ?? "01");
-    const compCode = typeof payload === "string" ? (c.company ?? "01") : (payload.company ?? c.company ?? "01");
-    const plantCode = typeof payload === "string" ? (c.plant ?? "100") : (payload.plant ?? c.plant ?? "100");
+    const warehouse = typeof payload === "string" ? c.warehouse : (payload.warehouse ?? c.warehouse);
+    const compCode = typeof payload === "string" ? c.company : (payload.company ?? c.company);
+    const plantCode = typeof payload === "string" ? c.plant : (payload.plant ?? c.plant);
     const userCode = typeof payload === "string" ? (c.worker ?? "") : (payload.user ?? c.worker ?? "");
     const traceStatus = typeof payload === "string" ? (isTrace ? 1 : 0) : (payload.traceStatus ?? (isTrace ? 1 : 0));
 
@@ -2425,9 +2425,9 @@ export const api = {
   ): Promise<SaveAdjustmentResult> {
     const c = ctx();
     const isTrace = useAppStore.getState().trace;
-    const compCode = String(payload.company ?? c.company ?? "01").trim();
-    const plantCode = String(payload.plant ?? c.plant ?? "100").trim();
-    const whCode = String(payload.warehouse ?? c.warehouse ?? "01").trim();
+    const compCode = String(payload.company ?? c.company).trim();
+    const plantCode = String(payload.plant ?? c.plant).trim();
+    const whCode = String(payload.warehouse ?? c.warehouse).trim();
     const docType = String(payload.invDocType ?? "").trim();
     const docNum = String(payload.invDocNum).trim();
     const userCode = String(payload.user ?? c.worker ?? "").trim();
@@ -2544,9 +2544,9 @@ export const api = {
     traceStatus?: number;
   }): Promise<Row[]> {
     const c = ctx();
-    const companyCode = params?.company || c.company || "01";
-    const plantCode = params?.plant || c.plant || "100";
-    const whCode = params?.warehouse || c.warehousePackaging || c.warehouse || "10";
+    const companyCode = params?.company || c.company;
+    const plantCode = params?.plant || c.plant;
+    const whCode = params?.warehouse || c.warehousePackaging || c.warehouse;
     const traceStatus = params?.traceStatus ?? (c.trace ? 1 : 0);
 
     const callParams = {
@@ -2585,10 +2585,10 @@ export const api = {
     success: boolean;
   }> {
     const c = ctx();
-    const companyCode = params.company || c.company || "01";
-    const plantCode = params.plant || c.plant || "100";
+    const companyCode = params.company || c.company;
+    const plantCode = params.plant || c.plant;
     const username = params.user || c.worker || "WMSWSUSER";
-    const whCode = params.warehouse || c.warehousePackaging || c.warehouse || "10";
+    const whCode = params.warehouse || c.warehousePackaging || c.warehouse;
     const stockPlace = params.stockPlace || "";
     const traceStatus = params.traceStatus ?? (c.trace ? 1 : 0);
 
@@ -2738,8 +2738,8 @@ export const api = {
     const c = ctx();
     const st = useAppStore.getState();
     const callParams = {
-      COMPANY: params?.company ?? c.company ?? "01",
-      PLANT: params?.plant ?? c.plant ?? "100",
+      COMPANY: params?.company ?? c.company,
+      PLANT: params?.plant ?? c.plant,
       USER: params?.user ?? c.worker ?? "WMSWSUSER",
       LANGU: params?.langu ?? (st.settings.language === "en" ? "E" : "T"),
       RECEIPTWH: params?.receiptWh ?? c.warehouseReceiving ?? "",

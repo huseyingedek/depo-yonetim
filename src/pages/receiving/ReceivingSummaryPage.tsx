@@ -1,3 +1,4 @@
+import { useAppStore } from "../../store/appStore";
 import { useState } from "react";
 import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { ArrowLeft, Save, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
@@ -16,7 +17,7 @@ export default function ReceivingSummaryPage() {
   const { toast, show } = useToast();
 
   const waybillNo = searchParams.get("waybill") || location.state?.waybillNo || "";
-  const targetWH = searchParams.get("targetWH") || location.state?.targetWarehouse || "00";
+  const targetWH = searchParams.get("targetWH") || location.state?.targetWarehouse || useAppStore.getState().settings.warehouseReceiving;
   const targetSP = searchParams.get("targetSP") || location.state?.targetStockPlace || "*";
   const vendorCode = searchParams.get("vendor") || location.state?.vendor || id || "";
   const vendorName = searchParams.get("vendorName") || location.state?.vendorName || "Tedarikçi";
@@ -100,8 +101,8 @@ export default function ReceivingSummaryPage() {
       const res = await api.saveReceipt({
         vendor: vendorCode,
         waybillNo,
-        warehouse: targetWH || "00",
-        targetWarehouse: targetWH || "00",
+        warehouse: targetWH || useAppStore.getState().settings.warehouseReceiving,
+        targetWarehouse: targetWH || useAppStore.getState().settings.warehouseReceiving,
         stockPlace: targetSP || "*",
         startTime: receiptStart,
         items: itemsPayload,

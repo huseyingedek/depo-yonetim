@@ -367,8 +367,6 @@ export default function ProductBarcodePage() {
     for (const card of selectedCards) {
       try {
         const res = await api.printMaterial({
-          company: "01",
-          plant: "100",
           barcode: card.barcode || card.material || "",
           unit: card.unit || "",
           repeat: count,

@@ -13,8 +13,8 @@ interface PersistedState {
 }
 
 export const defaultSettings: Settings = {
-  company: "01", // COMPANY
-  facility: "100", // PLANT
+  company: "", // COMPANY — CANIAS MZYGetUserDefault ile dolar (hardcode yok)
+  facility: "", // PLANT — CANIAS MZYGetUserDefault ile dolar (hardcode yok)
   warehouse: "", // Varsayılan Depo
   warehouseReceiving: "", // Mal Kabul Deposu
   warehousePackaging: "", // Paketleme Deposu

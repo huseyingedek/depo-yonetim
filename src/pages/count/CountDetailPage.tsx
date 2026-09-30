@@ -1,3 +1,4 @@
+import { useAppStore } from "../../store/appStore";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -238,7 +239,7 @@ export default function CountDetailPage() {
             const matLines = data.lines.filter((l) => sadelestir(l.material) === sadelestir(mat));
             const isLot = matLines.some((l) => l.specialStock === "1" || (l.batchNum && l.batchNum !== "*"));
             if (isLot) {
-              const wh = matLines[0].warehouse || data.warehouse || warehouseParam || "01";
+              const wh = matLines[0].warehouse || data.warehouse || warehouseParam || useAppStore.getState().settings.warehouse;
               api.getStock(mat, wh, "").then((stockBatches) => {
                 if (stockBatches && stockBatches.length > 0) {
                   prefetchedBatchesRef.current.set(
@@ -262,7 +263,7 @@ export default function CountDetailPage() {
               skunit: "PK",
               multiplier: 5,
               stockPlace: data.stockPlace || "A-01-01",
-              warehouse: data.warehouse || "01",
+              warehouse: data.warehouse || useAppStore.getState().settings.warehouse,
             },
             {
               id: "2",
@@ -275,7 +276,7 @@ export default function CountDetailPage() {
               skunit: "AD",
               multiplier: 1,
               stockPlace: data.stockPlace || "A-01-02",
-              warehouse: data.warehouse || "01",
+              warehouse: data.warehouse || useAppStore.getState().settings.warehouse,
             },
             {
               id: "3",
@@ -288,7 +289,7 @@ export default function CountDetailPage() {
               skunit: "AD",
               multiplier: 10,
               stockPlace: data.stockPlace || "A-01-03",
-              warehouse: data.warehouse || "01",
+              warehouse: data.warehouse || useAppStore.getState().settings.warehouse,
             },
           ]);
         }
@@ -331,7 +332,7 @@ export default function CountDetailPage() {
       if (!clean || shelfBusy) return;
 
       setShelfBusy(true);
-      const defaultWh = order?.warehouse || warehouseParam || "01";
+      const defaultWh = order?.warehouse || warehouseParam || useAppStore.getState().settings.warehouse;
       let inputWh = defaultWh;
       let inputSp = clean;
 
@@ -756,7 +757,7 @@ export default function CountDetailPage() {
         try {
           stockBatches = await api.getStock(
             item.material,
-            item.warehouse || selectedWarehouse || order?.warehouse || "01",
+            item.warehouse || selectedWarehouse || order?.warehouse || useAppStore.getState().settings.warehouse,
             "" // Depo genelindeki tüm partileri getir
           );
           if (stockBatches) {
@@ -834,7 +835,7 @@ export default function CountDetailPage() {
       try {
         const res = await api.readBarcode(
           rawCode,
-          selectedWarehouse || order?.warehouse || "01",
+          selectedWarehouse || order?.warehouse || useAppStore.getState().settings.warehouse,
           selectedStockPlace || order?.stockPlace || ""
         );
 
@@ -895,7 +896,7 @@ export default function CountDetailPage() {
             try {
               const stockBatches = await api.getStock(
                 mat,
-                selectedWarehouse || order?.warehouse || shelfMatched[0].warehouse || "01",
+                selectedWarehouse || order?.warehouse || shelfMatched[0].warehouse || useAppStore.getState().settings.warehouse,
                 "" // Depo genelindeki partileri getir
               );
               caniasBatches = stockBatches.filter((b) => b.batchNum && b.batchNum !== "*");
@@ -1020,7 +1021,7 @@ export default function CountDetailPage() {
             try {
               const stockBatches = await api.getStock(
                 mat,
-                selectedWarehouse || order?.warehouse || "01",
+                selectedWarehouse || order?.warehouse || useAppStore.getState().settings.warehouse,
                 ""
               );
               batches = stockBatches.filter((b) => b.batchNum && b.batchNum !== "*");
@@ -1259,7 +1260,7 @@ export default function CountDetailPage() {
       const bunit = (line.bunit || docUnit).toUpperCase();
       const bunitMult = line.bunitMultiplier && line.bunitMultiplier > 0 ? line.bunitMultiplier : (bunit === docUnit ? docMult : 1);
       const skunit = (line.skunit || docUnit).toUpperCase();
-      const wh = line.warehouse || order?.warehouse || selectedWarehouse || "01";
+      const wh = line.warehouse || order?.warehouse || selectedWarehouse || useAppStore.getState().settings.warehouse;
       const sp = line.stockPlace || selectedStockPlace || order?.stockPlace || "*";
 
       setSelectedWarehouse(wh);

@@ -1,3 +1,4 @@
+import { useAppStore } from "../../store/appStore";
 import { useState } from "react";
 import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { Trash2, ArrowLeft } from "lucide-react";
@@ -113,7 +114,7 @@ export default function ReceivingRecordsPage() {
             </thead>
             <tbody>
               {items.map((item, i) => {
-                const rawWh = String(item.warehouse || targetWH || "00").trim();
+                const rawWh = String(item.warehouse || targetWH || useAppStore.getState().settings.warehouseReceiving).trim();
                 const wh = rawWh.includes("$") ? rawWh.split("$")[0].trim() : rawWh;
                 const sp = item.stockPlace && item.stockPlace !== "*"
                   ? String(item.stockPlace).trim()
@@ -129,7 +130,7 @@ export default function ReceivingRecordsPage() {
 
                 const rowData: Record<string, string | number> = {
                   MATERIAL: item.material || "—",
-                  WAREHOUSE: wh || "00",
+                  WAREHOUSE: wh || useAppStore.getState().settings.warehouseReceiving,
                   STOCKPLACE: sp || "*",
                   SPECIALSTOCK: specialStockVal,
                   BATCHNUM: batchNumVal,

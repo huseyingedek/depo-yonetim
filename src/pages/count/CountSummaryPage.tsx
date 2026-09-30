@@ -119,11 +119,13 @@ export default function CountSummaryPage() {
     };
   };
 
-  // Özette YALNIZCA sayılan (işlem yapılan) kalemler listelenir — hiç sayılmayanlar
-  // (countedQty === 0) gösterilmez. Sıralama: Yeni/Planda Yok -> Fazla -> Eksik -> Tam Eşleşti.
+  // Bora: Fark TÜM listeye göre hesaplanır. Özette gönderilen (hedef>0) TÜM kalemler
+  // + planda olmayıp sayılan yeni kalemler listelenir; yalnız 0/0 gürültü satırları hariç.
+  // Beklenip sayılmayan kalem de bir farktır (fark = -hedef, "Sayılmadı").
+  // Sıralama: Yeni/Planda Yok -> Fazla -> Eksik -> Sayılmadı -> Tam Eşleşti.
   const sortedLines = useMemo(() => {
     return [...lines]
-      .filter((l) => l.countedQty > 0)
+      .filter((l) => l.targetQty > 0 || l.countedQty > 0)
       .sort((a, b) => {
         const tierA = getCategory(a).tier;
         const tierB = getCategory(b).tier;
@@ -307,15 +309,15 @@ export default function CountSummaryPage() {
       {!sortedLines.length ? (
         <div className="rounded-2xl border border-line bg-surface p-10 text-center text-sm text-subtle">
           <Package className="mx-auto h-10 w-10 text-subtle opacity-40" />
-          <p className="mt-2 font-bold">Henüz sayılan kalem yok.</p>
-          <p className="mt-1 text-xs">Özet yalnızca sayım yaptığınız kalemleri listeler.</p>
+          <p className="mt-2 font-bold">Listelenecek kalem yok.</p>
+          <p className="mt-1 text-xs">Bu belgede beklenen veya sayılan kalem bulunmuyor.</p>
         </div>
       ) : (
         <>
         {/* Kontrol çubuğu: sayılan + fark sayısı + Sadece farklar filtresi */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-subtle">
-            Sayılan <span className="font-bold text-fg">{sortedLines.length}</span> kalem ·{" "}
+            Listede <span className="font-bold text-fg">{sortedLines.length}</span> kalem ·{" "}
             <span className="font-bold text-rose-600">{farkliLines.length}</span> farklı
           </p>
           <button

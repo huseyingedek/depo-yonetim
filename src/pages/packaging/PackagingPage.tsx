@@ -315,6 +315,8 @@ export default function PackagingPage() {
   const { toast, show } = useToast();
   // Paketleme deposu ayarlardan (hardcode değil)
   const packWh = useAppStore((st) => st.settings.warehousePackaging);
+  const compCode = useAppStore((st) => st.settings.company);
+  const plantCode = useAppStore((st) => st.settings.facility);
   const idRef = useRef(100);
   const yid = () => `x${++idRef.current}`;
 
@@ -406,8 +408,8 @@ export default function PackagingPage() {
       const rows = await wmsApi.getPackagingList({ warehouse: packWh });
       if (rows && rows.length > 0) {
         const yeniEmirler: PackOrder[] = rows.map((r) => ({
-          company: String(r.COMPANY || "01"),
-          plant: String(r.PLANT || "100"),
+          company: String(r.COMPANY || compCode),
+          plant: String(r.PLANT || plantCode),
           warehouse: String(r.WAREHOUSE || packWh),
           stockPlace: String(r.STOCKPLACE || ""),
           worker: String(r.WORKER || ""),
