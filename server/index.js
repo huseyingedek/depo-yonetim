@@ -480,18 +480,42 @@ app.get("/health", async (_req, res) => {
 });
 
 // 2. Servis Listesi: CANIAS'ta tanımlı tüm web servislerini listeler.
-app.get("/services", async (_req, res) => {
+const getServicesHandler = async (_req, res) => {
   try {
     const client = await getClient();
     const s = await ensureSession();
     const [r] = V1
       ? await client.listIASServicesAsync({ p_strSessionId: s.sessionId })
       : await client.listServicesAsync({ SessionId: s.sessionId });
-    res.json(val(r?.listIASServicesReturn ?? r?.listServicesReturn ?? r));
+    const raw = r?.listIASServicesReturn ?? r?.listServicesReturn ?? r;
+    const items = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw?.listIASServicesReturn)
+        ? raw.listIASServicesReturn
+        : typeof raw === "object" && raw !== null
+          ? Object.values(raw).filter((x) => typeof x === "string")
+          : [];
+
+    const services = items.map((item) => {
+      const parts = String(item).split("_");
+      const id = parts[0] || "";
+      const description = parts.slice(1).join("_") || id;
+      return { id, name: id, description, raw: item };
+    });
+
+    res.json({
+      ok: true,
+      count: services.length,
+      services,
+      rawList: items,
+    });
   } catch (e) {
-    res.status(502).json({ error: String(e?.message || e) });
+    res.status(502).json({ ok: false, error: String(e?.message || e) });
   }
-});
+};
+
+app.get("/services", getServicesHandler);
+app.get("/api/services", getServicesHandler);
 
 // Servis İsim Takma Adları (Büyük/küçük harf veya eski isim uyumluluğu için)
 const SERVICE_ALIASES = {
