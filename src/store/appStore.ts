@@ -22,6 +22,7 @@ export const defaultSettings: Settings = {
   warehouseQuality: "", // Kalite Deposu
   printerName: "", // Yazıcı Adı
   language: "tr",
+  screenTimeout: 3, // Özet ekranı otomatik kapanma (sn) — CANIAS SCREENTIMEOUT ile güncellenir
 };
 
 function load(): PersistedState {

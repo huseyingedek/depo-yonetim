@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useAppStore } from "../../store/appStore";
 import { ArrowLeft, Loader2, Package } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import ToastView, { useToast } from "../../components/Toast";
@@ -9,6 +10,7 @@ import type { AdjustmentOrder, AdjustmentLine } from "../../types";
 
 export default function CountSummaryPage() {
   const navigate = useNavigate();
+  const screenTimeout = useAppStore((st) => st.settings.screenTimeout ?? 3);
   const location = useLocation();
   const { id } = useParams<{ id: string }>();
   const { toast, show } = useToast();
@@ -197,7 +199,7 @@ export default function CountSummaryPage() {
       // Sayım başarıyla tamamlandıktan sonra sayım listesine yönlendir
       setTimeout(() => {
         navigate("/count");
-      }, 1200);
+      }, Math.max(1, Number(screenTimeout) || 3) * 1000);
     } catch (e) {
       sesHata();
       const msg = e instanceof Error ? e.message : String(e);

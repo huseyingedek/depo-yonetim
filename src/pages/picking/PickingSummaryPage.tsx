@@ -5,6 +5,7 @@ import { Check, CheckCircle2, Loader2, Send, PackagePlus, AlertTriangle } from "
 import PageHeader from "../../components/PageHeader";
 import ProgressRing from "../../components/ProgressRing";
 import { usePickingStore, orderProgress, orderTotals } from "../../store/pickingStore";
+import { useAppStore } from "../../store/appStore";
 import { qtyRound, linePicked } from "../../store/pickingLogic";
 
 export default function PickingSummaryPage() {
@@ -21,6 +22,19 @@ export default function PickingSummaryPage() {
   const [hata, setHata] = useState<string | null>(null);
 
   const [ozet, setOzet] = useState({ picked: 0, missing: 0, lineCount: 0 });
+  const screenTimeout = useAppStore((s) => s.settings.screenTimeout ?? 3);
+
+  // Başarı ekranı SCREENTIMEOUT sn sonra kendiliğinden kapanıp sipariş listesine döner.
+  useEffect(() => {
+    if (!done) return;
+    const sn = Math.max(1, Number(screenTimeout) || 3);
+    const t = setTimeout(() => {
+      if (order) removeOrderFromList(order.id);
+      clear();
+      navigate("/picking", { replace: true });
+    }, sn * 1000);
+    return () => clearTimeout(t);
+  }, [done, screenTimeout, order, removeOrderFromList, clear, navigate]);
 
   useEffect(() => {
     if (!order) navigate("/picking", { replace: true });

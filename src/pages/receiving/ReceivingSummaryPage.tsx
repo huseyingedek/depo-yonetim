@@ -1,5 +1,5 @@
 import { useAppStore } from "../../store/appStore";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { ArrowLeft, Save, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
@@ -43,6 +43,15 @@ export default function ReceivingSummaryPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const screenTimeout = useAppStore((st) => st.settings.screenTimeout ?? 3);
+
+  // Başarı bildirimi SCREENTIMEOUT sn sonra kendiliğinden kapanıp ana sayfaya döner.
+  useEffect(() => {
+    if (!successMessage) return;
+    const sn = Math.max(1, Number(screenTimeout) || 3);
+    const t = setTimeout(() => navigate("/home", { replace: true }), sn * 1000);
+    return () => clearTimeout(t);
+  }, [successMessage, screenTimeout, navigate]);
 
   const handleBack = () => {
     const backUrl = `/receiving/${encodeURIComponent(vendorCode || id || "")}?waybill=${encodeURIComponent(

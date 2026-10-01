@@ -2645,28 +2645,42 @@ export const api = {
     plant?: string;
     user?: string;
     warehouse?: string;
-    stockPlace: string;
+    stockPlace?: string;
+    delNum?: string;
+    startTime?: string;
     orderType: string;
     orderNum: string;
     xml: string;
     traceStatus?: number;
-  }): Promise<{ raw: unknown; message: string; success: boolean }> {
+  }): Promise<{ raw: unknown; message: string; success: boolean; containerId?: string }> {
     const c = ctx();
+    const whCode = params.warehouse || c.warehousePackaging || c.warehouse;
+
+    // 1) Önce konteyner (palet/sevkiyat kabı) oluştur — savePick akışıyla aynı.
+    //    MZYCreateContainer dönüşündeki konteyner no, SavePack'e PSSTOCKPLACE olarak gider.
+    const cont = await api.placeInPackage(whCode, "KONSEVKIYAT", params.orderNum, params.orderType);
+    if (!cont.containerId) {
+      throw new WmsError(cont.message || "Konteyner oluşturulamadı (MZYCreateContainer boş döndü)");
+    }
+
+    // 2) SavePack — oluşturulan konteyneri PSSTOCKPLACE olarak gönder
     const callParams = {
       PSCOMPANY: params.company || c.company,
       PSPLANT: params.plant || c.plant,
       PSUSER: params.user || c.worker || "WMSWSUSER",
-      PSWAREHOUSE: params.warehouse || c.warehousePackaging || c.warehouse,
-      PSSTOCKPLACE: params.stockPlace || "",
+      PSDELNUM: params.delNum || "",               // teslimat no (PSWAREHOUSE yerine)
+      PSTARCONTAINER: cont.containerId,            // CreateContainer'dan gelen hedef konteyner (PSSTOCKPLACE yerine)
       PSORDERTYPE: params.orderType,
       PSORDERNUM: params.orderNum,
       PITRACESTATUS: params.traceStatus ?? (c.trace ? 1 : 0),
+      PDTSTARTTIME: params.startTime || "",         // paketlemeye giriş saati (süre hesabı)
       PSPACKITEMXML: params.xml,
     };
+    console.info("📦 [MZYCreateContainer] konteyner:", cont.containerId, "@", cont.containerWarehouse);
     console.info("📤 [MZYSavePack PARAMETRELER]", { ...callParams, PSPACKITEMXML: `(${params.xml.length} karakter)` });
     const r = await call(SERVICES.savePack, callParams);
     console.info("📥 [MZYSavePack GELEN YANIT]", r);
-    return { raw: r, message: serviceMessage(r) || "", success: true };
+    return { raw: r, message: serviceMessage(r) || "", success: true, containerId: cont.containerId };
   },
 
   /**
@@ -2719,9 +2733,12 @@ export const api = {
     const printName = pick(first, ["PRINTNAME", "PSPRINTNAME"]);
     const rawLangu = pick(first, ["LANGU", "PSLANGU", "LANGUAGE"]);
     const language: "tr" | "en" = rawLangu.toUpperCase() === "E" ? "en" : "tr";
+    const stRaw = pick(first, ["SCREENTIMEOUT", "PSSCREENTIMEOUT", "PISCREENTIMEOUT"]);
+    const screenTimeout = Number.parseInt(stRaw, 10);
+    const hasScreenTimeout = Number.isFinite(screenTimeout) && screenTimeout > 0;
 
     const defaults: Partial<Settings> | null =
-      company || plant || receiptWh || packWh || deliveryWh || qltWh || printName
+      company || plant || receiptWh || packWh || deliveryWh || qltWh || printName || hasScreenTimeout
         ? {
           ...(company ? { company } : {}),
           ...(plant ? { facility: plant } : {}),
@@ -2731,6 +2748,7 @@ export const api = {
           ...(qltWh ? { warehouseQuality: qltWh } : {}),
           ...(printName ? { printerName: printName } : {}),
           ...(rawLangu ? { language } : {}),
+          ...(hasScreenTimeout ? { screenTimeout } : {}),
         }
         : null;
 

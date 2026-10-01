@@ -25,6 +25,7 @@ export interface Settings {
   warehouseQuality?: string; // Kalite Deposu (QLTWH)
   printerName?: string; // Yazıcı Adı (PRINTNAME)
   language: "tr" | "en";
+  screenTimeout?: number; // Özet/başarı ekranı otomatik kapanma süresi (sn) — SCREENTIMEOUT
 }
 
 export interface ProductRef {

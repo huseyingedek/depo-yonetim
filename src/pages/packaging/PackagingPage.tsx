@@ -33,9 +33,10 @@ import {
 import PageHeader from "../../components/PageHeader";
 import ToastView, { useToast } from "../../components/Toast";
 import CameraScanOverlay from "../../components/CameraScanOverlay";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api as wmsApi } from "../../api/client";
 import { useAppStore } from "../../store/appStore";
+import { caniasDateTime } from "../../store/pickingStore";
 
 // -----------------------------------------------------------------------------
 // PAKETLEME — TASARIM AŞAMASI · KART SİSTEMİ
@@ -50,6 +51,10 @@ type Hazard = "kirilabilir" | "yanici" | "sivi" | "toksik" | "agir" | "bozulur";
 interface UrunNode {
   uid: string; tur: "urun"; code: string; name: string; qty: number; unit: string;
   desi: number; kg: number; paketli?: boolean;
+  // qty = Paket Miktarı (sipariş birimi, bu kaptaki adet). paketIci = Ürün Paket İçi Miktar (PERUNIT, sabit).
+  // Stok adedi = paketIci × qty × (üst kap tekrarları). desi/kg STOK birimi başına.
+  paketIci: number;    // PERUNIT — çevrim miktarı (sipariş birimi başına stok adedi)
+  stokBirim?: string;  // SKUNIT
 }
 interface KoliNode {
   uid: string; tur: "koli"; no: number; kod?: string; atil?: boolean; beklemede?: boolean;
@@ -61,7 +66,16 @@ interface KoliNode {
 interface PaletNode { uid: string; tur: "palet"; ad: string; cocuklar: Node[]; carpan?: number; }
 type Node = UrunNode | KoliNode | PaletNode;
 
-interface KaynakUrun { code: string; name: string; unit: string; siparis: number; desi: number; kg: number; paketli?: boolean; }
+interface KaynakUrun {
+  code: string; name: string; unit: string; // unit = sipariş birimi (AKLSQUNIT)
+  siparis: number;      // AKLSQUANTITY — sipariş birimi cinsinden toplam Paket Miktarı (limit buna göre)
+  paketIci: number;     // PERUNIT — Ürün Paket İçi Miktar (çevrim, sabit)
+  desi: number;         // birim (stok) hacmi
+  kg: number;           // birim (stok) ağırlığı
+  stokBirim: string;    // SKUNIT
+  paletZorunlu?: boolean; // AKLISPALLETMUST = 1
+  paketli?: boolean;
+}
 
 export interface PackOrder {
   company: string;
@@ -228,7 +242,7 @@ const koliKendiDesi = (koli: KoliNode): number => yuvarlaDesi(koli.hacim);
 // Koli içine konan ürünler ve iç kolilerin hacim toplamı
 const koliIcerikDesi = (koli: KoliNode): number => {
   return koli.cocuklar.reduce((s, c) => {
-    if (c.tur === "urun") return s + c.desi * c.qty;
+    if (c.tur === "urun") return s + c.desi * c.paketIci * c.qty;
     if (c.tur === "koli") return s + koliKendiDesi(c) * carpanOf(c);
     return s + nodeDesi(c);
   }, 0);
@@ -245,26 +259,18 @@ const carpanOf = (n: Node): number => (n.tur === "urun" ? 1 : Math.max(1, Math.r
 // - Koli ise: kolinin kendi standart desisi
 // - Palet ise: içindeki kolilerin ve malzemelerin desilerinin tam toplamı
 const nodeDesi = (n: Node): number => {
-  if (n.tur === "urun") return yuvarlaDesi(n.desi * n.qty);
+  if (n.tur === "urun") return yuvarlaDesi(n.desi * n.paketIci * n.qty);
   if (n.tur === "koli") return koliKendiDesi(n) * carpanOf(n);
   return cocuk(n).reduce((s, c) => s + nodeDesi(c), 0) * carpanOf(n);
 };
 
-// Ham hacim (patron yuvarlaması YOK) — MZYSavePack için Bora hesap tablosuna göre.
-// Ürün: birim desi × miktar. Koli: kolinin kendi hacmi × paket miktarı (içerik hariç).
-// Palet: içindekilerin ham hacim toplamı × paket miktarı.
-const nodeVolRaw = (n: Node): number => {
-  if (n.tur === "urun") return n.desi * n.qty;
-  if (n.tur === "koli") return n.hacim * carpanOf(n);
-  return cocuk(n).reduce((s, c) => s + nodeVolRaw(c), 0) * carpanOf(n);
-};
 
 // Node kilosu:
 // - Ürün ise: ürün kg * adet
 // - Koli ise: içindeki her şeyin kg toplamı + koli darası (kayıtlıysa, yoksa 0)
 // - Palet ise: içindeki her şeyin toplam kg'si
 const nodeKg = (n: Node): number => {
-  if (n.tur === "urun") return n.kg * n.qty;
+  if (n.tur === "urun") return n.kg * n.paketIci * n.qty;
   if (n.tur === "koli") {
     const icKg = cocuk(n).reduce((s, c) => s + nodeKg(c), 0);
     // 5 koli varsa 5 dara + 5x içerik
@@ -355,34 +361,44 @@ const xmlEsc = (v: unknown) =>
 function buildPackXml(nodes: Node[], ctx: { company: string; plant: string }): string {
   const rows: string[] = [];
   let seq = 0;
-  const walk = (list: Node[], parentTid: number) => {
+  // Her satır KENDİ BAŞINA okunur (ağaçta yukarı çıkmak yok):
+  //   QUANTITY = Ürün Paket İçi Miktar (İçi, stok/sipariş çevrimi) | kap için adedi
+  //   PACKQTY  = Ürün Paket Miktarı (sipariş birimi) | kap için 1
+  //   PARENTPACKQTY = üst kapların kümüle tekrarı
+  //   Satır toplamı (stok) = birim × QUANTITY × PACKQTY × PARENTPACKQTY
+  const walk = (list: Node[], parentTid: number, ancCum: number, topLevel: boolean) => {
     for (const n of list) {
       const tid = ++seq;
-      const carpan = carpanOf(n);
       const r3 = (x: number) => Math.round(x * 1000) / 1000;
       let ISPACKITEM = 0, ISSCRAPBOX = 0, ISMANUEL = 0;
-      let MATERIAL = "", MTEXT = "", QUANTITY = 0, QUNIT = "AD";
-      let VOLUME = 0, RVOLUME = 0, NETWEIGHT = 0, RNETWEIGHT = 0;
+      let MATERIAL = "", MTEXT = "", QUNIT = "AD";
+      let QUANTITY = 1, PACKQTY = 1, PARENTPACKQTY = 1, birimVol = 0, birimWt = 0;
       if (n.tur === "urun") {
-        // Ürün: birim = malzeme kartı; satır toplamı = birim × miktar (üst çarpan burada yok)
-        MATERIAL = n.code; MTEXT = n.name; QUANTITY = n.qty; QUNIT = n.unit || "AD";
-        VOLUME = r3(n.desi); RVOLUME = r3(n.desi * n.qty);
-        NETWEIGHT = r3(n.kg); RNETWEIGHT = r3(n.kg * n.qty);
+        MATERIAL = n.code; MTEXT = n.name; QUNIT = n.unit || "AD";
+        QUANTITY = n.paketIci;      // İçi Miktar (FCT)
+        PACKQTY = n.qty;            // Paket Miktarı (sipariş birimi, bu kapta)
+        PARENTPACKQTY = ancCum;     // üst kapların kümüle tekrarı
+        birimVol = n.desi; birimWt = n.kg; // STOK birimi başına
       } else if (n.tur === "koli") {
         ISPACKITEM = 1; ISSCRAPBOX = n.atil ? 1 : 0; ISMANUEL = n.elle ? 1 : 0;
         MATERIAL = n.kod || boyutKodu(n.no);
         MTEXT = n.atil ? "Atıl Koli" : (n.kod || `Koli ${boyutKodu(n.no)}`);
-        QUANTITY = 1; QUNIT = "AD";
-        // Hacim: SADECE kolinin kendi hacmi (içerik hariç) × paket miktarı
-        VOLUME = r3(n.hacim); RVOLUME = r3(n.hacim * carpan);
-        // Ağırlık: birim = koli darası; toplam = (içerik + dara) × paket miktarı
-        NETWEIGHT = r3(koliDara(n)); RNETWEIGHT = r3(nodeKg(n));
+        QUNIT = "AD";
+        QUANTITY = topLevel ? 1 : carpanOf(n);
+        PARENTPACKQTY = topLevel ? carpanOf(n) : ancCum;
+        birimVol = n.hacim;        // kolinin KENDİ hacmi (içerik ayrı satırlarda)
+        birimWt = koliDara(n);     // kolinin KENDİ darası
       } else {
-        // Palet: kendi hacmi/ağırlığı yok; toplam içindekilerden × paket miktarı
-        ISPACKITEM = 2; MATERIAL = ""; MTEXT = n.ad; QUANTITY = 1; QUNIT = "AD";
-        VOLUME = r3(nodeVolRaw(n) / carpan); RVOLUME = r3(nodeVolRaw(n));
-        NETWEIGHT = r3(nodeKg(n) / carpan); RNETWEIGHT = r3(nodeKg(n));
+        ISPACKITEM = 2; MATERIAL = ""; MTEXT = n.ad; QUNIT = "AD";
+        QUANTITY = topLevel ? 1 : carpanOf(n);
+        PARENTPACKQTY = topLevel ? carpanOf(n) : ancCum;
+        birimVol = 0; birimWt = 0;  // paletin kendi hacmi/ağırlığı yok
       }
+      const toplamCarpan = QUANTITY * PACKQTY * PARENTPACKQTY;
+      const VOLUME = r3(birimVol);
+      const NETWEIGHT = r3(birimWt);
+      const RVOLUME = r3(birimVol * toplamCarpan);
+      const RNETWEIGHT = r3(birimWt * toplamCarpan);
       rows.push(
         "  <ROW>" +
         `<TID>${tid}</TID>` +
@@ -392,10 +408,11 @@ function buildPackXml(nodes: Node[], ctx: { company: string; plant: string }): s
         `<ISMANUEL>${ISMANUEL}</ISMANUEL>` +
         `<COMPANY>${xmlEsc(ctx.company)}</COMPANY>` +
         `<PLANT>${xmlEsc(ctx.plant)}</PLANT>` +
-        `<PACKQTY>${carpan}</PACKQTY>` +
         `<MATERIAL>${xmlEsc(MATERIAL)}</MATERIAL>` +
         `<MTEXT>${xmlEsc(MTEXT)}</MTEXT>` +
-        `<QUANTITY>${QUANTITY}</QUANTITY>` +
+        `<QUANTITY>${r3(QUANTITY)}</QUANTITY>` +
+        `<PACKQTY>${r3(PACKQTY)}</PACKQTY>` +
+        `<PARENTPACKQTY>${r3(PARENTPACKQTY)}</PARENTPACKQTY>` +
         `<QUNIT>${xmlEsc(QUNIT)}</QUNIT>` +
         `<VOLUME>${VOLUME}</VOLUME>` +
         `<RVOLUME>${RVOLUME}</RVOLUME>` +
@@ -405,10 +422,10 @@ function buildPackXml(nodes: Node[], ctx: { company: string; plant: string }): s
         "<NWUNIT>KG</NWUNIT>" +
         "</ROW>"
       );
-      if (n.tur !== "urun") walk(n.cocuklar, tid);
+      if (n.tur !== "urun") walk(n.cocuklar, tid, ancCum * carpanOf(n), false);
     }
   };
-  walk(nodes, 0);
+  walk(nodes, 0, 1, true);
   return `<ROOT>\n${rows.join("\n")}\n</ROOT>`;
 }
 
@@ -422,6 +439,8 @@ export default function PackagingPage() {
   const compCode = useAppStore((st) => st.settings.company);
   const plantCode = useAppStore((st) => st.settings.facility);
   const location = useLocation();
+  const navigate = useNavigate();
+  const screenTimeout = useAppStore((st) => st.settings.screenTimeout ?? 3);
   const navState = (location.state as { order?: PackOrder } | null) || null;
   const idRef = useRef(100);
   const yid = () => `x${++idRef.current}`;
@@ -433,6 +452,7 @@ export default function PackagingPage() {
   const [dropHedef, setDropHedef] = useState<string | null>(null);
   const [bitti, setBitti] = useState(false);
   const [kaydediliyor, setKaydediliyor] = useState(false);
+  const [baslamaZamani, setBaslamaZamani] = useState<string>(""); // Paketlemeye giriş saati (PDTSTARTTIME)
   const [bekletildi, setBekletildi] = useState(false);
 
   // CANIAS MZYListingPack Servisi — Paketlenecek Emirler & Ürünler
@@ -445,6 +465,7 @@ export default function PackagingPage() {
     setSeciliEmir(emir);
     setSahne([]);
     setSeciliKapId(null);
+    setBaslamaZamani(caniasDateTime()); // kullanıcı bu emirle paketlemeye girdi
     setYukleniyor(true);
     try {
       // 1) Yeni CANIAS MZYEnterPack servisini çağır (Paketlemeye Başla)
@@ -464,21 +485,34 @@ export default function PackagingPage() {
             ? (l.TBLITEMMATLINE[0] as Record<string, unknown>)
             : (l.TBLITEMMATLINE as Record<string, unknown>) || {};
 
-          const desi = Number(matLine?.VOLUME) || 0;
-          let kg = Number(matLine?.NETWEIGHT) || 0;
+          const desi = Number(matLine?.VOLUME) || 0; // STOK birimi başına hacim (desi)
+          let kg = Number(matLine?.NETWEIGHT) || 0;   // STOK birimi başına ağırlık
           if (String(matLine?.NWUNIT || "").toUpperCase() === "GR") {
             kg = kg / 1000;
           }
 
-          const qty = Number(l.MOVEDQTY || l.MOVEQTY || l.QTY) || 0;
+          // Yeni model (Bora): sipariş birimi cinsinden miktar + çevrim (İçi Miktar)
+          const siparis = Number(l.AKLSQUANTITY ?? l.MOVEDQTY ?? l.MOVEQTY ?? l.QTY) || 0; // sipariş birimi toplam Paket Miktarı
+          // İçi Miktar = FCT = PERUNIT / VALUE (sipariş birimi başına stok adedi).
+          // Bora VALUE/FCT'yi enterPack'e ekleyince doğru hesaplanır; yoksa güvenli fallback (1).
+          const perunit = Number(matLine?.PERUNIT ?? l.PERUNIT) || 0;
+          const value = Number(matLine?.VALUE ?? l.VALUE) || 0;
+          const fctDirect = Number(matLine?.FCT ?? l.FCT) || 0;
+          const paketIci = fctDirect > 0 ? fctDirect : (perunit > 0 && value > 0 ? perunit / value : (perunit > 0 ? perunit : 1));
+          const orderUnit = String(l.AKLSQUNIT || l.UNIT || "AD");
+          const stokBirim = String(matLine?.SKUNIT || l.UNIT || "AD");
+          const paletZorunlu = String(l.AKLISPALLETMUST ?? "0") === "1";
 
           return {
             code: String(l.MATERIAL || ""),
             name: String(l.MTEXT || l.MATERIAL || "Malzeme").trim(),
-            unit: String(l.UNIT || "AD"),
-            siparis: qty,
+            unit: orderUnit,
+            siparis,
+            paketIci,
             desi: Number(desi.toFixed(2)),
             kg: Number(kg.toFixed(3)),
+            stokBirim,
+            paletZorunlu,
           };
         });
 
@@ -558,6 +592,14 @@ export default function PackagingPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Özet (başarı) ekranı otomatik kapanır: SCREENTIMEOUT sn sonra en başa (listeye) döner.
+  useEffect(() => {
+    if (!bitti) return;
+    const sn = Math.max(1, Number(screenTimeout) || 3);
+    const t = setTimeout(() => navigate("/packaging"), sn * 1000);
+    return () => clearTimeout(t);
+  }, [bitti, screenTimeout, navigate]);
 
   // Sürükle-bırak sırasında kenara yaklaşınca otomatik kaydırma (tablet + fare).
   // İmleç hangi kaydırılabilir alanın (sayfa, paketleme alanı, ürün listesi, koli)
@@ -679,7 +721,18 @@ export default function PackagingPage() {
 
   const hacim = (uid: string, v: number) => map(uid, (n) => (n.tur === "koli" ? { ...n, hacim: Math.max(0, v) } : n));
   // Paket miktarı (çarpan) — koli veya palet için
-  const carpanla = (uid: string, delta: number) => map(uid, (n) => (n.tur !== "urun" ? ({ ...n, carpan: Math.max(1, Math.round((n.carpan ?? 1) + delta)) } as Node) : n));
+  const carpanla = (uid: string, delta: number) => {
+    const yeni = nodeMap(sahne, uid, (n) => (n.tur !== "urun" ? ({ ...n, carpan: Math.max(1, Math.round((n.carpan ?? 1) + delta)) } as Node) : n));
+    // Çarpan artışı içindekilerin fiziksel adedini katlar — sipariş miktarı aşılamaz.
+    if (delta > 0) {
+      const asan = siparisAsan(yeni);
+      if (asan) {
+        show({ kind: "info", text: `${asan.name}: paket çarpanı artırılamaz — sipariş miktarı aşılıyor (max ${asan.siparis} ${asan.unit})` });
+        return;
+      }
+    }
+    setSahne(yeni);
+  };
   // Ürün miktarını doğrudan (elle) ayarla — sipariş miktarını (çarpan dahil) aşamaz.
   const urunAdetSet = (uid: string, value: number) => {
     const node = nodeFind(sahne, uid);
@@ -731,7 +784,7 @@ export default function PackagingPage() {
       return show({ kind: "info", text: F > 1 ? `Paket çarpanı ×${F} için yeterli adet kalmadı (kalan ${Math.max(0, kalanFiziksel)})` : "Bu üründen kalmadı" });
     }
     const qty = Math.floor(kalanFiziksel / F); // kap başına düşen adet
-    const yeni: UrunNode = { uid: yid(), tur: "urun", code: k.code, name: k.name, qty, unit: k.unit, desi: k.desi, kg: k.kg, paketli: k.paketli };
+    const yeni: UrunNode = { uid: yid(), tur: "urun", code: k.code, name: k.name, qty, unit: k.unit, desi: k.desi, kg: k.kg, paketIci: k.paketIci, stokBirim: k.stokBirim, paketli: k.paketli };
     setSahne((prev) => nodeAddUrun(prev, parent, yeni));
     show({ kind: "ok", text: F > 1 ? `${k.name} (+${qty}×${F} = ${qty * F} ${k.unit}) eklendi` : `${k.name} (+${qty} ${k.unit}) eklendi` });
   };
@@ -828,6 +881,10 @@ export default function PackagingPage() {
     if (bos) return show({ kind: "warn", text: "Boş koli var — kaydedilemez" });
     if (kSay === 0) return show({ kind: "info", text: "Paketlenecek koli yok" });
     if (!seciliEmir) return show({ kind: "warn", text: "Sevkiyat seçili değil" });
+    // Palet zorunlu müşteri kontrolü (AKLISPALLETMUST=1)
+    if (urunler.some((u) => u.paletZorunlu) && pSay === 0) {
+      return show({ kind: "warn", text: "Bu sipariş palet ile gönderilmeli — en az bir palet ekleyin" });
+    }
     // Güvenlik: hiçbir ürün sipariş miktarını aşmasın
     const asan = siparisAsan(sahne);
     if (asan) return show({ kind: "error", text: `${asan.name}: sipariş miktarı aşılıyor (max ${asan.siparis} ${asan.unit})` });
@@ -839,17 +896,18 @@ export default function PackagingPage() {
 
     setKaydediliyor(true);
     try {
-      await wmsApi.savePack({
+      const sonuc = await wmsApi.savePack({
         company: seciliEmir.company || compCode,
         plant: seciliEmir.plant || plantCode,
         warehouse: seciliEmir.warehouse || packWh,
-        stockPlace: seciliEmir.stockPlace,
+        delNum: seciliEmir.delNum,
+        startTime: baslamaZamani,
         orderType: seciliEmir.orderType,
         orderNum: seciliEmir.orderNum,
         xml,
       });
       setBitti(true);
-      show({ kind: "done", text: `${kSay} koli · ${pSay} palet kaydedildi` });
+      show({ kind: "done", text: sonuc.containerId ? `Konteyner ${sonuc.containerId} — ${kSay} koli · ${pSay} palet kaydedildi` : `${kSay} koli · ${pSay} palet kaydedildi` });
     } catch (e) {
       show({ kind: "error", text: e instanceof Error ? e.message : "Paketleme kaydedilemedi" });
     } finally {
@@ -1424,14 +1482,14 @@ function CarpanKontrol({ node, api }: { node: KoliNode | PaletNode; api: Api }) 
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      title="Paket miktarı — aynı içerikten kaç adet (desi/ağırlık/miktar bununla çarpılır)"
+      title="Tekrar (paketleme) miktarı — bu koli/paletten kaç tane (aynı yapı). Üst kap çarpanı olarak iner."
       className={`inline-flex items-center gap-0.5 rounded-lg border px-0.5 py-0.5 ${c > 1 ? "border-brand-400 bg-brand-50 dark:border-brand-500/50 dark:bg-brand-500/15" : "border-line bg-surface"}`}
     >
-      <button type="button" onClick={(e) => { e.stopPropagation(); api.carpanla(node.uid, -1); }} disabled={c <= 1} className="flex h-6 w-6 items-center justify-center rounded-md text-subtle transition hover:bg-elevated hover:text-fg active:scale-95 disabled:opacity-30" aria-label="Paket miktarı azalt">
+      <button type="button" onClick={(e) => { e.stopPropagation(); api.carpanla(node.uid, -1); }} disabled={c <= 1} className="flex h-6 w-6 items-center justify-center rounded-md text-subtle transition hover:bg-elevated hover:text-fg active:scale-95 disabled:opacity-30" aria-label="Tekrar miktarı azalt">
         <Minus className="h-3.5 w-3.5" />
       </button>
       <span className={`min-w-[2.1rem] text-center font-mono text-xs font-black tabular-nums ${c > 1 ? "text-brand-700 dark:text-brand-300" : "text-fg"}`}>×{c}</span>
-      <button type="button" onClick={(e) => { e.stopPropagation(); api.carpanla(node.uid, 1); }} className="flex h-6 w-6 items-center justify-center rounded-md text-subtle transition hover:bg-elevated hover:text-fg active:scale-95" aria-label="Paket miktarı artır">
+      <button type="button" onClick={(e) => { e.stopPropagation(); api.carpanla(node.uid, 1); }} className="flex h-6 w-6 items-center justify-center rounded-md text-subtle transition hover:bg-elevated hover:text-fg active:scale-95" aria-label="Tekrar miktarı artır">
         <Plus className="h-3.5 w-3.5" />
       </button>
     </div>
@@ -1790,6 +1848,11 @@ function UrunKart({ urun, api, parentTur }: { urun: UrunNode; api: Api; parentTu
         <div className="min-w-0 flex-1">
           <p className={`truncate text-[11px] font-bold leading-tight ${urun.paketli ? "text-slate-900" : "text-fg"}`}>{urun.name}</p>
           <p className={`font-mono text-[10px] font-bold ${urun.paketli ? "text-slate-900" : "text-fg"}`}>{urun.code}{urun.paketli && " · pk"}</p>
+          {urun.paketIci > 1 && (
+            <p className="font-mono text-[10px] font-bold text-brand-600 dark:text-brand-300" title="Ürün Paket İçi Miktar (çevrim) · bu kaptaki stok adedi">
+              İçi {urun.paketIci} · stok {Number((urun.paketIci * urun.qty).toFixed(2))}
+            </p>
+          )}
         </div>
         {urun.paketli && <PackageCheck className="h-3 w-3 shrink-0 text-emerald-600" />}
       </div>
