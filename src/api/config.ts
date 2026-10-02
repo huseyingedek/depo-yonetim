@@ -56,6 +56,7 @@ export const SERVICES = {
   listingPack: "MZYListingPack", // Paketlenecekleri getir
   enterPack: "MZYEnterPack", // Paketlemeye başla
   savePack: "MZYSavePack", // Paketlemeyi sakla
+  updateDlvPlan: "MZYUpdateDlvPlan", // Paketlemeyi beklet — hesap/XML kaydı, konteyner oluşturmaz (Bora)
 
   // Kullanıcı Öndeğerleri
   getUserDefault: "MZYGetUserDefault", // Kullanıcı öndeğerlerini getir (Firma, Tesis, Depolar)

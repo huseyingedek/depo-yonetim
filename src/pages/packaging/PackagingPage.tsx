@@ -9,7 +9,6 @@ import {
   Truck,
   Weight,
   Pause,
-  Play,
   Trash2,
   GripVertical,
   Flame,
@@ -527,6 +526,7 @@ export default function PackagingPage() {
   const packWh = useAppStore((st) => st.settings.warehousePackaging);
   const compCode = useAppStore((st) => st.settings.company);
   const plantCode = useAppStore((st) => st.settings.facility);
+  const sevkWh = useAppStore((st) => st.settings.warehouseDelivery); // sevkiyat konteynerinin deposu
   const location = useLocation();
   const navigate = useNavigate();
   const screenTimeout = useAppStore((st) => st.settings.screenTimeout ?? 3);
@@ -542,9 +542,8 @@ export default function PackagingPage() {
   const [atilMod, setAtilMod] = useState(false);
   const [dropHedef, setDropHedef] = useState<string | null>(null);
   const [bitti, setBitti] = useState(false);
-  const [kaydediliyor, setKaydediliyor] = useState(false);
+  const [kaydediliyor, setKaydediliyor] = useState<null | "bitir" | "beklet">(null); // hangi buton kaydediyor
   const [baslamaZamani, setBaslamaZamani] = useState<string>(""); // Paketlemeye giriş saati (PDTSTARTTIME)
-  const [bekletildi, setBekletildi] = useState(false);
 
   // CANIAS MZYListingPack Servisi — Paketlenecek Emirler & Ürünler
   const [emirler, setEmirler] = useState<PackOrder[]>([]);
@@ -868,6 +867,12 @@ export default function PackagingPage() {
     }
     setSahne((prev) => temizle(nodeMap(prev, uid, (n) => (n.tur === "urun" ? { ...n, qty: v } : n))));
   };
+  // Ürün paket içi miktarı (QUANTITY) elle değiştirme — manuel müdahale → satır ISMANUEL=1.
+  const urunIciSet = (uid: string, value: number) => {
+    const v = Number.isFinite(value) && value > 0 ? Math.round(value * 1000) / 1000 : 0;
+    if (v <= 0) { show({ kind: "info", text: "Paket içi miktar 0'dan büyük olmalı" }); return; }
+    setSahne((prev) => nodeMap(prev, uid, (n) => (n.tur === "urun" ? { ...n, paketIci: v, elle: true } : n)));
+  };
   const beklet = (uid: string) => map(uid, (n) => (n.tur === "koli" ? { ...n, beklemede: !n.beklemede } : n));
 
   const [barkodGiris, setBarkodGiris] = useState("");
@@ -991,18 +996,27 @@ export default function PackagingPage() {
     drag = null;
   };
 
-  const bitir = async () => {
-    let bos = false;
-    const kontrol = (ns: Node[]) => ns.forEach((n) => { if (n.tur === "koli") { if (urunSay(n) === 0) bos = true; kontrol(n.cocuklar); } else if (n.tur === "palet") kontrol(n.cocuklar); });
-    kontrol(sahne);
-    if (bos) return show({ kind: "warn", text: "Boş koli var — kaydedilemez" });
-    if (kSay === 0) return show({ kind: "info", text: "Paketlenecek koli yok" });
+  // Paketlemeyi kaydetme (Bora, 02.10):
+  //  - bitir : tam kontroller (boş koli, koli yok, palet zorunlu) → MZYCreateContainer + MZYSavePack → özet ekranı.
+  //  - beklet: yarım paketleme olduğu gibi → MZYUpdateDlvPlan (ayrı servis; konteyner OLUŞTURMAZ,
+  //            hesabın/XML'in doğru oluşup oluşmadığını CANIAS'ta görmeyi sağlar) → listeye dönülür.
+  const kaydet = async (mod: "bitir" | "beklet") => {
+    if (kaydediliyor) return;
     if (!seciliEmir) return show({ kind: "warn", text: "Sevkiyat seçili değil" });
-    // Palet zorunlu müşteri kontrolü (AKLISPALLETMUST=1)
-    if (urunler.some((u) => u.paletZorunlu) && pSay === 0) {
-      return show({ kind: "warn", text: "Bu sipariş palet ile gönderilmeli — en az bir palet ekleyin" });
+    if (mod === "beklet") {
+      if (sahne.length === 0) return show({ kind: "info", text: "Bekletilecek paketleme yok — alan boş" });
+    } else {
+      let bos = false;
+      const kontrol = (ns: Node[]) => ns.forEach((n) => { if (n.tur === "koli") { if (urunSay(n) === 0) bos = true; kontrol(n.cocuklar); } else if (n.tur === "palet") kontrol(n.cocuklar); });
+      kontrol(sahne);
+      if (bos) return show({ kind: "warn", text: "Boş koli var — kaydedilemez" });
+      if (kSay === 0) return show({ kind: "info", text: "Paketlenecek koli yok" });
+      // Palet zorunlu müşteri kontrolü (AKLISPALLETMUST=1)
+      if (urunler.some((u) => u.paletZorunlu) && pSay === 0) {
+        return show({ kind: "warn", text: "Bu sipariş palet ile gönderilmeli — en az bir palet ekleyin" });
+      }
     }
-    // Güvenlik: hiçbir ürün sipariş miktarını aşmasın
+    // Güvenlik: hiçbir ürün sipariş miktarını aşmasın (iki modda da)
     const asan = siparisAsan(sahne);
     if (asan) return show({ kind: "error", text: `${asan.name}: sipariş miktarı aşılıyor (max ${asan.siparis} ${asan.unit})` });
 
@@ -1011,8 +1025,22 @@ export default function PackagingPage() {
       plant: seciliEmir.plant || plantCode,
     });
 
-    setKaydediliyor(true);
+    setKaydediliyor(mod);
     try {
+      if (mod === "beklet") {
+        await wmsApi.updateDlvPlan({
+          company: seciliEmir.company || compCode,
+          plant: seciliEmir.plant || plantCode,
+          delNum: seciliEmir.delNum,
+          startTime: baslamaZamani,
+          orderType: seciliEmir.orderType,
+          orderNum: seciliEmir.orderNum,
+          xml,
+        });
+        show({ kind: "info", text: "Paketleme beklemeye alındı. Listeye dönülüyor…" });
+        setTimeout(() => navigate("/packaging"), 1200);
+        return;
+      }
       const sonuc = await wmsApi.savePack({
         company: seciliEmir.company || compCode,
         plant: seciliEmir.plant || plantCode,
@@ -1026,22 +1054,12 @@ export default function PackagingPage() {
       setBitti(true);
       show({ kind: "done", text: sonuc.containerId ? `Konteyner ${sonuc.containerId} — ${kSay} koli · ${pSay} palet kaydedildi` : `${kSay} koli · ${pSay} palet kaydedildi` });
     } catch (e) {
-      show({ kind: "error", text: e instanceof Error ? e.message : "Paketleme kaydedilemedi" });
+      show({ kind: "error", text: e instanceof Error ? e.message : (mod === "beklet" ? "Paketleme bekletilemedi" : "Paketleme kaydedilemedi") });
     } finally {
-      setKaydediliyor(false);
+      setKaydediliyor(null);
     }
   };
 
-  const paketlemeyiBeklet = () => {
-    setBekletildi((v) => {
-      const yeni = !v;
-      show({
-        kind: yeni ? "info" : "ok",
-        text: yeni ? "Paketleme işlemi beklemeye alındı" : "Paketleme işlemine devam ediliyor",
-      });
-      return yeni;
-    });
-  };
 
   const api: Api = {
     seciliKapId,
@@ -1049,6 +1067,7 @@ export default function PackagingPage() {
     sil,
     urunAdet,
     urunAdetSet,
+    urunIciSet,
     hacim,
     carpanla,
     beklet,
@@ -1147,17 +1166,15 @@ export default function PackagingPage() {
           <div className="ml-auto flex shrink-0 items-center gap-2">
             <button
               type="button"
-              onClick={paketlemeyiBeklet}
-              className={`inline-flex h-9 w-[130px] items-center justify-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition active:scale-95 ${bekletildi
-                ? "border-amber-400 bg-amber-100 text-amber-800 hover:bg-amber-200 dark:border-amber-500/40 dark:bg-amber-500/20 dark:text-amber-200"
-                : "border-line bg-surface text-subtle hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-500/10 dark:hover:text-amber-300"
-                }`}
-              title={bekletildi ? "Paketlemeye Devam Et" : "Paketlemeyi Beklet"}
+              onClick={() => kaydet("beklet")}
+              disabled={kaydediliyor !== null}
+              className="inline-flex h-9 w-[130px] items-center justify-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-semibold text-subtle transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 active:scale-95 disabled:opacity-60 dark:hover:bg-amber-500/10 dark:hover:text-amber-300"
+              title="Yarım paketlemenin hesabını CANIAS'a kaydet ve listeye dön (MZYUpdateDlvPlan — konteyner oluşturmaz)"
             >
-              {bekletildi ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-              <span>{bekletildi ? "Devam Ettir" : "Beklet"}</span>
+              {kaydediliyor === "beklet" ? <RotateCw className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
+              <span>{kaydediliyor === "beklet" ? "Bekletiliyor…" : "Beklet"}</span>
             </button>
-            <button type="button" onClick={bitir} disabled={kaydediliyor} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-700 disabled:opacity-60">{kaydediliyor ? <RotateCw className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />} {kaydediliyor ? "Kaydediliyor…" : "Paketlemeyi Bitir"}</button>
+            <button type="button" onClick={() => kaydet("bitir")} disabled={kaydediliyor !== null} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-700 disabled:opacity-60">{kaydediliyor === "bitir" ? <RotateCw className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />} {kaydediliyor === "bitir" ? "Kaydediliyor…" : "Paketlemeyi Bitir"}</button>
           </div>
         </div>
       </div>
@@ -1372,7 +1389,7 @@ export default function PackagingPage() {
       {xmlAcik && (
         <XmlOnizlemeModal
           xml={buildPackXml(sahne, { company: seciliEmir?.company || compCode, plant: seciliEmir?.plant || plantCode })}
-          ozet={{ palet: pSay, koli: kSay, desi: genelDesi, kg: genelKg, emir: seciliEmir ? `${seciliEmir.orderType}-${seciliEmir.orderNum}` : "—" }}
+          ozet={{ palet: pSay, koli: kSay, desi: genelDesi, kg: genelKg, emir: seciliEmir ? `${seciliEmir.orderType}-${seciliEmir.orderNum}` : "—", depo: sevkWh || "TANIMSIZ" }}
           onKapat={() => setXmlAcik(false)}
         />
       )}
@@ -1486,7 +1503,7 @@ function BirimDuzenleModal({ urun, onKaydet, onKapat }: { urun: KaynakUrun; onKa
 }
 
 // CANIAS'a gidecek paketleme verisinin (PSPACKITEMXML) önizlemesi — test/kontrol için.
-function XmlOnizlemeModal({ xml, ozet, onKapat }: { xml: string; ozet: { palet: number; koli: number; desi: number; kg: number; emir: string }; onKapat: () => void; }) {
+function XmlOnizlemeModal({ xml, ozet, onKapat }: { xml: string; ozet: { palet: number; koli: number; desi: number; kg: number; emir: string; depo: string }; onKapat: () => void; }) {
   const kopyala = () => { try { navigator.clipboard?.writeText(xml); } catch { /* yok say */ } };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onKapat}>
@@ -1497,6 +1514,7 @@ function XmlOnizlemeModal({ xml, ozet, onKapat }: { xml: string; ozet: { palet: 
         </div>
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-bold text-fg">
           <span className="rounded-lg bg-elevated px-2 py-1">Emir: <b className="font-mono">{ozet.emir}</b></span>
+          <span className="rounded-lg bg-elevated px-2 py-1" title="Sevkiyat konteynerinin oluşturulacağı depo (numarayı CANIAS üretir)">Sevkiyat deposu: <b className="font-mono">{ozet.depo}</b></span>
           <span className="rounded-lg bg-elevated px-2 py-1"><b className="font-mono">{ozet.palet}</b> palet</span>
           <span className="rounded-lg bg-elevated px-2 py-1"><b className="font-mono">{ozet.koli}</b> koli</span>
           <span className="rounded-lg bg-elevated px-2 py-1"><b className="font-mono">{ozet.desi}</b> desi</span>
@@ -1519,6 +1537,7 @@ interface Api {
   sil: (uid: string) => void;
   urunAdet: (uid: string, d: number) => void;
   urunAdetSet: (uid: string, value: number) => void;
+  urunIciSet: (uid: string, value: number) => void;
   hacim: (uid: string, v: number) => void;
   carpanla: (uid: string, delta: number) => void;
   beklet: (uid: string) => void;
@@ -1891,6 +1910,14 @@ function UrunKart({ urun, api, parentTur, faktor = 1 }: { urun: UrunNode; api: A
     const v = parseInt(draft, 10);
     api.urunAdetSet(urun.uid, Number.isNaN(v) ? 0 : v);
   };
+  const [iciDraft, setIciDraft] = useState(String(urun.paketIci));
+  useEffect(() => { setIciDraft(String(urun.paketIci)); }, [urun.paketIci]);
+  const iciCommit = () => {
+    const v = parseFloat(iciDraft.replace(",", "."));
+    if (!Number.isFinite(v) || v === urun.paketIci) { setIciDraft(String(urun.paketIci)); return; }
+    api.urunIciSet(urun.uid, v);
+  };
+  const etiket = "block text-[9px] font-black uppercase tracking-wide text-subtle";
   return (
     <div
       draggable
@@ -1902,16 +1929,29 @@ function UrunKart({ urun, api, parentTur, faktor = 1 }: { urun: UrunNode; api: A
         <div className="min-w-0 flex-1">
           <p className={`truncate text-[11px] font-bold leading-tight ${urun.paketli ? "text-slate-900" : "text-fg"}`}>{urun.name}</p>
           <p className={`font-mono text-[10px] font-bold ${urun.paketli ? "text-slate-900" : "text-fg"}`}>{urun.code}{urun.paketli && " · pk"}</p>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1 font-mono text-[9px] font-black leading-none">
-            <span className="rounded bg-sky-100 px-1 py-0.5 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300" title="Ürün Paket İçi Miktar (çevrim)">içi {fmt(urun.paketIci)}</span>
-            <span className="rounded bg-emerald-100 px-1 py-0.5 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300" title="Paket Miktarı (bu kaptaki adet)">pkt {fmt(urun.qty)}</span>
-            {faktor > 1 && <span className="rounded bg-amber-100 px-1 py-0.5 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" title="Bağlı Paket Miktarı (üst kap çarpanı)">bağlı ×{faktor}</span>}
-            <span className="text-subtle" title="Toplam stok adedi = içi × paket × bağlı">= {fmt(urun.paketIci * urun.qty * faktor)} stok</span>
-          </div>
         </div>
         {urun.paketli && <PackageCheck className="h-3 w-3 shrink-0 text-emerald-600" />}
       </div>
-      <div className="mt-1 flex flex-wrap items-center justify-between gap-1">
+      <div className="mt-1 flex flex-wrap items-end gap-x-2 gap-y-1">
+        {/* 1) Ürün Paket İçi Miktar (QUANTITY) */}
+        <div>
+          <span className={etiket} title="Ürün Paket İçi Miktar (XML: QUANTITY)">İçi</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={iciDraft}
+            onChange={(e) => setIciDraft(e.target.value.replace(/[^0-9.,]/g, ""))}
+            onFocus={(e) => { e.stopPropagation(); e.currentTarget.select(); }}
+            onClick={(e) => e.stopPropagation()}
+            onBlur={iciCommit}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
+            className={`h-6 w-12 rounded-md border bg-surface px-1 text-center font-mono text-sm font-black text-fg focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${urun.elle ? "border-amber-400" : "border-line"}`}
+            title={urun.elle ? "Elle değiştirildi (ISMANUEL=1)" : "Ürün paket içi miktarı — elle değiştirilebilir"}
+          />
+        </div>
+        {/* 2) Ürün Paket Miktarı (PACKQTY) */}
+        <div>
+          <span className={etiket} title="Ürün Paket Miktarı (XML: PACKQTY)">Paket</span>
         <div className="flex items-center gap-1">
           <button type="button" onClick={(e) => { e.stopPropagation(); api.urunAdet(urun.uid, -1); }} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-rose-300 text-rose-500 transition hover:bg-rose-50 active:scale-95 dark:hover:bg-rose-500/10"><Minus className="h-3.5 w-3.5" /></button>
           <input
@@ -1929,8 +1969,17 @@ function UrunKart({ urun, api, parentTur, faktor = 1 }: { urun: UrunNode; api: A
           <button type="button" onClick={(e) => { e.stopPropagation(); api.urunAdet(urun.uid, +1); }} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-emerald-300 text-emerald-600 transition hover:bg-emerald-50 active:scale-95 dark:hover:bg-emerald-500/10"><Plus className="h-3.5 w-3.5" /></button>
           <span className={`ml-0.5 text-[10px] font-bold ${urun.paketli ? "text-slate-900" : "text-fg"}`}>{urun.unit}</span>
         </div>
-        <SilButon onSil={() => api.sil(urun.uid)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-3 w-3" />
+        </div>
+        {/* 3) Bağlı Paket Miktarı / Paket Sayısı (PARENTPACKQTY) — kolinin ×N değerinden gelir */}
+        <div>
+          <span className={etiket} title="Bağlı Paket Miktarı / Paket Sayısı (XML: PARENTPACKQTY)">Bağlı</span>
+          <span className={`flex h-6 min-w-[2.5rem] items-center justify-center rounded-md border border-dashed px-1.5 font-mono text-sm font-black ${faktor > 1 ? "border-amber-400 text-amber-700 dark:text-amber-300" : "border-line text-fg"}`} title="Kolinin/paletin ×N paket sayısından gelir; değiştirmek için kolideki ×N'yi kullanın">×{faktor}</span>
+        </div>
+        <SilButon onSil={() => api.sil(urun.uid)} className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-3 w-3" />
       </div>
+      <p className="mt-0.5 font-mono text-[9px] font-semibold text-subtle" title="Toplam stok adedi = İçi × Paket × Bağlı">
+        = {fmt(urun.paketIci)} × {fmt(urun.qty)} × {faktor} = {fmt(urun.paketIci * urun.qty * faktor)} stok
+      </p>
     </div>
   );
 }

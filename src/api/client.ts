@@ -2654,13 +2654,15 @@ export const api = {
     traceStatus?: number;
   }): Promise<{ raw: unknown; message: string; success: boolean; containerId?: string }> {
     const c = ctx();
-    const whCode = params.warehouse || c.warehousePackaging || c.warehouse;
-
-    // 1) Önce konteyner (palet/sevkiyat kabı) oluştur — savePick akışıyla aynı.
-    //    MZYCreateContainer dönüşündeki konteyner no, SavePack'e PSSTOCKPLACE olarak gider.
-    const cont = await api.placeInPackage(whCode, "KONSEVKIYAT", params.orderNum, params.orderType);
+    // 1) SEVKİYAT konteyneri oluştur (Bora, 02.10):
+    //    - Depo = Sevkiyat Deposu (ayarlar: DELIVERYWH), paketleme deposu DEĞİL.
+    //    - Konteyner numarasını CANIAS (Bora) kendisi üretir; WMS numara göndermez.
+    //    Dönen konteyner no, SavePack'e PSTARCONTAINER olarak gider.
+    const sevkWh = String(c.warehouseDelivery || "").trim();
+    if (!sevkWh) throw new WmsError("Ayarlarda Sevkiyat Deposu tanımlı değil — paketleme kaydedilemez.");
+    const cont = await api.placeInPackage(sevkWh, "KONSEVKIYAT", params.orderNum, params.orderType);
     if (!cont.containerId) {
-      throw new WmsError(cont.message || "Konteyner oluşturulamadı (MZYCreateContainer boş döndü)");
+      throw new WmsError(cont.message || "Sevkiyat konteyneri oluşturulamadı (MZYCreateContainer boş döndü)");
     }
 
     // 2) SavePack — oluşturulan konteyneri PSSTOCKPLACE olarak gönder
@@ -2681,6 +2683,44 @@ export const api = {
     const r = await call(SERVICES.savePack, callParams);
     console.info("📥 [MZYSavePack GELEN YANIT]", r);
     return { raw: r, message: serviceMessage(r) || "", success: true, containerId: cont.containerId };
+  },
+
+  /**
+   * MZYUpdateDlvPlan — Paketlemeyi Beklet (Bora, 02.10)
+   * Yarım paketlemenin hesabını (PSPACKITEMXML) kaydeder.
+   * Bora: SavePack'e giden parametrelerin AYNISI gider; öncesinde MZYCreateContainer ÇAĞRILMAZ
+   * (bu yüzden PSTARCONTAINER boş gider).
+   */
+  async updateDlvPlan(params: {
+    company?: string;
+    plant?: string;
+    user?: string;
+    delNum?: string;
+    startTime?: string;
+    orderType: string;
+    orderNum: string;
+    xml: string;
+    traceStatus?: number;
+  }): Promise<{ raw: unknown; message: string }> {
+    const c = ctx();
+    const callParams = {
+      PSCOMPANY: params.company || c.company,
+      PSPLANT: params.plant || c.plant,
+      PSUSER: params.user || c.worker || "WMSWSUSER",
+      PSDELNUM: params.delNum || "",
+      PSTARCONTAINER: "",                           // konteyner çalıştırılmaz (Bora)
+      PSORDERTYPE: params.orderType,
+      PSORDERNUM: params.orderNum,
+      PITRACESTATUS: params.traceStatus ?? (c.trace ? 1 : 0),
+      PDTSTARTTIME: params.startTime || "",
+      PSPACKITEMXML: params.xml,
+    };
+    console.info("📤 [MZYUpdateDlvPlan PARAMETRELER]", { ...callParams, PSPACKITEMXML: `(${params.xml.length} karakter)` });
+    const r = await call(SERVICES.updateDlvPlan, callParams);
+    console.info("📥 [MZYUpdateDlvPlan GELEN YANIT]", r);
+    const hata = caniasErrorMessage(r);
+    if (hata) throw new WmsError(hata);
+    return { raw: r, message: serviceMessage(r) || "" };
   },
 
   /**

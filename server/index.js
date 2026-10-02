@@ -139,6 +139,9 @@ const ALLOWED = new Set([
   "MZYSavePack",
   "MzySavePack",
   "MZYSAVEPACK",
+  "MZYUpdateDlvPlan", // Paketlemeyi beklet (Bora)
+  "MzyUpdateDlvPlan",
+  "MZYUPDATEDLVPLAN",
 
   // Kullanıcı Öndeğerleri Servisi
   "MZYGetUserDefault",
@@ -415,6 +418,9 @@ async function callServiceInner(serviceId, params, retry = true) {
     serviceId === "MZYSavePack" ||
     serviceId === "MzySavePack" ||
     serviceId === "MZYSAVEPACK" ||
+    serviceId === "MZYUpdateDlvPlan" ||
+    serviceId === "MzyUpdateDlvPlan" ||
+    serviceId === "MZYUPDATEDLVPLAN" ||
     serviceId === "MZYSaveUserDefault" ||
     serviceId === "MzySaveUserDefault" ||
     serviceId === "MZYSAVEUSERDEFAULT";

@@ -39,6 +39,7 @@ export default function LoginPage() {
         console.warn("Kullanıcı öndeğerleri CANIAS'tan alınamadı, yerel ayarlar kullanılacak:", defErr);
       }
 
+      useAppStore.getState().setDefaultsLoaded(true); // öndeğerler bu girişte çekildi
       navigate("/home", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : t("login.error"));

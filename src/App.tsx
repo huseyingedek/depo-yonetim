@@ -1,5 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import { RotateCw } from "lucide-react";
+import { api } from "./api/client";
 import AppShell from "./components/AppShell";
 import { useAppStore } from "./store/appStore";
 import LoginPage from "./pages/LoginPage";
@@ -40,8 +42,36 @@ import BarcodeGeneratorPage from "./pages/label-printing/BarcodeGeneratorPage";
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const user = useAppStore((s) => s.user);
+  const defaultsLoaded = useAppStore((s) => s.defaultsLoaded);
   const location = useLocation();
+
+  // Kullanıcı localStorage'da kalıcı, ayarlar ise sadece bellekte. Sayfa yenilenince
+  // ayarlar boşalır → hangi ekrana girilirse girilsin önce MZYGetUserDefault bir kez çekilir.
+  useEffect(() => {
+    if (!user || defaultsLoaded) return;
+    let iptal = false;
+    api
+      .getUserDefault({ user: user.username })
+      .then((res) => {
+        if (!iptal && res.defaults) useAppStore.getState().updateSettings(res.defaults);
+      })
+      .catch((err) => console.warn("Kullanıcı öndeğerleri CANIAS'tan alınamadı:", err))
+      .finally(() => {
+        // Hata olsa da uygulamayı kilitleme; ayar eksikse ekranlar kendi uyarısını gösterir.
+        if (!iptal) useAppStore.getState().setDefaultsLoaded(true);
+      });
+    return () => { iptal = true; };
+  }, [user, defaultsLoaded]);
+
   if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
+  if (!defaultsLoaded) {
+    return (
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-3 text-subtle">
+        <RotateCw className="h-6 w-6 animate-spin text-brand-600" />
+        <p className="text-sm font-semibold">Kullanıcı ayarları yükleniyor…</p>
+      </div>
+    );
+  }
   return <>{children}</>;
 }
 

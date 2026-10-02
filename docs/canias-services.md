@@ -99,6 +99,7 @@ Bu doküman, Aktüel Ofis Depo Yönetim Uygulamasında (WMS) kullanılan CANIAS 
   - `PSMATERIAL` (*STRING*): Konteyner malzeme türü (örn: `"KONPAKET"`).
   - `PSORDERNUM` (*STRING*): Emir numarası (opsiyonel).
   - `PSORDERTYPE` (*STRING*): Emir tipi (opsiyonel).
+- **Not (paketleme)**: Paketleme kaydında konteyner Sevkiyat Deposunda (DELIVERYWH, ör. 20) oluşturulur; numarayı CANIAS üretir (WMS numara göndermez).
 - **WMS İstemci Karşılığı**: `api.placeInPackage(targetWarehouse, material, orderNum, orderType)`
 
 ### 1.9. `MZYClosePick` — Toplamadan Vazgeç
@@ -445,6 +446,17 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
   - `PITRACESTATUS` (*INTEGER*): Trace Durumu (`0`: Pasif, `1`: Aktif).
 - **WMS İstemci Karşılığı**: `api.enterPack({ company, plant, user, warehouse, stockPlace, orderType, orderNum, traceStatus })`
 
+### 8.3. `MZYSavePack` — Paketlemeyi Sakla
+- **Açıklama**: Paketlemeyi bitirir. Önce `MZYCreateContainer` ile Sevkiyat Deposunda konteyner istenir; dönen no `PSTARCONTAINER` olur.
+- **Parametreler**: `PSCOMPANY`, `PSPLANT`, `PSUSER`, `PSDELNUM` (EnterPack'teki DELNUM; ilk kayıtta boş), `PSTARCONTAINER` (sevkiyat konteyner no), `PSORDERTYPE`, `PSORDERNUM`, `PITRACESTATUS`, `PDTSTARTTIME`, `PSPACKITEMXML`.
+- **PSPACKITEMXML satırı**: `TID`, `TPID`, `ISPACKITEM` (0 ürün / 1 koli / 2 palet), `ISSCRAPBOX` (atıl koli 1), `COMPANY`, `PLANT`, `MATERIAL` (kolide koli kodu), `QUANTITY` (ürün paket içi miktar), `QUNIT`, `PACKQTY` (ürün paket miktarı), `PARENTPACKQTY` (paket sayısı, default 1), `RVOLUME`/`VUNIT` (satır toplam hacim), `RNETWEIGHT`/`NWUNIT` (satır toplam ağırlık), `VOLUME` (birim hacim), `NETWEIGHT` (birim ağırlık), `MTEXT`, `ISMANUEL` (manuel müdahalede 1).
+- **WMS İstemci Karşılığı**: `api.savePack({ company, plant, user, warehouse, delNum, startTime, orderType, orderNum, xml, traceStatus })`
+
+### 8.4. `MZYUpdateDlvPlan` — Paketlemeyi Beklet
+- **Açıklama**: Yarım paketlemenin hesabını/XML'ini kaydeder. Hesapların doğru oluşup oluşmadığını CANIAS'ta görmek için (Bora). Öncesinde `MZYCreateContainer` çağrılmaz.
+- **Parametreler**: `MZYSavePack` ile aynı: `PSCOMPANY`, `PSPLANT`, `PSUSER`, `PSDELNUM`, `PSTARCONTAINER` (boş), `PSORDERTYPE`, `PSORDERNUM`, `PITRACESTATUS`, `PDTSTARTTIME`, `PSPACKITEMXML`.
+- **WMS İstemci Karşılığı**: `api.updateDlvPlan({ company, plant, user, delNum, startTime, orderType, orderNum, xml, traceStatus })`
+
 ---
 
 ## 9. Özet Tablo: Servis İsimleri ve Kullanım Yerleri
@@ -484,5 +496,7 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 | **Sayım Emri Giriş** | `MZYEnterAdjustment` | `api.getAdjustmentOrder` | `src/api/client.ts` |
 | **Paketleme Listesi** | `MZYListingPack` | `api.getPackagingList` | `src/api/client.ts` |
 | **Paketlemeye Başla** | `MZYEnterPack` | `api.enterPack` | `src/api/client.ts` |
+| **Paketlemeyi Sakla** | `MZYSavePack` | `api.savePack` | `src/api/client.ts` |
+| **Paketlemeyi Beklet** | `MZYUpdateDlvPlan` | `api.updateDlvPlan` | `src/api/client.ts` |
 | **Kullanıcı Öndeğerleri** | `MZYGetUserDefault` | `api.getUserDefault` | `src/api/client.ts` |
 | **Kullanıcı Öndeğerlerini Kaydet** | `MZYSaveUserDefault` | `api.saveUserDefault` | `src/api/client.ts` |

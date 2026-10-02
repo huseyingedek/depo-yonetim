@@ -57,6 +57,7 @@ function applyTheme(theme: Theme) {
 interface AppState {
   user: User | null;
   settings: Settings;
+  defaultsLoaded: boolean; // MZYGetUserDefault bu oturumda çekildi mi (sayfa yenilenince false)
   theme: Theme;
   trace: boolean;
   login: (username: string, displayName?: string) => void;
@@ -65,6 +66,7 @@ interface AppState {
   setTheme: (theme: Theme) => void;
   toggleTrace: () => void;
   setTrace: (trace: boolean) => void;
+  setDefaultsLoaded: (v: boolean) => void;
 }
 
 const initial = load();
@@ -81,6 +83,7 @@ function persist(state: PersistedState) {
 export const useAppStore = create<AppState>((set, get) => ({
   user: initial.user,
   settings: { ...defaultSettings },
+  defaultsLoaded: false,
   theme: initial.theme,
   trace: initial.trace,
   login: (username: string, displayName?: string) => {
@@ -92,12 +95,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         "Depo Kullanıcısı",
     };
     // Yeni kullanıcı girişi: Ayarları sıfırla, CANIAS MZYGetUserDefault'tan dolacak
-    set({ user, settings: { ...defaultSettings } });
+    set({ user, settings: { ...defaultSettings }, defaultsLoaded: false });
     persist({ user, theme: get().theme, trace: get().trace });
   },
   logout: () => {
     // Çıkış yapıldığında oturumu ve ayarları tamamen sıfırla (başka kullanıcıya geçmemesi için)
-    set({ user: null, settings: { ...defaultSettings } });
+    set({ user: null, settings: { ...defaultSettings }, defaultsLoaded: false });
     persist({ user: null, theme: get().theme, trace: get().trace });
   },
   updateSettings: (patch: Partial<Settings>) => {
@@ -127,4 +130,5 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ trace });
     persist({ user: get().user, theme: get().theme, trace });
   },
+  setDefaultsLoaded: (v: boolean) => set({ defaultsLoaded: v }),
 }));
