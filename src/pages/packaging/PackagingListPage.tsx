@@ -61,6 +61,11 @@ export default function PackagingListPage() {
     fetchList();
   }, [fetchList]);
 
+  // Sipariş kalemlerinden (tblItem) aranabilir metin — malzeme kodu/adı/barkodu burada geçer.
+  const itemText = (o: PackOrder): string => {
+    try { return o.tblItem ? JSON.stringify(o.tblItem).toLowerCase() : ""; } catch { return ""; }
+  };
+
   const filtered = orders.filter((o) => {
     const s = q.trim().toLowerCase();
     if (!s) return true;
@@ -68,7 +73,8 @@ export default function PackagingListPage() {
       o.orderNum.toLowerCase().includes(s) ||
       o.customer.toLowerCase().includes(s) ||
       o.stockPlace.toLowerCase().includes(s) ||
-      o.delNum.toLowerCase().includes(s)
+      o.delNum.toLowerCase().includes(s) ||
+      itemText(o).includes(s)
     );
   });
 
@@ -111,7 +117,7 @@ export default function PackagingListPage() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Sipariş no, müşteri, konteyner veya teslimat kodu ile ara…"
+          placeholder="Sipariş no, müşteri, teslimat kodu veya malzeme (kod/ad/barkod) ile ara…"
           className="field-input w-full pl-10 text-sm"
         />
       </div>
