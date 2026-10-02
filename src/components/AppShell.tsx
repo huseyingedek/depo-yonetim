@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Boxes, Home, Settings as SettingsIcon, LogOut, Building2, Bell, ScanSearch, Barcode, CalendarDays, LayoutGrid, Menu, X, ChevronDown, type LucideIcon } from "lucide-react";
+import { Boxes, Home, Settings as SettingsIcon, LogOut, Building2, Bell, LayoutGrid, Menu, X, ChevronDown, type LucideIcon } from "lucide-react";
 import { useAppStore } from "../store/appStore";
 import { usePickingStore } from "../store/pickingStore";
 import { OPERATIONS } from "./operations";
-import { useOverlayStore, type OverlayAppId } from "../store/overlayStore";
+import { useOverlayStore } from "../store/overlayStore";
+import { YARDIMCI_UYGULAMALAR } from "./yardimciUygulamalar";
 import AppOverlayHost from "./AppOverlayHost";
 import GlobalHataToast from "./GlobalHataToast";
 
@@ -133,15 +134,28 @@ function RadialMenu({
   onClose,
   side,
   trace,
+  halkalar,
 }: {
   items: RadialItem[];
   open: boolean;
   onClose: () => void;
   side: "left" | "right";
   trace: boolean;
+  /** Halka başına öğe sayısı (içten dışa). Verilmezse 4'e kadar tek halka, fazlası 3'erli. */
+  halkalar?: number[];
 }) {
-  const N = items.length;
-  const R = 116;
+  // Öğeler iç içe halkalara bölünür (tek halkada 8 ikon + etiket üst üste binerdi).
+  const boyutlar = halkalar ?? (items.length > 4 ? Array.from({ length: Math.ceil(items.length / 3) }, () => 3) : [items.length]);
+  const tekHalka = boyutlar.length === 1;
+  const YARICAP = [108, 200, 288];
+  const halkaOf = (idx: number) => {
+    let bas = 0;
+    for (let h = 0; h < boyutlar.length; h++) {
+      if (idx < bas + boyutlar[h]) return { halka: h, i: idx - bas, N: boyutlar[h] };
+      bas += boyutlar[h];
+    }
+    return { halka: boyutlar.length - 1, i: 0, N: 1 };
+  };
   const anchor = side === "right" ? { right: "32px" } : { left: "32px" };
   return (
     <div
@@ -149,7 +163,9 @@ function RadialMenu({
       style={{ ...anchor, bottom: "56px", width: 0, height: 0 }}
     >
       {items.map((item, idx) => {
-        const f = N === 1 ? 0 : idx / (N - 1);
+        const { halka, i, N } = halkaOf(idx);
+        const R = tekHalka ? 116 : YARICAP[halka] ?? 288 + (halka - 2) * 88;
+        const f = N === 1 ? 0 : i / (N - 1);
         const deg = side === "right" ? 90 + f * 90 : 90 - f * 90; // sağ: 12→9, sol: 12→3
         const a = (deg * Math.PI) / 180;
         const dx = Math.round(R * Math.cos(a));
@@ -172,14 +188,15 @@ function RadialMenu({
               onClick={() => { item.onClick(); onClose(); }}
               aria-label={item.label}
               title={item.label}
-              className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-lg shadow-black/10 backdrop-blur-sm transition-transform duration-200 ease-soft hover:scale-110 active:scale-95 ${
+              className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-lg shadow-black/10 backdrop-blur-xl backdrop-saturate-150 transition-transform duration-200 ease-soft hover:scale-110 active:scale-95 ${
+                // iOS "buzlu cam" hissi: yarı saydam zemin + arkadaki içeriği bulanıklaştır
                 item.isTrace
                   ? trace
-                    ? "border-rose-300 bg-rose-500 text-white"
-                    : "border-line/70 bg-surface/95 text-muted"
+                    ? "border-rose-300/60 bg-rose-500/75 text-white"
+                    : "border-white/60 bg-white/45 text-muted dark:border-white/15 dark:bg-slate-800/45"
                   : item.active
-                  ? "border-brand-300 bg-brand-600 text-white"
-                  : "border-line/70 bg-surface/95 text-fg"
+                  ? "border-brand-300/60 bg-brand-600/75 text-white"
+                  : "border-white/60 bg-white/45 text-fg dark:border-white/15 dark:bg-slate-800/45"
               }`}
             >
               {item.isTrace ? (
@@ -189,8 +206,8 @@ function RadialMenu({
               ) : null}
             </button>
             <span
-              className={`whitespace-nowrap rounded-full bg-surface/85 px-1.5 py-0.5 text-[10px] font-bold leading-none shadow-sm backdrop-blur-sm ${
-                item.isTrace ? (trace ? "text-rose-600" : "text-subtle") : item.active ? "text-brand-700" : "text-fg"
+              className={`whitespace-nowrap rounded-full bg-white/45 px-1.5 py-0.5 text-[10px] font-bold leading-none shadow-sm backdrop-blur-xl backdrop-saturate-150 dark:bg-slate-800/45 ${
+                item.isTrace ? (trace ? "text-rose-600" : "text-fg") : item.active ? "text-brand-700" : "text-fg"
               }`}
             >
               {item.short ?? item.label}
@@ -211,28 +228,30 @@ function MobileTabBar() {
   const toggleTrace = useAppStore((s) => s.toggleTrace);
 
   const [sagAcik, setSagAcik] = useState(false);
-  const [solAcik, setSolAcik] = useState(false);
 
-  // SAĞ menü: yalnızca yardımcı uygulamalar (işlem kapanmadan overlay açar).
-  const helperItems: RadialItem[] = [
-    { key: "inquiry", icon: ScanSearch, label: "Ürün Sorgulama", short: "Sorgu", onClick: () => overlayOpen("inquiry"), active: overlayApp === "inquiry" },
-    { key: "barcode", icon: Barcode, label: "Barkod Oluşturma", short: "Barkod", onClick: () => overlayOpen("barcode"), active: overlayApp === "barcode" },
-    { key: "skt", icon: CalendarDays, label: "SKT Etiketi", short: "SKT", onClick: () => overlayOpen("skt"), active: overlayApp === "skt" },
-  ];
+  // Yardımcı uygulamalar (işlem kapanmadan overlay açar).
+  const helperItems: RadialItem[] = YARDIMCI_UYGULAMALAR.map((u) => ({
+    key: u.id, icon: u.icon, label: u.label, short: u.short, onClick: () => overlayOpen(u.id), active: overlayApp === u.id,
+  }));
 
-  // SOL menü: ana menü + ayarlar + trace.
+  // Sol alttaki ayrı buton kaldırıldı (Hüseyin). Tek buton, iki halka:
+  //   iç halka (3): SKT · Ayarlar · Trace
+  //   dış halka (5): Sorgu · Barkod · Paket · İrsaliye · Raf
+  // "Ana Menü" radyalden çıkarıldı (ana sayfaya sayfa başlığındaki geri tuşuyla dönülür).
+  const sktItem = helperItems.find((h) => h.key === "skt")!;
   const systemItems: RadialItem[] = [
-    { key: "home", icon: Home, label: "Ana Menü", short: "Ana Menü", onClick: () => navigate("/home"), active: pathname === "/home" && !overlayApp },
+    sktItem,
     { key: "settings", icon: SettingsIcon, label: "Ayarlar", short: "Ayarlar", onClick: () => navigate("/settings"), active: pathname.startsWith("/settings") && !overlayApp },
     { key: "trace", label: "Trace", short: "Trace", onClick: () => toggleTrace(), active: trace, isTrace: true },
   ];
 
-  const acik = sagAcik || solAcik;
-  const closeAll = () => { setSagAcik(false); setSolAcik(false); };
+  const menuItems = [...systemItems, ...helperItems.filter((h) => h.key !== "skt")];
+  const acik = sagAcik;
+  const closeAll = () => setSagAcik(false);
 
   return (
     <>
-      {/* Karartma — açıkken dışarı dokununca ikisi de kapanır (zemin şeffaf) */}
+      {/* Karartma — açıkken dışarı dokununca kapanır (zemin şeffaf) */}
       {acik && (
         <button
           type="button"
@@ -242,30 +261,19 @@ function MobileTabBar() {
         />
       )}
 
-      {/* SAĞ: yardımcılar (çeyrek daire, sola açılır) */}
-      <RadialMenu items={helperItems} open={sagAcik} onClose={closeAll} side="right" trace={trace} />
-      {/* SOL: ana menü/ayarlar/trace (çeyrek daire, sağa açılır) */}
-      <RadialMenu items={systemItems} open={solAcik} onClose={closeAll} side="left" trace={trace} />
+      {/* İç halka: SKT/ayarlar/trace · dış halka: diğer 5 yardımcı uygulama (çeyrek daire, sola açılır) */}
+      <RadialMenu items={menuItems} open={sagAcik} onClose={closeAll} side="right" trace={trace} halkalar={[3, 5]} />
 
-      {/* Sağ alt FAB — yardımcılar */}
+      {/* Sağ alt FAB — tek menü butonu */}
       <button
         type="button"
-        onClick={() => { setSagAcik((v) => !v); setSolAcik(false); }}
-        aria-label={sagAcik ? "Yardımcıları kapat" : "Yardımcılar"}
-        className="fixed bottom-2 right-2 z-[56] flex h-11 w-11 items-center justify-center rounded-full bg-brand-600 text-white shadow-soft transition active:scale-95 lg:!hidden"
+        onClick={() => setSagAcik((v) => !v)}
+        aria-label={sagAcik ? "Menüyü kapat" : "Menü"}
+        className="fixed bottom-2 right-2 z-[56] flex h-11 w-11 items-center justify-center rounded-full bg-brand-600/85 text-white shadow-soft ring-1 ring-white/30 backdrop-blur-xl backdrop-saturate-150 transition active:scale-95 lg:!hidden"
       >
         {sagAcik ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
       </button>
 
-      {/* Sol alt FAB — ana menü / ayarlar / trace */}
-      <button
-        type="button"
-        onClick={() => { setSolAcik((v) => !v); setSagAcik(false); }}
-        aria-label={solAcik ? "Menüyü kapat" : "Menü"}
-        className="fixed bottom-2 left-2 z-[56] flex h-11 w-11 items-center justify-center rounded-full bg-slate-800 text-white shadow-soft transition active:scale-95 lg:!hidden"
-      >
-        {solAcik ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-      </button>
     </>
   );
 }
@@ -305,7 +313,7 @@ function SidebarContent({ onNavigate }: { onNavigate: () => void }) {
       </div>
 
       {}
-      <nav className="mt-5 flex-1 space-y-1 overflow-y-auto no-scrollbar">
+      <nav className="mt-5 flex-1 space-y-1 overflow-y-auto ince-scrollbar -mr-2 pr-2">
         <NavLink to="/home" className={linkClass} onClick={onNavigate} end>
           <Home className="h-5 w-5" />
           {t("home.selectOperation")}
@@ -342,12 +350,8 @@ function SidebarContent({ onNavigate }: { onNavigate: () => void }) {
           <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${yardimciAcik ? "rotate-180" : ""}`} />
         </button>
         {yardimciAcik && (
-          <div className="ml-3 space-y-1 border-l border-white/10 pl-2">
-            {([
-              { id: "inquiry", icon: ScanSearch, label: "Ürün Sorgulama" },
-              { id: "barcode", icon: Barcode, label: "Barkod Oluşturma" },
-              { id: "skt", icon: CalendarDays, label: "SKT Etiketi" },
-            ] as { id: OverlayAppId; icon: LucideIcon; label: string }[]).map((h) => {
+          <div className="ml-3 space-y-0.5 border-l border-white/10 pl-2">
+            {YARDIMCI_UYGULAMALAR.map((h) => {
               const Icon = h.icon;
               const aktif = overlayApp === h.id;
               return (
@@ -355,7 +359,7 @@ function SidebarContent({ onNavigate }: { onNavigate: () => void }) {
                   key={h.id}
                   type="button"
                   onClick={() => { overlayOpen(h.id); onNavigate(); }}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 ease-soft ${
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-1.5 text-sm font-semibold transition-all duration-200 ease-soft ${
                     aktif ? "bg-white/15 text-white shadow-soft" : "text-white/70 hover:bg-white/10 hover:text-white"
                   }`}
                 >

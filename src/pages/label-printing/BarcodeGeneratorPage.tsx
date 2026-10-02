@@ -446,7 +446,7 @@ export default function BarcodeGeneratorPage() {
           {/* HEADER: Barkod Oluşturma başlığı (Devam butonu yok — birim seçilince otomatik 2. adıma geçilir) */}
           <PageHeader
             title="Barkod Oluşturma"
-            backTo="/label-printing"
+            backTo="/home"
           />
 
           {/* ÜST GİRİŞ KARTI (Arama & İrsaliye Alanı) */}

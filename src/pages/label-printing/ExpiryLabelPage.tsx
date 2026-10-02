@@ -91,7 +91,7 @@ export default function ExpiryLabelPage() {
       <PageHeader
         title="SKT (Son Kullanma Tarihi) Etiketi Yazdırma"
         subtitle="SKT tarihini seçin veya elle girin, adedi belirleyip yazdırın"
-        backTo="/label-printing"
+        backTo="/home"
         right={
           <div className="hidden sm:flex items-center gap-3">
             <button

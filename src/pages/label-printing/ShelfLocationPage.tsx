@@ -118,7 +118,7 @@ export default function ShelfLocationPage() {
       <PageHeader
         title="Depo Raf Etiketi Yazdırma"
         subtitle="Depoyu girin, raflar listelensin; seçip baskı sayısıyla yazdırın"
-        backTo="/label-printing"
+        backTo="/home"
         right={
           places.length > 0 ? (
             <div className="hidden sm:flex items-center gap-3">

@@ -404,7 +404,7 @@ export default function ProductBarcodePage() {
       <PageHeader
         title="Ürün Barkodu Yazdırma"
         subtitle="Ürünleri arayın, seçin ve etiket yazdırın"
-        backTo="/label-printing"
+        backTo="/home"
         right={
           <div className="hidden sm:flex items-center gap-3">
             <div className="flex items-center gap-1.5">

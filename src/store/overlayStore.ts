@@ -7,7 +7,7 @@
 // -----------------------------------------------------------------------------
 import { create } from "zustand";
 
-export type OverlayAppId = "inquiry" | "barcode" | "skt";
+export type OverlayAppId = "inquiry" | "barcode" | "skt" | "paketEtiket" | "irsaliye" | "rafEtiket";
 
 interface OverlayState {
   openApp: OverlayAppId | null;

@@ -88,6 +88,23 @@ button:focus-visible {
   scrollbar-width: none;
 }
 
+/* Sol menü: içerik ekrana sığmazsa ince, yarı saydam kaydırma çubuğu görünsün
+   (6 yardımcı uygulama eklenince alçak ekranlarda alttakiler gizli kalıyordu). */
+.ince-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.25) transparent;
+}
+.ince-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.ince-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.25);
+}
+.ince-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 @layer components {
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-2xl font-semibold transition-all duration-200 ease-soft active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;

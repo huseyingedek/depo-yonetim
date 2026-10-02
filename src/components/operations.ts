@@ -4,7 +4,6 @@ import {
   ClipboardList,
   ArrowLeftRight,
   Calculator,
-  Printer,
   BarChart3,
   Package,
   Truck,
@@ -31,6 +30,7 @@ export const OPERATIONS: OperationMeta[] = [
   { type: "packaging", icon: Package, route: "/packaging", iconBg: "bg-orange-100", iconFg: "text-orange-600", ready: true },
   { type: "dagitim", icon: Truck, route: "/dagitim", iconBg: "bg-teal-100", iconFg: "text-teal-600", ready: true },
   // "inquiry" ana menüden çıkarıldı (Bora): artık yalnızca Yardımcı Uygulamalar menüsünde. Rota (/inquiry) korunuyor.
-  { type: "label_printing", icon: Printer, route: "/label-printing", iconBg: "bg-indigo-100", iconFg: "text-indigo-600", ready: true },
+  // "label_printing" (Yardımcı İşlemler) da çıkarıldı (Bora: "teke düşsün"): ekranları artık
+  // Yardımcı Uygulamalar altında (components/yardimciUygulamalar.ts). /label-printing rotaları korunuyor.
   { type: "reporting", icon: BarChart3, route: "/reporting", iconBg: "bg-sky-100", iconFg: "text-sky-600", ready: true },
 ];

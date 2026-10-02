@@ -5,34 +5,52 @@
 // toplamaya kaldığın yerden devam et." Route DEĞİŞMEDİĞİ için alttaki işlem
 // (PickingDetailPage vb.) DOM'da mount kalır; tüm local state + scroll korunur.
 //
-// İlk sürüm (Bora onayı sonrası genişletilecek): Ürün Sorgulama, Barkod
-// Oluşturma, SKT Etiketi.
+// Uygulamalar: components/yardimciUygulamalar.ts (Ürün Sorgulama, Barkod
+// Oluşturma, SKT, Paketleme Etiketi, İrsaliye Etiketi, Depo Raf Etiketi).
 // -----------------------------------------------------------------------------
+import { useEffect, useRef, type ComponentType } from "react";
+import { useLocation } from "react-router-dom";
 import { X } from "lucide-react";
 import { useOverlayStore } from "../store/overlayStore";
 import { OverlayContext } from "./overlayContext";
 import InquiryPage from "../pages/inquiry/InquiryPage";
 import BarcodeGeneratorPage from "../pages/label-printing/BarcodeGeneratorPage";
 import ExpiryLabelPage from "../pages/label-printing/ExpiryLabelPage";
+import PackagingLabelPage from "../pages/label-printing/PackagingLabelPage";
+import WaybillLabelPage from "../pages/label-printing/WaybillLabelPage";
+import ShelfLocationPage from "../pages/label-printing/ShelfLocationPage";
+import { YARDIMCI_UYGULAMALAR } from "./yardimciUygulamalar";
+import type { OverlayAppId } from "../store/overlayStore";
 
-const BASLIK: Record<string, string> = {
-  inquiry: "Stok Sorgulama",
-  barcode: "Barkod Oluşturma",
-  skt: "SKT Etiketi",
+const BASLIK = Object.fromEntries(YARDIMCI_UYGULAMALAR.map((u) => [u.id, u.baslik])) as Record<OverlayAppId, string>;
+
+const ICERIK: Record<OverlayAppId, ComponentType> = {
+  inquiry: InquiryPage,
+  barcode: BarcodeGeneratorPage,
+  skt: ExpiryLabelPage,
+  paketEtiket: PackagingLabelPage,
+  irsaliye: WaybillLabelPage,
+  rafEtiket: ShelfLocationPage,
 };
 
 export default function AppOverlayHost() {
   const openApp = useOverlayStore((s) => s.openApp);
   const close = useOverlayStore((s) => s.close);
+  const { pathname } = useLocation();
+
+  // Overlay içinden başka sayfaya gidilirse (ör. etiket ekranındaki "Ayarlar"
+  // butonu) overlay kapanır; yoksa yeni sayfa overlay'in altında kalırdı.
+  const ilkPath = useRef(pathname);
+  useEffect(() => {
+    if (pathname !== ilkPath.current) {
+      ilkPath.current = pathname;
+      close();
+    }
+  }, [pathname, close]);
 
   if (!openApp) return null;
 
-  const Icerik =
-    openApp === "inquiry"
-      ? InquiryPage
-      : openApp === "barcode"
-      ? BarcodeGeneratorPage
-      : ExpiryLabelPage;
+  const Icerik = ICERIK[openApp];
 
   return (
     <OverlayContext.Provider value={{ close }}>
