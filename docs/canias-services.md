@@ -450,11 +450,13 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 - **Açıklama**: Paketlemeyi bitirir. Önce `MZYCreateContainer` ile Sevkiyat Deposunda konteyner istenir; dönen no `PSTARCONTAINER` olur.
 - **Parametreler**: `PSCOMPANY`, `PSPLANT`, `PSUSER`, `PSDELNUM` (EnterPack'teki DELNUM; ilk kayıtta boş), `PSTARCONTAINER` (sevkiyat konteyner no), `PSORDERTYPE`, `PSORDERNUM`, `PITRACESTATUS`, `PDTSTARTTIME`, `PSPACKITEMXML`.
 - **PSPACKITEMXML satırı**: `TID`, `TPID`, `ISPACKITEM` (0 ürün / 1 koli / 2 palet), `ISSCRAPBOX` (atıl koli 1), `COMPANY`, `PLANT`, `MATERIAL` (kolide koli kodu), `QUANTITY` (ürün paket içi miktar), `QUNIT`, `PACKQTY` (ürün paket miktarı), `PARENTPACKQTY` (paket sayısı, default 1), `RVOLUME`/`VUNIT` (satır toplam hacim), `RNETWEIGHT`/`NWUNIT` (satır toplam ağırlık), `VOLUME` (birim hacim), `NETWEIGHT` (birim ağırlık), `MTEXT`, `ISMANUEL` (manuel müdahalede 1).
+- **TID 0 satırı (Bora, 02.10)**: XML'in ilk satırı tüm siparişin özetidir: `TID=0`, `TPID=0`, `MATERIAL="Brüt"`, `RVOLUME` toplam hacim, `RNETWEIGHT` toplam ağırlık, `PACKQTY` toplam paket sayısı (zemindeki koli/palet ×N + koli dışı ürün paket miktarı), `ORDERTYPE`/`ORDERNUM`/`DELNUM`. Kullanıcı toplamları elle değiştirdiyse `ISMANUEL=1`. Diğer satırlar `TID=1`'den başlar.
 - **WMS İstemci Karşılığı**: `api.savePack({ company, plant, user, warehouse, delNum, startTime, orderType, orderNum, xml, traceStatus })`
 
 ### 8.4. `MZYUpdateDlvPlan` — Paketlemeyi Beklet
 - **Açıklama**: Yarım paketlemenin hesabını/XML'ini kaydeder. Hesapların doğru oluşup oluşmadığını CANIAS'ta görmek için (Bora). Öncesinde `MZYCreateContainer` çağrılmaz.
-- **Parametreler**: `MZYSavePack` ile aynı: `PSCOMPANY`, `PSPLANT`, `PSUSER`, `PSDELNUM`, `PSTARCONTAINER` (boş), `PSORDERTYPE`, `PSORDERNUM`, `PITRACESTATUS`, `PDTSTARTTIME`, `PSPACKITEMXML`.
+- **Parametreler**: `MZYSavePack` ile aynı, tek fark XML alanının adı: `PSCOMPANY`, `PSPLANT`, `PSUSER`, `PSDELNUM`, `PSTARCONTAINER` (boş), `PSORDERTYPE`, `PSORDERNUM`, `PITRACESTATUS`, `PDTSTARTTIME`, `PSTBLPACKITEMXML`.
+- **Geri yükleme**: Bekletilen paketleme `MZYEnterPack` yanıtında `TBLPOHEAD.TBLPACKITEMXML` alanında (JSON içinde XML metni) döner; WMS bunu `parsePackXml` / `parsePackOzet` ile ekrana geri kurar. Ürün ağırlığı `NWUNIT=GR` ise kg'a çevrilir.
 - **WMS İstemci Karşılığı**: `api.updateDlvPlan({ company, plant, user, delNum, startTime, orderType, orderNum, xml, traceStatus })`
 
 ---

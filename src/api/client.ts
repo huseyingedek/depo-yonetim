@@ -2559,6 +2559,8 @@ export const api = {
     console.info("📤 [MZYListingPack PARAMETRELER]", callParams);
     const r = await call(SERVICES.listingPack, callParams);
     console.info("📥 [MZYListingPack GELEN YANIT]", r);
+    const listeHata = caniasErrorMessage(r);
+    if (listeHata) throw new WmsError(listeHata); // servisin kendi mesajı ekranda görünsün
 
     if (Array.isArray(r.data)) return (r.data as unknown[]).map(flattenRow);
     return rowsOf(r, ["TBLPACKLIST", "TBLLISTINGPACK", "PACKLIST", "TBLPACK", "ROW"]) || [];
@@ -2606,6 +2608,8 @@ export const api = {
     console.info("📤 [MZYEnterPack PARAMETRELER]", callParams);
     const r = await call(SERVICES.enterPack, callParams);
     console.info("📥 [MZYEnterPack GELEN YANIT]", r);
+    const enterHata = caniasErrorMessage(r);
+    if (enterHata) throw new WmsError(enterHata); // servisin kendi mesajı ekranda görünsün
 
     let head: Row | undefined = undefined;
     let lines: Row[] = [];
@@ -2682,14 +2686,20 @@ export const api = {
     console.info("📤 [MZYSavePack PARAMETRELER]", { ...callParams, PSPACKITEMXML: `(${params.xml.length} karakter)` });
     const r = await call(SERVICES.savePack, callParams);
     console.info("📥 [MZYSavePack GELEN YANIT]", r);
-    return { raw: r, message: serviceMessage(r) || "", success: true, containerId: cont.containerId };
+    // Başarı/hata kararı ve ekrandaki mesaj SERVİSTEN gelir (MESSAGETABLE TYPE=E → servisin SYSTEMMSG'si).
+    const hata = caniasErrorMessage(r);
+    if (hata) throw new WmsError(hata);
+    const mesaj = serviceMessage(r);
+    // Ne veri ne mesaj döndüyse kayıt doğrulanamaz — sahte "tamamlandı" gösterme.
+    if (r.data == null && !mesaj) throw new WmsError("MZYSavePack yanıt döndürmedi — kayıt doğrulanamadı.");
+    return { raw: r, message: mesaj || "", success: true, containerId: cont.containerId };
   },
 
   /**
    * MZYUpdateDlvPlan — Paketlemeyi Beklet (Bora, 02.10)
    * Yarım paketlemenin hesabını (PSPACKITEMXML) kaydeder.
-   * Bora: SavePack'e giden parametrelerin AYNISI gider; öncesinde MZYCreateContainer ÇAĞRILMAZ
-   * (bu yüzden PSTARCONTAINER boş gider).
+   * Bora: SavePack'e giden parametrelerin aynısı gider; öncesinde MZYCreateContainer ÇAĞRILMAZ
+   * (bu yüzden PSTARCONTAINER boş gider). XML alanının adı burada PSTBLPACKITEMXML.
    */
   async updateDlvPlan(params: {
     company?: string;
@@ -2713,9 +2723,9 @@ export const api = {
       PSORDERNUM: params.orderNum,
       PITRACESTATUS: params.traceStatus ?? (c.trace ? 1 : 0),
       PDTSTARTTIME: params.startTime || "",
-      PSPACKITEMXML: params.xml,
+      PSTBLPACKITEMXML: params.xml,                 // Bora: bu serviste XML alanının adı PSTBLPACKITEMXML
     };
-    console.info("📤 [MZYUpdateDlvPlan PARAMETRELER]", { ...callParams, PSPACKITEMXML: `(${params.xml.length} karakter)` });
+    console.info("📤 [MZYUpdateDlvPlan PARAMETRELER]", { ...callParams, PSTBLPACKITEMXML: `(${params.xml.length} karakter)` });
     const r = await call(SERVICES.updateDlvPlan, callParams);
     console.info("📥 [MZYUpdateDlvPlan GELEN YANIT]", r);
     const hata = caniasErrorMessage(r);

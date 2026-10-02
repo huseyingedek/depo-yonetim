@@ -222,11 +222,9 @@ const fmt = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionDigit
 const boyutBul = (no: number) => BOYUTLAR.find((b) => b.n === no);
 const boyutHacim = (no: number) => boyutBul(no)?.hacim ?? 10;
 // Koli görsel genişliği DESİ ile orantılı (Bora: 4 desi ≈ 400px, 9 desi ≈ 900px).
-// Aşırı büyümeyi önlemek için [220, 680] px arasında kısılır.
-const boyutGenislik = (desi: number) => {
-  const px = Math.round(Math.max(1, desi) * 100);
-  return Math.min(680, Math.max(220, px));
-};
+// Kolinin KENDİ ebadına (fiziksel boyut) göre; içerik değiştikçe kart boyu oynamaz.
+// En az 280 px (başlık sığsın). Üst sınır kartın style'ında: alanın yarısı → her ekranda en az 2 koli yan yana.
+const boyutGenislik = (desi: number) => Math.max(280, Math.round(Math.max(1, desi) * 100));
 const boyutOl = (no: number) => boyutBul(no)?.ol ?? "";
 const boyutKodu = (no: number) => boyutBul(no)?.kod ?? `KOL0${no}`;
 
@@ -294,6 +292,19 @@ const koliSay = (ns: Node[], faktor = 1): number =>
   }, 0);
 // Fiziksel palet adedi — paket çarpanı dahil.
 const paletSay = (ns: Node[]): number => ns.filter((n) => n.tur === "palet").reduce((s, n) => s + carpanOf(n), 0);
+
+// Toplam paket sayısı (XML TID 0 satırı PACKQTY) — zemine temas eden birimler:
+// koli/palet → paket çarpanı (×N), koli dışında zemindeki ürün → paket miktarı.
+const paketSayisi = (ns: Node[]): number => ns.reduce((s, n) => s + (n.tur === "urun" ? n.qty : carpanOf(n)), 0);
+
+// İç içe yanıtta bir anahtarın ilk değerini bulur (alan TBLPOHEAD/ROW altında da olsa çalışır).
+function derinBul(obj: unknown, anahtar: string, derinlik = 0): unknown {
+  if (!obj || typeof obj !== "object" || derinlik > 8) return undefined;
+  const o = obj as Record<string, unknown>;
+  if (anahtar in o) return o[anahtar];
+  for (const v of Object.values(o)) { const r = derinBul(v, anahtar, derinlik + 1); if (r !== undefined) return r; }
+  return undefined;
+}
 
 // Koli içindeki ürünlerin tehlike niteliklerinin birleşimi (OTOMATIK) — iç koliler dahil.
 const koliHazards = (n: Node): Hazard[] => {
@@ -378,7 +389,8 @@ const xmlEsc = (v: unknown) =>
 // RVOLUME / RNETWEIGHT = TEK bir paket örneği için (PACKQTY ayrı alan; backend PACKQTY ile çarpar).
 //   - Koli hacmi = kolinin kendi ebat desisi (içerik hariç, patron kuralı)
 //   - Koli ağırlığı = içindekiler + koli darası
-function buildPackXml(nodes: Node[], ctx: { company: string; plant: string }): string {
+interface PackOzet { hacim: number; kg: number; paket: number; manuel: boolean; }
+function buildPackXml(nodes: Node[], ctx: { company: string; plant: string; orderType?: string; orderNum?: string; delNum?: string; ozet?: PackOzet }): string {
   const rows: string[] = [];
   let seq = 0;
   // Her satır KENDİ BAŞINA okunur (ağaçta yukarı çıkmak yok):
@@ -447,6 +459,23 @@ function buildPackXml(nodes: Node[], ctx: { company: string; plant: string }): s
       if (n.tur !== "urun") walk(n.cocuklar, tid, ancCum * carpanOf(n), false);
     }
   };
+  // TID 0 = tüm siparişin özet satırı (Bora): MATERIAL "Brüt", RVOLUME toplam hacim, RNETWEIGHT toplam
+  // ağırlık, PACKQTY toplam paket sayısı. Kullanıcı bu toplamları elle değiştirdiyse ISMANUEL=1.
+  if (ctx.ozet) {
+    const r3 = (x: number) => Math.round(x * 1000) / 1000;
+    rows.push(
+      "  <ROW>" +
+      "<TID>0</TID><TPID>0</TPID><ISPACKITEM>0</ISPACKITEM><ISSCRAPBOX>0</ISSCRAPBOX>" +
+      `<ISMANUEL>${ctx.ozet.manuel ? 1 : 0}</ISMANUEL>` +
+      `<COMPANY>${xmlEsc(ctx.company)}</COMPANY><PLANT>${xmlEsc(ctx.plant)}</PLANT>` +
+      `<ORDERTYPE>${xmlEsc(ctx.orderType ?? "")}</ORDERTYPE><ORDERNUM>${xmlEsc(ctx.orderNum ?? "")}</ORDERNUM><DELNUM>${xmlEsc(ctx.delNum ?? "")}</DELNUM>` +
+      "<MATERIAL>Brüt</MATERIAL><MTEXT></MTEXT><QUANTITY>0</QUANTITY>" +
+      `<PACKQTY>${r3(ctx.ozet.paket)}</PACKQTY><PARENTPACKQTY>1</PARENTPACKQTY><QUNIT></QUNIT>` +
+      `<VOLUME>0</VOLUME><RVOLUME>${r3(ctx.ozet.hacim)}</RVOLUME><VUNIT>DS</VUNIT>` +
+      `<NETWEIGHT>0</NETWEIGHT><RNETWEIGHT>${r3(ctx.ozet.kg)}</RNETWEIGHT><NWUNIT>KG</NWUNIT>` +
+      "</ROW>"
+    );
+  }
   walk(nodes, 0, 1, true);
   return `<ROOT>\n${rows.join("\n")}\n</ROOT>`;
 }
@@ -476,6 +505,7 @@ export function parsePackXml(xml: string): Node[] {
   while ((m = rowRe.exec(xml)) !== null) {
     const r = m[1];
     const tid = num(r, "TID");
+    if (tid === 0) continue; // TID 0 = sipariş özet satırı (parsePackOzet okur), ağaçta düğüm değil
     const tpid = num(r, "TPID");
     const ispack = num(r, "ISPACKITEM");
     const material = field(r, "MATERIAL");
@@ -485,7 +515,14 @@ export function parsePackXml(xml: string): Node[] {
     const packqty = num(r, "PACKQTY");
     const parentpackqty = num(r, "PARENTPACKQTY") || 1;
     const volume = num(r, "VOLUME");
-    const netweight = num(r, "NETWEIGHT");
+    const kgCarpan = field(r, "NWUNIT").toUpperCase() === "GR" ? 0.001 : 1; // CANIAS ürün ağırlığını GR dönebiliyor
+    const netweight = num(r, "NETWEIGHT") * kgCarpan;
+    const hz: Hazard[] = [];
+    if (num(r, "AKLISBREAKABLE") === 1) hz.push("kirilabilir");
+    if (num(r, "ISEXPLOS") === 1) hz.push("yanici");
+    if (num(r, "AKLISLIQUID") === 1) hz.push("sivi");
+    if (num(r, "AKLISTOXIC") === 1) hz.push("toksik");
+    if (num(r, "ISSPOIL") === 1) hz.push("bozulur");
     const manuel = num(r, "ISMANUEL") === 1;
     const atil = num(r, "ISSCRAPBOX") === 1;
 
@@ -494,7 +531,7 @@ export function parsePackXml(xml: string): Node[] {
 
     let node: Node;
     if (ispack === 0) {
-      node = { uid: yeniId(), tur: "urun", code: material, name: mtext || material, qty: Math.round(packqty), unit: qunit, desi: volume, kg: netweight, paketIci: quantity || 1, stokBirim: qunit, hazards: [], elle: manuel };
+      node = { uid: yeniId(), tur: "urun", code: material, name: mtext || material, qty: Math.round(packqty), unit: qunit, desi: volume, kg: netweight, paketIci: quantity || 1, stokBirim: qunit, hazards: hz, elle: manuel };
     } else if (ispack === 1) {
       const b = BOYUTLAR.find((x) => x.kod === material);
       const koli: KoliNode = { uid: yeniId(), tur: "koli", no: b?.n ?? 0, kod: material || b?.kod, en: b?.en, boy: b?.boy, yukseklik: b?.yukseklik, ol: b?.ol, hacim: b?.hacim ?? volume, dara: b?.dara, hazards: [], cocuklar: [], atil, elle: manuel, carpan };
@@ -515,6 +552,16 @@ export function parsePackXml(xml: string): Node[] {
     else kokler.push(h.node);
   }
   return kokler;
+}
+
+// XML'deki TID 0 (sipariş özeti) satırını okur — bekletilen paketlemede manuel toplamları geri yüklemek için.
+export function parsePackOzet(xml: string): PackOzet | null {
+  const m = (xml || "").match(/<ROW>((?:(?!<\/ROW>)[\s\S])*?<TID>0<\/TID>[\s\S]*?)<\/ROW>/);
+  if (!m) return null;
+  const r = m[1];
+  const f = (tag: string) => { const x = r.match(new RegExp("<" + tag + ">([^<]*)</" + tag + ">")); return x ? x[1] : ""; };
+  const kgCarpan = f("NWUNIT").toUpperCase() === "GR" ? 0.001 : 1;
+  return { hacim: Number(f("RVOLUME")) || 0, kg: (Number(f("RNETWEIGHT")) || 0) * kgCarpan, paket: Number(f("PACKQTY")) || 0, manuel: Number(f("ISMANUEL")) === 1 };
 }
 
 // sürükleme durumu (modül seviyesi)
@@ -539,6 +586,8 @@ export default function PackagingPage() {
   const [duzenlenenKoliUid, setDuzenlenenKoliUid] = useState<string | null>(null);
   const [duzenlenenUrunCode, setDuzenlenenUrunCode] = useState<string | null>(null);
   const [xmlAcik, setXmlAcik] = useState(false);
+  const [toplamElle, setToplamElle] = useState<{ desi?: number; kg?: number; paket?: number } | null>(null); // TID 0 manuel
+  const [toplamDuzenle, setToplamDuzenle] = useState(false);
   const [atilMod, setAtilMod] = useState(false);
   const [dropHedef, setDropHedef] = useState<string | null>(null);
   const [bitti, setBitti] = useState(false);
@@ -554,6 +603,7 @@ export default function PackagingPage() {
   const emirSec = async (emir: PackOrder) => {
     setSeciliEmir(emir);
     setSahne([]);
+    setToplamElle(null);
     setSeciliKapId(null);
     setBaslamaZamani(caniasDateTime()); // kullanıcı bu emirle paketlemeye girdi
     setYukleniyor(true);
@@ -623,6 +673,20 @@ export default function PackagingPage() {
         if (enterDelNum && enterDelNum !== emir.delNum) setSeciliEmir({ ...emir, delNum: enterDelNum });
 
         setUrunler(caniasUrunler);
+
+        // Bekletilmiş paketleme varsa ekrana geri yükle (Bora: EnterPack → TBLPOHEAD.TBLPACKITEMXML).
+        const kayitliXml = derinBul(res.raw, "TBLPACKITEMXML");
+        if (typeof kayitliXml === "string" && kayitliXml.includes("<ROW>")) {
+          const agac = parsePackXml(kayitliXml);
+          if (agac.length > 0) {
+            setSahne(agac);
+            const oz = parsePackOzet(kayitliXml);
+            if (oz?.manuel) setToplamElle({ desi: oz.hacim, kg: oz.kg, paket: oz.paket });
+            show({ kind: "ok", text: `${emir.orderType}-${emir.orderNum} bekletilen paketleme yüklendi` });
+            return;
+          }
+        }
+
         show({
           kind: "ok",
           text: `${emir.orderType}-${emir.orderNum} CANIAS kalemleri yüklendi (${caniasUrunler.length} kalem)`,
@@ -634,7 +698,7 @@ export default function PackagingPage() {
       setUrunler([]);
       show({
         kind: "info",
-        text: `${emir.orderType}-${emir.orderNum} için CANIAS'ta açık paketlenecek malzeme bulunamadı`,
+        text: res.message || `${emir.orderType}-${emir.orderNum} için CANIAS'ta açık paketlenecek malzeme bulunamadı`,
       });
     } catch (err) {
       console.warn("enterPack hatası:", err);
@@ -766,8 +830,13 @@ export default function PackagingPage() {
   }, []);
 
   const genelHacim = sahne.reduce((s, n) => s + nodeHacimHam(n), 0); // ham (yuvarlanmamış) toplam hacim
-  const genelDesi = yuvarlaDesi(genelHacim);
   const genelKg = sahne.reduce((s, n) => s + nodeKg(n), 0);
+  // Sipariş toplamı (TID 0): kullanıcı elle girdiyse o değerler, yoksa otomatik hesap.
+  const otoPaket = paketSayisi(sahne);
+  const gosterHacim = toplamElle?.desi ?? genelHacim;
+  const gosterKg = toplamElle?.kg ?? genelKg;
+  const gosterPaket = toplamElle?.paket ?? otoPaket;
+  const packOzet: PackOzet = { hacim: gosterHacim, kg: gosterKg, paket: gosterPaket, manuel: toplamElle !== null };
   const kSay = koliSay(sahne);
   const pSay = paletSay(sahne);
 
@@ -1023,12 +1092,16 @@ export default function PackagingPage() {
     const xml = buildPackXml(sahne, {
       company: seciliEmir.company || compCode,
       plant: seciliEmir.plant || plantCode,
+      orderType: seciliEmir.orderType,
+      orderNum: seciliEmir.orderNum,
+      delNum: seciliEmir.delNum,
+      ozet: packOzet,
     });
 
     setKaydediliyor(mod);
     try {
       if (mod === "beklet") {
-        await wmsApi.updateDlvPlan({
+        const bekletSonuc = await wmsApi.updateDlvPlan({
           company: seciliEmir.company || compCode,
           plant: seciliEmir.plant || plantCode,
           delNum: seciliEmir.delNum,
@@ -1037,7 +1110,7 @@ export default function PackagingPage() {
           orderNum: seciliEmir.orderNum,
           xml,
         });
-        show({ kind: "info", text: "Paketleme beklemeye alındı. Listeye dönülüyor…" });
+        show({ kind: "info", text: `${bekletSonuc.message || "Paketleme beklemeye alındı."} Listeye dönülüyor…` });
         setTimeout(() => navigate("/packaging"), 1200);
         return;
       }
@@ -1052,7 +1125,7 @@ export default function PackagingPage() {
         xml,
       });
       setBitti(true);
-      show({ kind: "done", text: sonuc.containerId ? `Konteyner ${sonuc.containerId} — ${kSay} koli · ${pSay} palet kaydedildi` : `${kSay} koli · ${pSay} palet kaydedildi` });
+      show({ kind: "done", text: sonuc.message || (sonuc.containerId ? `Konteyner ${sonuc.containerId} — ${kSay} koli · ${pSay} palet kaydedildi` : `${kSay} koli · ${pSay} palet kaydedildi`) });
     } catch (e) {
       show({ kind: "error", text: e instanceof Error ? e.message : (mod === "beklet" ? "Paketleme bekletilemedi" : "Paketleme kaydedilemedi") });
     } finally {
@@ -1089,7 +1162,7 @@ export default function PackagingPage() {
       {bitti && (
         <div className="mt-3 flex flex-col items-start gap-3 rounded-2xl border border-emerald-400 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10 sm:flex-row sm:items-center">
           <Check className="h-5 w-5 shrink-0 text-emerald-600" />
-          <p className="flex-1 text-sm font-bold text-emerald-800 dark:text-emerald-200">Paketleme tamamlandı — {kSay} koli, {pSay} palet, {fmt(genelKg)} kg.</p>
+          <p className="flex-1 text-sm font-bold text-emerald-800 dark:text-emerald-200">Paketleme tamamlandı — {kSay} koli, {pSay} palet, {gosterPaket} paket, {fmt(gosterKg)} kg.</p>
           <button type="button" onClick={() => setBitti(false)} className="btn-ghost btn-sm">Devam et</button>
         </div>
       )}
@@ -1143,7 +1216,7 @@ export default function PackagingPage() {
           <span className="hidden h-6 w-px shrink-0 bg-line xl:block" />
 
           {/* Koli Boyutu — 6 renkli boyut butonu; altında ölçüsü yazılı */}
-          <div className="flex shrink-0 items-start gap-1.5">
+          <div className="flex flex-wrap items-start gap-1.5">
             <Ruler className="mt-3.5 h-4 w-4 shrink-0 text-subtle" />
             {BOYUTLAR.map((b) => {
               const ik = 14 + (b.n === 0 ? 10 : b.n) * 1.6;
@@ -1216,12 +1289,15 @@ export default function PackagingPage() {
                 <span>Paketleme Alanı</span>
                 {seciliKapId === null && <span className="rounded bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">Hedef</span>}
               </h2>
-              <div className="flex items-center gap-2.5 text-xs font-bold text-fg">
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-bold text-fg">
                 <span className="font-mono text-sm font-extrabold text-fg">Toplam:</span>
                 <span><b className="font-mono text-sm font-extrabold text-fg">{pSay}</b> palet</span>
                 <span><b className="font-mono text-sm font-extrabold text-fg">{kSay}</b> koli</span>
-                <span><b className="font-mono text-sm font-extrabold text-fg">{genelDesi}</b> desi <span className="font-mono text-[10px] font-semibold text-subtle" title="Ham hacim (yuvarlanmamış) — her miktar değişimi birim hacim kadar burada görünür">({fmt(genelHacim)})</span></span>
-                <span><b className="font-mono text-sm font-extrabold text-fg">{fmt(genelKg)}</b> kg</span>
+                <span><b className="font-mono text-sm font-extrabold text-fg">{gosterPaket}</b> paket</span>
+                <span><b className="font-mono text-sm font-extrabold text-fg">{fmt(gosterHacim)}</b> desi</span>
+                <span><b className="font-mono text-sm font-extrabold text-fg">{fmt(gosterKg)}</b> kg</span>
+                {toplamElle && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-black text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" title="Sipariş toplamı elle girildi (TID 0, ISMANUEL=1)">manuel</span>}
+                <button type="button" onClick={() => setToplamDuzenle(true)} title="Sipariş toplamını (hacim / ağırlık / paket sayısı) düzenle" className="ml-1 rounded-lg border border-line bg-surface p-1 text-subtle transition hover:text-brand-600 active:scale-95"><Pencil className="h-3.5 w-3.5" /></button>
                 <button type="button" onClick={hesabiYenile} title="Hesaplamayı yenile" className="ml-1 rounded-lg border border-line bg-surface p-1 text-subtle transition hover:text-brand-600 active:scale-95"><RotateCw className="h-3.5 w-3.5" /></button>
                 <button type="button" onClick={() => setXmlAcik(true)} title="CANIAS'a gidecek veriyi önizle (XML)" className="rounded-lg border border-line bg-surface px-1.5 py-1 text-[10px] font-black text-subtle transition hover:text-brand-600 active:scale-95">XML</button>
               </div>
@@ -1386,10 +1462,20 @@ export default function PackagingPage() {
         />
       )}
 
+      {toplamDuzenle && (
+        <ToplamDuzenleModal
+          oto={{ desi: genelHacim, kg: genelKg, paket: otoPaket }}
+          mevcut={toplamElle}
+          onKaydet={(v) => { setToplamElle(v); setToplamDuzenle(false); show({ kind: "ok", text: `Sipariş toplamı elle girildi — ${fmt(v.desi)} DS · ${fmt(v.kg)} kg · ${v.paket} paket` }); }}
+          onSifirla={() => { setToplamElle(null); setToplamDuzenle(false); show({ kind: "info", text: "Sipariş toplamı otomatik hesaba döndürüldü" }); }}
+          onKapat={() => setToplamDuzenle(false)}
+        />
+      )}
+
       {xmlAcik && (
         <XmlOnizlemeModal
-          xml={buildPackXml(sahne, { company: seciliEmir?.company || compCode, plant: seciliEmir?.plant || plantCode })}
-          ozet={{ palet: pSay, koli: kSay, desi: genelDesi, kg: genelKg, emir: seciliEmir ? `${seciliEmir.orderType}-${seciliEmir.orderNum}` : "—", depo: sevkWh || "TANIMSIZ" }}
+          xml={buildPackXml(sahne, { company: seciliEmir?.company || compCode, plant: seciliEmir?.plant || plantCode, orderType: seciliEmir?.orderType, orderNum: seciliEmir?.orderNum, delNum: seciliEmir?.delNum, ozet: packOzet })}
+          ozet={{ palet: pSay, koli: kSay, paket: gosterPaket, desi: gosterHacim, kg: gosterKg, emir: seciliEmir ? `${seciliEmir.orderType}-${seciliEmir.orderNum}` : "—", depo: sevkWh || "TANIMSIZ" }}
           onKapat={() => setXmlAcik(false)}
         />
       )}
@@ -1503,7 +1589,7 @@ function BirimDuzenleModal({ urun, onKaydet, onKapat }: { urun: KaynakUrun; onKa
 }
 
 // CANIAS'a gidecek paketleme verisinin (PSPACKITEMXML) önizlemesi — test/kontrol için.
-function XmlOnizlemeModal({ xml, ozet, onKapat }: { xml: string; ozet: { palet: number; koli: number; desi: number; kg: number; emir: string; depo: string }; onKapat: () => void; }) {
+function XmlOnizlemeModal({ xml, ozet, onKapat }: { xml: string; ozet: { palet: number; koli: number; paket: number; desi: number; kg: number; emir: string; depo: string }; onKapat: () => void; }) {
   const kopyala = () => { try { navigator.clipboard?.writeText(xml); } catch { /* yok say */ } };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onKapat}>
@@ -1517,13 +1603,60 @@ function XmlOnizlemeModal({ xml, ozet, onKapat }: { xml: string; ozet: { palet: 
           <span className="rounded-lg bg-elevated px-2 py-1" title="Sevkiyat konteynerinin oluşturulacağı depo (numarayı CANIAS üretir)">Sevkiyat deposu: <b className="font-mono">{ozet.depo}</b></span>
           <span className="rounded-lg bg-elevated px-2 py-1"><b className="font-mono">{ozet.palet}</b> palet</span>
           <span className="rounded-lg bg-elevated px-2 py-1"><b className="font-mono">{ozet.koli}</b> koli</span>
-          <span className="rounded-lg bg-elevated px-2 py-1"><b className="font-mono">{ozet.desi}</b> desi</span>
+          <span className="rounded-lg bg-elevated px-2 py-1"><b className="font-mono">{ozet.paket}</b> paket</span>
+          <span className="rounded-lg bg-elevated px-2 py-1"><b className="font-mono">{fmt(ozet.desi)}</b> desi</span>
           <span className="rounded-lg bg-elevated px-2 py-1"><b className="font-mono">{fmt(ozet.kg)}</b> kg</span>
         </div>
         <pre className="flex-1 overflow-auto rounded-xl border border-line bg-elevated/50 p-3 font-mono text-[10px] leading-relaxed text-fg whitespace-pre-wrap break-all">{xml}</pre>
         <div className="mt-3 flex items-center justify-end gap-2">
           <button type="button" onClick={kopyala} className="rounded-xl border border-line bg-surface px-4 py-2 text-sm font-semibold text-fg transition hover:bg-elevated active:scale-95">Kopyala</button>
           <button type="button" onClick={onKapat} className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-bold text-white shadow-soft transition hover:bg-brand-700 active:scale-95">Kapat</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Sipariş toplamı (XML TID 0 satırı) manuel düzenleme — Bora: kullanıcı satırları tek tek değiştirmek yerine
+// toplam hacim / ağırlık / paket sayısını doğrudan değiştirebilmeli. Elle girilen değer hesapla ezilmez.
+function ToplamDuzenleModal({ oto, mevcut, onKaydet, onSifirla, onKapat }: { oto: { desi: number; kg: number; paket: number }; mevcut: { desi?: number; kg?: number; paket?: number } | null; onKaydet: (v: { desi: number; kg: number; paket: number }) => void; onSifirla: () => void; onKapat: () => void; }) {
+  const [desi, setDesi] = useState<number | string>(Number((mevcut?.desi ?? oto.desi).toFixed(2)));
+  const [kg, setKg] = useState<number | string>(Number((mevcut?.kg ?? oto.kg).toFixed(3)));
+  const [paket, setPaket] = useState<number | string>(mevcut?.paket ?? oto.paket);
+  const sayi = (v: number | string) => (Number(v) >= 0 ? Number(v) : 0);
+  const alan = "w-full rounded-xl border border-line bg-elevated px-3.5 py-2.5 font-mono text-base font-bold text-fg transition focus:border-brand-500 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-500/20";
+  const etiket = "mb-1.5 block text-xs font-bold uppercase tracking-wider text-fg";
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onKapat}>
+      <div className="w-full max-w-lg rounded-2xl border border-line bg-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-base font-black text-fg">Sipariş Toplamı</h2>
+          <button type="button" onClick={onKapat} className="rounded-lg p-1 text-subtle transition hover:bg-elevated hover:text-fg" aria-label="Kapat"><X className="h-5 w-5" /></button>
+        </div>
+        <p className="mb-4 text-xs text-subtle">Tüm siparişin toplam hacmi, ağırlığı ve paket sayısı (XML'deki TID 0 satırı). Elle girilen değerler hesapla ezilmez ve ISMANUEL=1 ile gönderilir.</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div>
+            <label className={etiket}>Hacim (DS)</label>
+            <input type="number" min="0" step="0.01" value={desi} onChange={(e) => setDesi(e.target.value === "" ? "" : parseFloat(e.target.value))} className={alan} autoFocus />
+            <p className="mt-1 text-[10px] text-subtle">Otomatik: {fmt(oto.desi)}</p>
+          </div>
+          <div>
+            <label className={etiket}>Ağırlık (KG)</label>
+            <input type="number" min="0" step="0.001" value={kg} onChange={(e) => setKg(e.target.value === "" ? "" : parseFloat(e.target.value))} className={alan} />
+            <p className="mt-1 text-[10px] text-subtle">Otomatik: {fmt(oto.kg)}</p>
+          </div>
+          <div>
+            <label className={etiket}>Paket sayısı</label>
+            <input type="number" min="0" step="1" value={paket} onChange={(e) => setPaket(e.target.value === "" ? "" : parseInt(e.target.value, 10))} className={alan} />
+            <p className="mt-1 text-[10px] text-subtle">Otomatik: {oto.paket}</p>
+          </div>
+        </div>
+        <div className="mt-5 flex items-center justify-between gap-2">
+          <button type="button" onClick={onSifirla} disabled={!mevcut} className="rounded-xl border border-line bg-surface px-3 py-2 text-xs font-semibold text-subtle transition hover:text-fg active:scale-95 disabled:opacity-40">Otomatiğe dön</button>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={onKapat} className="rounded-xl border border-line bg-surface px-4 py-2 text-sm font-semibold text-muted transition hover:bg-elevated hover:text-fg active:scale-95">İptal</button>
+            <button type="button" onClick={() => onKaydet({ desi: sayi(desi), kg: sayi(kg), paket: Math.round(sayi(paket)) })} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2 text-sm font-bold text-white shadow-soft transition hover:bg-brand-700 active:scale-95"><Check className="h-4 w-4" /> Kaydet</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1627,9 +1760,21 @@ function PaletKart({ palet, api, faktor = 1 }: { palet: PaletNode; api: Api; fak
 
   // Sağ ve sol sütunları bağımsız akacak şekilde akıllı palet yerleşimiyle ayırıyoruz
   const { solKolon, sagKolon } = paletKolonlaraAyir(palet.cocuklar);
+  // Dar ekranda palet içini iki sütuna bölme (içindeki koliler sıkışıp taşmasın) — gerçek genişliğe göre.
+  const paletRef = useRef<HTMLDivElement>(null);
+  const [paletOlcu, setPaletOlcu] = useState(0);
+  useEffect(() => {
+    const el = paletRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((g) => setPaletOlcu(Math.round(g[0].contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const paletTekSutun = paletOlcu > 0 && paletOlcu < 600;
 
   return (
     <div
+      ref={paletRef}
       draggable
       onDragStart={(e) => { e.stopPropagation(); drag = { kind: "node", uid: palet.uid }; }}
       onDragOver={(e) => { if (drag) { e.preventDefault(); e.stopPropagation(); api.setDropHedef(palet.uid); } }}
@@ -1646,10 +1791,10 @@ function PaletKart({ palet, api, faktor = 1 }: { palet: PaletNode; api: Api; fak
           <p className="text-sm font-extrabold text-fg">{palet.ad}</p>
           {secili && <span className="rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-500/30 dark:text-amber-200">Hedef</span>}
           <div className="inline-flex items-center gap-1.5">
-            <span className="font-mono text-xs font-bold text-fg flex items-center gap-2">
+            <span className="font-mono text-xs font-bold text-fg flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <span>Toplam:</span>
               <span>{koliSay(palet.cocuklar)} koli</span>
-              <span>{nodeDesi(palet)} desi</span>
+              <span>{fmt(nodeHacimHam(palet))} desi</span>
               <span>{fmt(nodeKg(palet))} kg</span>
             </span>
           </div>
@@ -1661,6 +1806,10 @@ function PaletKart({ palet, api, faktor = 1 }: { palet: PaletNode; api: Api; fak
         <div className="mt-1.5 rounded-xl border border-dashed border-amber-300/60 dark:border-amber-500/40 bg-white/40 p-1 dark:bg-black/10">
           {palet.cocuklar.length === 0 ? (
             <p className="w-full py-4 text-center text-[11px] text-subtle">Boş palet — koli ekle</p>
+          ) : paletTekSutun ? (
+            <div className="flex flex-col gap-[4px]">
+              {palet.cocuklar.map((c) => <KartNode key={c.uid} node={c} api={api} parentTur="palet" faktor={faktor * carpanOf(palet)} />)}
+            </div>
           ) : (
             <div className="flex items-start gap-[4px]">
               {/* Sol Sütun (Bağımsız) */}
@@ -1745,7 +1894,18 @@ function KoliKart({ koli, api, parentTur, faktor = 1 }: { koli: KoliNode; api: A
   const dolu = koli.hacim > 0 ? (icDesiHam / koli.hacim) * 100 : 0;
   const atil = koli.atil;
   const inContainer = parentTur === "palet" || parentTur === "koli";
-  const genislik = boyutGenislik(koli.elleDesi ?? (yuvarlaDesi(icDesiHam) || kDesi));
+  const genislik = boyutGenislik(kDesi); // kolinin kendi ebadı — boş koli geniş / dolu koli dar olmasın
+  // Ürünleri iki sütuna bölme kararı kartın EKRANDAKİ gerçek genişliğine göre (ekran daralınca koli küçülür).
+  const kartRef = useRef<HTMLDivElement>(null);
+  const [olcu, setOlcu] = useState(0);
+  useEffect(() => {
+    const el = kartRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((g) => setOlcu(Math.round(g[0].contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const tekSutun = (olcu || (inContainer ? 0 : genislik)) < 480;
 
   const isNestedKoli = parentTur === "koli";
 
@@ -1754,13 +1914,14 @@ function KoliKart({ koli, api, parentTur, faktor = 1 }: { koli: KoliNode; api: A
 
   return (
     <div
+      ref={kartRef}
       draggable
       onDragStart={(e) => { e.stopPropagation(); drag = { kind: "node", uid: koli.uid }; }}
       onDragOver={(e) => { if (drag) { e.preventDefault(); e.stopPropagation(); api.setDropHedef(koli.uid); } }}
       onDragLeave={() => drop && api.setDropHedef(null)}
       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); api.birak(koli.uid); }}
       onClick={(e) => { e.stopPropagation(); api.setSeciliKapId(koli.uid); }}
-      style={!inContainer ? { minWidth: genislik, maxWidth: genislik } : undefined}
+      style={!inContainer ? { width: `min(${genislik}px, calc(50% - 4px))`, minWidth: "min(280px, 100%)", maxWidth: "100%" } : undefined}
       className={`flex min-w-0 w-full flex-col rounded-2xl border-2 p-[2px] shadow-sm transition ${b?.btn} ${secili ? `ring-2 ${b?.ring}` : ""}`}
     >
       <div className="px-2 pt-1.5 pb-0.5">
@@ -1795,7 +1956,7 @@ function KoliKart({ koli, api, parentTur, faktor = 1 }: { koli: KoliNode; api: A
                 <p className="font-mono text-[10px] font-bold text-fg flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span>{urunSay(koli)} ürün</span>
                   {carpan > 1 && <span className="rounded bg-brand-100 px-1 text-[9px] font-black text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">×{carpan}</span>}
-                  <span title={`Toplam desi: ${toplamDesi} ds${carpan > 1 ? ` (${kDesi} × ${carpan})` : ""} · İçerik: ${icDesiYuvarlanmis} ds`}>{toplamDesi} ds</span>
+                  <span title={`Toplam desi: ${toplamDesi} ds${carpan > 1 ? ` (${kDesi} × ${carpan})` : ""} · İçerik: ${icDesiYuvarlanmis} ds`}>{fmt(nodeHacimHam(koli))} ds</span>
                   <span title={`Toplam brüt ağırlık: ${fmt(toplamKg)} kg${carpan > 1 ? ` (${carpan} koli, dara dahil)` : ""} · Koli darası: ${fmt(daraKg)} kg`}>{fmt(toplamKg)} kg</span>
                 </p>
                 <button
@@ -1813,31 +1974,25 @@ function KoliKart({ koli, api, parentTur, faktor = 1 }: { koli: KoliNode; api: A
             </div>
           </>
         ) : (
-          <div className="flex items-start gap-2">
-            <GripVertical className="mt-1 h-4 w-4 shrink-0 cursor-grab text-subtle/50" />
-            <button type="button" onClick={(e) => { e.stopPropagation(); setAcik((v) => !v); }} className="mt-0.5 shrink-0 text-subtle">{acik ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</button>
-            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-black ${atil ? "bg-slate-200 text-slate-600 dark:bg-slate-600/50 dark:text-slate-200" : "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300"}`}>{koli.no}</span>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-fg">
-                <span>{atil ? "Atıl Koli" : koli.kod || `Koli ${boyutKodu(koli.no)}`}</span>
-                <span className="text-xs font-bold text-fg flex items-center gap-2">
-                  <span>{koli.kod || `Boyut ${koli.no}`}</span>
-                  {(koli.ol || boyutOl(koli.no)) && <span>{koli.ol || boyutOl(koli.no)} cm</span>}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <p className="font-mono text-[11px] font-bold text-fg flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  <span>{urunSay(koli)} ürün</span>
-                  {carpan > 1 && <span className="rounded bg-brand-100 px-1 text-[9px] font-black text-brand-700 dark:bg-brand-500/20 dark:text-brand-300" title="Paket çarpanı">×{carpan}</span>}
-                  {koli.elleDesi != null && <span className="rounded bg-amber-100 px-1 text-[9px] font-black text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" title="Desi/ağırlık elle girildi">manuel</span>}
-                  <span className="text-subtle" title="Koli ebat kapasitesi">kap {kDesi} ds</span>
-                </p>
+          <div>
+            {/* 1. satır: aç/kapa · no · koli kodu (tek kez) · ×N · sil */}
+            <div className="flex items-center gap-1.5">
+              <button type="button" onClick={(e) => { e.stopPropagation(); setAcik((v) => !v); }} className="shrink-0 text-subtle">{acik ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</button>
+              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-black ${atil ? "bg-slate-200 text-slate-600 dark:bg-slate-600/50 dark:text-slate-200" : "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300"}`}>{koli.no}</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-fg" title={koli.kod || `Koli ${boyutKodu(koli.no)}`}>{atil ? `Atıl · ${koli.kod || boyutKodu(koli.no)}` : koli.kod || `Koli ${boyutKodu(koli.no)}`}</span>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <CarpanKontrol node={koli} api={api} />
+                <SilButon onSil={() => api.sil(koli.uid)} className="rounded-lg p-1.5 text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-4 w-4" />
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-0.5">
-              <CarpanKontrol node={koli} api={api} />
-              <SilButon onSil={() => api.sil(koli.uid)} className="rounded-lg p-1.5 text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-4 w-4" />
-            </div>
+            {/* 2. satır: ölçü · ürün sayısı · ×N · manuel · kapasite */}
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[11px] font-bold text-subtle">
+              {(koli.ol || boyutOl(koli.no)) && <span className="text-fg">{koli.ol || boyutOl(koli.no)} cm</span>}
+              <span>{urunSay(koli)} ürün</span>
+              {carpan > 1 && <span className="rounded bg-brand-100 px-1 text-[9px] font-black text-brand-700 dark:bg-brand-500/20 dark:text-brand-300" title="Paket çarpanı">×{carpan}</span>}
+              {koli.elleDesi != null && <span className="rounded bg-amber-100 px-1 text-[9px] font-black text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" title="Desi/ağırlık elle girildi">manuel</span>}
+              <span title="Koli ebat kapasitesi">kap {kDesi} ds</span>
+            </p>
           </div>
         )}
 
@@ -1847,8 +2002,7 @@ function KoliKart({ koli, api, parentTur, faktor = 1 }: { koli: KoliNode; api: A
               <Pencil className="h-3.5 w-3.5" /> Düzenle
             </button>
             <div className="flex items-baseline gap-3 font-mono leading-none">
-              <span className="text-xl font-black text-fg" title={`Toplam desi${carpan > 1 ? ` (×${carpan} dahil)` : ""}`}>{toplamDesi}<span className="ml-0.5 text-[11px] font-bold text-subtle">ds</span></span>
-              <span className="text-[10px] font-semibold text-subtle" title="Ham hacim (yuvarlanmamış)">({fmt(nodeHacimHam(koli))})</span>
+              <span className="text-xl font-black text-fg" title={`Toplam desi${carpan > 1 ? ` (×${carpan} dahil)` : ""}`}>{fmt(nodeHacimHam(koli))}<span className="ml-0.5 text-[11px] font-bold text-subtle">ds</span></span>
               <span className="text-xl font-black text-fg" title={`Toplam brüt ağırlık${carpan > 1 ? ` (×${carpan} dahil)` : ""} · Dara: ${fmt(daraKg)} kg`}>{fmt(toplamKg)}<span className="ml-0.5 text-[11px] font-bold text-subtle">kg</span></span>
             </div>
           </div>
@@ -1884,6 +2038,10 @@ function KoliKart({ koli, api, parentTur, faktor = 1 }: { koli: KoliNode; api: A
         <div className="mt-[2px] max-h-[360px] overflow-y-auto rounded-xl border border-dashed border-slate-300/70 dark:border-slate-600/50 bg-elevated/30 px-[3px] py-1.5">
           {koli.cocuklar.length === 0 ? (
             <p className="w-full py-3 text-center text-[11px] text-subtle">Boş koli</p>
+          ) : tekSutun ? (
+            <div className="flex flex-col gap-[3px]">
+              {koli.cocuklar.map((c) => <KartNode key={c.uid} node={c} api={api} parentTur="koli" faktor={faktor * carpanOf(koli)} />)}
+            </div>
           ) : (
             <div className="flex items-start gap-[3px]">
               {/* Sol Sütun (Bağımsız) */}
@@ -1917,13 +2075,13 @@ function UrunKart({ urun, api, parentTur, faktor = 1 }: { urun: UrunNode; api: A
     if (!Number.isFinite(v) || v === urun.paketIci) { setIciDraft(String(urun.paketIci)); return; }
     api.urunIciSet(urun.uid, v);
   };
-  const etiket = "block text-[9px] font-black uppercase tracking-wide text-subtle";
+  const etiket = "block h-3 text-[9px] font-black uppercase leading-3 tracking-wide text-subtle";
   return (
     <div
       draggable
       onDragStart={(e) => { e.stopPropagation(); drag = { kind: "node", uid: urun.uid }; }}
       onClick={(e) => e.stopPropagation()}
-      className={`flex ${isPalet ? "w-[calc((100%-4px)/2)] shrink-0" : "w-full"} min-w-0 flex-col rounded-xl border p-2 transition ${urun.paketli ? "border-slate-400 dark:border-slate-400 bg-white text-slate-900" : "border-slate-400 dark:border-slate-400 bg-surface hover:border-brand-400"}`}
+      className={`flex ${isPalet ? "min-w-[min(230px,100%)] grow basis-[calc((100%-4px)/2)]" : parentTur === "sahne" ? "w-[min(340px,100%)] shrink-0 self-start" : "w-full"} min-w-0 flex-col rounded-xl border p-2 transition ${urun.paketli ? "border-slate-400 dark:border-slate-400 bg-white text-slate-900" : "border-slate-400 dark:border-slate-400 bg-surface hover:border-brand-400"}`}
     >
       <div className="flex items-start gap-1">
         <div className="min-w-0 flex-1">
@@ -1932,10 +2090,10 @@ function UrunKart({ urun, api, parentTur, faktor = 1 }: { urun: UrunNode; api: A
         </div>
         {urun.paketli && <PackageCheck className="h-3 w-3 shrink-0 text-emerald-600" />}
       </div>
-      <div className="mt-1 flex flex-wrap items-end gap-x-2 gap-y-1">
+      <div className="mt-1 flex flex-wrap items-end gap-1.5">
         {/* 1) Ürün Paket İçi Miktar (QUANTITY) */}
         <div>
-          <span className={etiket} title="Ürün Paket İçi Miktar (XML: QUANTITY)">İçi</span>
+          <span className={etiket} title="Ürün Paket İçi Miktar (XML: QUANTITY)">İÇİ</span>
           <input
             type="text"
             inputMode="decimal"
@@ -1945,14 +2103,14 @@ function UrunKart({ urun, api, parentTur, faktor = 1 }: { urun: UrunNode; api: A
             onClick={(e) => e.stopPropagation()}
             onBlur={iciCommit}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
-            className={`h-6 w-12 rounded-md border bg-surface px-1 text-center font-mono text-sm font-black text-fg focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${urun.elle ? "border-amber-400" : "border-line"}`}
+            className={`block h-6 w-10 rounded-md border bg-surface px-1 text-center font-mono text-sm font-black text-fg focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${urun.elle ? "border-amber-400" : "border-line"}`}
             title={urun.elle ? "Elle değiştirildi (ISMANUEL=1)" : "Ürün paket içi miktarı — elle değiştirilebilir"}
           />
         </div>
         {/* 2) Ürün Paket Miktarı (PACKQTY) */}
         <div>
-          <span className={etiket} title="Ürün Paket Miktarı (XML: PACKQTY)">Paket</span>
-        <div className="flex items-center gap-1">
+          <span className={etiket} title="Ürün Paket Miktarı (XML: PACKQTY)">PAKET · {urun.unit}</span>
+        <div className="flex items-center gap-0.5">
           <button type="button" onClick={(e) => { e.stopPropagation(); api.urunAdet(urun.uid, -1); }} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-rose-300 text-rose-500 transition hover:bg-rose-50 active:scale-95 dark:hover:bg-rose-500/10"><Minus className="h-3.5 w-3.5" /></button>
           <input
             type="text"
@@ -1963,17 +2121,16 @@ function UrunKart({ urun, api, parentTur, faktor = 1 }: { urun: UrunNode; api: A
             onClick={(e) => e.stopPropagation()}
             onBlur={commit}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
-            className="h-6 w-14 rounded-md border border-line bg-surface px-1 text-center font-mono text-sm font-black text-fg focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            className="h-6 w-9 rounded-md border border-line bg-surface px-0.5 text-center font-mono text-sm font-black text-fg focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             title="Miktarı elle gir (sipariş miktarını aşamaz)"
           />
           <button type="button" onClick={(e) => { e.stopPropagation(); api.urunAdet(urun.uid, +1); }} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-emerald-300 text-emerald-600 transition hover:bg-emerald-50 active:scale-95 dark:hover:bg-emerald-500/10"><Plus className="h-3.5 w-3.5" /></button>
-          <span className={`ml-0.5 text-[10px] font-bold ${urun.paketli ? "text-slate-900" : "text-fg"}`}>{urun.unit}</span>
         </div>
         </div>
         {/* 3) Bağlı Paket Miktarı / Paket Sayısı (PARENTPACKQTY) — kolinin ×N değerinden gelir */}
         <div>
-          <span className={etiket} title="Bağlı Paket Miktarı / Paket Sayısı (XML: PARENTPACKQTY)">Bağlı</span>
-          <span className={`flex h-6 min-w-[2.5rem] items-center justify-center rounded-md border border-dashed px-1.5 font-mono text-sm font-black ${faktor > 1 ? "border-amber-400 text-amber-700 dark:text-amber-300" : "border-line text-fg"}`} title="Kolinin/paletin ×N paket sayısından gelir; değiştirmek için kolideki ×N'yi kullanın">×{faktor}</span>
+          <span className={etiket} title="Bağlı Paket Miktarı / Paket Sayısı (XML: PARENTPACKQTY)">BAĞLI</span>
+          <span className={`flex h-6 min-w-[2rem] items-center justify-center rounded-md border border-dashed px-1.5 font-mono text-sm font-black ${faktor > 1 ? "border-amber-400 text-amber-700 dark:text-amber-300" : "border-line text-fg"}`} title="Kolinin/paletin ×N paket sayısından gelir; değiştirmek için kolideki ×N'yi kullanın">×{faktor}</span>
         </div>
         <SilButon onSil={() => api.sil(urun.uid)} className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-subtle transition hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:hover:bg-rose-500/10" iconCls="h-3 w-3" />
       </div>
