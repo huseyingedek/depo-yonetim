@@ -5,6 +5,7 @@ import {
   MapPin, Check, AlertTriangle, Loader2, PackagePlus, X, RotateCcw,
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
+import UrunResmi from "../../components/UrunResmi";
 import BarcodeScanner from "../../components/BarcodeScanner";
 import AdimBar from "../../components/AdimBar";
 import {
@@ -523,27 +524,22 @@ export default function PickingDetailPage() {
                   } ${done ? "bg-elevated opacity-60" : "bg-surface"}`}
                 >
                   <div className="flex min-w-0 items-start gap-3">
-                    <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                        done ? "bg-emerald-100" : partial ? "bg-amber-100" : "bg-elevated"
-                      }`}
-                    >
-                      {done ? (
-                        <Check className="h-5 w-5 text-emerald-600" />
-                      ) : (
-                        <span
-                          className={`text-sm font-bold ${
-                            partial ? "text-amber-600" : "text-subtle"
-                          }`}
-                          title="Kalan (okutulacak)"
-                        >
-                          {qtyRound(Math.max(0, istenenSiparis - toplananSiparis))}
-                        </span>
-                      )}
-                    </div>
+                    {/* Ürün resmi — kartın en solunda; masaüstünde metin bloğunun yüksekliğine kare olarak oturur (80–112 px), telefonda 64 px */}
+                    <UrunResmi kod={line.product.code} ad={line.product.name} className="h-16 w-16 sm:h-auto sm:w-auto sm:min-h-20 sm:max-h-28 sm:self-stretch sm:aspect-square" />
 
                     <div className="min-w-0 flex-1">
-                      <p className="text-[15px] font-semibold text-fg">{line.product.name}</p>
+                      <p className="flex items-start gap-1.5 text-[15px] font-semibold text-fg">
+                        {/* Kalan (okutulacak) miktar — ürün adının başında, küçük rozet */}
+                        <span
+                          className={`inline-flex h-7 min-w-[1.75rem] shrink-0 items-center justify-center rounded-md px-2 text-sm font-bold ${
+                            done ? "bg-emerald-100 text-emerald-600" : partial ? "bg-amber-100 text-amber-600" : "bg-elevated text-subtle"
+                          }`}
+                          title={done ? "Tamamlandı" : "Kalan (okutulacak)"}
+                        >
+                          {done ? <Check className="h-4 w-4" /> : qtyRound(Math.max(0, istenenSiparis - toplananSiparis))}
+                        </span>
+                        <span className="min-w-0 pt-[3px]">{line.product.name}</span>
+                      </p>
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-subtle">
                         {line.product.code && (
                           <span className="font-mono font-semibold">{line.product.code}</span>
