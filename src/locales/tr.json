@@ -55,6 +55,7 @@
     "warehouseReceiving": "Mal Kabul Deposu",
     "warehouseQuality": "Kalite Deposu",
     "printerName": "Yazıcı Adı",
+    "screenTimeout": "Ekran Kapanma Süresi (sn)",
     "language": "Dil",
     "appearance": "Görünüm",
     "themeLight": "Açık",

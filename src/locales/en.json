@@ -55,6 +55,7 @@
     "warehouseReceiving": "Receiving Warehouse",
     "warehouseQuality": "Quality Warehouse",
     "printerName": "Printer Name",
+    "screenTimeout": "Screen Timeout (sec)",
     "language": "Language",
     "appearance": "Appearance",
     "themeLight": "Light",

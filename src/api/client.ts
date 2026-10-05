@@ -2828,6 +2828,7 @@ export const api = {
     deliveryWh?: string;
     qltWh?: string;
     printName?: string;
+    screenTimeout?: number;
     traceStatus?: number;
   }): Promise<{
     raw: unknown;
@@ -2848,6 +2849,8 @@ export const api = {
       DELIVERYWH: params?.deliveryWh ?? c.warehouseDelivery ?? "",
       QLTWH: params?.qltWh ?? c.warehouseQuality ?? "",
       PRINTNAME: params?.printName ?? c.printerName ?? "",
+      // Başarı/özet ekranı kapanma süresi (sn). GetUserDefault SCREENTIMEOUT döndürüyor; aynı adla kaydediyoruz.
+      SCREENTIMEOUT: params?.screenTimeout ?? st.settings.screenTimeout ?? 3,
       PITRACESTATUS: params?.traceStatus ?? (c.trace ? 1 : 0),
     };
 

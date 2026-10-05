@@ -32,8 +32,9 @@ Bu doküman, Aktüel Ofis Depo Yönetim Uygulamasında (WMS) kullanılan CANIAS 
   - `DELIVERYWH` (*STRING*): Sevkiyat Deposu.
   - `QLTWH` (*STRING*): Kalite Deposu.
   - `PRINTNAME` (*STRING*): Yazıcı Adı.
+  - `SCREENTIMEOUT` (*INTEGER*): Başarı/özet ekranlarının kendiliğinden kapanma süresi (sn). Ayarlar ekranındaki "Ekran Kapanma Süresi" alanı; boşsa `3`. (Parametre adı Bora ile teyit edilecek.)
   - `PITRACESTATUS` (*INTEGER*): Trace Durumu (`0`: Pasif, `1`: Aktif).
-- **WMS İstemci Karşılığı**: `api.saveUserDefault({ company, plant, user, langu, receiptWh, packWh, deliveryWh, qltWh, printName, traceStatus })`
+- **WMS İstemci Karşılığı**: `api.saveUserDefault({ company, plant, user, langu, receiptWh, packWh, deliveryWh, qltWh, printName, screenTimeout, traceStatus })`
 
 ### 1.4. `MZYListingPick` — Toplama Emri Listeleri
 - **Açıklama**: Giriş yapan kullanıcıya atanmış ve açık durumdaki toplama emirlerini listeler.

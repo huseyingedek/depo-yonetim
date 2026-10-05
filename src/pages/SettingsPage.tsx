@@ -69,6 +69,7 @@ export default function SettingsPage() {
         deliveryWh: form.warehouseDelivery,
         qltWh: form.warehouseQuality,
         printName: form.printerName,
+        screenTimeout: form.screenTimeout,
       });
 
       // 2. Uygulama hafızasını güncelle (oturum boyunca geçerli)
@@ -132,6 +133,23 @@ export default function SettingsPage() {
             <div>
               <label className="field-label">{t("settings.printerName")}</label>
               <input value={form.printerName ?? ""} onChange={(e) => set({ printerName: e.target.value })} className="field-input" />
+            </div>
+            <div>
+              {/* SCREENTIMEOUT: başarı/özet ekranlarının kendiliğinden kapanma süresi (sn) */}
+              <label className="field-label">{t("settings.screenTimeout")}</label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                value={form.screenTimeout ?? ""}
+                onChange={(e) => {
+                  const n = Number.parseInt(e.target.value, 10);
+                  set({ screenTimeout: Number.isFinite(n) && n > 0 ? n : undefined });
+                }}
+                placeholder="3"
+                className="field-input"
+              />
             </div>
           </div>
         </div>
