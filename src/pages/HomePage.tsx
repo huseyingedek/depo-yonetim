@@ -32,11 +32,16 @@ export default function HomePage() {
           return (
             <button
               key={op.type}
-              onClick={() => navigate(op.route)}
+              // Pasif işlem: kart görünür ama tıklanamaz (gri/soluk, rozet yok).
+              disabled={op.pasif}
+              title={op.pasif ? "Bu işlem şu an pasif" : undefined}
+              onClick={() => !op.pasif && navigate(op.route)}
               style={{ animationDelay: `${i * 55}ms` }}
-              className="stagger group relative flex flex-col items-start gap-4 rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition-all duration-200 ease-soft hover:-translate-y-1 hover:border-brand-200 hover:shadow-soft"
+              className={`stagger group relative flex flex-col items-start gap-4 rounded-2xl border border-line bg-surface p-5 text-left shadow-card transition-all duration-200 ease-soft ${
+                op.pasif ? "cursor-not-allowed grayscale [&>*]:opacity-45" : "hover:-translate-y-1 hover:border-brand-200 hover:shadow-soft"
+              }`}
             >
-              <div className={`flex h-14 w-14 items-center justify-center rounded-2xl transition-transform duration-200 ease-soft group-hover:scale-110 group-hover:rotate-3 ${op.iconBg}`}>
+              <div className={`flex h-14 w-14 items-center justify-center rounded-2xl transition-transform duration-200 ease-soft ${op.pasif ? "" : "group-hover:scale-110 group-hover:rotate-3"} ${op.iconBg}`}>
                 <Icon className={`h-7 w-7 ${op.iconFg}`} />
               </div>
               <div className="min-w-0">
@@ -44,12 +49,14 @@ export default function HomePage() {
                 <p className="mt-0.5 text-sm leading-snug text-subtle">{t(`home.operationDesc.${op.type}`)}</p>
               </div>
               <div className="mt-1 flex w-full items-center justify-between">
-                {!op.ready ? (
+                {!op.ready && !op.pasif ? (
                   <span className="chip bg-elevated text-subtle">yakında</span>
                 ) : (
                   <span />
                 )}
-                <ArrowRight className="h-5 w-5 text-subtle transition group-hover:translate-x-0.5 group-hover:text-brand-500" />
+                <ArrowRight
+                  className={`h-5 w-5 text-subtle transition ${op.pasif ? "" : "group-hover:translate-x-0.5 group-hover:text-brand-500"}`}
+                />
               </div>
             </button>
           );

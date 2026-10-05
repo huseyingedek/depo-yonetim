@@ -323,6 +323,22 @@ function SidebarContent({ onNavigate }: { onNavigate: () => void }) {
         </p>
         {OPERATIONS.map((op) => {
           const Icon = op.icon;
+          // Pasif işlem: menüde görünür ama tıklanamaz (link değil, soluk düz satır; rozet yok).
+          if (op.pasif) {
+            return (
+              <div
+                key={op.type}
+                aria-disabled="true"
+                title="Bu işlem şu an pasif"
+                className="flex cursor-not-allowed select-none items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/35"
+              >
+                <span className={`flex h-7 w-7 items-center justify-center rounded-lg opacity-40 grayscale ${op.iconBg}`}>
+                  <Icon className={`h-4 w-4 ${op.iconFg}`} />
+                </span>
+                <span className="flex-1">{t(`home.operations.${op.type}`)}</span>
+              </div>
+            );
+          }
           return (
             <NavLink key={op.type} to={op.route} className={linkClass} onClick={onNavigate}>
               <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${op.iconBg}`}>
