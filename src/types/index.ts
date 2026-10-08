@@ -335,8 +335,10 @@ export interface TransactionRow {
   docNum: string; // INVDOCNUM — envanter belge no
   srcDocType: string; // SRCDOCTYPE — kaynak belge tipi (SO=sipariş, MR=rezervasyon)
   order: string; // SRCDOCNUM — kaynak belge no (sipariş no)
+  docName: string; // DTSTEXT — belge adı (Bora, 08.10)
+  pickType: string; // PICKTYPE — alt işlem türü (Bora, 08.10)
   plant: string; // PLANT — tesis
-  isSalesOrder: boolean; // SRCDOCTYPE === "SO"
+  isSalesOrder: boolean; // SRCDOCTYPE === "SO" (KPI sipariş sayımında KULLANILMAZ — tüm kaynak belgeler sayılır)
   raw: Record<string, string>; // ham alanlar (teyit için)
 }
 

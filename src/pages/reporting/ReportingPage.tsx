@@ -86,6 +86,11 @@ export default function ReportingPage() {
   // Servis belge bazında dönüyor: her satır bir belge, ITEM = belgedeki kalem sayısı.
   const data = rows;
 
+  // Sipariş = TEKİL "Kaynak Belge" (SRCDOCTYPE + SRCDOCNUM). Tip filtresi YOK (Bora, 08.10):
+  // eskiden yalnız SO sayılıyordu (215 ↔ CANIAS 267). Aynı belge tekrar gelirse sayı artmaz.
+  const siparisKey = (r: { srcDocType: string; order: string }) =>
+    r.order ? `${r.srcDocType}|${r.order}` : "";
+
   // İşlem türü bazında özet (Mal Kabul / Toplama / Yerleştirme... ayrı ayrı) +
   // her işlemin içinde kullanıcı kırılımı. (KPI: gruplama + toplam ayrımı)
   const islemGruplari = useMemo(() => {
@@ -104,7 +109,7 @@ export default function ReportingPage() {
       g.kalem += r.item;
       g.hacim += r.volume;
       g.agirlik += r.weight;
-      if (r.isSalesOrder && r.order) g.siparis.add(r.order);
+      if (siparisKey(r)) g.siparis.add(siparisKey(r));
 
       const uk = r.user || "—";
       if (!g.kullanicilar.has(uk)) {
@@ -115,7 +120,7 @@ export default function ReportingPage() {
       u.kalem += r.item;
       u.hacim += r.volume;
       u.agirlik += r.weight;
-      if (r.isSalesOrder && r.order) u.siparis.add(r.order);
+      if (siparisKey(r)) u.siparis.add(siparisKey(r));
     }
     return [...map.values()]
       .map((g) => ({
@@ -135,7 +140,7 @@ export default function ReportingPage() {
     kalem: data.reduce((s, r) => s + r.item, 0),
     hacim: data.reduce((s, r) => s + r.volume, 0),
     agirlik: data.reduce((s, r) => s + r.weight, 0),
-    siparis: new Set(data.filter((r) => r.isSalesOrder).map((r) => r.order).filter(Boolean)).size,
+    siparis: new Set(data.map(siparisKey).filter(Boolean)).size,
     kullanici: new Set(data.map((r) => r.user).filter(Boolean)).size,
   }), [data]);
 
@@ -319,6 +324,8 @@ export default function ReportingPage() {
                     <th className="px-3 py-2 font-semibold">Kullanıcı</th>
                     <th className="px-3 py-2 font-semibold">Tarih</th>
                     <th className="px-3 py-2 font-semibold">İşlem</th>
+                    <th className="px-3 py-2 font-semibold">Alt İşlem Türü</th>
+                    <th className="px-3 py-2 font-semibold">Belge Adı</th>
                     <th className="px-3 py-2 text-right font-semibold">Kalem</th>
                     <th className="px-3 py-2 text-right font-semibold">kg</th>
                     <th className="px-3 py-2 text-right font-semibold">Desi</th>
@@ -332,6 +339,8 @@ export default function ReportingPage() {
                       <td className="px-3 py-2 font-semibold">{r.user || "—"}</td>
                       <td className="px-3 py-2 font-mono">{r.date || "—"}</td>
                       <td className="px-3 py-2">{r.typeText || "—"}</td>
+                      <td className="px-3 py-2">{r.pickType || "—"}</td>
+                      <td className="px-3 py-2">{r.docName || "—"}</td>
                       <td className="px-3 py-2 text-right font-mono">{r.item}</td>
                       <td className="px-3 py-2 text-right font-mono">{round(r.weight)}</td>
                       <td className="px-3 py-2 text-right font-mono">{round(r.volume)}</td>

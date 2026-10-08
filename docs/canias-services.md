@@ -156,6 +156,7 @@ Bu doküman, Aktüel Ofis Depo Yönetim Uygulamasında (WMS) kullanılan CANIAS 
   - `PSPLANT` (*STRING*): Tesis kodu (`"100"`).
   - `PSORDERNUM` (*STRING*): Seçilen yerleştirme emri numarası.
   - `PSORDERTYPE` (*STRING*): Seçilen yerleştirme emri tipi.
+  - `PSUSER` (*STRING*): Giriş yapan kullanıcı adı.
 - **WMS İstemci Karşılığı**: `api.enterPutaway(orderNum, orderType)`
 
 ### 2.4. `MZYCrtSuggestListPlacement` — Yerleştirme İçin Stok Yeri Önerisi Oluştur

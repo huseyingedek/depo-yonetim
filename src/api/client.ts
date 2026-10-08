@@ -1052,6 +1052,8 @@ export const api = {
         docNum: pick(row, ["INVDOCNUM", "DOCNUM"]).trim(),
         srcDocType,
         order: pick(row, ["SRCDOCNUM", "ORDERNUM", "ORDER"]).trim(),
+        docName: pick(row, ["DTSTEXT"]).trim(),
+        pickType: pick(row, ["PICKTYPE"]).trim(),
         plant: pick(row, ["PLANT"]).trim(),
         isSalesOrder: srcDocType === "SO",
         raw: row as Record<string, string>,
@@ -1446,6 +1448,7 @@ export const api = {
       PSPLANT: c.plant,
       PSORDERNUM: orderNum,
       PSORDERTYPE: orderType,
+      PSUSER: c.worker,
     });
     const rows = rowsOf(r, ["IASWMSPOITEM", "TBLWMSPO", "TBLPODETAIL"]);
     if (!rows.length) return undefined;
