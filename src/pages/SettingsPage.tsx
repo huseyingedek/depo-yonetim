@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Globe, Sun, Moon, Loader2 } from "lucide-react";
+import { Check, Globe, Sun, Moon, Loader2, RotateCw, AlertTriangle } from "lucide-react";
 import { useAppStore } from "../store/appStore";
 import PageHeader from "../components/PageHeader";
 import { api } from "../api/client";
@@ -16,6 +16,10 @@ export default function SettingsPage() {
   const setTheme = useAppStore((s) => s.setTheme);
 
   const [form, setForm] = useState<Settings>(settings);
+  // CANIAS'tan en son yüklenen değerler — "değişiklik var mı" bununla karşılaştırılır.
+  const [orijinal, setOrijinal] = useState<Settings>(settings);
+  // tamam: CANIAS'tan geldi · bos: CANIAS'ta kayıt yok · hata: servis çağrılamadı
+  const [yukDurum, setYukDurum] = useState<"yukleniyor" | "tamam" | "bos" | "hata">("yukleniyor");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -23,30 +27,51 @@ export default function SettingsPage() {
 
   const lastFetchedUser = useRef<string | null>(null);
 
-  // Sayfa açıldığında CANIAS'tan giriş yapan kullanıcının en güncel öndeğerlerini çek
+  // CANIAS'tan kullanıcının en güncel öndeğerlerini çek (sayfa açılışı + "CANIAS'tan yenile").
+  // Bora (12.10): "bilgiler gidiyorsa kullanıcı manuel refreshleyip geri çağırabilsin".
+  const yukle = async () => {
+    const username = user?.username;
+    if (!username) return;
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const res = await api.getUserDefault({ user: username });
+      const guncel = { ...useAppStore.getState().settings, ...(res.defaults ?? {}) };
+      setForm(guncel);
+      setOrijinal(guncel);
+      setSaved(false);
+      if (res.defaults) {
+        updateSettings(res.defaults);
+        useAppStore.getState().setDefaultsHata(null);
+        setYukDurum("tamam");
+      } else {
+        setYukDurum("bos");
+      }
+    } catch (err) {
+      console.warn("CANIAS öndeğerleri çekilemedi:", err);
+      setYukDurum("hata");
+      setErrorMsg(err instanceof Error ? err.message : "CANIAS'tan ayarlar alınamadı");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     const username = user?.username;
     if (!username || lastFetchedUser.current === username) return;
     lastFetchedUser.current = username;
-    setLoading(true);
-    api
-      .getUserDefault({ user: username })
-      .then((res) => {
-        if (res.defaults) {
-          setForm((prev) => ({ ...prev, ...res.defaults }));
-          updateSettings(res.defaults);
-        } else {
-          // CANIAS'tan veri gelmezse alanlar boş kalır
-          setForm(settings);
-        }
-      })
-      .catch((err) => {
-        console.warn("CANIAS öndeğerleri çekilemedi:", err);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [user?.username, updateSettings, settings]);
+    yukle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.username]);
+
+  // Değişiklik var mı? (Bora: SaveUserDefault yalnızca ekranda değişiklik yapılınca çalışmalı)
+  const ALANLAR: (keyof Settings)[] = [
+    "company", "facility", "warehouseDelivery", "warehousePackaging", "warehouseReceiving",
+    "warehouseQuality", "printerName", "language", "screenTimeout",
+  ];
+  const degisti = ALANLAR.some((k) => String(form[k] ?? "").trim() !== String(orijinal[k] ?? "").trim());
+  // Ayarlar CANIAS'tan okunamadıysa kaydetme: boş form CANIAS'taki kaydı ezerdi.
+  const kaydedilemez = yukDurum === "hata" || yukDurum === "yukleniyor" || loading;
 
   const set = (patch: Partial<Settings>) => {
     setForm((f) => ({ ...f, ...patch }));
@@ -55,6 +80,12 @@ export default function SettingsPage() {
   };
 
   const save = async () => {
+    if (!degisti || kaydedilemez) return;
+    // Firma/Tesis boşken kaydetmek CANIAS kaydını bozar → engelle
+    if (!form.company.trim() || !form.facility.trim()) {
+      setErrorMsg("Firma ve Tesis boş bırakılamaz.");
+      return;
+    }
     setSaving(true);
     setErrorMsg(null);
     try {
@@ -74,6 +105,9 @@ export default function SettingsPage() {
 
       // 2. Uygulama hafızasını güncelle (oturum boyunca geçerli)
       updateSettings(form);
+      setOrijinal(form);
+      useAppStore.getState().setDefaultsHata(null);
+      setYukDurum("tamam");
       setSaved(true);
       setTimeout(() => setSaved(false), 2200);
     } catch (err) {
@@ -93,13 +127,30 @@ export default function SettingsPage() {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-subtle">
             {t("settings.workContext")}
           </h2>
-          {loading && (
-            <span className="flex items-center gap-1.5 text-xs text-brand-600 dark:text-brand-400">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              {t("settings.loading")}
-            </span>
-          )}
+          <button
+            type="button"
+            onClick={yukle}
+            disabled={loading || saving}
+            title="Ayarları CANIAS'tan yeniden çek (kaydedilmemiş değişiklikler silinir)"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1 text-xs font-semibold text-brand-600 transition hover:bg-elevated disabled:opacity-60 dark:text-brand-400"
+          >
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}
+            {loading ? t("settings.loading") : "Yenile"}
+          </button>
         </div>
+
+        {yukDurum === "hata" && (
+          <div className="mb-3 flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>Ayarlar CANIAS'tan alınamadı; CANIAS'taki kayıt bozulmasın diye kaydetme kapalı. "Yenile" ile tekrar deneyin.</span>
+          </div>
+        )}
+        {yukDurum === "bos" && (
+          <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>CANIAS'ta bu kullanıcı için kayıtlı ayar yok. Alanları doldurup kaydedin.</span>
+          </div>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -174,14 +225,15 @@ export default function SettingsPage() {
         </div>
 
         {errorMsg && (
-          <p className="mt-4 text-xs font-semibold text-danger-500">
+          <p className="mt-4 text-xs font-semibold text-rose-600 dark:text-rose-400">
             {errorMsg}
           </p>
         )}
 
         <button
           onClick={save}
-          disabled={saving}
+          disabled={saving || !degisti || kaydedilemez}
+          title={!degisti ? "Değişiklik yok" : kaydedilemez ? "Önce ayarları CANIAS'tan yükleyin" : undefined}
           className="btn-primary btn-lg mt-6 w-full sm:w-auto sm:px-10"
         >
           {saving ? (

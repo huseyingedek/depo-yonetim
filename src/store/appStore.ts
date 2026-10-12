@@ -58,6 +58,7 @@ interface AppState {
   user: User | null;
   settings: Settings;
   defaultsLoaded: boolean; // MZYGetUserDefault bu oturumda çekildi mi (sayfa yenilenince false)
+  defaultsHata: string | null; // öndeğerler alınamadı / boş döndü → AppShell uyarı + "Yeniden dene"
   theme: Theme;
   trace: boolean;
   login: (username: string, displayName?: string) => void;
@@ -67,6 +68,7 @@ interface AppState {
   toggleTrace: () => void;
   setTrace: (trace: boolean) => void;
   setDefaultsLoaded: (v: boolean) => void;
+  setDefaultsHata: (m: string | null) => void;
 }
 
 const initial = load();
@@ -84,6 +86,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   user: initial.user,
   settings: { ...defaultSettings },
   defaultsLoaded: false,
+  defaultsHata: null,
   theme: initial.theme,
   trace: initial.trace,
   login: (username: string, displayName?: string) => {
@@ -95,12 +98,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         "Depo Kullanıcısı",
     };
     // Yeni kullanıcı girişi: Ayarları sıfırla, CANIAS MZYGetUserDefault'tan dolacak
-    set({ user, settings: { ...defaultSettings }, defaultsLoaded: false });
+    set({ user, settings: { ...defaultSettings }, defaultsLoaded: false, defaultsHata: null });
     persist({ user, theme: get().theme, trace: get().trace });
   },
   logout: () => {
     // Çıkış yapıldığında oturumu ve ayarları tamamen sıfırla (başka kullanıcıya geçmemesi için)
-    set({ user: null, settings: { ...defaultSettings }, defaultsLoaded: false });
+    set({ user: null, settings: { ...defaultSettings }, defaultsLoaded: false, defaultsHata: null });
     persist({ user: null, theme: get().theme, trace: get().trace });
   },
   updateSettings: (patch: Partial<Settings>) => {
@@ -131,4 +134,5 @@ export const useAppStore = create<AppState>((set, get) => ({
     persist({ user: get().user, theme: get().theme, trace });
   },
   setDefaultsLoaded: (v: boolean) => set({ defaultsLoaded: v }),
+  setDefaultsHata: (m: string | null) => set({ defaultsHata: m }),
 }));

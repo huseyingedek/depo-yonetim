@@ -1,7 +1,6 @@
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useEffect, type ReactNode } from "react";
 import { RotateCw } from "lucide-react";
-import { api } from "./api/client";
 import AppShell from "./components/AppShell";
 import { useAppStore } from "./store/appStore";
 import LoginPage from "./pages/LoginPage";
@@ -39,6 +38,7 @@ import ExpiryLabelPage from "./pages/label-printing/ExpiryLabelPage";
 import ProductBarcodePage from "./pages/label-printing/ProductBarcodePage";
 import ShelfLocationPage from "./pages/label-printing/ShelfLocationPage";
 import BarcodeGeneratorPage from "./pages/label-printing/BarcodeGeneratorPage";
+import { kullaniciAyarlariniYukle } from "./utils/ayarYukle";
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const user = useAppStore((s) => s.user);
@@ -50,12 +50,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user || defaultsLoaded) return;
     let iptal = false;
-    api
-      .getUserDefault({ user: user.username })
-      .then((res) => {
-        if (!iptal && res.defaults) useAppStore.getState().updateSettings(res.defaults);
-      })
-      .catch((err) => console.warn("Kullanıcı öndeğerleri CANIAS'tan alınamadı:", err))
+    kullaniciAyarlariniYukle(user.username)
       .finally(() => {
         // Hata olsa da uygulamayı kilitleme; ayar eksikse ekranlar kendi uyarısını gösterir.
         if (!iptal) useAppStore.getState().setDefaultsLoaded(true);

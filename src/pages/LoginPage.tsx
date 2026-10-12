@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Boxes, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useAppStore } from "../store/appStore";
 import { api } from "../api/client";
+import { kullaniciAyarlariniYukle } from "../utils/ayarYukle";
 
 export default function LoginPage() {
   const { t } = useTranslation();
@@ -29,15 +30,9 @@ export default function LoginPage() {
 
       login(username.trim(), user?.displayName);
 
-      // MZYGetUserDefault — CANIAS'tan kullanıcının Firma, Tesis ve Depo öndeğerlerini çek
-      try {
-        const defRes = await api.getUserDefault({ user: username.trim() });
-        if (defRes.defaults) {
-          useAppStore.getState().updateSettings(defRes.defaults);
-        }
-      } catch (defErr) {
-        console.warn("Kullanıcı öndeğerleri CANIAS'tan alınamadı, yerel ayarlar kullanılacak:", defErr);
-      }
+      // MZYGetUserDefault — CANIAS'tan kullanıcının Firma, Tesis ve Depo öndeğerlerini çek.
+      // Alınamazsa/boşsa üstte uyarı + "Yeniden dene" çıkar (sessizce boş kalmaz).
+      await kullaniciAyarlariniYukle(username.trim());
 
       useAppStore.getState().setDefaultsLoaded(true); // öndeğerler bu girişte çekildi
       navigate("/home", { replace: true });

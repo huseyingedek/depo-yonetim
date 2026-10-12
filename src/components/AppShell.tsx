@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Boxes, Home, Settings as SettingsIcon, LogOut, Building2, Bell, LayoutGrid, Menu, X, ChevronDown, type LucideIcon } from "lucide-react";
+import { Boxes, Home, Settings as SettingsIcon, LogOut, Building2, Bell, LayoutGrid, Menu, X, ChevronDown, RotateCw, type LucideIcon } from "lucide-react";
 import { useAppStore } from "../store/appStore";
 import { usePickingStore } from "../store/pickingStore";
 import { OPERATIONS } from "./operations";
@@ -9,6 +9,7 @@ import { useOverlayStore } from "../store/overlayStore";
 import { YARDIMCI_UYGULAMALAR } from "./yardimciUygulamalar";
 import AppOverlayHost from "./AppOverlayHost";
 import GlobalHataToast from "./GlobalHataToast";
+import { kullaniciAyarlariniYukle } from "../utils/ayarYukle";
 
 export default function AppShell() {
   const { t } = useTranslation();
@@ -98,6 +99,7 @@ export default function AppShell() {
           ref={mainRef}
           className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-24 lg:pb-0 short:pb-0"
         >
+          {!location.pathname.startsWith("/settings") && <AyarHataSeridi />}
           <div key={location.pathname} className="min-w-0 animate-fade-in">
             <Outlet />
           </div>
@@ -112,6 +114,37 @@ export default function AppShell() {
 
       {/* Tek yerden global hata bildirimi */}
       <GlobalHataToast />
+    </div>
+  );
+}
+
+// Kullanıcı öndeğerleri (MZYGetUserDefault) alınamadıysa/boşsa her ekranın üstünde
+// uyarı + "Yeniden dene" (Bora, 12.10). Ayarlar ekranının kendi Yenile butonu var.
+function AyarHataSeridi() {
+  const hata = useAppStore((s) => s.defaultsHata);
+  const user = useAppStore((s) => s.user);
+  const navigate = useNavigate();
+  const [deniyor, setDeniyor] = useState(false);
+  if (!hata || !user) return null;
+  return (
+    <div className="px-4 pt-3 lg:px-8">
+    <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
+      <span className="min-w-0 flex-1">{hata}</span>
+      <button
+        type="button"
+        disabled={deniyor}
+        onClick={async () => {
+          setDeniyor(true);
+          try { await kullaniciAyarlariniYukle(user.username); } finally { setDeniyor(false); }
+        }}
+        className="inline-flex items-center gap-1 rounded-lg bg-amber-600 px-2.5 py-1 text-white hover:bg-amber-700 disabled:opacity-60"
+      >
+        <RotateCw className={`h-3.5 w-3.5 ${deniyor ? "animate-spin" : ""}`} /> Yeniden dene
+      </button>
+      <button type="button" onClick={() => navigate("/settings")} className="rounded-lg px-2 py-1 underline-offset-2 hover:underline">
+        Ayarlar
+      </button>
+    </div>
     </div>
   );
 }
