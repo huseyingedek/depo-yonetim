@@ -477,6 +477,7 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 | **Toplama Vazgeç** | `MZYClosePick` | `api.cancelPick` | `src/api/client.ts` |
 | **Toplama Sakla** | `MZYSavePick` | `api.savePick` | `src/api/client.ts` |
 | **Yerleştirme Listesi** | `MZYListingPlacement` | `api.getPutawayOrders` | `src/api/client.ts` |
+| **Malzeme Arama (Barkod Oluşturma)** | `MZYListMaterial` | `api.listMaterial` | `src/api/client.ts` |
 | **Yerleştirme Giriş** | `MZYEnterPlacement` | `api.enterPutaway` | `src/api/client.ts` |
 | **Yerleştirme Önerisi** | `MZYCrtSuggestListPlacement` | `api.suggestPlacementForLine` | `src/api/client.ts` |
 | **Yerleştirme Vazgeç** | `MZYClosePlacement` | `api.cancelPutaway` | `src/api/client.ts` |
@@ -504,3 +505,13 @@ Tüm etiket basım servislerinde parametreler doğrudan servis üzerinden CANIAS
 | **Paketlemeyi Beklet** | `MZYUpdateDlvPlan` | `api.updateDlvPlan` | `src/api/client.ts` |
 | **Kullanıcı Öndeğerleri** | `MZYGetUserDefault` | `api.getUserDefault` | `src/api/client.ts` |
 | **Kullanıcı Öndeğerlerini Kaydet** | `MZYSaveUserDefault` | `api.saveUserDefault` | `src/api/client.ts` |
+
+
+### `MZYListMaterial` — Malzemeleri Listele (Bora, 12.10)
+- **Açıklama**: Barkod, malzeme kodu veya açıklamaya göre malzeme arar. Barkod Oluşturma ekranında arama kutusunda Enter/ok ile çağrılır; dönen her satır için `MZYGetMaterial` çağrılıp `MaterialDetailCard` + `MaterialUnitsCard` gösterilir (ilk 30 malzeme).
+- **Parametreler**:
+  - `PSCOMPANY` (*STRING*): Firma kodu.
+  - `PSBARCODE` (*STRING*): Arama çubuğuna yazılan ifade.
+  - `PITRACESTATUS` (*INTEGER*): Trace durumu.
+- **Dönen tablo**: `TBLMATLIST` — `COMPANY`, `MATERIAL`, `STEXT`.
+- **WMS İstemci Karşılığı**: `api.listMaterial(term)`

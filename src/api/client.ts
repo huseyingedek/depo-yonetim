@@ -169,6 +169,10 @@ const READ_ONLY = new Set<string>([
   SERVICES.getSourceType,
   SERVICES.getPlant,
   SERVICES.getUserDefault,
+  // Barkod Oluşturma: aynı malzemeye aynı anda kart + birimler + arama için
+  // birden çok MZYGetMaterial gidiyordu → eşzamanlı aynı çağrılar tek istekte birleşsin.
+  SERVICES.getMaterialDetail,
+  SERVICES.listMaterial,
 ]);
 const inflight = new Map<string, Promise<MzyResult>>();
 
@@ -316,6 +320,53 @@ function rowsOf(result: MzyResult, tableNames: string[]): Row[] {
     if (rows.length) return rows;
   }
   return [];
+}
+
+// MZYListMaterial yanıtı: tablo PSRTNTABLE dönüş parametresinin içinde gelir
+// ({ PSRTNTABLE: { TBLMATLIST: { ROW: [...] } } }). Bora ilk sürümde tabloyu STRING
+// gönderiyordu; o yüzden string gelirse JSON/XML olarak da çözülür. rowsOf'un genel
+// yedeği iç içe tabloda tüm satırları tek satıra birleştirdiğinden burada derin arıyoruz.
+function matListSatirlari(r: MzyResult): Row[] {
+  const ADLAR = ["TBLMATLIST", "MATLIST"];
+  const coz = (v: unknown): unknown => {
+    if (typeof v !== "string") return v;
+    const t = v.trim();
+    if (!t) return null;
+    if (t.startsWith("{") || t.startsWith("[")) {
+      try { return coz(JSON.parse(t)); } catch { return null; }
+    }
+    if (t.startsWith("<") && typeof DOMParser !== "undefined") {
+      const doc = new DOMParser().parseFromString(t, "text/xml");
+      return Array.from(doc.getElementsByTagName("ROW")).map((el) => {
+        const o: Row = {};
+        for (const c of Array.from(el.children)) o[c.tagName] = c.textContent ?? "";
+        return o;
+      });
+    }
+    return null;
+  };
+  const bul = (v: unknown, derinlik = 0): Row[] => {
+    v = coz(v);
+    if (!v || derinlik > 6) return [];
+    if (Array.isArray(v)) {
+      const satir = v.filter((x) => x && typeof x === "object") as Row[];
+      if (satir.some((x) => "MATERIAL" in x)) return satir.map(flattenRow);
+      for (const x of v) { const s = bul(x, derinlik + 1); if (s.length) return s; }
+      return [];
+    }
+    if (typeof v !== "object") return [];
+    const o = v as Record<string, unknown>;
+    for (const ad of ADLAR) if (ad in o) { const s = unwrapRows(coz(o[ad])); if (s.length) return s; }
+    if ("ROW" in o) { const s = unwrapRows(coz(o.ROW)); if (s.some((x) => "MATERIAL" in x)) return s; }
+    if ("MATERIAL" in o) return [flattenRow(o)];
+    for (const [k, x] of Object.entries(o)) {
+      if (/MESSAGE/i.test(k)) continue;
+      const s = bul(x, derinlik + 1);
+      if (s.length) return s;
+    }
+    return [];
+  };
+  return bul(r.data);
 }
 
 function toProduct(row: Row): ProductRef {
@@ -1854,6 +1905,33 @@ export const api = {
       message: mesaj,
       orders: tableRows,
     };
+  },
+
+  // MZYListMaterial — Malzeme arama (Bora, 12.10). Barkod, malzeme kodu VE açıklamaya göre
+  // arar; TBLMATLIST (COMPANY, MATERIAL, STEXT) döner. Barkod Oluşturma ilk arama ekranı
+  // önce bunu çağırır, sonra her satır için MZYGetMaterial ile detay/birim çekilir.
+  async listMaterial(term: string): Promise<{ company: string; material: string; name: string }[]> {
+    const c = ctx();
+    const r = await call(SERVICES.listMaterial, {
+      PSCOMPANY: String(c.company ?? "").trim(),
+      PSBARCODE: (term || "").trim(),
+      PITRACESTATUS: c.trace ? 1 : 0,
+    });
+    const hata = caniasErrorMessage(r);
+    if (hata) throw new Error(hata);
+    const gorulen = new Set<string>();
+    return matListSatirlari(r)
+      .map((row) => ({
+        company: pick(row, ["COMPANY"]).trim(),
+        material: pick(row, ["MATERIAL", "MATCODE"]).trim(),
+        name: pick(row, ["STEXT", "MTEXT", "NAME"]).trim(),
+      }))
+      .filter((m) => {
+        const k = m.material.toUpperCase();
+        if (!k || gorulen.has(k)) return false;
+        gorulen.add(k);
+        return true;
+      });
   },
 
   // 2. MZYGetMaterial - Malzeme Detay Kartı, Barkod ve Ölçü Listesi

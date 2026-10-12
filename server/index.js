@@ -108,6 +108,9 @@ const ALLOWED = new Set([
   // Mal Kabul Servisleri
   "MZYGetOpenOrder",
   "MZYGetMaterial",
+  "MZYListMaterial",
+  "MzyListMaterial",
+  "MZYLISTMATERIAL",
   "MZYSetMatSize",
   "MzySetMatSize",
   "MZYGetCustomer",

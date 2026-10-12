@@ -21,6 +21,8 @@ import {
 
 // Koşul KALDIRILDI (Bora): her tanımlı birim barkodlanabilir — kısıt yok.
 const NON_BARCODE_UNITS = new Set<string>();
+// Açıklamayla aramada çok sonuç dönebilir; her biri için MZYGetMaterial çağrıldığından ilk N gösterilir.
+const MAKS_SONUC = 30;
 
 type StepType = 1 | 2;
 type BarcodeMode = "manual" | "auto";
@@ -36,6 +38,7 @@ export default function BarcodeGeneratorPage() {
   const [searching, setSearching] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
   const [searchResults, setSearchResults] = useState<ProductBarcodeCardItem[]>([]);
+  const [fazlaSonuc, setFazlaSonuc] = useState(0); // >0 → listede bu kadar malzeme vardı, ilk MAKS_SONUC gösterildi
   const [selectedCard, setSelectedCard] = useState<ProductBarcodeCardItem | null>(null);
 
   // --- ADIM 2: BİRİM & BARKOD DURUMLARI ---
@@ -52,18 +55,6 @@ export default function BarcodeGeneratorPage() {
   const [copied, setCopied] = useState(false);
 
   // Seçilen malzemenin CANIAS'ta sahip olduğu geçerli birimler
-  // Türkçe karakter duyarsız arama normalizasyonu
-  function trNormalize(str: string): string {
-    return str
-      .toLocaleLowerCase("tr-TR")
-      .replace(/ı/g, "i")
-      .replace(/ş/g, "s")
-      .replace(/ğ/g, "g")
-      .replace(/ü/g, "u")
-      .replace(/ö/g, "o")
-      .replace(/ç/g, "c")
-      .trim();
-  }
 
   // CANIAS MZYGetMaterial detayından malzeme kartlarını üretir
   // Kural: Aynı ürünün her birimi için sadece 1 kart üretilir (Örn: 1 AD, 1 KO, 3 PK -> 1 AD, 1 KO, 1 PK)
@@ -197,74 +188,30 @@ export default function BarcodeGeneratorPage() {
     setSelectedCard(null);
 
     try {
-      let cards: ProductBarcodeCardItem[] = [];
-      let apiError: string | null = null;
+      // Bora (12.10): Önce MZYListMaterial (barkod / kod / AÇIKLAMA ile arar, TBLMATLIST döner),
+      // sonra dönen HER malzeme için MZYGetMaterial → her biri için MaterialDetailCard + birimler kartı.
+      // (Eski akış: GetMaterial → tüm stok listesinde istemci araması → ReadBarcode. Açıklamayla
+      // arama stok listesine bağlıydı; artık doğrudan servis arıyor.)
+      const liste = await api.listMaterial(term);
+      const gosterilecek = liste.slice(0, MAKS_SONUC);
+      setFazlaSonuc(liste.length > MAKS_SONUC ? liste.length : 0);
 
-      // A) Doğrudan malzeme detayı / barkod çağrısı
-      try {
-        const directCards = await fetchCardsForMaterial(term, "", "", term);
-        if (directCards.length > 0 && directCards[0].name.toLowerCase() !== term.toLowerCase()) {
-          cards = directCards;
-        }
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        apiError = msg;
-        if (/bağlantı|cevaplanmadı|proxy|zaman aşımı|fetch|500|network/i.test(msg)) {
-          throw err;
-        }
-      }
-
-      // B) Stok sorgusu (Açıklama veya malzeme koduna göre arama)
-      if (cards.length === 0) {
-        try {
-          const allStock = await api.queryStock({});
-          const normTerm = trNormalize(term);
-          const matches = allStock.filter((r) => {
-            const rName = r.name ? trNormalize(r.name) : "";
-            const rMat = r.material ? trNormalize(r.material) : "";
-            return rName.includes(normTerm) || rMat.includes(normTerm);
-          });
-
-          const uniqueMaterials = new Map<string, { name: string; unit: string }>();
-          for (const r of matches) {
-            if (r.material && !uniqueMaterials.has(r.material)) {
-              uniqueMaterials.set(r.material, { name: r.name, unit: r.unit });
-              if (uniqueMaterials.size >= 25) break;
+      // MZYGetMaterial çağrıları 5'erli gruplar halinde (CANIAS'ı yüzlerce eşzamanlı istekle boğmamak için)
+      const cards: ProductBarcodeCardItem[] = [];
+      for (let k = 0; k < gosterilecek.length; k += 5) {
+        const grup = await Promise.all(
+          gosterilecek.slice(k, k + 5).map(async (m) => {
+            try {
+              return await fetchCardsForMaterial(m.material, m.name || m.material, "", term);
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : String(err);
+              // Bağlantı hatasıysa aramayı durdur; tek malzemenin detay hatası diğerlerini engellemesin
+              if (/bağlantı|cevaplanmadı|proxy|zaman aşımı|fetch|500|network/i.test(msg)) throw err;
+              return [] as ProductBarcodeCardItem[];
             }
-          }
-
-          if (uniqueMaterials.size > 0) {
-            const cardGroups = await Promise.all(
-              Array.from(uniqueMaterials.entries()).map(([mCode, info]) =>
-                fetchCardsForMaterial(mCode, info.name, info.unit)
-              )
-            );
-            cards = cardGroups.flat();
-          }
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (!apiError) apiError = msg;
-          if (/bağlantı|cevaplanmadı|proxy|zaman aşımı|fetch|500|network/i.test(msg)) {
-            throw err;
-          }
-        }
-      }
-
-      // C) Hala kart bulunamadıysa readBarcode servisi
-      if (cards.length === 0) {
-        try {
-          const readRes = await api.readBarcode(term);
-          if (readRes.ok && readRes.material) {
-            cards = await fetchCardsForMaterial(readRes.material, readRes.name, readRes.unit, term);
-          }
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (!apiError) apiError = msg;
-        }
-      }
-
-      if (cards.length === 0 && apiError) {
-        throw new Error(apiError);
+          })
+        );
+        cards.push(...grup.flat());
       }
 
       // Tekilleştirme: her MALZEMEDEN yalnızca 1 kart (birimler ayrı komponentte
@@ -281,6 +228,7 @@ export default function BarcodeGeneratorPage() {
       setSearchDone(true);
     } catch (err: unknown) {
       setSearchResults([]);
+      setFazlaSonuc(0);
       setSearchDone(true);
       const msg = err instanceof Error ? err.message : "Arama sırasında bir hata oluştu.";
       setErrorMsg(msg);
@@ -525,6 +473,11 @@ export default function BarcodeGeneratorPage() {
               </div>
             ) : searchResults.length > 0 ? (
               <div className="space-y-4">
+                {fazlaSonuc > 0 && (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                    {fazlaSonuc} malzeme bulundu, ilk {MAKS_SONUC} tanesi gösteriliyor. Aramayı daraltın.
+                  </div>
+                )}
                 {searchResults.map((r) => (
                   <div key={r.material} className="space-y-2">
                     {/* Malzeme kartı (resim/barkod/ölçü/özellik) */}

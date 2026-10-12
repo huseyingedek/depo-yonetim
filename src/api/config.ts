@@ -40,6 +40,7 @@ export const SERVICES = {
   // Mal Kabul Servisleri
   getOpenOrder: "MZYGetOpenOrder", // Açık satın alma siparişleri listesi
   getMaterialDetail: "MZYGetMaterial", // Malzeme detay, resim, barkod ve ölçü listesi
+  listMaterial: "MZYListMaterial", // Malzeme arama (barkod / kod / AÇIKLAMA) → TBLMATLIST (COMPANY, MATERIAL, STEXT)
   setMatSize: "MZYSetMatSize", // Malzeme boyut, ağırlık ve güvenlik nitelikleri kaydı
   getCustomer: "MzyGetCustomer", // Tedarikçi / Müşteri arama servisi
   saveReceipt: "MZYSaveReceipt", // Mal kabul tamamlama ve saklama servisi
