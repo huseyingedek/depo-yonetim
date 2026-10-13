@@ -2938,6 +2938,11 @@ export const api = {
     console.info("📤 [MZYSaveUserDefault PARAMETRELER]", callParams);
     const r = await call(SERVICES.saveUserDefault, callParams);
     console.info("📥 [MZYSaveUserDefault GELEN YANIT]", r);
+    // CANIAS reddederse (MESSAGETABLE TYPE=E) hata fırlat. Eskiden her durumda success:true
+    // dönüyordu → ekran "Kaydedildi" diyor, ayar bellekte kalıyor, ama CANIAS'a yazılmamış
+    // oluyordu; çıkıp girince eski değer geliyordu (Bora, 13.10: "çıkıp girince gidiyor").
+    const hata = caniasErrorMessage(r);
+    if (hata) throw new Error(hata);
 
     let data: Row | null = null;
     let rows: Row[] = [];

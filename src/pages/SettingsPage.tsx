@@ -105,7 +105,25 @@ export default function SettingsPage() {
         screenTimeout: form.screenTimeout,
       });
 
-      // 2. Uygulama hafızasını güncelle (oturum boyunca geçerli)
+      // 2. Doğrulama: CANIAS'tan geri oku, kaydettiğimiz değerler gerçekten yazılmış mı?
+      //    (Servis hata vermeden kaydetmeyebilir → kullanıcı "Kaydedildi" görüp çıkıp girince
+      //    eski değeri buluyordu.) Okuma başarısızsa kaydı geri almayız, sadece uyarırız.
+      try {
+        const geri = await api.getUserDefault({ user: user?.username });
+        const d = geri.defaults ?? {};
+        const farkli: string[] = (
+          ["company", "facility", "warehouseDelivery", "warehousePackaging", "warehouseReceiving", "warehouseQuality", "printerName"] as const
+        ).filter((k) => String(form[k] ?? "").trim() !== String(d[k] ?? "").trim());
+        if (d.screenTimeout !== undefined && Number(d.screenTimeout) !== Number(form.screenTimeout ?? 3)) farkli.push("screenTimeout");
+        if (farkli.length) {
+          setErrorMsg(`CANIAS kaydı doğrulanamadı: kaydedilen değerler geri okunamadı (${farkli.map((k) => t(`settings.${k}`)).join(", ")}).`);
+          return;
+        }
+      } catch (dogErr) {
+        console.warn("Kayıt sonrası doğrulama okunamadı:", dogErr);
+      }
+
+      // 3. Uygulama hafızasını güncelle (oturum boyunca geçerli)
       updateSettings(form);
       setOrijinal(form);
       useAppStore.getState().setDefaultsHata(null);
