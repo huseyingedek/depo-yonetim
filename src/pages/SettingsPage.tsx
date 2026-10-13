@@ -24,6 +24,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [yukHata, setYukHata] = useState<string | null>(null); // okuma hatası (servisin kendi mesajı)
 
   const lastFetchedUser = useRef<string | null>(null);
 
@@ -34,6 +35,7 @@ export default function SettingsPage() {
     if (!username) return;
     setLoading(true);
     setErrorMsg(null);
+    setYukHata(null);
     try {
       const res = await api.getUserDefault({ user: username });
       const guncel = { ...useAppStore.getState().settings, ...(res.defaults ?? {}) };
@@ -50,7 +52,7 @@ export default function SettingsPage() {
     } catch (err) {
       console.warn("CANIAS öndeğerleri çekilemedi:", err);
       setYukDurum("hata");
-      setErrorMsg(err instanceof Error ? err.message : "CANIAS'tan ayarlar alınamadı");
+      setYukHata(err instanceof Error && err.message ? err.message : "Ayarlar alınamadı");
     } finally {
       setLoading(false);
     }
@@ -142,7 +144,7 @@ export default function SettingsPage() {
         {yukDurum === "hata" && (
           <div className="mb-3 flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>Ayarlar CANIAS'tan alınamadı; CANIAS'taki kayıt bozulmasın diye kaydetme kapalı. "Yenile" ile tekrar deneyin.</span>
+            <span>{yukHata}</span>
           </div>
         )}
         {yukDurum === "bos" && (
